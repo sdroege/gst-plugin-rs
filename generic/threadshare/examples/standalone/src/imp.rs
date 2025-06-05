@@ -6,7 +6,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use futures::future::BoxFuture;
 use futures::prelude::*;
 
 use gst::glib;
@@ -98,7 +97,7 @@ impl SrcTask {
 impl TaskImpl for SrcTask {
     type Item = ();
 
-    fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
+    async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
         let imp = self.elem.imp();
         let settings = imp.settings.lock().unwrap();
         self.is_main_elem = settings.is_main_elem;
@@ -108,148 +107,135 @@ impl TaskImpl for SrcTask {
         self.push_period = settings.push_period;
         self.num_buffers = settings.num_buffers;
 
-        future::ok(()).boxed()
+        Ok(())
     }
 
-    fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async move {
-            log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Starting Task");
+    async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
+        log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Starting Task");
 
-            if self.need_initial_events {
-                let imp = self.elem.imp();
+        if self.need_initial_events {
+            let imp = self.elem.imp();
 
-                debug_or_trace!(
-                    CAT,
-                    self.is_main_elem,
-                    obj = self.elem,
-                    "Pushing initial events"
-                );
-
-                let stream_id =
-                    format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
-                let stream_start_evt = gst::event::StreamStart::builder(&stream_id)
-                    .group_id(gst::GroupId::next())
-                    .build();
-                imp.src_pad.push_event(stream_start_evt).await;
-
-                imp.src_pad
-                    .push_event(gst::event::Caps::new(
-                        &gst::Caps::builder("foo/bar").build(),
-                    ))
-                    .await;
-
-                let segment_evt =
-                    gst::event::Segment::new(&gst::FormattedSegment::<gst::format::Time>::new());
-                imp.src_pad.push_event(segment_evt).await;
-
-                self.need_initial_events = false;
-            }
-
-            self.timer = Some(
-                timer::interval_delayed_by(
-                    // Delay first buffer push so as to let others start.
-                    Duration::from_secs(2),
-                    self.push_period.into(),
-                )
-                .expect("push period must be greater than 0"),
+            debug_or_trace!(
+                CAT,
+                self.is_main_elem,
+                obj = self.elem,
+                "Pushing initial events"
             );
-            self.buffer_count = 0;
-            self.buffer_pool.set_active(true).unwrap();
 
-            Ok(())
+            let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
+            let stream_start_evt = gst::event::StreamStart::builder(&stream_id)
+                .group_id(gst::GroupId::next())
+                .build();
+            imp.src_pad.push_event(stream_start_evt).await;
+
+            imp.src_pad
+                .push_event(gst::event::Caps::new(
+                    &gst::Caps::builder("foo/bar").build(),
+                ))
+                .await;
+
+            let segment_evt =
+                gst::event::Segment::new(&gst::FormattedSegment::<gst::format::Time>::new());
+            imp.src_pad.push_event(segment_evt).await;
+
+            self.need_initial_events = false;
         }
-        .boxed()
+
+        self.timer = Some(
+            timer::interval_delayed_by(
+                // Delay first buffer push so as to let others start.
+                Duration::from_secs(2),
+                self.push_period.into(),
+            )
+            .expect("push period must be greater than 0"),
+        );
+        self.buffer_count = 0;
+        self.buffer_pool.set_active(true).unwrap();
+
+        Ok(())
     }
 
-    fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
+    async fn stop(&mut self) -> Result<(), gst::ErrorMessage> {
         log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Stopping Task");
         self.buffer_pool.set_active(false).unwrap();
         self.timer = None;
         self.need_initial_events = true;
 
-        future::ok(()).boxed()
+        Ok(())
     }
 
-    fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-        async move {
-            log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Awaiting timer");
-            self.timer.as_mut().unwrap().next().await;
-            log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Timer ticked");
+    async fn try_next(&mut self) -> Result<(), gst::FlowError> {
+        log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Awaiting timer");
+        self.timer.as_mut().unwrap().next().await;
+        log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Timer ticked");
 
-            Ok(())
+        Ok(())
+    }
+
+    async fn handle_item(&mut self, _: ()) -> Result<(), gst::FlowError> {
+        let buffer = self
+            .buffer_pool
+            .acquire_buffer(None)
+            .map(|mut buffer| {
+                {
+                    let buffer = buffer.get_mut().unwrap();
+                    let rtime = self.elem.current_running_time().unwrap();
+                    buffer.set_pts(rtime);
+                }
+                buffer
+            })
+            .inspect_err(|&err| {
+                gst::error!(CAT, obj = self.elem, "Failed to acquire buffer {err}");
+            })?;
+
+        debug_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Forwarding buffer");
+        self.elem.imp().src_pad.push(buffer).await?;
+        log_or_trace!(
+            CAT,
+            self.is_main_elem,
+            obj = self.elem,
+            "Successfully pushed buffer"
+        );
+
+        self.buffer_count += 1;
+
+        if self.num_buffers.opt_eq(self.buffer_count) == Some(true) {
+            return Err(gst::FlowError::Eos);
         }
-        .boxed()
+
+        Ok(())
     }
 
-    fn handle_item(&mut self, _: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-        async move {
-            let buffer = self
-                .buffer_pool
-                .acquire_buffer(None)
-                .map(|mut buffer| {
-                    {
-                        let buffer = buffer.get_mut().unwrap();
-                        let rtime = self.elem.current_running_time().unwrap();
-                        buffer.set_pts(rtime);
-                    }
-                    buffer
-                })
-                .inspect_err(|&err| {
-                    gst::error!(CAT, obj = self.elem, "Failed to acquire buffer {err}");
-                })?;
+    async fn handle_loop_error(&mut self, err: gst::FlowError) -> task::Trigger {
+        match err {
+            gst::FlowError::Eos => {
+                debug_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Pushing EOS");
 
-            debug_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Forwarding buffer");
-            self.elem.imp().src_pad.push(buffer).await?;
-            log_or_trace!(
-                CAT,
-                self.is_main_elem,
-                obj = self.elem,
-                "Successfully pushed buffer"
-            );
+                let imp = self.elem.imp();
+                if !imp.src_pad.push_event(gst::event::Eos::new()).await {
+                    gst::error!(CAT, imp = imp, "Error pushing EOS");
+                }
 
-            self.buffer_count += 1;
-
-            if self.num_buffers.opt_eq(self.buffer_count) == Some(true) {
-                return Err(gst::FlowError::Eos);
+                task::Trigger::Stop
             }
+            gst::FlowError::Flushing => {
+                debug_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Flushing");
 
-            Ok(())
-        }
-        .boxed()
-    }
+                task::Trigger::FlushStart
+            }
+            err => {
+                gst::error!(CAT, obj = self.elem, "Got error {err}");
+                gst::element_error!(
+                    &self.elem,
+                    gst::StreamError::Failed,
+                    ("Internal data stream error"),
+                    ["streaming stopped, reason {}", err]
+                );
 
-    fn handle_loop_error(&mut self, err: gst::FlowError) -> BoxFuture<'_, task::Trigger> {
-        async move {
-            match err {
-                gst::FlowError::Eos => {
-                    debug_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Pushing EOS");
-
-                    let imp = self.elem.imp();
-                    if !imp.src_pad.push_event(gst::event::Eos::new()).await {
-                        gst::error!(CAT, imp = imp, "Error pushing EOS");
-                    }
-
-                    task::Trigger::Stop
-                }
-                gst::FlowError::Flushing => {
-                    debug_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Flushing");
-
-                    task::Trigger::FlushStart
-                }
-                err => {
-                    gst::error!(CAT, obj = self.elem, "Got error {err}");
-                    gst::element_error!(
-                        &self.elem,
-                        gst::StreamError::Failed,
-                        ("Internal data stream error"),
-                        ["streaming stopped, reason {}", err]
-                    );
-
-                    task::Trigger::Error
-                }
+                task::Trigger::Error
             }
         }
-        .boxed()
     }
 }
 

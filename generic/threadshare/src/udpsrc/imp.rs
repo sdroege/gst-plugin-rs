@@ -17,7 +17,6 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
-use futures::future::BoxFuture;
 use futures::prelude::*;
 
 use gst::glib;
@@ -112,17 +111,12 @@ impl UdpReader {
 impl SocketRead for UdpReader {
     const DO_TIMESTAMP: bool = true;
 
-    fn read<'buf>(
+    async fn read<'buf>(
         &'buf mut self,
         buffer: &'buf mut [u8],
-    ) -> BoxFuture<'buf, io::Result<(usize, Option<std::net::SocketAddr>)>> {
-        async move {
-            self.0
-                .recv_from(buffer)
-                .await
-                .map(|(read_size, saddr)| (read_size, Some(saddr)))
-        }
-        .boxed()
+    ) -> io::Result<(usize, Option<std::net::SocketAddr>)> {
+        let (read_size, saddr) = self.0.recv_from(buffer).await?;
+        Ok((read_size, Some(saddr)))
     }
 }
 
@@ -224,596 +218,571 @@ impl UdpSrcTask {
 impl TaskImpl for UdpSrcTask {
     type Item = gst::Buffer;
 
-    fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async move {
-            let udpsrc = self.element.imp();
-            let mut settings = udpsrc.settings.lock().unwrap();
+    async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
+        let udpsrc = self.element.imp();
+        let mut settings = udpsrc.settings.lock().unwrap();
 
-            gst::debug!(CAT, obj = self.element, "Preparing Task");
+        gst::debug!(CAT, obj = self.element, "Preparing Task");
 
-            self.retrieve_sender_address = settings.retrieve_sender_address;
+        self.retrieve_sender_address = settings.retrieve_sender_address;
 
-            let socket = if let Some(ref wrapped_socket) = settings.socket {
-                let socket: UdpSocket;
+        let socket = if let Some(ref wrapped_socket) = settings.socket {
+            let socket: UdpSocket;
 
-                #[cfg(unix)]
-                {
-                    socket = wrapped_socket.get()
+            #[cfg(unix)]
+            {
+                socket = wrapped_socket.get()
+            }
+            #[cfg(windows)]
+            {
+                socket = wrapped_socket.get()
+            }
+
+            let socket = Async::<UdpSocket>::try_from(socket).map_err(|err| {
+                gst::error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to setup Async socket: {}", err]
+                )
+            })?;
+
+            settings.used_socket = Some(wrapped_socket.clone());
+
+            socket
+        } else {
+            let addr: IpAddr = match settings.address {
+                None => {
+                    return Err(gst::error_msg!(
+                        gst::ResourceError::Settings,
+                        ["No address set"]
+                    ));
                 }
-                #[cfg(windows)]
-                {
-                    socket = wrapped_socket.get()
-                }
-
-                let socket = Async::<UdpSocket>::try_from(socket).map_err(|err| {
-                    gst::error_msg!(
-                        gst::ResourceError::OpenRead,
-                        ["Failed to setup Async socket: {}", err]
-                    )
-                })?;
-
-                settings.used_socket = Some(wrapped_socket.clone());
-
-                socket
-            } else {
-                let addr: IpAddr = match settings.address {
-                    None => {
+                Some(ref addr) => match addr.parse() {
+                    Err(err) => {
                         return Err(gst::error_msg!(
                             gst::ResourceError::Settings,
-                            ["No address set"]
+                            ["Invalid address '{}' set: {}", addr, err]
                         ));
                     }
-                    Some(ref addr) => match addr.parse() {
-                        Err(err) => {
-                            return Err(gst::error_msg!(
-                                gst::ResourceError::Settings,
-                                ["Invalid address '{}' set: {}", addr, err]
-                            ));
-                        }
-                        Ok(addr) => {
-                            self.multicast_addr = Some(addr);
-                            addr
-                        }
-                    },
-                };
-                let port = settings.port;
-
-                // TODO: TTL etc
-                let saddr = if addr.is_multicast() {
-                    let bind_addr = if addr.is_ipv4() {
-                        IpAddr::V4(Ipv4Addr::UNSPECIFIED)
-                    } else {
-                        IpAddr::V6(Ipv6Addr::UNSPECIFIED)
-                    };
-
-                    let saddr = SocketAddr::new(bind_addr, port as u16);
-                    gst::debug!(
-                        CAT,
-                        obj = self.element,
-                        "Binding to {:?} for multicast group {:?}",
-                        saddr,
+                    Ok(addr) => {
+                        self.multicast_addr = Some(addr);
                         addr
-                    );
+                    }
+                },
+            };
+            let port = settings.port;
 
-                    saddr
+            // TODO: TTL etc
+            let saddr = if addr.is_multicast() {
+                let bind_addr = if addr.is_ipv4() {
+                    IpAddr::V4(Ipv4Addr::UNSPECIFIED)
                 } else {
-                    let saddr = SocketAddr::new(addr, port as u16);
-                    gst::debug!(CAT, obj = self.element, "Binding to {:?}", saddr);
-
-                    saddr
+                    IpAddr::V6(Ipv6Addr::UNSPECIFIED)
                 };
 
-                let socket = if addr.is_ipv4() {
-                    socket2::Socket::new(
-                        socket2::Domain::IPV4,
-                        socket2::Type::DGRAM,
-                        Some(socket2::Protocol::UDP),
-                    )
-                } else {
-                    socket2::Socket::new(
-                        socket2::Domain::IPV6,
-                        socket2::Type::DGRAM,
-                        Some(socket2::Protocol::UDP),
-                    )
-                }
-                .map_err(|err| {
-                    gst::error_msg!(
-                        gst::ResourceError::OpenRead,
-                        ["Failed to create socket: {}", err]
-                    )
-                })?;
-
-                socket.set_reuse_address(settings.reuse).map_err(|err| {
-                    gst::error_msg!(
-                        gst::ResourceError::OpenRead,
-                        ["Failed to set reuse_address: {}", err]
-                    )
-                })?;
-
+                let saddr = SocketAddr::new(bind_addr, port as u16);
                 gst::debug!(
                     CAT,
                     obj = self.element,
-                    "socket recv buffer size is {:?}",
-                    socket.recv_buffer_size()
+                    "Binding to {:?} for multicast group {:?}",
+                    saddr,
+                    addr
                 );
-                if settings.buffer_size != 0 {
-                    gst::debug!(
-                        CAT,
-                        obj = self.element,
-                        "changing the socket recv buffer size to {}",
-                        settings.buffer_size
-                    );
-                    socket
-                        .set_recv_buffer_size(settings.buffer_size as usize)
-                        .map_err(|err| {
-                            gst::error_msg!(
-                                gst::ResourceError::OpenRead,
-                                ["Failed to set buffer_size: {}", err]
-                            )
-                        })?;
-                }
 
-                #[cfg(unix)]
-                {
-                    socket.set_reuse_port(settings.reuse).map_err(|err| {
+                saddr
+            } else {
+                let saddr = SocketAddr::new(addr, port as u16);
+                gst::debug!(CAT, obj = self.element, "Binding to {:?}", saddr);
+
+                saddr
+            };
+
+            let socket = if addr.is_ipv4() {
+                socket2::Socket::new(
+                    socket2::Domain::IPV4,
+                    socket2::Type::DGRAM,
+                    Some(socket2::Protocol::UDP),
+                )
+            } else {
+                socket2::Socket::new(
+                    socket2::Domain::IPV6,
+                    socket2::Type::DGRAM,
+                    Some(socket2::Protocol::UDP),
+                )
+            }
+            .map_err(|err| {
+                gst::error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to create socket: {}", err]
+                )
+            })?;
+
+            socket.set_reuse_address(settings.reuse).map_err(|err| {
+                gst::error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to set reuse_address: {}", err]
+                )
+            })?;
+
+            gst::debug!(
+                CAT,
+                obj = self.element,
+                "socket recv buffer size is {:?}",
+                socket.recv_buffer_size()
+            );
+            if settings.buffer_size != 0 {
+                gst::debug!(
+                    CAT,
+                    obj = self.element,
+                    "changing the socket recv buffer size to {}",
+                    settings.buffer_size
+                );
+                socket
+                    .set_recv_buffer_size(settings.buffer_size as usize)
+                    .map_err(|err| {
                         gst::error_msg!(
                             gst::ResourceError::OpenRead,
-                            ["Failed to set reuse_port: {}", err]
+                            ["Failed to set buffer_size: {}", err]
                         )
                     })?;
-                }
+            }
 
-                socket.bind(&saddr.into()).map_err(|err| {
+            #[cfg(unix)]
+            {
+                socket.set_reuse_port(settings.reuse).map_err(|err| {
                     gst::error_msg!(
                         gst::ResourceError::OpenRead,
-                        ["Failed to bind socket: {}", err]
+                        ["Failed to set reuse_port: {}", err]
                     )
                 })?;
+            }
 
-                let socket = Async::<UdpSocket>::try_from(socket).map_err(|err| {
-                    gst::error_msg!(
-                        gst::ResourceError::OpenRead,
-                        ["Failed to setup Async socket: {}", err]
-                    )
-                })?;
+            socket.bind(&saddr.into()).map_err(|err| {
+                gst::error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to bind socket: {}", err]
+                )
+            })?;
 
-                if addr.is_multicast() {
-                    if let Some(multicast_iface) = &settings.multicast_iface {
-                        let multi_ifaces: Vec<String> =
-                            multicast_iface.split(',').map(|s| s.to_string()).collect();
+            let socket = Async::<UdpSocket>::try_from(socket).map_err(|err| {
+                gst::error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to setup Async socket: {}", err]
+                )
+            })?;
 
-                        //FIXME: Remove this when https://github.com/mmastrac/getifaddrs/issues/5 is fixed in the `getifaddrs` crate
-                        #[cfg(not(target_os = "android"))]
-                        {
-                            let iter = getifaddrs::getifaddrs().map_err(|err| {
-                                gst::error_msg!(
-                                    gst::ResourceError::OpenRead,
-                                    ["Failed to get interfaces: {}", err]
-                                )
-                            })?;
+            if addr.is_multicast() {
+                if let Some(multicast_iface) = &settings.multicast_iface {
+                    let multi_ifaces: Vec<String> =
+                        multicast_iface.split(',').map(|s| s.to_string()).collect();
 
-                            iter.for_each(|iface| {
-                                let ip_ver = if iface.address.is_ipv4() {
-                                    "IPv4"
+                    //FIXME: Remove this when https://github.com/mmastrac/getifaddrs/issues/5 is fixed in the `getifaddrs` crate
+                    #[cfg(not(target_os = "android"))]
+                    {
+                        let iter = getifaddrs::getifaddrs().map_err(|err| {
+                            gst::error_msg!(
+                                gst::ResourceError::OpenRead,
+                                ["Failed to get interfaces: {}", err]
+                            )
+                        })?;
+
+                        iter.for_each(|iface| {
+                            let ip_ver = if iface.address.is_ipv4() {
+                                "IPv4"
+                            } else {
+                                "IPv6"
+                            };
+
+                            for m in &multi_ifaces {
+                                if &iface.name == m {
+                                    self.multicast_ifaces.push(iface.clone());
+                                    gst::debug!(
+                                        CAT,
+                                        obj = self.element,
+                                        "Interface {m} available, version: {ip_ver}"
+                                    );
                                 } else {
-                                    "IPv6"
-                                };
-
-                                for m in &multi_ifaces {
-                                    if &iface.name == m {
+                                    // check if name matches the interface description (Friendly name) on Windows
+                                    #[cfg(windows)]
+                                    if &iface.description == m {
                                         self.multicast_ifaces.push(iface.clone());
                                         gst::debug!(
                                             CAT,
                                             obj = self.element,
                                             "Interface {m} available, version: {ip_ver}"
                                         );
-                                    } else {
-                                        // check if name matches the interface description (Friendly name) on Windows
-                                        #[cfg(windows)]
-                                        if &iface.description == m {
-                                            self.multicast_ifaces.push(iface.clone());
-                                            gst::debug!(
-                                                CAT,
-                                                obj = self.element,
-                                                "Interface {m} available, version: {ip_ver}"
-                                            );
-                                        }
                                     }
                                 }
-                            });
-                        }
-                    }
-
-                    if self.multicast_ifaces.is_empty() {
-                        gst::warning!(
-                            CAT,
-                            obj = self.element,
-                            "No suitable network interfaces found, adding default iface"
-                        );
-
-                        self.multicast_ifaces.push(getifaddrs::Interface {
-                            name: "default".to_owned(),
-                            #[cfg(windows)]
-                            description: "default".to_owned(),
-                            address: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-                            #[cfg(not(windows))]
-                            associated_address: None,
-                            netmask: None,
-                            flags: getifaddrs::InterfaceFlags::UP,
-                            index: Some(0),
+                            }
                         });
                     }
-
-                    match addr {
-                        IpAddr::V4(addr) => {
-                            for iface in &self.multicast_ifaces {
-                                if !iface.address.is_ipv4() {
-                                    gst::debug!(
-                                        CAT,
-                                        "Skipping the IPv6 version of the interface {}",
-                                        iface.name
-                                    );
-                                    continue;
-                                }
-
-                                gst::debug!(CAT, "interface {} joining the multicast", iface.name);
-                                // use the custom written API to be able to pass the interface index
-                                // for all types of target OS
-                                net::imp::join_multicast_v4(socket.as_ref(), &addr, iface)
-                                    .map_err(|err| {
-                                        gst::error_msg!(
-                                            gst::ResourceError::OpenRead,
-                                            ["Failed to join multicast group: {}", err]
-                                        )
-                                    })?;
-                            }
-
-                            socket
-                                .as_ref()
-                                .set_multicast_loop_v4(settings.multicast_loop)
-                                .map_err(|err| {
-                                    gst::error_msg!(
-                                        gst::ResourceError::OpenWrite,
-                                        [
-                                            "Failed to set multicast loop to {}: {}",
-                                            settings.multicast_loop,
-                                            err
-                                        ]
-                                    )
-                                })?;
-                        }
-                        IpAddr::V6(addr) => {
-                            for iface in &self.multicast_ifaces {
-                                if !iface.address.is_ipv6() {
-                                    gst::debug!(
-                                        CAT,
-                                        "Skipping the IPv4 version of the interface {}",
-                                        iface.name
-                                    );
-                                    continue;
-                                }
-
-                                gst::debug!(CAT, "interface {} joining the multicast", iface.name);
-                                socket
-                                    .as_ref()
-                                    .join_multicast_v6(&addr, iface.index.unwrap_or(0))
-                                    .map_err(|err| {
-                                        gst::error_msg!(
-                                            gst::ResourceError::OpenRead,
-                                            ["Failed to join multicast group: {}", err]
-                                        )
-                                    })?;
-                            }
-
-                            socket
-                                .as_ref()
-                                .set_multicast_loop_v6(settings.multicast_loop)
-                                .map_err(|err| {
-                                    gst::error_msg!(
-                                        gst::ResourceError::OpenWrite,
-                                        [
-                                            "Failed to set multicast loop to {}: {}",
-                                            settings.multicast_loop,
-                                            err
-                                        ]
-                                    )
-                                })?;
-                        }
-                    }
                 }
 
-                settings.used_socket = Some(wrap_socket(&socket)?);
+                if self.multicast_ifaces.is_empty() {
+                    gst::warning!(
+                        CAT,
+                        obj = self.element,
+                        "No suitable network interfaces found, adding default iface"
+                    );
 
-                socket
-            };
+                    self.multicast_ifaces.push(getifaddrs::Interface {
+                        name: "default".to_owned(),
+                        #[cfg(windows)]
+                        description: "default".to_owned(),
+                        address: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+                        #[cfg(not(windows))]
+                        associated_address: None,
+                        netmask: None,
+                        flags: getifaddrs::InterfaceFlags::UP,
+                        index: Some(0),
+                    });
+                }
 
-            let port: i32 = socket.as_ref().local_addr().unwrap().port().into();
-            if settings.port != port {
-                settings.port = port;
-                drop(settings);
-                self.element.notify("port");
+                match addr {
+                    IpAddr::V4(addr) => {
+                        for iface in &self.multicast_ifaces {
+                            if !iface.address.is_ipv4() {
+                                gst::debug!(
+                                    CAT,
+                                    "Skipping the IPv6 version of the interface {}",
+                                    iface.name
+                                );
+                                continue;
+                            }
 
-                settings = udpsrc.settings.lock().unwrap();
-            };
+                            gst::debug!(CAT, "interface {} joining the multicast", iface.name);
+                            // use the custom written API to be able to pass the interface index
+                            // for all types of target OS
+                            net::imp::join_multicast_v4(socket.as_ref(), &addr, iface).map_err(
+                                |err| {
+                                    gst::error_msg!(
+                                        gst::ResourceError::OpenRead,
+                                        ["Failed to join multicast group: {}", err]
+                                    )
+                                },
+                            )?;
+                        }
 
-            let buffer_pool = gst::BufferPool::new();
-            let mut config = buffer_pool.config();
-            config.set_params(None, settings.mtu, 0, 0);
-            buffer_pool.set_config(config).map_err(|err| {
-                gst::error_msg!(
-                    gst::ResourceError::Settings,
-                    ["Failed to configure buffer pool {:?}", err]
-                )
-            })?;
+                        socket
+                            .as_ref()
+                            .set_multicast_loop_v4(settings.multicast_loop)
+                            .map_err(|err| {
+                                gst::error_msg!(
+                                    gst::ResourceError::OpenWrite,
+                                    [
+                                        "Failed to set multicast loop to {}: {}",
+                                        settings.multicast_loop,
+                                        err
+                                    ]
+                                )
+                            })?;
+                    }
+                    IpAddr::V6(addr) => {
+                        for iface in &self.multicast_ifaces {
+                            if !iface.address.is_ipv6() {
+                                gst::debug!(
+                                    CAT,
+                                    "Skipping the IPv4 version of the interface {}",
+                                    iface.name
+                                );
+                                continue;
+                            }
 
+                            gst::debug!(CAT, "interface {} joining the multicast", iface.name);
+                            socket
+                                .as_ref()
+                                .join_multicast_v6(&addr, iface.index.unwrap_or(0))
+                                .map_err(|err| {
+                                    gst::error_msg!(
+                                        gst::ResourceError::OpenRead,
+                                        ["Failed to join multicast group: {}", err]
+                                    )
+                                })?;
+                        }
+
+                        socket
+                            .as_ref()
+                            .set_multicast_loop_v6(settings.multicast_loop)
+                            .map_err(|err| {
+                                gst::error_msg!(
+                                    gst::ResourceError::OpenWrite,
+                                    [
+                                        "Failed to set multicast loop to {}: {}",
+                                        settings.multicast_loop,
+                                        err
+                                    ]
+                                )
+                            })?;
+                    }
+                }
+            }
+
+            settings.used_socket = Some(wrap_socket(&socket)?);
+
+            socket
+        };
+
+        let port: i32 = socket.as_ref().local_addr().unwrap().port().into();
+        if settings.port != port {
+            settings.port = port;
             drop(settings);
+            self.element.notify("port");
 
-            self.socket = Some(
-                Socket::try_new(
-                    self.element.clone().upcast(),
-                    buffer_pool,
-                    UdpReader::new(socket),
+            settings = udpsrc.settings.lock().unwrap();
+        };
+
+        let buffer_pool = gst::BufferPool::new();
+        let mut config = buffer_pool.config();
+        config.set_params(None, settings.mtu, 0, 0);
+        buffer_pool.set_config(config).map_err(|err| {
+            gst::error_msg!(
+                gst::ResourceError::Settings,
+                ["Failed to configure buffer pool {:?}", err]
+            )
+        })?;
+
+        drop(settings);
+
+        self.socket = Some(
+            Socket::try_new(
+                self.element.clone().upcast(),
+                buffer_pool,
+                UdpReader::new(socket),
+            )
+            .map_err(|err| {
+                gst::error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to prepare socket {:?}", err]
                 )
-                .map_err(|err| {
-                    gst::error_msg!(
-                        gst::ResourceError::OpenRead,
-                        ["Failed to prepare socket {:?}", err]
-                    )
-                })?,
-            );
+            })?,
+        );
 
-            self.element.notify("used-socket");
+        self.element.notify("used-socket");
 
-            Ok(())
-        }
-        .boxed()
+        Ok(())
     }
 
-    fn unprepare(&mut self) -> BoxFuture<'_, ()> {
-        async move {
-            gst::debug!(CAT, obj = self.element, "Unpreparing Task");
-            let udpsrc = self.element.imp();
-            if let Some(reader) = &self.socket {
-                let socket = &reader.get().0;
-                if let Some(addr) = self.multicast_addr {
-                    match addr {
-                        IpAddr::V4(addr) => {
-                            for iface in &self.multicast_ifaces {
-                                if !iface.address.is_ipv4() {
-                                    gst::debug!(
-                                        CAT,
-                                        "Skipping the IPv6 version of the interface {}",
-                                        iface.name
-                                    );
-                                    continue;
-                                }
-
-                                gst::debug!(CAT, "interface {} leaving the multicast", iface.name);
-                                net::imp::leave_multicast_v4(socket.as_ref(), &addr, iface)
-                                    .unwrap();
+    async fn unprepare(&mut self) {
+        gst::debug!(CAT, obj = self.element, "Unpreparing Task");
+        let udpsrc = self.element.imp();
+        if let Some(reader) = &self.socket {
+            let socket = &reader.get().0;
+            if let Some(addr) = self.multicast_addr {
+                match addr {
+                    IpAddr::V4(addr) => {
+                        for iface in &self.multicast_ifaces {
+                            if !iface.address.is_ipv4() {
+                                gst::debug!(
+                                    CAT,
+                                    "Skipping the IPv6 version of the interface {}",
+                                    iface.name
+                                );
+                                continue;
                             }
+
+                            gst::debug!(CAT, "interface {} leaving the multicast", iface.name);
+                            net::imp::leave_multicast_v4(socket.as_ref(), &addr, iface).unwrap();
                         }
-                        IpAddr::V6(addr) => {
-                            for iface in &self.multicast_ifaces {
-                                if !iface.address.is_ipv6() {
-                                    gst::debug!(
-                                        CAT,
-                                        "Skipping the IPv4 version of the interface {}",
-                                        iface.name
-                                    );
-                                    continue;
-                                }
-
-                                gst::debug!(CAT, "interface {} leaving the multicast", iface.name);
-                                socket
-                                    .as_ref()
-                                    .leave_multicast_v6(&addr, iface.index.unwrap_or(0))
-                                    .unwrap();
+                    }
+                    IpAddr::V6(addr) => {
+                        for iface in &self.multicast_ifaces {
+                            if !iface.address.is_ipv6() {
+                                gst::debug!(
+                                    CAT,
+                                    "Skipping the IPv4 version of the interface {}",
+                                    iface.name
+                                );
+                                continue;
                             }
+
+                            gst::debug!(CAT, "interface {} leaving the multicast", iface.name);
+                            socket
+                                .as_ref()
+                                .leave_multicast_v6(&addr, iface.index.unwrap_or(0))
+                                .unwrap();
                         }
                     }
                 }
             }
-            udpsrc.settings.lock().unwrap().used_socket = None;
-            self.element.notify("used-socket");
         }
-        .boxed()
+        udpsrc.settings.lock().unwrap().used_socket = None;
+        self.element.notify("used-socket");
     }
 
-    fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async move {
-            gst::log!(CAT, obj = self.element, "Starting task");
-            self.socket
-                .as_mut()
-                .unwrap()
-                .set_clock(self.element.clock(), self.element.base_time());
-            gst::log!(CAT, obj = self.element, "Task started");
-            Ok(())
-        }
-        .boxed()
+    async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
+        gst::log!(CAT, obj = self.element, "Starting task");
+        self.socket
+            .as_mut()
+            .unwrap()
+            .set_clock(self.element.clock(), self.element.base_time());
+        gst::log!(CAT, obj = self.element, "Task started");
+        Ok(())
     }
 
-    fn try_next(&mut self) -> BoxFuture<'_, Result<gst::Buffer, gst::FlowError>> {
-        async move {
-            let event_fut = self.event_receiver.next().fuse();
-            let socket_fut = self.socket.as_mut().unwrap().try_next().fuse();
+    async fn try_next(&mut self) -> Result<gst::Buffer, gst::FlowError> {
+        let event_fut = self.event_receiver.next().fuse();
+        let socket_fut = self.socket.as_mut().unwrap().try_next().fuse();
 
-            pin_mut!(event_fut);
-            pin_mut!(socket_fut);
+        pin_mut!(event_fut);
+        pin_mut!(socket_fut);
 
-            futures::select! {
-                event_res = event_fut => match event_res {
-                    Some(event) => {
-                        gst::debug!(CAT, obj = self.element, "Handling element level event {event:?}");
+        futures::select! {
+            event_res = event_fut => match event_res {
+                Some(event) => {
+                    gst::debug!(CAT, obj = self.element, "Handling element level event {event:?}");
 
-                        match event.view() {
-                            gst::EventView::Eos(_) => Err(gst::FlowError::Eos),
-                            ev => {
-                                gst::error!(CAT, obj = self.element, "Unexpected event {ev:?} on channel");
-                                Err(gst::FlowError::Error)
-                            }
+                    match event.view() {
+                        gst::EventView::Eos(_) => Err(gst::FlowError::Eos),
+                        ev => {
+                            gst::error!(CAT, obj = self.element, "Unexpected event {ev:?} on channel");
+                            Err(gst::FlowError::Error)
                         }
                     }
-                    None => {
-                        gst::error!(CAT, obj = self.element, "Unexpected return on event channel");
-                        Err(gst::FlowError::Error)
+                }
+                None => {
+                    gst::error!(CAT, obj = self.element, "Unexpected return on event channel");
+                    Err(gst::FlowError::Error)
+                }
+            },
+            socket_res = socket_fut => match socket_res {
+                Ok((mut buffer, saddr)) => {
+                    if let Some(saddr) = saddr {
+                        if self.retrieve_sender_address {
+                            NetAddressMeta::add(
+                                buffer.get_mut().unwrap(),
+                                &gio::InetSocketAddress::from(saddr),
+                            );
+                        }
                     }
+
+                    Ok(buffer)
                 },
-                socket_res = socket_fut => match socket_res {
-                    Ok((mut buffer, saddr)) => {
-                        if let Some(saddr) = saddr {
-                            if self.retrieve_sender_address {
-                                NetAddressMeta::add(
-                                    buffer.get_mut().unwrap(),
-                                    &gio::InetSocketAddress::from(saddr),
-                                );
-                            }
-                        }
-
-                        Ok(buffer)
-                    },
-                    Err(err) => {
-                        gst::error!(CAT, obj = self.element, "Got error {err:#}");
-
-                        match err {
-                            SocketError::Gst(err) => {
-                                gst::element_error!(
-                                    self.element,
-                                    gst::StreamError::Failed,
-                                    ("Internal data stream error"),
-                                    ["streaming stopped, reason {err}"]
-                                );
-                            }
-                            SocketError::Io(err) => {
-                                gst::element_error!(
-                                    self.element,
-                                    gst::StreamError::Failed,
-                                    ("I/O error"),
-                                    ["streaming stopped, I/O error {err}"]
-                                );
-                            }
-                        }
-
-                        Err(gst::FlowError::Error)
-                    }
-                },
-            }
-        }
-        .boxed()
-    }
-
-    fn handle_item(&mut self, buffer: gst::Buffer) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-        async {
-            gst::log!(CAT, obj = self.element, "Handling {:?}", buffer);
-            let udpsrc = self.element.imp();
-
-            if self.need_initial_events {
-                gst::debug!(CAT, obj = self.element, "Pushing initial events");
-
-                let stream_id =
-                    format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
-                let stream_start_evt = gst::event::StreamStart::builder(&stream_id)
-                    .group_id(gst::GroupId::next())
-                    .build();
-                udpsrc.src_pad.push_event(stream_start_evt).await;
-
-                let caps = udpsrc.settings.lock().unwrap().caps.clone();
-                if let Some(caps) = caps {
-                    udpsrc
-                        .src_pad
-                        .push_event(gst::event::Caps::new(&caps))
-                        .await;
-                    *udpsrc.configured_caps.lock().unwrap() = Some(caps);
-                }
-
-                self.need_initial_events = false;
-            }
-
-            if self.need_segment {
-                let segment_evt =
-                    gst::event::Segment::new(&gst::FormattedSegment::<gst::format::Time>::new());
-                udpsrc.src_pad.push_event(segment_evt).await;
-
-                self.need_segment = false;
-            }
-
-            let res = udpsrc.src_pad.push(buffer).await.map(drop);
-            match res {
-                Ok(_) => gst::log!(CAT, obj = self.element, "Successfully pushed buffer"),
-                Err(gst::FlowError::Flushing) => gst::debug!(CAT, obj = self.element, "Flushing"),
-                Err(gst::FlowError::Eos) => {
-                    gst::debug!(CAT, obj = self.element, "EOS");
-                    udpsrc.src_pad.push_event(gst::event::Eos::new()).await;
-                }
                 Err(err) => {
-                    gst::error!(CAT, obj = self.element, "Got error {}", err);
-                    gst::element_error!(
-                        self.element,
-                        gst::StreamError::Failed,
-                        ("Internal data stream error"),
-                        ["streaming stopped, reason {}", err]
-                    );
+                    gst::error!(CAT, obj = self.element, "Got error {err:#}");
+
+                    match err {
+                        SocketError::Gst(err) => {
+                            gst::element_error!(
+                                self.element,
+                                gst::StreamError::Failed,
+                                ("Internal data stream error"),
+                                ["streaming stopped, reason {err}"]
+                            );
+                        }
+                        SocketError::Io(err) => {
+                            gst::element_error!(
+                                self.element,
+                                gst::StreamError::Failed,
+                                ("I/O error"),
+                                ["streaming stopped, I/O error {err}"]
+                            );
+                        }
+                    }
+
+                    Err(gst::FlowError::Error)
                 }
+            },
+        }
+    }
+
+    async fn handle_item(&mut self, buffer: gst::Buffer) -> Result<(), gst::FlowError> {
+        gst::log!(CAT, obj = self.element, "Handling {:?}", buffer);
+        let udpsrc = self.element.imp();
+
+        if self.need_initial_events {
+            gst::debug!(CAT, obj = self.element, "Pushing initial events");
+
+            let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
+            let stream_start_evt = gst::event::StreamStart::builder(&stream_id)
+                .group_id(gst::GroupId::next())
+                .build();
+            udpsrc.src_pad.push_event(stream_start_evt).await;
+
+            let caps = udpsrc.settings.lock().unwrap().caps.clone();
+            if let Some(caps) = caps {
+                udpsrc
+                    .src_pad
+                    .push_event(gst::event::Caps::new(&caps))
+                    .await;
+                *udpsrc.configured_caps.lock().unwrap() = Some(caps);
             }
 
-            res
+            self.need_initial_events = false;
         }
-        .boxed()
-    }
 
-    fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async move {
-            gst::log!(CAT, obj = self.element, "Stopping task");
-            self.need_initial_events = true;
-            self.need_segment = true;
-            gst::log!(CAT, obj = self.element, "Task stopped");
-            Ok(())
+        if self.need_segment {
+            let segment_evt =
+                gst::event::Segment::new(&gst::FormattedSegment::<gst::format::Time>::new());
+            udpsrc.src_pad.push_event(segment_evt).await;
+
+            self.need_segment = false;
         }
-        .boxed()
-    }
 
-    fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async move {
-            gst::log!(CAT, obj = self.element, "Stopping task flush");
-            self.need_segment = true;
-            gst::log!(CAT, obj = self.element, "Stopped task flush");
-            Ok(())
-        }
-        .boxed()
-    }
-
-    fn handle_loop_error(&mut self, err: gst::FlowError) -> BoxFuture<'_, task::Trigger> {
-        async move {
-            match err {
-                gst::FlowError::Flushing => {
-                    gst::debug!(CAT, obj = self.element, "Flushing");
-
-                    task::Trigger::FlushStart
-                }
-                gst::FlowError::Eos => {
-                    gst::debug!(CAT, obj = self.element, "EOS");
-                    self.element
-                        .imp()
-                        .src_pad
-                        .push_event(gst::event::Eos::new())
-                        .await;
-
-                    task::Trigger::Stop
-                }
-                err => {
-                    gst::error!(CAT, obj = self.element, "Got error {err}");
-                    gst::element_error!(
-                        &self.element,
-                        gst::StreamError::Failed,
-                        ("Internal data stream error"),
-                        ["streaming stopped, reason {}", err]
-                    );
-
-                    task::Trigger::Error
-                }
+        let res = udpsrc.src_pad.push(buffer).await.map(drop);
+        match res {
+            Ok(_) => gst::log!(CAT, obj = self.element, "Successfully pushed buffer"),
+            Err(gst::FlowError::Flushing) => gst::debug!(CAT, obj = self.element, "Flushing"),
+            Err(gst::FlowError::Eos) => {
+                gst::debug!(CAT, obj = self.element, "EOS");
+                udpsrc.src_pad.push_event(gst::event::Eos::new()).await;
+            }
+            Err(err) => {
+                gst::error!(CAT, obj = self.element, "Got error {}", err);
+                gst::element_error!(
+                    self.element,
+                    gst::StreamError::Failed,
+                    ("Internal data stream error"),
+                    ["streaming stopped, reason {}", err]
+                );
             }
         }
-        .boxed()
+
+        res
+    }
+
+    async fn stop(&mut self) -> Result<(), gst::ErrorMessage> {
+        gst::log!(CAT, obj = self.element, "Stopping task");
+        self.need_initial_events = true;
+        self.need_segment = true;
+        gst::log!(CAT, obj = self.element, "Task stopped");
+        Ok(())
+    }
+
+    async fn flush_stop(&mut self) -> Result<(), gst::ErrorMessage> {
+        gst::log!(CAT, obj = self.element, "Stopping task flush");
+        self.need_segment = true;
+        gst::log!(CAT, obj = self.element, "Stopped task flush");
+        Ok(())
+    }
+
+    async fn handle_loop_error(&mut self, err: gst::FlowError) -> task::Trigger {
+        match err {
+            gst::FlowError::Flushing => {
+                gst::debug!(CAT, obj = self.element, "Flushing");
+
+                task::Trigger::FlushStart
+            }
+            gst::FlowError::Eos => {
+                gst::debug!(CAT, obj = self.element, "EOS");
+                self.element
+                    .imp()
+                    .src_pad
+                    .push_event(gst::event::Eos::new())
+                    .await;
+
+                task::Trigger::Stop
+            }
+            err => {
+                gst::error!(CAT, obj = self.element, "Got error {err}");
+                gst::element_error!(
+                    &self.element,
+                    gst::StreamError::Failed,
+                    ("Internal data stream error"),
+                    ["streaming stopped, reason {}", err]
+                );
+
+                task::Trigger::Error
+            }
+        }
     }
 }
 

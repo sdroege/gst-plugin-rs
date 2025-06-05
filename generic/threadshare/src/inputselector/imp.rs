@@ -17,7 +17,6 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
-use futures::future::BoxFuture;
 use futures::future::{abortable, AbortHandle};
 use futures::prelude::*;
 
@@ -156,61 +155,55 @@ impl InputSelectorPadSinkHandler {
 impl PadSinkHandler for InputSelectorPadSinkHandler {
     type ElementImpl = InputSelector;
 
-    fn sink_chain(
+    async fn sink_chain(
         self,
         pad: gst::Pad,
         elem: super::InputSelector,
         buffer: gst::Buffer,
-    ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-        async move { self.handle_item(&pad, &elem, buffer).await }.boxed()
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        self.handle_item(&pad, &elem, buffer).await
     }
 
-    fn sink_chain_list(
+    async fn sink_chain_list(
         self,
         pad: gst::Pad,
         elem: super::InputSelector,
         list: gst::BufferList,
-    ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-        async move {
-            gst::log!(CAT, obj = pad, "Handling buffer list {:?}", list);
-            // TODO: Ideally we would keep the list intact and forward it in one go
-            for buffer in list.iter_owned() {
-                self.handle_item(&pad, &elem, buffer).await?;
-            }
-
-            Ok(gst::FlowSuccess::Ok)
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst::log!(CAT, obj = pad, "Handling buffer list {:?}", list);
+        // TODO: Ideally we would keep the list intact and forward it in one go
+        for buffer in list.iter_owned() {
+            self.handle_item(&pad, &elem, buffer).await?;
         }
-        .boxed()
+
+        Ok(gst::FlowSuccess::Ok)
     }
 
-    fn sink_event_serialized(
+    async fn sink_event_serialized(
         self,
         _pad: gst::Pad,
         _elem: super::InputSelector,
         event: gst::Event,
-    ) -> BoxFuture<'static, bool> {
-        async move {
-            let mut inner = self.0.lock().unwrap();
+    ) -> bool {
+        let mut inner = self.0.lock().unwrap();
 
-            // Remember the segment for later use
-            if let gst::EventView::Segment(e) = event.view() {
-                inner.segment = Some(e.segment().clone());
-            }
-
-            // We sent sticky events together with the next buffer once it becomes
-            // the active pad.
-            //
-            // TODO: Other serialized events for the active pad can also be forwarded
-            // here, and sticky events could be forwarded directly. Needs forwarding of
-            // all other sticky events first!
-            if event.is_sticky() {
-                inner.send_sticky = true;
-                true
-            } else {
-                true
-            }
+        // Remember the segment for later use
+        if let gst::EventView::Segment(e) = event.view() {
+            inner.segment = Some(e.segment().clone());
         }
-        .boxed()
+
+        // We sent sticky events together with the next buffer once it becomes
+        // the active pad.
+        //
+        // TODO: Other serialized events for the active pad can also be forwarded
+        // here, and sticky events could be forwarded directly. Needs forwarding of
+        // all other sticky events first!
+        if event.is_sticky() {
+            inner.send_sticky = true;
+            true
+        } else {
+            true
+        }
     }
 
     fn sink_event(self, _pad: &gst::Pad, imp: &InputSelector, event: gst::Event) -> bool {

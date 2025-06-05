@@ -18,7 +18,6 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
-use futures::future::BoxFuture;
 use futures::prelude::*;
 
 use gst::glib;
@@ -87,11 +86,11 @@ impl TcpClientReader {
 impl SocketRead for TcpClientReader {
     const DO_TIMESTAMP: bool = false;
 
-    fn read<'buf>(
+    async fn read<'buf>(
         &'buf mut self,
         buffer: &'buf mut [u8],
-    ) -> BoxFuture<'buf, io::Result<(usize, Option<std::net::SocketAddr>)>> {
-        async move { self.0.read(buffer).await.map(|read_size| (read_size, None)) }.boxed()
+    ) -> io::Result<(usize, Option<std::net::SocketAddr>)> {
+        Ok((self.0.read(buffer).await?, None))
     }
 }
 
@@ -270,178 +269,161 @@ impl TcpClientSrcTask {
 impl TaskImpl for TcpClientSrcTask {
     type Item = gst::Buffer;
 
-    fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async move {
-            gst::log!(
-                CAT,
-                obj = self.element,
-                "Preparing task connecting to {:?}",
-                self.saddr
-            );
+    async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
+        gst::log!(
+            CAT,
+            obj = self.element,
+            "Preparing task connecting to {:?}",
+            self.saddr
+        );
 
-            let socket = Async::<TcpStream>::connect(self.saddr)
-                .await
-                .map_err(|err| {
-                    gst::error_msg!(
-                        gst::ResourceError::OpenRead,
-                        ["Failed to connect to {:?}: {:?}", self.saddr, err]
-                    )
-                })?;
-
-            self.socket = Some(
-                Socket::try_new(
-                    self.element.clone().upcast(),
-                    self.buffer_pool.take().unwrap(),
-                    TcpClientReader::new(socket),
+        let socket = Async::<TcpStream>::connect(self.saddr)
+            .await
+            .map_err(|err| {
+                gst::error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to connect to {:?}: {:?}", self.saddr, err]
                 )
-                .map_err(|err| {
-                    gst::error_msg!(
-                        gst::ResourceError::OpenRead,
-                        ["Failed to prepare socket {:?}", err]
-                    )
-                })?,
-            );
+            })?;
 
-            gst::log!(CAT, obj = self.element, "Task prepared");
-            Ok(())
-        }
-        .boxed()
+        self.socket = Some(
+            Socket::try_new(
+                self.element.clone().upcast(),
+                self.buffer_pool.take().unwrap(),
+                TcpClientReader::new(socket),
+            )
+            .map_err(|err| {
+                gst::error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to prepare socket {:?}", err]
+                )
+            })?,
+        );
+
+        gst::log!(CAT, obj = self.element, "Task prepared");
+        Ok(())
     }
 
-    fn handle_action_error(
+    async fn handle_action_error(
         &mut self,
         trigger: task::Trigger,
         state: TaskState,
         err: gst::ErrorMessage,
-    ) -> BoxFuture<'_, task::Trigger> {
-        async move {
-            match trigger {
-                task::Trigger::Prepare => {
-                    gst::error!(CAT, "Task preparation failed: {:?}", err);
-                    self.element.post_error_message(err);
+    ) -> task::Trigger {
+        match trigger {
+            task::Trigger::Prepare => {
+                gst::error!(CAT, "Task preparation failed: {:?}", err);
+                self.element.post_error_message(err);
 
-                    task::Trigger::Error
-                }
-                other => unreachable!("Action error for {:?} in state {:?}", other, state),
+                task::Trigger::Error
             }
+            other => unreachable!("Action error for {:?} in state {:?}", other, state),
         }
-        .boxed()
     }
 
-    fn try_next(&mut self) -> BoxFuture<'_, Result<gst::Buffer, gst::FlowError>> {
-        async move {
-            let event_fut = self.event_receiver.next().fuse();
-            let socket_fut = self.socket.as_mut().unwrap().try_next().fuse();
+    async fn try_next(&mut self) -> Result<gst::Buffer, gst::FlowError> {
+        let event_fut = self.event_receiver.next().fuse();
+        let socket_fut = self.socket.as_mut().unwrap().try_next().fuse();
 
-            pin_mut!(event_fut);
-            pin_mut!(socket_fut);
+        pin_mut!(event_fut);
+        pin_mut!(socket_fut);
 
-            futures::select! {
-                event_res = event_fut => match event_res {
-                    Some(event) => {
-                        gst::debug!(CAT, obj = self.element, "Handling element level event {event:?}");
+        futures::select! {
+            event_res = event_fut => match event_res {
+                Some(event) => {
+                    gst::debug!(CAT, obj = self.element, "Handling element level event {event:?}");
 
-                        match event.view() {
-                            gst::EventView::Eos(_) => Err(gst::FlowError::Eos),
-                            ev => {
-                                gst::error!(CAT, obj = self.element, "Unexpected event {ev:?} on channel");
-                                Err(gst::FlowError::Error)
-                            }
+                    match event.view() {
+                        gst::EventView::Eos(_) => Err(gst::FlowError::Eos),
+                        ev => {
+                            gst::error!(CAT, obj = self.element, "Unexpected event {ev:?} on channel");
+                            Err(gst::FlowError::Error)
                         }
                     }
-                    None => {
-                        gst::error!(CAT, obj = self.element, "Unexpected return on event channel");
-                        Err(gst::FlowError::Error)
-                    }
-                },
-                socket_res = socket_fut => match socket_res {
-                    Ok((buffer, _saddr)) => Ok(buffer),
-                    Err(err) => {
-                        gst::error!(CAT, obj = self.element, "Got error {err:#}");
+                }
+                None => {
+                    gst::error!(CAT, obj = self.element, "Unexpected return on event channel");
+                    Err(gst::FlowError::Error)
+                }
+            },
+            socket_res = socket_fut => match socket_res {
+                Ok((buffer, _saddr)) => Ok(buffer),
+                Err(err) => {
+                    gst::error!(CAT, obj = self.element, "Got error {err:#}");
 
-                        match err {
-                            SocketError::Gst(err) => {
-                                gst::element_error!(
-                                    self.element,
-                                    gst::StreamError::Failed,
-                                    ("Internal data stream error"),
-                                    ["streaming stopped, reason {err}"]
-                                );
-                            }
-                            SocketError::Io(err) => {
-                                gst::element_error!(
-                                    self.element,
-                                    gst::StreamError::Failed,
-                                    ("I/O error"),
-                                    ["streaming stopped, I/O error {err}"]
-                                );
-                            }
+                    match err {
+                        SocketError::Gst(err) => {
+                            gst::element_error!(
+                                self.element,
+                                gst::StreamError::Failed,
+                                ("Internal data stream error"),
+                                ["streaming stopped, reason {err}"]
+                            );
                         }
-
-                        Err(gst::FlowError::Error)
+                        SocketError::Io(err) => {
+                            gst::element_error!(
+                                self.element,
+                                gst::StreamError::Failed,
+                                ("I/O error"),
+                                ["streaming stopped, I/O error {err}"]
+                            );
+                        }
                     }
-                },
+
+                    Err(gst::FlowError::Error)
+                }
+            },
+        }
+    }
+
+    async fn handle_item(&mut self, buffer: gst::Buffer) -> Result<(), gst::FlowError> {
+        let _ = self.push_buffer(buffer).await?;
+        Ok(())
+    }
+
+    async fn stop(&mut self) -> Result<(), gst::ErrorMessage> {
+        gst::log!(CAT, obj = self.element, "Stopping task");
+        self.need_initial_events = true;
+        gst::log!(CAT, obj = self.element, "Task stopped");
+        Ok(())
+    }
+
+    async fn flush_stop(&mut self) -> Result<(), gst::ErrorMessage> {
+        gst::log!(CAT, obj = self.element, "Stopping task flush");
+        self.need_initial_events = true;
+        gst::log!(CAT, obj = self.element, "Task flush stopped");
+        Ok(())
+    }
+
+    async fn handle_loop_error(&mut self, err: gst::FlowError) -> task::Trigger {
+        match err {
+            gst::FlowError::Flushing => {
+                gst::debug!(CAT, obj = self.element, "Flushing");
+
+                task::Trigger::FlushStart
+            }
+            gst::FlowError::Eos => {
+                gst::debug!(CAT, obj = self.element, "EOS");
+                self.element
+                    .imp()
+                    .src_pad
+                    .push_event(gst::event::Eos::new())
+                    .await;
+
+                task::Trigger::Stop
+            }
+            err => {
+                gst::error!(CAT, obj = self.element, "Got error {err}");
+                gst::element_error!(
+                    &self.element,
+                    gst::StreamError::Failed,
+                    ("Internal data stream error"),
+                    ["streaming stopped, reason {}", err]
+                );
+
+                task::Trigger::Error
             }
         }
-        .boxed()
-    }
-
-    fn handle_item(&mut self, buffer: gst::Buffer) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-        self.push_buffer(buffer).map_ok(drop).boxed()
-    }
-
-    fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async move {
-            gst::log!(CAT, obj = self.element, "Stopping task");
-            self.need_initial_events = true;
-            gst::log!(CAT, obj = self.element, "Task stopped");
-            Ok(())
-        }
-        .boxed()
-    }
-
-    fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async move {
-            gst::log!(CAT, obj = self.element, "Stopping task flush");
-            self.need_initial_events = true;
-            gst::log!(CAT, obj = self.element, "Task flush stopped");
-            Ok(())
-        }
-        .boxed()
-    }
-
-    fn handle_loop_error(&mut self, err: gst::FlowError) -> BoxFuture<'_, task::Trigger> {
-        async move {
-            match err {
-                gst::FlowError::Flushing => {
-                    gst::debug!(CAT, obj = self.element, "Flushing");
-
-                    task::Trigger::FlushStart
-                }
-                gst::FlowError::Eos => {
-                    gst::debug!(CAT, obj = self.element, "EOS");
-                    self.element
-                        .imp()
-                        .src_pad
-                        .push_event(gst::event::Eos::new())
-                        .await;
-
-                    task::Trigger::Stop
-                }
-                err => {
-                    gst::error!(CAT, obj = self.element, "Got error {err}");
-                    gst::element_error!(
-                        &self.element,
-                        gst::StreamError::Failed,
-                        ("Internal data stream error"),
-                        ["streaming stopped, reason {}", err]
-                    );
-
-                    task::Trigger::Error
-                }
-            }
-        }
-        .boxed()
     }
 }
 

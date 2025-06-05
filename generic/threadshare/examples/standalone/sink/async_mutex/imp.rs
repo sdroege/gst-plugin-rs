@@ -6,9 +6,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use futures::future::BoxFuture;
-use futures::prelude::*;
-
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -96,61 +93,55 @@ struct AsyncPadSinkHandler(Arc<futures::lock::Mutex<PadSinkHandlerInner>>);
 impl PadSinkHandler for AsyncPadSinkHandler {
     type ElementImpl = AsyncMutexSink;
 
-    fn sink_chain(
+    async fn sink_chain(
         self,
         _pad: gst::Pad,
         elem: super::AsyncMutexSink,
         buffer: gst::Buffer,
-    ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-        async move {
-            if self.0.lock().await.handle_buffer(&elem, buffer).is_err() {
-                return Err(gst::FlowError::Flushing);
-            }
-
-            Ok(gst::FlowSuccess::Ok)
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        if self.0.lock().await.handle_buffer(&elem, buffer).is_err() {
+            return Err(gst::FlowError::Flushing);
         }
-        .boxed()
+
+        Ok(gst::FlowSuccess::Ok)
     }
 
-    fn sink_event_serialized(
+    async fn sink_event_serialized(
         self,
         _pad: gst::Pad,
         elem: super::AsyncMutexSink,
         event: gst::Event,
-    ) -> BoxFuture<'static, bool> {
-        async move {
-            match event.view() {
-                EventView::Eos(_) => {
-                    {
-                        let mut inner = self.0.lock().await;
-                        debug_or_trace!(CAT, inner.is_main_elem, obj = elem, "EOS");
-                        inner.is_flushing = true;
-                    }
+    ) -> bool {
+        match event.view() {
+            EventView::Eos(_) => {
+                {
+                    let mut inner = self.0.lock().await;
+                    debug_or_trace!(CAT, inner.is_main_elem, obj = elem, "EOS");
+                    inner.is_flushing = true;
+                }
 
-                    // When each element sends its own EOS message,
-                    // it takes ages for the pipeline to process all of them.
-                    // Let's just post an error message and let main shuts down
-                    // after all streams have posted this message.
-                    let _ = elem
-                        .post_message(gst::message::Error::new(gst::LibraryError::Shutdown, "EOS"));
-                }
-                EventView::FlushStop(_) => {
-                    self.0.lock().await.is_flushing = false;
-                }
-                EventView::Segment(evt) => {
-                    if let Some(time_seg) = evt.segment().downcast_ref::<gst::ClockTime>() {
-                        self.0.lock().await.segment_start = time_seg.start();
-                    }
-                }
-                EventView::SinkMessage(evt) => {
-                    let _ = elem.post_message(evt.message());
-                }
-                _ => (),
+                // When each element sends its own EOS message,
+                // it takes ages for the pipeline to process all of them.
+                // Let's just post an error message and let main shuts down
+                // after all streams have posted this message.
+                let _ =
+                    elem.post_message(gst::message::Error::new(gst::LibraryError::Shutdown, "EOS"));
             }
-
-            true
+            EventView::FlushStop(_) => {
+                self.0.lock().await.is_flushing = false;
+            }
+            EventView::Segment(evt) => {
+                if let Some(time_seg) = evt.segment().downcast_ref::<gst::ClockTime>() {
+                    self.0.lock().await.segment_start = time_seg.start();
+                }
+            }
+            EventView::SinkMessage(evt) => {
+                let _ = elem.post_message(evt.message());
+            }
+            _ => (),
         }
-        .boxed()
+
+        true
     }
 
     fn sink_event(self, _pad: &gst::Pad, _imp: &AsyncMutexSink, event: gst::Event) -> bool {

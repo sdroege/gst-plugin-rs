@@ -17,9 +17,6 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
-use futures::future::BoxFuture;
-use futures::prelude::*;
-
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -350,60 +347,54 @@ impl UdpSinkPadHandler {
 impl PadSinkHandler for UdpSinkPadHandler {
     type ElementImpl = UdpSink;
 
-    fn sink_chain(
+    async fn sink_chain(
         self,
         _pad: gst::Pad,
         elem: super::UdpSink,
         buffer: gst::Buffer,
-    ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-        async move { self.0.lock().await.handle_buffer(&elem, buffer).await }.boxed()
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        self.0.lock().await.handle_buffer(&elem, buffer).await
     }
 
-    fn sink_chain_list(
+    async fn sink_chain_list(
         self,
         _pad: gst::Pad,
         elem: super::UdpSink,
         list: gst::BufferList,
-    ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-        async move {
-            let mut inner = self.0.lock().await;
-            for buffer in list.iter_owned() {
-                inner.handle_buffer(&elem, buffer).await?;
-            }
-
-            Ok(gst::FlowSuccess::Ok)
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let mut inner = self.0.lock().await;
+        for buffer in list.iter_owned() {
+            inner.handle_buffer(&elem, buffer).await?;
         }
-        .boxed()
+
+        Ok(gst::FlowSuccess::Ok)
     }
 
-    fn sink_event_serialized(
+    async fn sink_event_serialized(
         self,
         _pad: gst::Pad,
         elem: super::UdpSink,
         event: gst::Event,
-    ) -> BoxFuture<'static, bool> {
-        async move {
-            gst::debug!(CAT, obj = elem, "Handling {event:?}");
+    ) -> bool {
+        gst::debug!(CAT, obj = elem, "Handling {event:?}");
 
-            match event.view() {
-                EventView::Eos(_) => {
-                    let _ = elem.post_message(gst::message::Eos::builder().src(&elem).build());
-                }
-                EventView::Segment(e) => {
-                    self.0.lock().await.segment = Some(e.segment().clone());
-                }
-                EventView::FlushStop(_) => {
-                    self.0.lock().await.is_flushing = false;
-                }
-                EventView::SinkMessage(e) => {
-                    let _ = elem.post_message(e.message());
-                }
-                _ => (),
+        match event.view() {
+            EventView::Eos(_) => {
+                let _ = elem.post_message(gst::message::Eos::builder().src(&elem).build());
             }
-
-            true
+            EventView::Segment(e) => {
+                self.0.lock().await.segment = Some(e.segment().clone());
+            }
+            EventView::FlushStop(_) => {
+                self.0.lock().await.is_flushing = false;
+            }
+            EventView::SinkMessage(e) => {
+                let _ = elem.post_message(e.message());
+            }
+            _ => (),
         }
-        .boxed()
+
+        true
     }
 
     fn sink_event(self, _pad: &gst::Pad, imp: &UdpSink, event: gst::Event) -> bool {

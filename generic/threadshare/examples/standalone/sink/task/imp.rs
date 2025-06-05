@@ -6,9 +6,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use futures::future::BoxFuture;
-use futures::prelude::*;
-
 use gst::error_msg;
 use gst::glib;
 use gst::prelude::*;
@@ -37,59 +34,53 @@ struct TaskPadSinkHandler;
 impl PadSinkHandler for TaskPadSinkHandler {
     type ElementImpl = TaskSink;
 
-    fn sink_chain(
+    async fn sink_chain(
         self,
         _pad: gst::Pad,
         elem: super::TaskSink,
         buffer: gst::Buffer,
-    ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let sender = elem.imp().clone_item_sender();
-        async move {
-            if sender.send_async(StreamItem::Buffer(buffer)).await.is_err() {
-                return Err(gst::FlowError::Flushing);
-            }
-
-            Ok(gst::FlowSuccess::Ok)
+        if sender.send_async(StreamItem::Buffer(buffer)).await.is_err() {
+            return Err(gst::FlowError::Flushing);
         }
-        .boxed()
+
+        Ok(gst::FlowSuccess::Ok)
     }
 
-    fn sink_event_serialized(
+    async fn sink_event_serialized(
         self,
         _pad: gst::Pad,
         elem: super::TaskSink,
         event: gst::Event,
-    ) -> BoxFuture<'static, bool> {
+    ) -> bool {
         let sender = elem.imp().clone_item_sender();
-        async move {
-            match event.view() {
-                EventView::Segment(_) => {
-                    let _ = sender.send_async(StreamItem::Event(event)).await;
-                }
-                EventView::Eos(_) => {
-                    let is_main_elem = elem.imp().settings.lock().unwrap().is_main_elem;
-                    debug_or_trace!(CAT, is_main_elem, obj = elem, "EOS");
-
-                    // When each element sends its own EOS message,
-                    // it takes ages for the pipeline to process all of them.
-                    // Let's just post an error message and let main shuts down
-                    // after all streams have posted this message.
-                    let _ = elem
-                        .post_message(gst::message::Error::new(gst::LibraryError::Shutdown, "EOS"));
-                }
-                EventView::FlushStop(_) => {
-                    let imp = elem.imp();
-                    return imp.task.flush_stop().await_maybe_on_context().is_ok();
-                }
-                EventView::SinkMessage(evt) => {
-                    let _ = elem.post_message(evt.message());
-                }
-                _ => (),
+        match event.view() {
+            EventView::Segment(_) => {
+                let _ = sender.send_async(StreamItem::Event(event)).await;
             }
+            EventView::Eos(_) => {
+                let is_main_elem = elem.imp().settings.lock().unwrap().is_main_elem;
+                debug_or_trace!(CAT, is_main_elem, obj = elem, "EOS");
 
-            true
+                // When each element sends its own EOS message,
+                // it takes ages for the pipeline to process all of them.
+                // Let's just post an error message and let main shuts down
+                // after all streams have posted this message.
+                let _ =
+                    elem.post_message(gst::message::Error::new(gst::LibraryError::Shutdown, "EOS"));
+            }
+            EventView::FlushStop(_) => {
+                let imp = elem.imp();
+                return imp.task.flush_stop().await_maybe_on_context().is_ok();
+            }
+            EventView::SinkMessage(evt) => {
+                let _ = elem.post_message(evt.message());
+            }
+            _ => (),
         }
-        .boxed()
+
+        true
     }
 
     fn sink_event(self, _pad: &gst::Pad, imp: &TaskSink, event: gst::Event) -> bool {
@@ -136,92 +127,80 @@ impl TaskSinkTask {
 impl TaskImpl for TaskSinkTask {
     type Item = StreamItem;
 
-    fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
+    async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
         log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Preparing Task");
-        future::ok(()).boxed()
+        Ok(())
     }
 
-    fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async {
-            log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Starting Task");
-            self.last_ts = None;
-            if let Some(stats) = self.stats.as_mut() {
-                stats.start();
-            }
-
-            Ok(())
+    async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
+        log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Starting Task");
+        self.last_ts = None;
+        if let Some(stats) = self.stats.as_mut() {
+            stats.start();
         }
-        .boxed()
+
+        Ok(())
     }
 
-    fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async {
-            log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Stopping Task");
-            self.flush();
-            Ok(())
-        }
-        .boxed()
+    async fn stop(&mut self) -> Result<(), gst::ErrorMessage> {
+        log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Stopping Task");
+        self.flush();
+        Ok(())
     }
 
-    fn try_next(&mut self) -> BoxFuture<'_, Result<StreamItem, gst::FlowError>> {
-        self.item_receiver
-            .recv_async()
-            .map(|opt_item| Ok(opt_item.unwrap()))
-            .boxed()
+    async fn try_next(&mut self) -> Result<StreamItem, gst::FlowError> {
+        Ok(self.item_receiver.recv_async().await.unwrap())
     }
 
-    fn handle_item(&mut self, item: StreamItem) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-        async move {
-            debug_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Received {item:?}");
+    async fn handle_item(&mut self, item: StreamItem) -> Result<(), gst::FlowError> {
+        debug_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Received {item:?}");
 
-            match item {
-                StreamItem::Buffer(buffer) => {
-                    let ts = buffer
-                        .dts_or_pts()
-                        .expect("Buffer without ts")
-                        // FIXME do proper segment to running time
-                        .checked_sub(self.segment_start.expect("Buffer without Time Segment"))
-                        .expect("dts before Segment start");
+        match item {
+            StreamItem::Buffer(buffer) => {
+                let ts = buffer
+                    .dts_or_pts()
+                    .expect("Buffer without ts")
+                    // FIXME do proper segment to running time
+                    .checked_sub(self.segment_start.expect("Buffer without Time Segment"))
+                    .expect("dts before Segment start");
 
-                    if let Some(last_ts) = self.last_ts {
-                        let cur_ts = self.elem.current_running_time().unwrap();
-                        let latency: Duration = (cur_ts - ts).into();
-                        let interval: Duration = (ts - last_ts).into();
+                if let Some(last_ts) = self.last_ts {
+                    let cur_ts = self.elem.current_running_time().unwrap();
+                    let latency: Duration = (cur_ts - ts).into();
+                    let interval: Duration = (ts - last_ts).into();
 
-                        if let Some(stats) = self.stats.as_mut() {
-                            stats.add_buffer(latency, interval);
-                        }
-
-                        debug_or_trace!(
-                            CAT,
-                            self.is_main_elem,
-                            obj = self.elem,
-                            "o latency {latency:.2?}",
-                        );
-                        debug_or_trace!(
-                            CAT,
-                            self.is_main_elem,
-                            obj = self.elem,
-                            "o interval {interval:.2?}",
-                        );
+                    if let Some(stats) = self.stats.as_mut() {
+                        stats.add_buffer(latency, interval);
                     }
 
-                    self.last_ts = Some(ts);
-
-                    log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Buffer processed");
+                    debug_or_trace!(
+                        CAT,
+                        self.is_main_elem,
+                        obj = self.elem,
+                        "o latency {latency:.2?}",
+                    );
+                    debug_or_trace!(
+                        CAT,
+                        self.is_main_elem,
+                        obj = self.elem,
+                        "o interval {interval:.2?}",
+                    );
                 }
-                StreamItem::Event(evt) => {
-                    if let EventView::Segment(evt) = evt.view() {
-                        if let Some(time_seg) = evt.segment().downcast_ref::<gst::ClockTime>() {
-                            self.segment_start = time_seg.start();
-                        }
+
+                self.last_ts = Some(ts);
+
+                log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Buffer processed");
+            }
+            StreamItem::Event(evt) => {
+                if let EventView::Segment(evt) = evt.view() {
+                    if let Some(time_seg) = evt.segment().downcast_ref::<gst::ClockTime>() {
+                        self.segment_start = time_seg.start();
                     }
                 }
             }
-
-            Ok(())
         }
-        .boxed()
+
+        Ok(())
     }
 }
 

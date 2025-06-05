@@ -18,8 +18,6 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
-use futures::future::BoxFuture;
-
 use gst::glib;
 use gst::prelude::*;
 
@@ -27,6 +25,7 @@ use std::sync::LazyLock;
 
 use std::error;
 use std::fmt;
+use std::future::Future;
 use std::io;
 use std::net::UdpSocket;
 
@@ -52,7 +51,7 @@ pub trait SocketRead: Send + Unpin {
     fn read<'buf>(
         &'buf mut self,
         buffer: &'buf mut [u8],
-    ) -> BoxFuture<'buf, io::Result<(usize, Option<std::net::SocketAddr>)>>;
+    ) -> impl Future<Output = io::Result<(usize, Option<std::net::SocketAddr>)>> + Send;
 }
 
 pub struct Socket<T: SocketRead> {

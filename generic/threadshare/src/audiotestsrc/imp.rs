@@ -6,9 +6,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use futures::future::BoxFuture;
-use futures::prelude::*;
-
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -240,7 +237,7 @@ impl AudioTestSrcTask {
 impl TaskImpl for AudioTestSrcTask {
     type Item = gst::Buffer;
 
-    fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
+    async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
         gst::log!(CAT, obj = self.elem, "Preparing Task");
 
         let imp = self.elem.imp();
@@ -255,84 +252,80 @@ impl TaskImpl for AudioTestSrcTask {
             self.is_main_elem = settings.is_main_elem;
         }
 
-        future::ok(()).boxed()
+        Ok(())
     }
 
-    fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async move {
-            gst::log!(CAT, obj = self.elem, "Starting Task");
+    async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
+        gst::log!(CAT, obj = self.elem, "Starting Task");
 
-            if self.need_initial_events {
-                gst::debug!(CAT, obj = self.elem, "Pushing initial events");
+        if self.need_initial_events {
+            gst::debug!(CAT, obj = self.elem, "Pushing initial events");
 
-                let stream_id =
-                    format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
-                let stream_start_evt = gst::event::StreamStart::builder(&stream_id)
-                    .group_id(gst::GroupId::next())
-                    .build();
-                self.elem.imp().src_pad.push_event(stream_start_evt).await;
-            }
-
-            if self.negotiate().await?.has_changed() {
-                let bytes_per_buffer = (self.rate as u64)
-                    * self.buffer_duration.mseconds()
-                    * self.channels as u64
-                    * size_of::<i16>() as u64
-                    / 1_000;
-
-                let mut pool_config = self.buffer_pool.config();
-                pool_config
-                    .as_mut()
-                    .set_params(Some(&self.caps), bytes_per_buffer as u32, 2, 6);
-                self.buffer_pool.set_config(pool_config).unwrap();
-            }
-
-            assert!(!self.caps.is_empty());
-            self.buffer_pool.set_active(true).unwrap();
-
-            if self.need_initial_events {
-                let segment_evt =
-                    gst::event::Segment::new(&gst::FormattedSegment::<gst::format::Time>::new());
-                self.elem.imp().src_pad.push_event(segment_evt).await;
-
-                self.need_initial_events = false;
-            }
-
-            self.buffer_count = 0;
-
-            #[cfg(feature = "tuning")]
-            if self.is_main_elem {
-                self.parked_duration_init = None;
-            }
-
-            Ok(())
+            let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
+            let stream_start_evt = gst::event::StreamStart::builder(&stream_id)
+                .group_id(gst::GroupId::next())
+                .build();
+            self.elem.imp().src_pad.push_event(stream_start_evt).await;
         }
-        .boxed()
+
+        if self.negotiate().await?.has_changed() {
+            let bytes_per_buffer = (self.rate as u64)
+                * self.buffer_duration.mseconds()
+                * self.channels as u64
+                * size_of::<i16>() as u64
+                / 1_000;
+
+            let mut pool_config = self.buffer_pool.config();
+            pool_config
+                .as_mut()
+                .set_params(Some(&self.caps), bytes_per_buffer as u32, 2, 6);
+            self.buffer_pool.set_config(pool_config).unwrap();
+        }
+
+        assert!(!self.caps.is_empty());
+        self.buffer_pool.set_active(true).unwrap();
+
+        if self.need_initial_events {
+            let segment_evt =
+                gst::event::Segment::new(&gst::FormattedSegment::<gst::format::Time>::new());
+            self.elem.imp().src_pad.push_event(segment_evt).await;
+
+            self.need_initial_events = false;
+        }
+
+        self.buffer_count = 0;
+
+        #[cfg(feature = "tuning")]
+        if self.is_main_elem {
+            self.parked_duration_init = None;
+        }
+
+        Ok(())
     }
 
-    fn pause(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
+    async fn pause(&mut self) -> Result<(), gst::ErrorMessage> {
         gst::log!(CAT, obj = self.elem, "Pausing Task");
         self.buffer_pool.set_active(false).unwrap();
 
-        future::ok(()).boxed()
+        Ok(())
     }
 
-    fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
+    async fn stop(&mut self) -> Result<(), gst::ErrorMessage> {
         gst::log!(CAT, obj = self.elem, "Stopping Task");
 
         self.need_initial_events = true;
         self.accumulator = 0.0;
         self.last_buffer_end = None;
 
-        future::ok(()).boxed()
+        Ok(())
     }
 
-    fn try_next(&mut self) -> BoxFuture<'_, Result<gst::Buffer, gst::FlowError>> {
+    async fn try_next(&mut self) -> Result<gst::Buffer, gst::FlowError> {
         let mut buffer = match self.buffer_pool.acquire_buffer(None) {
             Ok(buffer) => buffer,
             Err(err) => {
                 gst::error!(CAT, obj = self.elem, "Failed to acquire buffer {}", err);
-                return future::err(err).boxed();
+                return Err(err);
             }
         };
 
@@ -375,101 +368,91 @@ impl TaskImpl for AudioTestSrcTask {
 
         self.last_buffer_end = start.opt_add(self.buffer_duration);
 
-        async move {
-            if self.is_live {
-                if let Some(delay) = self
-                    .last_buffer_end
-                    .unwrap()
-                    .checked_sub(self.elem.current_running_time().unwrap())
-                {
-                    // Wait for all samples to fit in last time slice
-                    timer::delay_for_at_least(delay.into()).await;
-                }
-            } else {
-                // Let the scheduler share time with other tasks
-                runtime::executor::yield_now().await;
+        if self.is_live {
+            if let Some(delay) = self
+                .last_buffer_end
+                .unwrap()
+                .checked_sub(self.elem.current_running_time().unwrap())
+            {
+                // Wait for all samples to fit in last time slice
+                timer::delay_for_at_least(delay.into()).await;
             }
-
-            Ok(buffer)
+        } else {
+            // Let the scheduler share time with other tasks
+            runtime::executor::yield_now().await;
         }
-        .boxed()
+
+        Ok(buffer)
     }
 
-    fn handle_item(&mut self, buffer: gst::Buffer) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-        async move {
-            let imp = self.elem.imp();
+    async fn handle_item(&mut self, buffer: gst::Buffer) -> Result<(), gst::FlowError> {
+        let imp = self.elem.imp();
 
-            gst::debug!(CAT, imp = imp, "Pushing {buffer:?}");
-            imp.src_pad.push(buffer).await?;
-            gst::log!(CAT, imp = imp, "Successfully pushed buffer");
+        gst::debug!(CAT, imp = imp, "Pushing {buffer:?}");
+        imp.src_pad.push(buffer).await?;
+        gst::log!(CAT, imp = imp, "Successfully pushed buffer");
 
-            self.buffer_count += 1;
+        self.buffer_count += 1;
 
-            #[cfg(feature = "tuning")]
-            if self.is_main_elem {
-                if let Some(parked_duration_init) = self.parked_duration_init {
-                    if self.buffer_count % LOG_BUFFER_INTERVAL == 0 {
-                        let parked_duration =
-                            runtime::Context::current().unwrap().parked_duration()
-                                - parked_duration_init;
+        #[cfg(feature = "tuning")]
+        if self.is_main_elem {
+            if let Some(parked_duration_init) = self.parked_duration_init {
+                if self.buffer_count % LOG_BUFFER_INTERVAL == 0 {
+                    let parked_duration = runtime::Context::current().unwrap().parked_duration()
+                        - parked_duration_init;
 
-                        gst::info!(
-                            CAT,
-                            "Parked: {:5.2?}%",
-                            parked_duration.as_nanos() as f32 * 100.0
-                                / self.log_start.elapsed().as_nanos() as f32,
-                        );
-                    }
-                } else if self.buffer_count == RAMPUP_BUFFER_COUNT {
-                    self.parked_duration_init =
-                        Some(runtime::Context::current().unwrap().parked_duration());
-                    self.log_start = Instant::now();
-
-                    gst::info!(CAT, "Ramp up complete");
-                }
-            }
-
-            if self.num_buffers.opt_eq(self.buffer_count) == Some(true) {
-                return Err(gst::FlowError::Eos);
-            }
-
-            Ok(())
-        }
-        .boxed()
-    }
-
-    fn handle_loop_error(&mut self, err: gst::FlowError) -> BoxFuture<'_, task::Trigger> {
-        async move {
-            match err {
-                gst::FlowError::Flushing => {
-                    gst::debug!(CAT, obj = self.elem, "Flushing");
-
-                    task::Trigger::FlushStart
-                }
-                gst::FlowError::Eos => {
-                    gst::debug!(CAT, obj = self.elem, "EOS");
-                    self.elem
-                        .imp()
-                        .src_pad
-                        .push_event(gst::event::Eos::new())
-                        .await;
-
-                    task::Trigger::Stop
-                }
-                err => {
-                    gst::error!(CAT, obj = self.elem, "Got error {err}");
-                    gst::element_error!(
-                        &self.elem,
-                        gst::StreamError::Failed,
-                        ("Internal data stream error"),
-                        ["streaming stopped, reason {}", err]
+                    gst::info!(
+                        CAT,
+                        "Parked: {:5.2?}%",
+                        parked_duration.as_nanos() as f32 * 100.0
+                            / self.log_start.elapsed().as_nanos() as f32,
                     );
-
-                    task::Trigger::Error
                 }
+            } else if self.buffer_count == RAMPUP_BUFFER_COUNT {
+                self.parked_duration_init =
+                    Some(runtime::Context::current().unwrap().parked_duration());
+                self.log_start = Instant::now();
+
+                gst::info!(CAT, "Ramp up complete");
             }
         }
-        .boxed()
+
+        if self.num_buffers.opt_eq(self.buffer_count) == Some(true) {
+            return Err(gst::FlowError::Eos);
+        }
+
+        Ok(())
+    }
+
+    async fn handle_loop_error(&mut self, err: gst::FlowError) -> task::Trigger {
+        match err {
+            gst::FlowError::Flushing => {
+                gst::debug!(CAT, obj = self.elem, "Flushing");
+
+                task::Trigger::FlushStart
+            }
+            gst::FlowError::Eos => {
+                gst::debug!(CAT, obj = self.elem, "EOS");
+                self.elem
+                    .imp()
+                    .src_pad
+                    .push_event(gst::event::Eos::new())
+                    .await;
+
+                task::Trigger::Stop
+            }
+            err => {
+                gst::error!(CAT, obj = self.elem, "Got error {err}");
+                gst::element_error!(
+                    &self.elem,
+                    gst::StreamError::Failed,
+                    ("Internal data stream error"),
+                    ["streaming stopped, reason {}", err]
+                );
+
+                task::Trigger::Error
+            }
+        }
     }
 }
 

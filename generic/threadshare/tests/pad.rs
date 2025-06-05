@@ -20,7 +20,6 @@
 #![allow(clippy::non_send_fields_in_send_ty, unused_doc_comments)]
 
 use futures::channel::mpsc;
-use futures::future::BoxFuture;
 use futures::prelude::*;
 
 use gst::glib;
@@ -145,50 +144,38 @@ mod imp_src {
     impl TaskImpl for ElementSrcTestTask {
         type Item = Item;
 
-        fn try_next(&mut self) -> BoxFuture<'_, Result<Item, gst::FlowError>> {
-            async move {
-                self.receiver.next().await.ok_or_else(|| {
-                    gst::log!(SRC_CAT, obj = self.element, "SrcPad channel aborted");
-                    gst::FlowError::Eos
-                })
-            }
-            .boxed()
+        async fn try_next(&mut self) -> Result<Item, gst::FlowError> {
+            self.receiver.next().await.ok_or_else(|| {
+                gst::log!(SRC_CAT, obj = self.element, "SrcPad channel aborted");
+                gst::FlowError::Eos
+            })
         }
 
-        fn handle_item(&mut self, item: Item) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-            async move {
-                let res = self.push_item(item).await.map(drop);
-                match res {
-                    Ok(_) => gst::log!(SRC_CAT, obj = self.element, "Successfully pushed item"),
-                    Err(gst::FlowError::Flushing) => {
-                        gst::debug!(SRC_CAT, obj = self.element, "Flushing")
-                    }
-                    Err(err) => panic!("Got error {err}"),
+        async fn handle_item(&mut self, item: Item) -> Result<(), gst::FlowError> {
+            let res = self.push_item(item).await.map(drop);
+            match res {
+                Ok(_) => gst::log!(SRC_CAT, obj = self.element, "Successfully pushed item"),
+                Err(gst::FlowError::Flushing) => {
+                    gst::debug!(SRC_CAT, obj = self.element, "Flushing")
                 }
-
-                res
+                Err(err) => panic!("Got error {err}"),
             }
-            .boxed()
+
+            res
         }
 
-        fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-            async move {
-                gst::log!(SRC_CAT, obj = self.element, "Stopping task");
-                self.flush();
-                gst::log!(SRC_CAT, obj = self.element, "Task stopped");
-                Ok(())
-            }
-            .boxed()
+        async fn stop(&mut self) -> Result<(), gst::ErrorMessage> {
+            gst::log!(SRC_CAT, obj = self.element, "Stopping task");
+            self.flush();
+            gst::log!(SRC_CAT, obj = self.element, "Task stopped");
+            Ok(())
         }
 
-        fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-            async move {
-                gst::log!(SRC_CAT, obj = self.element, "Starting task flush");
-                self.flush();
-                gst::log!(SRC_CAT, obj = self.element, "Task flush started");
-                Ok(())
-            }
-            .boxed()
+        async fn flush_start(&mut self) -> Result<(), gst::ErrorMessage> {
+            gst::log!(SRC_CAT, obj = self.element, "Starting task flush");
+            self.flush();
+            gst::log!(SRC_CAT, obj = self.element, "Task flush started");
+            Ok(())
         }
     }
 
@@ -438,30 +425,24 @@ mod imp_sink {
     impl PadSinkHandler for PadSinkTestHandler {
         type ElementImpl = ElementSinkTest;
 
-        fn sink_chain(
+        async fn sink_chain(
             self,
             _pad: gst::Pad,
             elem: super::ElementSinkTest,
             buffer: gst::Buffer,
-        ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-            async move {
-                let imp = elem.imp();
-                imp.forward_item(Item::Buffer(buffer)).await
-            }
-            .boxed()
+        ) -> Result<gst::FlowSuccess, gst::FlowError> {
+            let imp = elem.imp();
+            imp.forward_item(Item::Buffer(buffer)).await
         }
 
-        fn sink_chain_list(
+        async fn sink_chain_list(
             self,
             _pad: gst::Pad,
             elem: super::ElementSinkTest,
             list: gst::BufferList,
-        ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-            async move {
-                let imp = elem.imp();
-                imp.forward_item(Item::BufferList(list)).await
-            }
-            .boxed()
+        ) -> Result<gst::FlowSuccess, gst::FlowError> {
+            let imp = elem.imp();
+            imp.forward_item(Item::BufferList(list)).await
         }
 
         fn sink_event(self, pad: &gst::Pad, imp: &ElementSinkTest, event: gst::Event) -> bool {
@@ -476,23 +457,20 @@ mod imp_sink {
             }
         }
 
-        fn sink_event_serialized(
+        async fn sink_event_serialized(
             self,
             pad: gst::Pad,
             elem: super::ElementSinkTest,
             event: gst::Event,
-        ) -> BoxFuture<'static, bool> {
-            async move {
-                gst::log!(SINK_CAT, obj = pad, "Handling serialized {:?}", event);
+        ) -> bool {
+            gst::log!(SINK_CAT, obj = pad, "Handling serialized {:?}", event);
 
-                let imp = elem.imp();
-                if let EventView::FlushStop(..) = event.view() {
-                    imp.start();
-                }
-
-                imp.forward_item(Item::Event(event)).await.is_ok()
+            let imp = elem.imp();
+            if let EventView::FlushStop(..) = event.view() {
+                imp.start();
             }
-            .boxed()
+
+            imp.forward_item(Item::Event(event)).await.is_ok()
         }
     }
 

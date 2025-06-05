@@ -22,12 +22,11 @@
 
 use futures::channel::mpsc as async_mpsc;
 use futures::channel::oneshot;
-use futures::future::{self, BoxFuture};
 use futures::prelude::*;
 
 use std::fmt;
 use std::ops::Deref;
-use std::pin::Pin;
+use std::pin::{pin, Pin};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::task::Poll;
 
@@ -319,16 +318,16 @@ impl fmt::Debug for TransitionStatus {
 pub trait TaskImpl: Send + 'static {
     type Item: Send + 'static;
 
-    fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        future::ok(()).boxed()
+    fn prepare(&mut self) -> impl Future<Output = Result<(), gst::ErrorMessage>> + Send {
+        future::ok(())
     }
 
-    fn unprepare(&mut self) -> BoxFuture<'_, ()> {
-        future::ready(()).boxed()
+    fn unprepare(&mut self) -> impl Future<Output = ()> + Send {
+        future::ready(())
     }
 
-    fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        future::ok(()).boxed()
+    fn start(&mut self) -> impl Future<Output = Result<(), gst::ErrorMessage>> + Send {
+        future::ok(())
     }
 
     /// Tries to retrieve the next item to process.
@@ -343,7 +342,7 @@ pub trait TaskImpl: Send + 'static {
     /// with said `Item`.
     ///
     /// If `Err(..)` is returned, the iteration calls [`Self::handle_loop_error`].
-    fn try_next(&mut self) -> BoxFuture<'_, Result<Self::Item, gst::FlowError>>;
+    fn try_next(&mut self) -> impl Future<Output = Result<Self::Item, gst::FlowError>> + Send;
 
     /// Does whatever needs to be done with the `item`.
     ///
@@ -355,22 +354,25 @@ pub trait TaskImpl: Send + 'static {
     /// to completion even if a state transition is requested.
     ///
     /// If `Err(..)` is returned, the iteration calls [`Self::handle_loop_error`].
-    fn handle_item(&mut self, _item: Self::Item) -> BoxFuture<'_, Result<(), gst::FlowError>>;
+    fn handle_item(
+        &mut self,
+        _item: Self::Item,
+    ) -> impl Future<Output = Result<(), gst::FlowError>> + Send;
 
-    fn pause(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        future::ok(()).boxed()
+    fn pause(&mut self) -> impl Future<Output = Result<(), gst::ErrorMessage>> + Send {
+        future::ok(())
     }
 
-    fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        future::ok(()).boxed()
+    fn flush_start(&mut self) -> impl Future<Output = Result<(), gst::ErrorMessage>> + Send {
+        future::ready(Ok(()))
     }
 
-    fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        future::ok(()).boxed()
+    fn flush_stop(&mut self) -> impl Future<Output = Result<(), gst::ErrorMessage>> + Send {
+        future::ready(Ok(()))
     }
 
-    fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        future::ok(()).boxed()
+    fn stop(&mut self) -> impl Future<Output = Result<(), gst::ErrorMessage>> + Send {
+        future::ready(Ok(()))
     }
 
     /// Handles an error occurring during the execution of the `Task` loop.
@@ -387,7 +389,7 @@ pub trait TaskImpl: Send + 'static {
     /// - `FlowError::Flushing` -> `Trigger::FlushStart`.
     /// - `FlowError::Eos` -> `Trigger::Stop`.
     /// - Other `FlowError` -> `Trigger::Error`.
-    fn handle_loop_error(&mut self, err: gst::FlowError) -> BoxFuture<'_, Trigger> {
+    fn handle_loop_error(&mut self, err: gst::FlowError) -> impl Future<Output = Trigger> + Send {
         async move {
             match err {
                 gst::FlowError::Flushing => {
@@ -407,7 +409,6 @@ pub trait TaskImpl: Send + 'static {
                 }
             }
         }
-        .boxed()
     }
 
     /// Handles an error occurring during the execution of a transition action.
@@ -425,7 +426,7 @@ pub trait TaskImpl: Send + 'static {
         trigger: Trigger,
         state: TaskState,
         err: gst::ErrorMessage,
-    ) -> BoxFuture<'_, Trigger> {
+    ) -> impl Future<Output = Trigger> + Send {
         async move {
             gst::error!(
                 RUNTIME_CAT,
@@ -437,7 +438,6 @@ pub trait TaskImpl: Send + 'static {
 
             Trigger::Error
         }
-        .boxed()
     }
 }
 
@@ -663,11 +663,7 @@ impl Task {
         inner.state = TaskState::Preparing;
 
         gst::log!(RUNTIME_CAT, "Spawning task state machine");
-        inner.state_machine_handle = Some(StateMachine::spawn(
-            self.0.clone(),
-            Box::new(task_impl),
-            context,
-        ));
+        inner.state_machine_handle = Some(StateMachine::spawn(self.0.clone(), task_impl, context));
 
         let ack_rx = match inner.trigger(Trigger::Prepare) {
             Ok(ack_rx) => ack_rx,
@@ -809,8 +805,8 @@ impl Task {
     }
 }
 
-struct StateMachine<Item: Send + 'static> {
-    task_impl: Box<dyn TaskImpl<Item = Item>>,
+struct StateMachine<Task: TaskImpl> {
+    task_impl: Task,
     triggering_evt_rx: async_mpsc::Receiver<TriggeringEvent>,
     pending_triggering_evt: Option<TriggeringEvent>,
 }
@@ -845,12 +841,10 @@ macro_rules! exec_action {
     }};
 }
 
-impl<Item: Send + 'static> StateMachine<Item> {
-    // Use dynamic dispatch for TaskImpl as it reduces memory usage compared to monomorphization
-    // without inducing any significant performance penalties.
+impl<Task: TaskImpl> StateMachine<Task> {
     fn spawn(
         task_inner: Arc<Mutex<TaskInner>>,
-        task_impl: Box<dyn TaskImpl<Item = Item>>,
+        task_impl: Task,
         context: Context,
     ) -> StateMachineHandle {
         let (triggering_evt_tx, triggering_evt_rx) = async_mpsc::channel(4);
@@ -1127,7 +1121,7 @@ impl<Item: Send + 'static> StateMachine<Item> {
                 // `try_next`. Since we need to get a new `BoxFuture` at
                 // each iteration, we can guarantee that the future is
                 // always valid for use in `select_biased`.
-                let mut try_next_fut = self.task_impl.try_next().fuse();
+                let mut try_next_fut = pin!(self.task_impl.try_next().fuse());
                 futures::select_biased! {
                     triggering_evt = self.triggering_evt_rx.next() => {
                         let triggering_evt = triggering_evt.expect("broken state machine channel");
@@ -1156,8 +1150,8 @@ impl<Item: Send + 'static> StateMachine<Item> {
 mod tests {
     use futures::channel::{mpsc, oneshot};
     use futures::executor::block_on;
-    use futures::future::BoxFuture;
     use futures::prelude::*;
+    use std::future::pending;
     use std::time::Duration;
 
     use super::{
@@ -1195,73 +1189,52 @@ mod tests {
         impl TaskImpl for TaskTest {
             type Item = ();
 
-            fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "nominal: prepared");
-                    self.prepared_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "nominal: prepared");
+                self.prepared_sender.send(()).await.unwrap();
+                Ok(())
             }
 
-            fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "nominal: started");
-                    self.started_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "nominal: started");
+                self.started_sender.send(()).await.unwrap();
+                Ok(())
             }
 
-            fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "nominal: entering try_next");
-                    self.try_next_ready_sender.send(()).await.unwrap();
-                    gst::debug!(RUNTIME_CAT, "nominal: awaiting try_next");
-                    self.try_next_receiver.next().await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn try_next(&mut self) -> Result<(), gst::FlowError> {
+                gst::debug!(RUNTIME_CAT, "nominal: entering try_next");
+                self.try_next_ready_sender.send(()).await.unwrap();
+                gst::debug!(RUNTIME_CAT, "nominal: awaiting try_next");
+                self.try_next_receiver.next().await.unwrap();
+                Ok(())
             }
 
-            fn handle_item(&mut self, _item: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "nominal: entering handle_item");
-                    self.handle_item_ready_sender.send(()).await.unwrap();
+            async fn handle_item(&mut self, _item: ()) -> Result<(), gst::FlowError> {
+                gst::debug!(RUNTIME_CAT, "nominal: entering handle_item");
+                self.handle_item_ready_sender.send(()).await.unwrap();
 
-                    gst::debug!(RUNTIME_CAT, "nominal: locked in handle_item");
-                    self.handle_item_sender.send(()).await.unwrap();
-                    gst::debug!(RUNTIME_CAT, "nominal: leaving handle_item");
+                gst::debug!(RUNTIME_CAT, "nominal: locked in handle_item");
+                self.handle_item_sender.send(()).await.unwrap();
+                gst::debug!(RUNTIME_CAT, "nominal: leaving handle_item");
 
-                    Ok(())
-                }
-                .boxed()
+                Ok(())
             }
 
-            fn pause(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "nominal: paused");
-                    self.paused_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn pause(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "nominal: paused");
+                self.paused_sender.send(()).await.unwrap();
+                Ok(())
             }
 
-            fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "nominal: stopped");
-                    self.stopped_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn stop(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "nominal: stopped");
+                self.stopped_sender.send(()).await.unwrap();
+                Ok(())
             }
 
-            fn unprepare(&mut self) -> BoxFuture<'_, ()> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "nominal: unprepared");
-                    self.unprepared_sender.send(()).await.unwrap();
-                }
-                .boxed()
+            async fn unprepare(&mut self) {
+                gst::debug!(RUNTIME_CAT, "nominal: unprepared");
+                self.unprepared_sender.send(()).await.unwrap();
             }
         }
 
@@ -1488,45 +1461,39 @@ mod tests {
         impl TaskImpl for TaskPrepareTest {
             type Item = ();
 
-            fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "prepare_error: prepare returning an error");
-                    Err(gst::error_msg!(
-                        gst::ResourceError::Failed,
-                        ["prepare_error: intentional error"]
-                    ))
-                }
-                .boxed()
+            async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "prepare_error: prepare returning an error");
+                Err(gst::error_msg!(
+                    gst::ResourceError::Failed,
+                    ["prepare_error: intentional error"]
+                ))
             }
 
-            fn handle_action_error(
+            async fn handle_action_error(
                 &mut self,
                 trigger: Trigger,
                 state: TaskState,
                 err: gst::ErrorMessage,
-            ) -> BoxFuture<'_, Trigger> {
-                async move {
-                    gst::debug!(
-                        RUNTIME_CAT,
-                        "prepare_error: handling prepare error {:?}",
-                        err
-                    );
-                    match (trigger, state) {
-                        (Prepare, Unprepared) => {
-                            self.prepare_error_sender.send(()).await.unwrap();
-                        }
-                        other => unreachable!("{:?}", other),
+            ) -> Trigger {
+                gst::debug!(
+                    RUNTIME_CAT,
+                    "prepare_error: handling prepare error {:?}",
+                    err
+                );
+                match (trigger, state) {
+                    (Prepare, Unprepared) => {
+                        self.prepare_error_sender.send(()).await.unwrap();
                     }
-                    Trigger::Error
+                    other => unreachable!("{:?}", other),
                 }
-                .boxed()
+                Trigger::Error
             }
 
-            fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+            async fn try_next(&mut self) -> Result<(), gst::FlowError> {
                 unreachable!("prepare_error: try_next");
             }
 
-            fn handle_item(&mut self, _item: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+            async fn handle_item(&mut self, _item: ()) -> Result<(), gst::FlowError> {
                 unreachable!("prepare_error: handle_item");
             }
         }
@@ -1590,41 +1557,35 @@ mod tests {
         impl TaskImpl for TaskPrepareTest {
             type Item = ();
 
-            fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(
-                        RUNTIME_CAT,
-                        "prepare_start_ok: preparation awaiting trigger"
-                    );
-                    self.prepare_receiver.next().await.unwrap();
-                    gst::debug!(RUNTIME_CAT, "prepare_start_ok: preparation complete Ok");
-                    Ok(())
-                }
-                .boxed()
+            async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(
+                    RUNTIME_CAT,
+                    "prepare_start_ok: preparation awaiting trigger"
+                );
+                self.prepare_receiver.next().await.unwrap();
+                gst::debug!(RUNTIME_CAT, "prepare_start_ok: preparation complete Ok");
+                Ok(())
             }
 
-            fn handle_action_error(
+            async fn handle_action_error(
                 &mut self,
                 _trigger: Trigger,
                 _state: TaskState,
                 _err: gst::ErrorMessage,
-            ) -> BoxFuture<'_, Trigger> {
+            ) -> Trigger {
                 unreachable!("prepare_start_ok: handle_prepare_error");
             }
 
-            fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "prepare_start_ok: started");
-                    Ok(())
-                }
-                .boxed()
+            async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "prepare_start_ok: started");
+                Ok(())
             }
 
-            fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                future::pending::<Result<(), gst::FlowError>>().boxed()
+            async fn try_next(&mut self) -> Result<(), gst::FlowError> {
+                pending().await
             }
 
-            fn handle_item(&mut self, _item: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+            async fn handle_item(&mut self, _item: ()) -> Result<(), gst::FlowError> {
                 unreachable!("prepare_start_ok: handle_item");
             }
         }
@@ -1721,55 +1682,49 @@ mod tests {
         impl TaskImpl for TaskPrepareTest {
             type Item = ();
 
-            fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(
-                        RUNTIME_CAT,
-                        "prepare_start_error: preparation awaiting trigger"
-                    );
-                    self.prepare_receiver.next().await.unwrap();
-                    gst::debug!(RUNTIME_CAT, "prepare_start_error: preparation complete Err");
+            async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(
+                    RUNTIME_CAT,
+                    "prepare_start_error: preparation awaiting trigger"
+                );
+                self.prepare_receiver.next().await.unwrap();
+                gst::debug!(RUNTIME_CAT, "prepare_start_error: preparation complete Err");
 
-                    Err(gst::error_msg!(
-                        gst::ResourceError::Failed,
-                        ["prepare_start_error: intentional error"]
-                    ))
-                }
-                .boxed()
+                Err(gst::error_msg!(
+                    gst::ResourceError::Failed,
+                    ["prepare_start_error: intentional error"]
+                ))
             }
 
-            fn handle_action_error(
+            async fn handle_action_error(
                 &mut self,
                 trigger: Trigger,
                 state: TaskState,
                 err: gst::ErrorMessage,
-            ) -> BoxFuture<'_, Trigger> {
-                async move {
-                    gst::debug!(
-                        RUNTIME_CAT,
-                        "prepare_start_error: handling prepare error {:?}",
-                        err
-                    );
-                    match (trigger, state) {
-                        (Prepare, Unprepared) => {
-                            self.prepare_error_sender.send(()).await.unwrap();
-                        }
-                        other => panic!("action error for {other:?}"),
+            ) -> Trigger {
+                gst::debug!(
+                    RUNTIME_CAT,
+                    "prepare_start_error: handling prepare error {:?}",
+                    err
+                );
+                match (trigger, state) {
+                    (Prepare, Unprepared) => {
+                        self.prepare_error_sender.send(()).await.unwrap();
                     }
-                    Trigger::Error
+                    other => panic!("action error for {other:?}"),
                 }
-                .boxed()
+                Trigger::Error
             }
 
-            fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
+            async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
                 unreachable!("prepare_start_error: start");
             }
 
-            fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+            async fn try_next(&mut self) -> Result<(), gst::FlowError> {
                 unreachable!("prepare_start_error: try_next");
             }
 
-            fn handle_item(&mut self, _item: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+            async fn handle_item(&mut self, _item: ()) -> Result<(), gst::FlowError> {
                 unreachable!("prepare_start_error: handle_item");
             }
         }
@@ -1862,23 +1817,14 @@ mod tests {
         impl TaskImpl for TaskTest {
             type Item = gst::FlowError;
 
-            fn try_next(&mut self) -> BoxFuture<'_, Result<gst::FlowError, gst::FlowError>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "item_error: awaiting try_next");
-                    Ok(self.try_next_receiver.next().await.unwrap())
-                }
-                .boxed()
+            async fn try_next(&mut self) -> Result<gst::FlowError, gst::FlowError> {
+                gst::debug!(RUNTIME_CAT, "item_error: awaiting try_next");
+                Ok(self.try_next_receiver.next().await.unwrap())
             }
 
-            fn handle_item(
-                &mut self,
-                item: gst::FlowError,
-            ) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "item_error: handle_item received {:?}", item);
-                    Err(item)
-                }
-                .boxed()
+            async fn handle_item(&mut self, item: gst::FlowError) -> Result<(), gst::FlowError> {
+                gst::debug!(RUNTIME_CAT, "item_error: handle_item received {:?}", item);
+                Err(item)
             }
         }
 
@@ -1945,30 +1891,24 @@ mod tests {
         impl TaskImpl for TaskFlushTest {
             type Item = ();
 
-            fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                future::pending::<Result<(), gst::FlowError>>().boxed()
+            async fn try_next(&mut self) -> Result<(), gst::FlowError> {
+                pending().await
             }
 
-            fn handle_item(&mut self, _item: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+            async fn handle_item(&mut self, _item: ()) -> Result<(), gst::FlowError> {
                 unreachable!("flush_regular_sync: handle_item");
             }
 
-            fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "flush_regular_sync: started flushing");
-                    self.flush_start_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn flush_start(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "flush_regular_sync: started flushing");
+                self.flush_start_sender.send(()).await.unwrap();
+                Ok(())
             }
 
-            fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "flush_regular_sync: stopped flushing");
-                    self.flush_stop_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn flush_stop(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "flush_regular_sync: stopped flushing");
+                self.flush_stop_sender.send(()).await.unwrap();
+                Ok(())
             }
         }
 
@@ -2032,36 +1972,30 @@ mod tests {
         impl TaskImpl for TaskFlushTest {
             type Item = ();
 
-            fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                future::pending::<Result<(), gst::FlowError>>().boxed()
+            async fn try_next(&mut self) -> Result<(), gst::FlowError> {
+                pending().await
             }
 
-            fn handle_item(&mut self, _item: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+            async fn handle_item(&mut self, _item: ()) -> Result<(), gst::FlowError> {
                 unreachable!("flush_regular_different_context: handle_item");
             }
 
-            fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(
-                        RUNTIME_CAT,
-                        "flush_regular_different_context: started flushing"
-                    );
-                    self.flush_start_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn flush_start(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(
+                    RUNTIME_CAT,
+                    "flush_regular_different_context: started flushing"
+                );
+                self.flush_start_sender.send(()).await.unwrap();
+                Ok(())
             }
 
-            fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(
-                        RUNTIME_CAT,
-                        "flush_regular_different_context: stopped flushing"
-                    );
-                    self.flush_stop_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn flush_stop(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(
+                    RUNTIME_CAT,
+                    "flush_regular_different_context: stopped flushing"
+                );
+                self.flush_stop_sender.send(()).await.unwrap();
+                Ok(())
             }
         }
 
@@ -2151,30 +2085,24 @@ mod tests {
         impl TaskImpl for TaskFlushTest {
             type Item = ();
 
-            fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                future::pending::<Result<(), gst::FlowError>>().boxed()
+            async fn try_next(&mut self) -> Result<(), gst::FlowError> {
+                pending().await
             }
 
-            fn handle_item(&mut self, _item: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+            async fn handle_item(&mut self, _item: ()) -> Result<(), gst::FlowError> {
                 unreachable!("flush_regular_same_context: handle_item");
             }
 
-            fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "flush_regular_same_context: started flushing");
-                    self.flush_start_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn flush_start(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "flush_regular_same_context: started flushing");
+                self.flush_start_sender.send(()).await.unwrap();
+                Ok(())
             }
 
-            fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "flush_regular_same_context: stopped flushing");
-                    self.flush_stop_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn flush_stop(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "flush_regular_same_context: stopped flushing");
+                self.flush_stop_sender.send(()).await.unwrap();
+                Ok(())
             }
         }
 
@@ -2255,33 +2183,27 @@ mod tests {
         impl TaskImpl for TaskFlushTest {
             type Item = ();
 
-            fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                future::ok(()).boxed()
+            async fn try_next(&mut self) -> Result<(), gst::FlowError> {
+                Ok(())
             }
 
-            fn handle_item(&mut self, _item: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "flush_from_loop: flush_start from handle_item");
-                    match self.task.flush_start() {
-                        Pending {
-                            trigger: FlushStart,
-                            origin: Started,
-                            ..
-                        } => (),
-                        other => panic!("{other:?}"),
-                    }
-                    Ok(())
+            async fn handle_item(&mut self, _item: ()) -> Result<(), gst::FlowError> {
+                gst::debug!(RUNTIME_CAT, "flush_from_loop: flush_start from handle_item");
+                match self.task.flush_start() {
+                    Pending {
+                        trigger: FlushStart,
+                        origin: Started,
+                        ..
+                    } => (),
+                    other => panic!("{other:?}"),
                 }
-                .boxed()
+                Ok(())
             }
 
-            fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "flush_from_loop: started flushing");
-                    self.flush_start_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn flush_start(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "flush_from_loop: started flushing");
+                self.flush_start_sender.send(()).await.unwrap();
+                Ok(())
             }
         }
 
@@ -2332,38 +2254,32 @@ mod tests {
         impl TaskImpl for TaskStartTest {
             type Item = ();
 
-            fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                future::ok(()).boxed()
+            async fn try_next(&mut self) -> Result<(), gst::FlowError> {
+                Ok(())
             }
 
-            fn handle_item(&mut self, _item: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "pause_from_loop: entering handle_item");
+            async fn handle_item(&mut self, _item: ()) -> Result<(), gst::FlowError> {
+                gst::debug!(RUNTIME_CAT, "pause_from_loop: entering handle_item");
 
-                    crate::runtime::timer::delay_for(Duration::from_millis(50)).await;
+                crate::runtime::timer::delay_for(Duration::from_millis(50)).await;
 
-                    gst::debug!(RUNTIME_CAT, "pause_from_loop: pause from handle_item");
-                    match self.task.pause() {
-                        Pending {
-                            trigger: Pause,
-                            origin: Started,
-                            ..
-                        } => (),
-                        other => panic!("{other:?}"),
-                    }
-
-                    Ok(())
+                gst::debug!(RUNTIME_CAT, "pause_from_loop: pause from handle_item");
+                match self.task.pause() {
+                    Pending {
+                        trigger: Pause,
+                        origin: Started,
+                        ..
+                    } => (),
+                    other => panic!("{other:?}"),
                 }
-                .boxed()
+
+                Ok(())
             }
 
-            fn pause(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "pause_from_loop: entering pause action");
-                    self.pause_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn pause(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "pause_from_loop: entering pause action");
+                self.pause_sender.send(()).await.unwrap();
+                Ok(())
             }
         }
 
@@ -2403,41 +2319,35 @@ mod tests {
         impl TaskImpl for TaskFlushTest {
             type Item = ();
 
-            fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                future::pending::<Result<(), gst::FlowError>>().boxed()
+            async fn try_next(&mut self) -> Result<(), gst::FlowError> {
+                pending().await
             }
 
-            fn handle_item(&mut self, _item: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+            async fn handle_item(&mut self, _item: ()) -> Result<(), gst::FlowError> {
                 unreachable!("trigger_from_action: handle_item");
             }
 
-            fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(
-                        RUNTIME_CAT,
-                        "trigger_from_action: flush_start triggering flush_stop"
-                    );
-                    match self.task.flush_stop() {
-                        Pending {
-                            trigger: FlushStop,
-                            origin: Started,
-                            ..
-                        } => (),
-                        other => panic!("{other:?}"),
-                    }
-
-                    Ok(())
+            async fn flush_start(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(
+                    RUNTIME_CAT,
+                    "trigger_from_action: flush_start triggering flush_stop"
+                );
+                match self.task.flush_stop() {
+                    Pending {
+                        trigger: FlushStop,
+                        origin: Started,
+                        ..
+                    } => (),
+                    other => panic!("{other:?}"),
                 }
-                .boxed()
+
+                Ok(())
             }
 
-            fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "trigger_from_action: stopped flushing");
-                    self.flush_stop_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn flush_stop(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "trigger_from_action: stopped flushing");
+                self.flush_stop_sender.send(()).await.unwrap();
+                Ok(())
             }
         }
 
@@ -2481,39 +2391,30 @@ mod tests {
         impl TaskImpl for TaskFlushTest {
             type Item = ();
 
-            fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "pause_flush_start: started");
-                    self.started_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "pause_flush_start: started");
+                self.started_sender.send(()).await.unwrap();
+                Ok(())
             }
 
-            fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                future::pending::<Result<(), gst::FlowError>>().boxed()
+            async fn try_next(&mut self) -> Result<(), gst::FlowError> {
+                pending().await
             }
 
-            fn handle_item(&mut self, _item: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+            async fn handle_item(&mut self, _item: ()) -> Result<(), gst::FlowError> {
                 unreachable!("pause_flush_start: handle_item");
             }
 
-            fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "pause_flush_start: started flushing");
-                    self.flush_start_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn flush_start(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "pause_flush_start: started flushing");
+                self.flush_start_sender.send(()).await.unwrap();
+                Ok(())
             }
 
-            fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "pause_flush_start: stopped flushing");
-                    self.flush_stop_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn flush_stop(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "pause_flush_start: stopped flushing");
+                self.flush_stop_sender.send(()).await.unwrap();
+                Ok(())
             }
         }
 
@@ -2597,39 +2498,30 @@ mod tests {
         impl TaskImpl for TaskFlushTest {
             type Item = ();
 
-            fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "pause_flushing_start: started");
-                    self.started_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "pause_flushing_start: started");
+                self.started_sender.send(()).await.unwrap();
+                Ok(())
             }
 
-            fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                future::pending::<Result<(), gst::FlowError>>().boxed()
+            async fn try_next(&mut self) -> Result<(), gst::FlowError> {
+                pending().await
             }
 
-            fn handle_item(&mut self, _item: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+            async fn handle_item(&mut self, _item: ()) -> Result<(), gst::FlowError> {
                 unreachable!("pause_flushing_start: handle_item");
             }
 
-            fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "pause_flushing_start: started flushing");
-                    self.flush_start_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn flush_start(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "pause_flushing_start: started flushing");
+                self.flush_start_sender.send(()).await.unwrap();
+                Ok(())
             }
 
-            fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "pause_flushing_start: stopped flushing");
-                    self.flush_stop_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn flush_stop(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "pause_flushing_start: stopped flushing");
+                self.flush_stop_sender.send(()).await.unwrap();
+                Ok(())
             }
         }
 
@@ -2703,30 +2595,24 @@ mod tests {
         impl TaskImpl for TaskStartTest {
             type Item = ();
 
-            fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                future::pending::<Result<(), gst::FlowError>>().boxed()
+            async fn try_next(&mut self) -> Result<(), gst::FlowError> {
+                pending().await
             }
 
-            fn handle_item(&mut self, _item: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+            async fn handle_item(&mut self, _item: ()) -> Result<(), gst::FlowError> {
                 unreachable!("flush_concurrent_start: handle_item");
             }
 
-            fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "flush_concurrent_start: started flushing");
-                    self.flush_start_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn flush_start(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "flush_concurrent_start: started flushing");
+                self.flush_start_sender.send(()).await.unwrap();
+                Ok(())
             }
 
-            fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "flush_concurrent_start: stopped flushing");
-                    self.flush_stop_sender.send(()).await.unwrap();
-                    Ok(())
-                }
-                .boxed()
+            async fn flush_stop(&mut self) -> Result<(), gst::ErrorMessage> {
+                gst::debug!(RUNTIME_CAT, "flush_concurrent_start: stopped flushing");
+                self.flush_stop_sender.send(()).await.unwrap();
+                Ok(())
             }
         }
 
@@ -2826,34 +2712,25 @@ mod tests {
         impl TaskImpl for TaskTimerTest {
             type Item = ();
 
-            fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-                async move {
-                    self.timer = Some(crate::runtime::timer::delay_for(Duration::from_millis(50)));
-                    gst::debug!(RUNTIME_CAT, "start_timer: started");
-                    Ok(())
-                }
-                .boxed()
+            async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
+                self.timer = Some(crate::runtime::timer::delay_for(Duration::from_millis(50)));
+                gst::debug!(RUNTIME_CAT, "start_timer: started");
+                Ok(())
             }
 
-            fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "start_timer: awaiting timer");
-                    self.timer.take().unwrap().await;
-                    Ok(())
-                }
-                .boxed()
+            async fn try_next(&mut self) -> Result<(), gst::FlowError> {
+                gst::debug!(RUNTIME_CAT, "start_timer: awaiting timer");
+                self.timer.take().unwrap().await;
+                Ok(())
             }
 
-            fn handle_item(&mut self, _item: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-                async move {
-                    gst::debug!(RUNTIME_CAT, "start_timer: timer elapsed");
-                    if let Some(timer_elapsed_sender) = self.timer_elapsed_sender.take() {
-                        timer_elapsed_sender.send(()).unwrap();
-                    }
-
-                    Err(gst::FlowError::Eos)
+            async fn handle_item(&mut self, _item: ()) -> Result<(), gst::FlowError> {
+                gst::debug!(RUNTIME_CAT, "start_timer: timer elapsed");
+                if let Some(timer_elapsed_sender) = self.timer_elapsed_sender.take() {
+                    timer_elapsed_sender.send(()).unwrap();
                 }
-                .boxed()
+
+                Err(gst::FlowError::Eos)
             }
         }
 

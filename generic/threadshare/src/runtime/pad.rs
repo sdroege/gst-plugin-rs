@@ -69,7 +69,6 @@
 //! [`Context`]: ../executor/struct.Context.html
 
 use futures::future;
-use futures::future::BoxFuture;
 use futures::prelude::*;
 
 use gst::prelude::*;
@@ -104,11 +103,10 @@ fn event_to_event_full(ret: bool, event_type: gst::EventType) -> Result<FlowSucc
 
 #[inline]
 fn event_to_event_full_serialized(
-    ret: BoxFuture<'static, bool>,
+    ret: impl Future<Output = bool> + Send,
     event_type: gst::EventType,
-) -> BoxFuture<'static, Result<FlowSuccess, FlowError>> {
+) -> impl Future<Output = Result<FlowSuccess, FlowError>> + Send {
     ret.map(move |ret| event_ret_to_event_full_res(ret, event_type))
-        .boxed()
 }
 
 /// A trait to define `handler`s for [`PadSrc`] callbacks.
@@ -538,8 +536,8 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         _pad: gst::Pad,
         _elem: <Self::ElementImpl as ObjectSubclass>::Type,
         _buffer: gst::Buffer,
-    ) -> BoxFuture<'static, Result<FlowSuccess, FlowError>> {
-        future::err(FlowError::NotSupported).boxed()
+    ) -> impl Future<Output = Result<FlowSuccess, FlowError>> + Send {
+        future::err(FlowError::NotSupported)
     }
 
     fn sink_chain_list(
@@ -547,8 +545,8 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         _pad: gst::Pad,
         _elem: <Self::ElementImpl as ObjectSubclass>::Type,
         _buffer_list: gst::BufferList,
-    ) -> BoxFuture<'static, Result<FlowSuccess, FlowError>> {
-        future::err(FlowError::NotSupported).boxed()
+    ) -> impl Future<Output = Result<FlowSuccess, FlowError>> + Send {
+        future::err(FlowError::NotSupported)
     }
 
     fn sink_event(self, pad: &gst::Pad, imp: &Self::ElementImpl, event: gst::Event) -> bool {
@@ -562,14 +560,13 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         pad: gst::Pad,
         elem: <Self::ElementImpl as ObjectSubclass>::Type,
         event: gst::Event,
-    ) -> BoxFuture<'static, bool> {
+    ) -> impl Future<Output = bool> + Send {
         assert!(event.is_serialized());
 
         async move {
             gst::log!(RUNTIME_CAT, obj = pad, "Handling {:?}", event);
             gst::Pad::event_default(&pad, Some(&elem), event)
         }
-        .boxed()
     }
 
     fn sink_event_full(
@@ -590,7 +587,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         pad: gst::Pad,
         elem: <Self::ElementImpl as ObjectSubclass>::Type,
         event: gst::Event,
-    ) -> BoxFuture<'static, Result<FlowSuccess, FlowError>> {
+    ) -> impl Future<Output = Result<FlowSuccess, FlowError>> + Send {
         assert!(event.is_serialized());
         // default is to dispatch to `sink_event`
         // (as implemented in `gst_pad_send_event_unchecked`)

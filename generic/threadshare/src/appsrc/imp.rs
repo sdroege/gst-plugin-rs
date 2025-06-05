@@ -19,7 +19,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 use futures::channel::mpsc;
-use futures::future::BoxFuture;
 use futures::prelude::*;
 
 use gst::glib;
@@ -226,72 +225,60 @@ impl AppSrcTask {
 impl TaskImpl for AppSrcTask {
     type Item = StreamItem;
 
-    fn try_next(&mut self) -> BoxFuture<'_, Result<StreamItem, gst::FlowError>> {
-        async move {
-            self.receiver
-                .next()
-                .await
-                .ok_or_else(|| panic!("Internal channel sender dropped while Task is Started"))
-        }
-        .boxed()
+    async fn try_next(&mut self) -> Result<StreamItem, gst::FlowError> {
+        self.receiver
+            .next()
+            .await
+            .ok_or_else(|| panic!("Internal channel sender dropped while Task is Started"))
     }
 
-    fn handle_item(&mut self, item: StreamItem) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-        async move {
-            let res = self.push_item(item).await;
-            match res {
-                Ok(_) => {
-                    gst::log!(CAT, obj = self.element, "Successfully pushed item");
-                }
-                Err(gst::FlowError::Eos) => {
-                    gst::debug!(CAT, obj = self.element, "EOS");
-                    let appsrc = self.element.imp();
-                    appsrc.src_pad.push_event(gst::event::Eos::new()).await;
-                }
-                Err(gst::FlowError::Flushing) => {
-                    gst::debug!(CAT, obj = self.element, "Flushing");
-                }
-                Err(err) => {
-                    gst::error!(CAT, obj = self.element, "Got error {}", err);
-                    gst::element_error!(
-                        &self.element,
-                        gst::StreamError::Failed,
-                        ("Internal data stream error"),
-                        ["streaming stopped, reason {}", err]
-                    );
-                }
+    async fn handle_item(&mut self, item: StreamItem) -> Result<(), gst::FlowError> {
+        let res = self.push_item(item).await;
+        match res {
+            Ok(_) => {
+                gst::log!(CAT, obj = self.element, "Successfully pushed item");
             }
-
-            res.map(drop)
+            Err(gst::FlowError::Eos) => {
+                gst::debug!(CAT, obj = self.element, "EOS");
+                let appsrc = self.element.imp();
+                appsrc.src_pad.push_event(gst::event::Eos::new()).await;
+            }
+            Err(gst::FlowError::Flushing) => {
+                gst::debug!(CAT, obj = self.element, "Flushing");
+            }
+            Err(err) => {
+                gst::error!(CAT, obj = self.element, "Got error {}", err);
+                gst::element_error!(
+                    &self.element,
+                    gst::StreamError::Failed,
+                    ("Internal data stream error"),
+                    ["streaming stopped, reason {}", err]
+                );
+            }
         }
-        .boxed()
+
+        res.map(drop)
     }
 
-    fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async move {
-            gst::log!(CAT, obj = self.element, "Stopping task");
+    async fn stop(&mut self) -> Result<(), gst::ErrorMessage> {
+        gst::log!(CAT, obj = self.element, "Stopping task");
 
-            self.flush();
-            self.need_initial_events = true;
-            self.need_segment = true;
+        self.flush();
+        self.need_initial_events = true;
+        self.need_segment = true;
 
-            gst::log!(CAT, obj = self.element, "Task stopped");
-            Ok(())
-        }
-        .boxed()
+        gst::log!(CAT, obj = self.element, "Task stopped");
+        Ok(())
     }
 
-    fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async move {
-            gst::log!(CAT, obj = self.element, "Starting task flush");
+    async fn flush_start(&mut self) -> Result<(), gst::ErrorMessage> {
+        gst::log!(CAT, obj = self.element, "Starting task flush");
 
-            self.flush();
-            self.need_segment = true;
+        self.flush();
+        self.need_segment = true;
 
-            gst::log!(CAT, obj = self.element, "Task flush started");
-            Ok(())
-        }
-        .boxed()
+        gst::log!(CAT, obj = self.element, "Task flush started");
+        Ok(())
     }
 }
 

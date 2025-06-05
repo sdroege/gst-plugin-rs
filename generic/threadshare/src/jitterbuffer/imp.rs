@@ -17,7 +17,6 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
-use futures::future::BoxFuture;
 use futures::future::{abortable, AbortHandle, Aborted};
 use futures::prelude::*;
 
@@ -546,17 +545,14 @@ impl SinkHandler {
 impl PadSinkHandler for SinkHandler {
     type ElementImpl = JitterBuffer;
 
-    fn sink_chain(
+    async fn sink_chain(
         self,
         pad: gst::Pad,
         elem: super::JitterBuffer,
         buffer: gst::Buffer,
-    ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-        async move {
-            gst::debug!(CAT, obj = pad, "Handling {:?}", buffer);
-            self.enqueue_item(pad, elem.imp(), Some(buffer))
-        }
-        .boxed()
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst::debug!(CAT, obj = pad, "Handling {:?}", buffer);
+        self.enqueue_item(pad, elem.imp(), Some(buffer))
     }
 
     fn sink_event(self, pad: &gst::Pad, jb: &JitterBuffer, event: gst::Event) -> bool {
@@ -581,56 +577,53 @@ impl PadSinkHandler for SinkHandler {
         jb.src_pad.gst_pad().push_event(event)
     }
 
-    fn sink_event_serialized(
+    async fn sink_event_serialized(
         self,
         pad: gst::Pad,
         elem: super::JitterBuffer,
         event: gst::Event,
-    ) -> BoxFuture<'static, bool> {
-        async move {
-            gst::log!(CAT, obj = pad, "Handling {:?}", event);
+    ) -> bool {
+        gst::log!(CAT, obj = pad, "Handling {:?}", event);
 
-            let jb = elem.imp();
+        let jb = elem.imp();
 
-            let mut forward = true;
-            use gst::EventView;
-            match event.view() {
-                EventView::Segment(e) => {
-                    let mut state = jb.state.lock().unwrap();
-                    state.segment = e.segment().clone().downcast::<gst::format::Time>().unwrap();
-                }
-                EventView::FlushStop(..) => {
-                    if let Err(err) = jb.task.flush_stop().await_maybe_on_context() {
-                        gst::error!(CAT, obj = pad, "FlushStop failed {:?}", err);
-                        gst::element_error!(
-                            elem,
-                            gst::StreamError::Failed,
-                            ("Internal data stream error"),
-                            ["FlushStop failed {:?}", err]
-                        );
-                        return false;
-                    }
-                }
-                EventView::Eos(..) => {
-                    let mut state = jb.state.lock().unwrap();
-                    state.eos = true;
-                    if let Some((_, abort_handle)) = state.wait_handle.take() {
-                        abort_handle.abort();
-                    }
-                    forward = false;
-                }
-                _ => (),
-            };
-
-            if forward {
-                // FIXME: These events should really be queued up and stay in order
-                gst::log!(CAT, obj = pad, "Forwarding serialized {:?}", event);
-                jb.src_pad.push_event(event).await
-            } else {
-                true
+        let mut forward = true;
+        use gst::EventView;
+        match event.view() {
+            EventView::Segment(e) => {
+                let mut state = jb.state.lock().unwrap();
+                state.segment = e.segment().clone().downcast::<gst::format::Time>().unwrap();
             }
+            EventView::FlushStop(..) => {
+                if let Err(err) = jb.task.flush_stop().await_maybe_on_context() {
+                    gst::error!(CAT, obj = pad, "FlushStop failed {:?}", err);
+                    gst::element_error!(
+                        elem,
+                        gst::StreamError::Failed,
+                        ("Internal data stream error"),
+                        ["FlushStop failed {:?}", err]
+                    );
+                    return false;
+                }
+            }
+            EventView::Eos(..) => {
+                let mut state = jb.state.lock().unwrap();
+                state.eos = true;
+                if let Some((_, abort_handle)) = state.wait_handle.take() {
+                    abort_handle.abort();
+                }
+                forward = false;
+            }
+            _ => (),
+        };
+
+        if forward {
+            // FIXME: These events should really be queued up and stay in order
+            gst::log!(CAT, obj = pad, "Forwarding serialized {:?}", event);
+            jb.src_pad.push_event(event).await
+        } else {
+            true
         }
-        .boxed()
     }
 }
 
@@ -1105,25 +1098,22 @@ impl JitterBufferTask {
 impl TaskImpl for JitterBufferTask {
     type Item = ();
 
-    fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async move {
-            gst::log!(CAT, obj = self.element, "Starting task");
+    async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
+        gst::log!(CAT, obj = self.element, "Starting task");
 
-            self.src_pad_handler.clear();
-            self.sink_pad_handler.clear();
+        self.src_pad_handler.clear();
+        self.sink_pad_handler.clear();
 
-            let jb = self.element.imp();
+        let jb = self.element.imp();
 
-            let latency = jb.settings.lock().unwrap().latency;
-            let state = State::default();
+        let latency = jb.settings.lock().unwrap().latency;
+        let state = State::default();
 
-            state.jbuf.set_delay(latency);
-            *jb.state.lock().unwrap() = state;
+        state.jbuf.set_delay(latency);
+        *jb.state.lock().unwrap() = state;
 
-            gst::log!(CAT, obj = self.element, "Task started");
-            Ok(())
-        }
-        .boxed()
+        gst::log!(CAT, obj = self.element, "Task started");
+        Ok(())
     }
 
     // FIXME this function was migrated to the try_next / handle_item model
@@ -1136,67 +1126,233 @@ impl TaskImpl for JitterBufferTask {
     // If latency can change during processing, a command based mechanism
     // could be implemented. See the command implementation for ts-udpsink as
     // an example.
-    fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-        async move {
-            let jb = self.element.imp();
-            let (latency, context_wait, do_lost, max_dropout_time) = {
-                let settings = jb.settings.lock().unwrap();
-                (
-                    settings.latency,
-                    settings.context_wait,
-                    settings.do_lost,
-                    gst::ClockTime::from_mseconds(settings.max_dropout_time as u64),
-                )
-            };
+    async fn try_next(&mut self) -> Result<(), gst::FlowError> {
+        let jb = self.element.imp();
+        let (latency, context_wait, do_lost, max_dropout_time) = {
+            let settings = jb.settings.lock().unwrap();
+            (
+                settings.latency,
+                settings.context_wait,
+                settings.do_lost,
+                gst::ClockTime::from_mseconds(settings.max_dropout_time as u64),
+            )
+        };
 
-            loop {
-                let delay_fut = {
-                    let mut state = jb.state.lock().unwrap();
-                    let (_, next_wakeup) = self.src_pad_handler.next_wakeup(
-                        &self.element,
-                        &state,
-                        do_lost,
-                        latency,
-                        context_wait,
-                        max_dropout_time,
-                    );
+        loop {
+            let delay_fut = {
+                let mut state = jb.state.lock().unwrap();
+                let (_, next_wakeup) = self.src_pad_handler.next_wakeup(
+                    &self.element,
+                    &state,
+                    do_lost,
+                    latency,
+                    context_wait,
+                    max_dropout_time,
+                );
 
-                    let (delay_fut, abort_handle) = match next_wakeup {
-                        Some((_, delay)) if delay.is_zero() => (None, None),
-                        _ => {
-                            let (delay_fut, abort_handle) = abortable(async move {
-                                match next_wakeup {
-                                    Some((_, delay)) => {
-                                        runtime::timer::delay_for_at_least(delay).await;
-                                    }
-                                    None => {
-                                        future::pending::<()>().await;
-                                    }
-                                };
-                            });
+                let (delay_fut, abort_handle) = match next_wakeup {
+                    Some((_, delay)) if delay.is_zero() => (None, None),
+                    _ => {
+                        let (delay_fut, abort_handle) = abortable(async move {
+                            match next_wakeup {
+                                Some((_, delay)) => {
+                                    runtime::timer::delay_for_at_least(delay).await;
+                                }
+                                None => {
+                                    future::pending::<()>().await;
+                                }
+                            };
+                        });
 
-                            let next_wakeup = next_wakeup.and_then(|w| w.0);
-                            (Some(delay_fut), Some((next_wakeup, abort_handle)))
-                        }
-                    };
-
-                    state.wait_handle = abort_handle;
-
-                    delay_fut
+                        let next_wakeup = next_wakeup.and_then(|w| w.0);
+                        (Some(delay_fut), Some((next_wakeup, abort_handle)))
+                    }
                 };
 
-                // Got aborted, reschedule if needed
-                if let Some(delay_fut) = delay_fut {
-                    gst::debug!(CAT, obj = self.element, "Waiting");
-                    if let Err(Aborted) = delay_fut.await {
-                        gst::debug!(CAT, obj = self.element, "Waiting aborted");
+                state.wait_handle = abort_handle;
+
+                delay_fut
+            };
+
+            // Got aborted, reschedule if needed
+            if let Some(delay_fut) = delay_fut {
+                gst::debug!(CAT, obj = self.element, "Waiting");
+                if let Err(Aborted) = delay_fut.await {
+                    gst::debug!(CAT, obj = self.element, "Waiting aborted");
+                    return Ok(());
+                }
+            }
+
+            let (head_pts, head_seq, lost_events) = {
+                let mut state = jb.state.lock().unwrap();
+                //
+                // Check earliest PTS as we have just taken the lock
+                let (now, next_wakeup) = self.src_pad_handler.next_wakeup(
+                    &self.element,
+                    &state,
+                    do_lost,
+                    latency,
+                    context_wait,
+                    max_dropout_time,
+                );
+
+                gst::debug!(
+                    CAT,
+                    obj = self.element,
+                    "Woke up at {}, earliest_pts {}",
+                    now.display(),
+                    state.earliest_pts.display()
+                );
+
+                if let Some((next_wakeup, _)) = next_wakeup {
+                    if next_wakeup.opt_gt(now).unwrap_or(false) {
+                        // Reschedule and wait a bit longer in the next iteration
                         return Ok(());
+                    }
+                } else {
+                    return Ok(());
+                }
+
+                let (head_pts, head_seq) = state.jbuf.peek();
+                let mut events = vec![];
+
+                // We may have woken up in order to push lost events on time
+                // (see next_packet_wakeup())
+                if do_lost && state.equidistant > 3 && !state.packet_spacing.is_zero() {
+                    loop {
+                        // Make sure we don't push longer than max_dropout_time
+                        // consecutive PacketLost events
+                        let dropout_time = state
+                            .last_popped_pts
+                            .opt_saturating_sub(state.last_popped_buffer_pts);
+                        if dropout_time.opt_gt(max_dropout_time).unwrap_or(false) {
+                            break;
+                        }
+
+                        if let Some((lost_seq, lost_pts)) =
+                            state.last_popped_seqnum.and_then(|last| {
+                                if let Some(last_popped_pts) = state.last_popped_pts {
+                                    let next = last.wrapping_add(1);
+                                    if (last_popped_pts + latency - context_wait / 2)
+                                        .opt_lt(now)
+                                        .unwrap_or(false)
+                                    {
+                                        if let Some(earliest) = state.earliest_seqnum {
+                                            if next != earliest {
+                                                Some((next, last_popped_pts + state.packet_spacing))
+                                            } else {
+                                                None
+                                            }
+                                        } else {
+                                            Some((next, last_popped_pts + state.packet_spacing))
+                                        }
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            })
+                        {
+                            if (lost_pts + latency).opt_lt(now).unwrap_or(false) {
+                                /* We woke up to push the next lost event exactly on time, yet
+                                 * clearly we are now too late to do so. This may have happened
+                                 * because of a seqnum jump on the input side or some other
+                                 * condition, but in any case we want to let the regular
+                                 * generate_lost_events method take over, with its lost events
+                                 * aggregation logic.
+                                 */
+                                break;
+                            }
+
+                            if lost_pts.opt_gt(state.earliest_pts).unwrap_or(false) {
+                                /* Don't let our logic carry us too far in the future */
+                                break;
+                            }
+
+                            let s = gst::Structure::builder("GstRTPPacketLost")
+                                .field("seqnum", lost_seq as u32)
+                                .field("timestamp", lost_pts)
+                                .field("duration", state.packet_spacing)
+                                .field("retry", 0)
+                                .build();
+
+                            events.push(gst::event::CustomDownstream::new(s));
+                            state.stats.num_lost += 1;
+                            state.last_popped_pts = Some(lost_pts);
+                            state.last_popped_seqnum = Some(lost_seq);
+                        } else {
+                            break;
+                        }
                     }
                 }
 
-                let (head_pts, head_seq, lost_events) = {
-                    let mut state = jb.state.lock().unwrap();
-                    //
+                (head_pts, head_seq, events)
+            };
+
+            {
+                // Push any lost events we may have woken up to push on schedule
+                for event in lost_events {
+                    gst::debug!(
+                        CAT,
+                        obj = jb.src_pad.gst_pad(),
+                        "Pushing lost event {:?}",
+                        event
+                    );
+                    let _ = jb.src_pad.push_event(event).await;
+                }
+
+                let state = jb.state.lock().unwrap();
+                //
+                // Now recheck earliest PTS as we have just retaken the lock and may
+                // have advanced last_popped_* fields
+                let (now, next_wakeup) = self.src_pad_handler.next_wakeup(
+                    &self.element,
+                    &state,
+                    do_lost,
+                    latency,
+                    context_wait,
+                    max_dropout_time,
+                );
+
+                gst::debug!(
+                    CAT,
+                    obj = &self.element,
+                    "Woke up at {}, earliest_pts {}",
+                    now.display(),
+                    state.earliest_pts.display()
+                );
+
+                if let Some((next_wakeup, _)) = next_wakeup {
+                    if next_wakeup.opt_gt(now).unwrap_or(false) {
+                        // Reschedule and wait a bit longer in the next iteration
+                        return Ok(());
+                    }
+                } else {
+                    return Ok(());
+                }
+            }
+
+            let res = self.src_pad_handler.pop_and_push(&self.element).await;
+
+            {
+                let mut state = jb.state.lock().unwrap();
+
+                state.last_res = res;
+
+                if head_pts == state.earliest_pts && head_seq == state.earliest_seqnum {
+                    if state.jbuf.num_packets() > 0 {
+                        let (earliest_pts, earliest_seqnum) = state.jbuf.find_earliest();
+                        state.earliest_pts = earliest_pts;
+                        state.earliest_seqnum = earliest_seqnum;
+                    } else {
+                        state.earliest_pts = None;
+                        state.earliest_seqnum = None;
+                    }
+                }
+
+                if res.is_ok() {
+                    // Return and reschedule if the next packet would be in the future
                     // Check earliest PTS as we have just taken the lock
                     let (now, next_wakeup) = self.src_pad_handler.next_wakeup(
                         &self.element,
@@ -1206,139 +1362,8 @@ impl TaskImpl for JitterBufferTask {
                         context_wait,
                         max_dropout_time,
                     );
-
-                    gst::debug!(
-                        CAT,
-                        obj = self.element,
-                        "Woke up at {}, earliest_pts {}",
-                        now.display(),
-                        state.earliest_pts.display()
-                    );
-
-                    if let Some((next_wakeup, _)) = next_wakeup {
-                        if next_wakeup.opt_gt(now).unwrap_or(false) {
-                            // Reschedule and wait a bit longer in the next iteration
-                            return Ok(());
-                        }
-                    } else {
-                        return Ok(());
-                    }
-
-                    let (head_pts, head_seq) = state.jbuf.peek();
-                    let mut events = vec![];
-
-                    // We may have woken up in order to push lost events on time
-                    // (see next_packet_wakeup())
-                    if do_lost && state.equidistant > 3 && !state.packet_spacing.is_zero() {
-                        loop {
-                            // Make sure we don't push longer than max_dropout_time
-                            // consecutive PacketLost events
-                            let dropout_time = state
-                                .last_popped_pts
-                                .opt_saturating_sub(state.last_popped_buffer_pts);
-                            if dropout_time.opt_gt(max_dropout_time).unwrap_or(false) {
-                                break;
-                            }
-
-                            if let Some((lost_seq, lost_pts)) =
-                                state.last_popped_seqnum.and_then(|last| {
-                                    if let Some(last_popped_pts) = state.last_popped_pts {
-                                        let next = last.wrapping_add(1);
-                                        if (last_popped_pts + latency - context_wait / 2)
-                                            .opt_lt(now)
-                                            .unwrap_or(false)
-                                        {
-                                            if let Some(earliest) = state.earliest_seqnum {
-                                                if next != earliest {
-                                                    Some((
-                                                        next,
-                                                        last_popped_pts + state.packet_spacing,
-                                                    ))
-                                                } else {
-                                                    None
-                                                }
-                                            } else {
-                                                Some((next, last_popped_pts + state.packet_spacing))
-                                            }
-                                        } else {
-                                            None
-                                        }
-                                    } else {
-                                        None
-                                    }
-                                })
-                            {
-                                if (lost_pts + latency).opt_lt(now).unwrap_or(false) {
-                                    /* We woke up to push the next lost event exactly on time, yet
-                                     * clearly we are now too late to do so. This may have happened
-                                     * because of a seqnum jump on the input side or some other
-                                     * condition, but in any case we want to let the regular
-                                     * generate_lost_events method take over, with its lost events
-                                     * aggregation logic.
-                                     */
-                                    break;
-                                }
-
-                                if lost_pts.opt_gt(state.earliest_pts).unwrap_or(false) {
-                                    /* Don't let our logic carry us too far in the future */
-                                    break;
-                                }
-
-                                let s = gst::Structure::builder("GstRTPPacketLost")
-                                    .field("seqnum", lost_seq as u32)
-                                    .field("timestamp", lost_pts)
-                                    .field("duration", state.packet_spacing)
-                                    .field("retry", 0)
-                                    .build();
-
-                                events.push(gst::event::CustomDownstream::new(s));
-                                state.stats.num_lost += 1;
-                                state.last_popped_pts = Some(lost_pts);
-                                state.last_popped_seqnum = Some(lost_seq);
-                            } else {
-                                break;
-                            }
-                        }
-                    }
-
-                    (head_pts, head_seq, events)
-                };
-
-                {
-                    // Push any lost events we may have woken up to push on schedule
-                    for event in lost_events {
-                        gst::debug!(
-                            CAT,
-                            obj = jb.src_pad.gst_pad(),
-                            "Pushing lost event {:?}",
-                            event
-                        );
-                        let _ = jb.src_pad.push_event(event).await;
-                    }
-
-                    let state = jb.state.lock().unwrap();
-                    //
-                    // Now recheck earliest PTS as we have just retaken the lock and may
-                    // have advanced last_popped_* fields
-                    let (now, next_wakeup) = self.src_pad_handler.next_wakeup(
-                        &self.element,
-                        &state,
-                        do_lost,
-                        latency,
-                        context_wait,
-                        max_dropout_time,
-                    );
-
-                    gst::debug!(
-                        CAT,
-                        obj = &self.element,
-                        "Woke up at {}, earliest_pts {}",
-                        now.display(),
-                        state.earliest_pts.display()
-                    );
-
-                    if let Some((next_wakeup, _)) = next_wakeup {
-                        if next_wakeup.opt_gt(now).unwrap_or(false) {
+                    if let Some((Some(next_wakeup), _)) = next_wakeup {
+                        if now.is_some_and(|now| next_wakeup > now) {
                             // Reschedule and wait a bit longer in the next iteration
                             return Ok(());
                         }
@@ -1346,90 +1371,46 @@ impl TaskImpl for JitterBufferTask {
                         return Ok(());
                     }
                 }
-
-                let res = self.src_pad_handler.pop_and_push(&self.element).await;
-
-                {
-                    let mut state = jb.state.lock().unwrap();
-
-                    state.last_res = res;
-
-                    if head_pts == state.earliest_pts && head_seq == state.earliest_seqnum {
-                        if state.jbuf.num_packets() > 0 {
-                            let (earliest_pts, earliest_seqnum) = state.jbuf.find_earliest();
-                            state.earliest_pts = earliest_pts;
-                            state.earliest_seqnum = earliest_seqnum;
-                        } else {
-                            state.earliest_pts = None;
-                            state.earliest_seqnum = None;
-                        }
-                    }
-
-                    if res.is_ok() {
-                        // Return and reschedule if the next packet would be in the future
-                        // Check earliest PTS as we have just taken the lock
-                        let (now, next_wakeup) = self.src_pad_handler.next_wakeup(
-                            &self.element,
-                            &state,
-                            do_lost,
-                            latency,
-                            context_wait,
-                            max_dropout_time,
-                        );
-                        if let Some((Some(next_wakeup), _)) = next_wakeup {
-                            if now.is_some_and(|now| next_wakeup > now) {
-                                // Reschedule and wait a bit longer in the next iteration
-                                return Ok(());
-                            }
-                        } else {
-                            return Ok(());
-                        }
-                    }
-                }
-
-                if let Err(err) = res {
-                    match err {
-                        gst::FlowError::Eos => {
-                            gst::debug!(CAT, obj = self.element, "Pushing EOS event");
-                            let _ = jb.src_pad.push_event(gst::event::Eos::new()).await;
-                        }
-                        gst::FlowError::Flushing => {
-                            gst::debug!(CAT, obj = self.element, "Flushing")
-                        }
-                        err => gst::error!(CAT, obj = self.element, "Error {}", err),
-                    }
-
-                    return Err(err);
-                }
-            }
-        }
-        .boxed()
-    }
-
-    fn handle_item(&mut self, _item: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-        future::ok(()).boxed()
-    }
-
-    fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
-        async move {
-            gst::log!(CAT, obj = self.element, "Stopping task");
-
-            let jb = self.element.imp();
-            let mut jb_state = jb.state.lock().unwrap();
-
-            if let Some((_, abort_handle)) = jb_state.wait_handle.take() {
-                abort_handle.abort();
             }
 
-            self.src_pad_handler.clear();
-            self.sink_pad_handler.clear();
+            if let Err(err) = res {
+                match err {
+                    gst::FlowError::Eos => {
+                        gst::debug!(CAT, obj = self.element, "Pushing EOS event");
+                        let _ = jb.src_pad.push_event(gst::event::Eos::new()).await;
+                    }
+                    gst::FlowError::Flushing => {
+                        gst::debug!(CAT, obj = self.element, "Flushing")
+                    }
+                    err => gst::error!(CAT, obj = self.element, "Error {}", err),
+                }
 
-            *jb_state = State::default();
-
-            gst::log!(CAT, obj = self.element, "Task stopped");
-            Ok(())
+                return Err(err);
+            }
         }
-        .boxed()
+    }
+
+    async fn handle_item(&mut self, _item: ()) -> Result<(), gst::FlowError> {
+        Ok(())
+    }
+
+    async fn stop(&mut self) -> Result<(), gst::ErrorMessage> {
+        gst::log!(CAT, obj = self.element, "Stopping task");
+
+        let jb = self.element.imp();
+        let mut jb_state = jb.state.lock().unwrap();
+
+        if let Some((_, abort_handle)) = jb_state.wait_handle.take() {
+            abort_handle.abort();
+        }
+
+        self.src_pad_handler.clear();
+        self.sink_pad_handler.clear();
+
+        *jb_state = State::default();
+
+        gst::log!(CAT, obj = self.element, "Task stopped");
+        Ok(())
     }
 }
 
