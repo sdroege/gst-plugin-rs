@@ -8,7 +8,11 @@
 //
 
 use std::{fs::File, path::Path};
+#[cfg(feature = "v1_28")]
+use std::{io::Seek as _, sync::LazyLock};
 
+#[cfg(feature = "v1_28")]
+use gst::{ClockTime, ReferenceTimestampMeta};
 use gst_pbutils::prelude::*;
 use mp4_atom::{Atom, ReadAtom as _, ReadFrom as _};
 use tempfile::tempdir;
@@ -22,6 +26,10 @@ fn init() {
         gstmp4::plugin_register_static().unwrap();
     });
 }
+
+#[cfg(feature = "v1_28")]
+static TAI1958_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::builder("timestamp/x-tai1958").build());
 
 struct Pipeline(gst::Pipeline);
 impl std::ops::Deref for Pipeline {
@@ -73,6 +81,7 @@ struct ExpectedConfiguration {
     has_taic: bool,
     taic_time_uncertainty: u64,
     taic_clock_type: u8,
+    num_tai_timestamps: i32,
 }
 
 fn test_basic_with(video_enc: &str, audio_enc: &str, cb: impl FnOnce(&Path)) {
@@ -290,6 +299,7 @@ fn test_expected_uncompressed_output(location: &Path, width: u32, height: u32) {
             has_taic: false,
             taic_clock_type: 0,       // only if has_taic
             taic_time_uncertainty: 0, // only if has_taic
+            num_tai_timestamps: 0,
         },
     );
 }
@@ -626,6 +636,7 @@ fn test_expected_image_sequence_output(location: &Path, width: u32, height: u32)
             has_taic: false,
             taic_time_uncertainty: 0, // only if has_taic
             taic_clock_type: 0,       // only if has_taic
+            num_tai_timestamps: 0,
         },
     );
 }
@@ -695,6 +706,7 @@ fn test_audio_only_output(location: &Path) {
             has_taic: false,
             taic_time_uncertainty: 0, // only if has_taic
             taic_clock_type: 0,       // only if has_taic
+            num_tai_timestamps: 0,
         },
     );
 }
@@ -811,8 +823,8 @@ fn check_stbl_sanity(stbl: &mp4_atom::Stbl, expected_config: &ExpectedConfigurat
     } else {
         assert!(stbl.ctts.is_none());
     }
-    assert!(stbl.saio.is_none());
-    assert!(stbl.saiz.is_none());
+    check_saio_sanity(&stbl.saio, expected_config);
+    check_saiz_sanity(&stbl.saiz, expected_config);
     check_stco_sanity(&stbl.stco);
     check_stsc_sanity(&stbl.stsc);
     check_stsd_sanity(&stbl.stsd, expected_config);
@@ -826,6 +838,49 @@ fn check_stbl_sanity(stbl: &mp4_atom::Stbl, expected_config: &ExpectedConfigurat
     check_stsz_sanity(&stbl.stsz);
     check_stts_sanity(&stbl.stts);
     // TODO: check consistency between sample sizes and chunk / sample offsets
+}
+
+fn check_saio_sanity(maybe_saio: &Option<mp4_atom::Saio>, expected_config: &ExpectedConfiguration) {
+    if expected_config.num_tai_timestamps == 0 {
+        assert!(maybe_saio.is_none());
+    } else {
+        assert!(maybe_saio.is_some());
+        let saio = maybe_saio.as_ref().unwrap();
+        assert!(saio.aux_info.is_some());
+        assert_eq!(
+            saio.aux_info.as_ref().unwrap().aux_info_type,
+            b"stai".into()
+        );
+        assert_eq!(saio.aux_info.as_ref().unwrap().aux_info_type_parameter, 0);
+        assert_eq!(
+            saio.offsets.len(),
+            expected_config.num_tai_timestamps as usize
+        );
+        let mut previous_offset = 0u64;
+        for offset in &saio.offsets {
+            // We check that the byte offsets are increasing
+            // This is different to checking that the timestamps are increasing
+            assert!(*offset > previous_offset);
+            previous_offset = *offset;
+        }
+    }
+}
+
+fn check_saiz_sanity(maybe_saiz: &Option<mp4_atom::Saiz>, expected_config: &ExpectedConfiguration) {
+    if expected_config.num_tai_timestamps == 0 {
+        assert!(maybe_saiz.is_none());
+    } else {
+        assert!(maybe_saiz.is_some());
+        let saiz = maybe_saiz.as_ref().unwrap();
+        assert!(saiz.aux_info.is_some());
+        assert_eq!(
+            saiz.aux_info.as_ref().unwrap().aux_info_type,
+            b"stai".into()
+        );
+        assert_eq!(saiz.aux_info.as_ref().unwrap().aux_info_type_parameter, 0);
+        assert_eq!(saiz.default_sample_info_size, 9);
+        assert_eq!(saiz.sample_count, expected_config.num_tai_timestamps as u32);
+    }
 }
 
 fn check_stco_sanity(maybe_stco: &Option<mp4_atom::Stco>) {
@@ -1062,8 +1117,177 @@ fn test_taic_encode(video_enc: &str) {
             has_taic: true,
             taic_time_uncertainty: 100_000,
             taic_clock_type: 2,
+            num_tai_timestamps: 0,
         },
     );
+}
+
+#[cfg(feature = "v1_28")]
+fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
+    let filename = format!("taic_{video_enc}.mp4").to_string();
+    let temp_dir = tempdir().unwrap();
+    let temp_file_path = temp_dir.path().join(filename);
+    let location = temp_file_path.as_path();
+    let number_of_frames = 12;
+    let pipeline = gst::Pipeline::builder()
+        .name(format!("stai-{video_enc}"))
+        .build();
+    let videotestsrc = gst::ElementFactory::make("videotestsrc")
+        .property("num-buffers", number_of_frames)
+        .property("is-live", true)
+        .build()
+        .unwrap();
+    let encoder = gst::ElementFactory::make(video_enc)
+        .name("video encoder")
+        .property("bframes", 0u32)
+        .build()
+        .unwrap();
+    let taginject = gst::ElementFactory::make("taginject")
+        .property_from_str("tags", "precision-clock-type=can-sync-to-TAI,precision-clock-time-uncertainty-nanoseconds=100000")
+        .property_from_str("scope", "stream")
+        .build().unwrap();
+    let mux = gst::ElementFactory::make("isomp4mux")
+        .property("tai-precision-timestamps", enabled)
+        .build()
+        .unwrap();
+    let sink = gst::ElementFactory::make("filesink")
+        .property("location", location)
+        .build()
+        .unwrap();
+    pipeline
+        .add_many([&videotestsrc, &encoder, &taginject, &mux, &sink])
+        .unwrap();
+
+    gst::Element::link_many([&videotestsrc, &encoder, &taginject, &mux, &sink]).unwrap();
+
+    let tai_nanos_initial_offset: u64 = 100_000_000_000;
+    let tai_nanos_per_frame_step = 20_000_000; // 20 milliseconds.
+    let tai_nanos = std::sync::atomic::AtomicU64::new(tai_nanos_initial_offset);
+    videotestsrc.static_pad("src").unwrap().add_probe(
+        gst::PadProbeType::BUFFER,
+        move |_pad, info| {
+            if let Some(buffer) = info.buffer_mut() {
+                let timestamp: ClockTime =
+                    ClockTime::from_nseconds(tai_nanos.load(std::sync::atomic::Ordering::Acquire));
+                let mut meta =
+                    ReferenceTimestampMeta::add(buffer.make_mut(), &TAI1958_CAPS, timestamp, None);
+                let s = gst::Structure::builder("iso23001-17-timestamp")
+                    .field("synchronization-state", true)
+                    .field("timestamp-generation-failure", false)
+                    .field("timestamp-is-modified", false)
+                    .build();
+                meta.set_info(s);
+                tai_nanos.fetch_add(
+                    tai_nanos_per_frame_step,
+                    std::sync::atomic::Ordering::AcqRel,
+                );
+            }
+            gst::PadProbeReturn::Ok
+        },
+    );
+
+    pipeline
+        .set_state(gst::State::Playing)
+        .expect("Unable to set the pipeline to the `Playing` state");
+    for msg in pipeline.bus().unwrap().iter_timed(gst::ClockTime::NONE) {
+        use gst::MessageView;
+
+        match msg.view() {
+            MessageView::Eos(..) => break,
+            MessageView::Error(err) => {
+                panic!(
+                    "Error from {:?}: {} ({:?})",
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
+                );
+            }
+            _ => (),
+        }
+    }
+    pipeline
+        .set_state(gst::State::Null)
+        .expect("Unable to set the pipeline to the `Null` state");
+
+    check_generic_single_trak_file_structure(
+        location,
+        b"iso4".into(),
+        0,
+        if enabled {
+            vec![
+                b"isom".into(),
+                b"mp41".into(),
+                b"mp42".into(),
+                b"iso6".into(),
+            ]
+        } else {
+            vec![b"isom".into(), b"mp41".into(), b"mp42".into()]
+        },
+        ExpectedConfiguration {
+            is_audio: false,
+            width: 320,
+            height: 240,
+            has_ctts: false,
+            has_stss: true,
+            has_taic: true,
+            taic_time_uncertainty: 100_000,
+            taic_clock_type: 2,
+            num_tai_timestamps: if enabled { number_of_frames } else { 0 },
+        },
+    );
+    if enabled {
+        let mut input = File::open(location).unwrap();
+        let mut mdat_data: Option<Vec<u8>> = None;
+        let mut mdat_offset: u64 = 0;
+        while let Ok(header) = mp4_atom::Header::read_from(&mut input) {
+            match header.kind {
+                mp4_atom::Moov::KIND => {
+                    let moov = mp4_atom::Moov::read_atom(&header, &mut input).unwrap();
+                    let stbl = &moov.trak.first().unwrap().mdia.minf.stbl;
+                    let saio = stbl.saio.as_ref().unwrap();
+                    let saiz = stbl.saiz.as_ref().unwrap();
+                    if mdat_data.is_some() {
+                        assert_eq!(
+                            saio.aux_info.as_ref().unwrap().aux_info_type,
+                            b"stai".into()
+                        );
+                        assert_eq!(saio.aux_info.as_ref().unwrap().aux_info_type_parameter, 0);
+                        assert_eq!(
+                            saiz.aux_info.as_ref().unwrap().aux_info_type,
+                            b"stai".into()
+                        );
+                        assert_eq!(saiz.aux_info.as_ref().unwrap().aux_info_type_parameter, 0);
+                        for i in 0..saio.offsets.len() {
+                            let offset = saio.offsets[i];
+                            let len = saiz.default_sample_info_size as u64;
+                            let offset_into_mdat_start = (offset - mdat_offset) as usize;
+                            let offset_into_mdat_end = offset_into_mdat_start + len as usize;
+                            let vec = &mdat_data.as_ref().unwrap()
+                                [offset_into_mdat_start..offset_into_mdat_end]
+                                .to_vec();
+                            assert_eq!(vec.len(), 9);
+                            let mut timestamp_bytes: [u8; 8] = [0; 8];
+                            timestamp_bytes.copy_from_slice(&vec.as_slice()[0..8]);
+                            let timestamp = u64::from_be_bytes(timestamp_bytes);
+                            assert_eq!(
+                                timestamp,
+                                tai_nanos_initial_offset + (i as u64) * tai_nanos_per_frame_step
+                            );
+                            assert_eq!(vec[8], 0x80);
+                        }
+                    } else {
+                        panic!("mdat should not be none");
+                    }
+                }
+                mp4_atom::Mdat::KIND => {
+                    mdat_offset = input.stream_position().unwrap();
+                    let mdat = mp4_atom::Mdat::read_atom(&header, &mut input).unwrap();
+                    mdat_data = Some(mdat.data);
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 fn test_taic_encode_cannot_sync(video_enc: &str) {
@@ -1112,6 +1336,7 @@ fn test_taic_encode_cannot_sync(video_enc: &str) {
             has_taic: true,
             taic_time_uncertainty: 0xFFFF_FFFF_FFFF_FFFF,
             taic_clock_type: 1,
+            num_tai_timestamps: 0,
         },
     );
 }
@@ -1120,6 +1345,20 @@ fn test_taic_encode_cannot_sync(video_enc: &str) {
 fn test_taic_x264() {
     init();
     test_taic_encode("x264enc");
+}
+
+#[test]
+#[cfg(feature = "v1_28")]
+fn test_taic_stai_x264() {
+    init();
+    test_taic_stai_encode("x264enc", true);
+}
+
+#[test]
+#[cfg(feature = "v1_28")]
+fn test_taic_stai_x264_not_enabled() {
+    init();
+    test_taic_stai_encode("x264enc", false);
 }
 
 #[test]

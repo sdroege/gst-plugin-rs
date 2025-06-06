@@ -14,6 +14,8 @@ use std::str::FromStr;
 use std::sync::LazyLock;
 use std::{collections::BTreeMap, convert::TryFrom};
 
+use crate::mp4mux::{AuxiliaryInformation, AuxiliaryInformationEntry};
+
 fn write_box<T, F: FnOnce(&mut Vec<u8>) -> Result<T, Error>>(
     vec: &mut Vec<u8>,
     fourcc: impl std::borrow::Borrow<[u8; 4]>,
@@ -656,6 +658,107 @@ fn write_stbl(
         })?;
     }
 
+    for auxiliary_information in &stream.auxiliary_info {
+        if !auxiliary_information.entries.is_empty() {
+            write_full_saiz(v, auxiliary_information)?;
+            write_full_saio(v, auxiliary_information)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn write_full_saiz(
+    v: &mut Vec<u8>,
+    auxiliary_information: &AuxiliaryInformation,
+) -> Result<(), Error> {
+    if let Some(aux_info_type) = auxiliary_information.aux_info_type {
+        write_full_box(v, b"saiz", FULL_BOX_VERSION_0, 1, |v| {
+            v.extend(aux_info_type);
+            v.extend(auxiliary_information.aux_info_type_parameter.to_be_bytes());
+            write_saiz_entries(v, &auxiliary_information.entries)
+        })?;
+    } else {
+        write_full_box(v, b"saiz", FULL_BOX_VERSION_0, 0, |v| {
+            write_saiz_entries(v, &auxiliary_information.entries)
+        })?;
+    }
+    Ok(())
+}
+
+fn write_saiz_entries(v: &mut Vec<u8>, entries: &[AuxiliaryInformationEntry]) -> Result<(), Error> {
+    assert!(!entries.is_empty());
+    let first_entry_length = entries[0].entry_len;
+    if entries[1..]
+        .iter()
+        .all(|entry| entry.entry_len == first_entry_length)
+    {
+        v.extend(first_entry_length.to_be_bytes());
+        v.extend((entries.len() as u32).to_be_bytes());
+    } else {
+        v.extend(0u8.to_be_bytes());
+        v.extend((entries.len() as u32).to_be_bytes());
+        for entry in entries {
+            v.extend(entry.entry_len.to_be_bytes());
+        }
+    }
+    Ok(())
+}
+
+fn write_full_saio(
+    v: &mut Vec<u8>,
+    auxiliary_information: &AuxiliaryInformation,
+) -> Result<(), Error> {
+    let version = if auxiliary_information
+        .entries
+        .iter()
+        .any(|entry| entry.entry_offset > (u32::MAX as u64))
+    {
+        FULL_BOX_VERSION_1
+    } else {
+        FULL_BOX_VERSION_0
+    };
+    if let Some(aux_info_type) = auxiliary_information.aux_info_type {
+        write_full_box(v, b"saio", version, 1, |v| {
+            v.extend(aux_info_type);
+            v.extend(auxiliary_information.aux_info_type_parameter.to_be_bytes());
+            if version == FULL_BOX_VERSION_0 {
+                write_saio_entries_v0(v, &auxiliary_information.entries)
+            } else {
+                write_saio_entries_v1(v, &auxiliary_information.entries)
+            }
+        })?;
+    } else {
+        write_full_box(v, b"saio", version, 0, |v| {
+            if version == FULL_BOX_VERSION_0 {
+                write_saio_entries_v0(v, &auxiliary_information.entries)
+            } else {
+                write_saio_entries_v1(v, &auxiliary_information.entries)
+            }
+        })?;
+    }
+    Ok(())
+}
+
+fn write_saio_entries_v0(
+    v: &mut Vec<u8>,
+    entries: &[AuxiliaryInformationEntry],
+) -> Result<(), Error> {
+    v.extend((entries.len() as u32).to_be_bytes());
+    for entry in entries {
+        v.extend((entry.entry_offset as u32).to_be_bytes());
+    }
+    Ok(())
+}
+
+fn write_saio_entries_v1(
+    v: &mut Vec<u8>,
+    entries: &[AuxiliaryInformationEntry],
+) -> Result<(), Error> {
+    v.extend((entries.len() as u32).to_be_bytes());
+    for entry in entries {
+        v.extend(entry.entry_offset.to_be_bytes());
+    }
     Ok(())
 }
 

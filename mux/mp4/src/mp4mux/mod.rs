@@ -241,6 +241,20 @@ pub(crate) struct TaiClockInfo {
     clock_type: TaicClockType,
 }
 
+// Data for auxiliary information, as used for per-sample timestamps and for protection schemes
+#[derive(Clone, Debug, Default)]
+struct AuxiliaryInformationEntry {
+    entry_offset: u64,
+    entry_len: u8,
+}
+
+#[derive(Clone, Debug, Default)]
+struct AuxiliaryInformation {
+    aux_info_type: Option<[u8; 4]>,
+    aux_info_type_parameter: u32,
+    entries: Vec<AuxiliaryInformationEntry>,
+}
+
 #[derive(Debug)]
 pub(crate) struct Stream {
     /// Caps of this stream
@@ -284,6 +298,9 @@ pub(crate) struct Stream {
 
     /// TAI Clock information (ISO/IEC 23001-17 Amd 1)
     tai_clock_info: Option<TaiClockInfo>,
+
+    /// Sample auxiliary information (ISO/IEC 14496-12:2022 Section 8.7.8 and 8.7.9)
+    auxiliary_info: Vec<AuxiliaryInformation>,
 }
 
 #[derive(Debug)]

@@ -20,6 +20,8 @@ use std::str::FromStr;
 use std::sync::Mutex;
 
 use crate::mp4mux::obu::read_seq_header_obu_bytes;
+use crate::mp4mux::AuxiliaryInformation;
+use crate::mp4mux::AuxiliaryInformationEntry;
 use crate::mp4mux::TaicClockType;
 use std::sync::LazyLock;
 
@@ -40,6 +42,11 @@ static NTP_CAPS: LazyLock<gst::Caps> =
 /// Reference timestamp meta caps for UNIX timestamps.
 static UNIX_CAPS: LazyLock<gst::Caps> =
     LazyLock::new(|| gst::Caps::builder("timestamp/x-unix").build());
+
+#[cfg(feature = "v1_28")]
+/// Reference timestamp meta caps for TAI timestamps with 1958-01-01 epoch.
+static TAI1958_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::builder("timestamp/x-tai1958").build());
 
 /// Returns the UTC time of the buffer in the UNIX epoch.
 fn get_utc_time_from_buffer(buffer: &gst::BufferRef) -> Option<gst::ClockTime> {
@@ -127,6 +134,7 @@ struct Settings {
     interleave_time: Option<gst::ClockTime>,
     movie_timescale: u32,
     extra_brands: Vec<[u8; 4]>,
+    with_precision_timestamps: bool,
 }
 
 impl Default for Settings {
@@ -136,6 +144,7 @@ impl Default for Settings {
             interleave_time: DEFAULT_INTERLEAVE_TIME,
             movie_timescale: 0,
             extra_brands: Vec::new(),
+            with_precision_timestamps: false,
         }
     }
 }
@@ -164,7 +173,14 @@ struct PendingBuffer {
     composition_time_offset: Option<i64>,
     duration: Option<gst::ClockTime>,
 }
+#[derive(Debug)]
+struct PendingAuxInfoEntry {
+    aux_info_type: Option<[u8; 4]>,
+    aux_info_type_parameter: u32,
+    data: Vec<u8>,
+}
 
+#[derive(Debug)]
 struct Stream {
     /// Sink pad for this stream.
     sinkpad: super::MP4MuxPad,
@@ -222,6 +238,11 @@ struct Stream {
 
     /// TAI precision clock information
     tai_clock_info: Option<TaiClockInfo>,
+
+    /// The auxiliary information (saio/saiz) for the stream
+    aux_info: Vec<AuxiliaryInformation>,
+    /// auxiliary information to be written after the chunk is finished
+    pending_aux_info_data: VecDeque<PendingAuxInfoEntry>,
 }
 
 impl Stream {
@@ -371,6 +392,10 @@ struct State {
 
     /// Size of the `mdat` as written so far.
     mdat_size: u64,
+
+    #[cfg(feature = "v1_28")]
+    /// The last TAI timestamp value, in nanoseconds after epoch
+    last_tai_timestamp: u64,
 }
 
 #[derive(Default)]
@@ -957,6 +982,7 @@ impl MP4Mux {
         &self,
         settings: &Settings,
         state: &mut State,
+        buffers: &mut gst::BufferListRef,
     ) -> Result<Option<usize>, gst::FlowError> {
         if let Some(current_stream_idx) = state.current_stream_idx {
             // If a stream was previously selected, check if another buffer from
@@ -991,6 +1017,10 @@ impl MP4Mux {
                         );
                         return Ok(Some(current_stream_idx));
                     }
+                    let num_bytes_added =
+                        self.flush_aux_info(buffers, stream, state.current_offset);
+                    state.current_offset += num_bytes_added;
+                    state.mdat_size += num_bytes_added;
 
                     state.current_stream_idx = None;
                     gst::debug!(
@@ -1012,6 +1042,10 @@ impl MP4Mux {
                         obj = stream.sinkpad,
                         "Stream is EOS, switching to next stream"
                     );
+                    let num_bytes_added =
+                        self.flush_aux_info(buffers, stream, state.current_offset);
+                    state.current_offset += num_bytes_added;
+                    state.mdat_size += num_bytes_added;
                     state.current_stream_idx = None;
                 }
                 Err(err) => {
@@ -1101,6 +1135,56 @@ impl MP4Mux {
         }
     }
 
+    fn flush_aux_info(
+        &self,
+        buffers: &mut gst::BufferListRef,
+        stream: &mut Stream,
+        initial_offset: u64,
+    ) -> u64 {
+        gst::debug!(
+            CAT,
+            obj = stream.sinkpad,
+            "Flushing {} pending entries of auxiliary information from stream {} to mdat at end of current chunk",
+            stream.pending_aux_info_data.len(),
+            stream.sinkpad.name(),
+        );
+        let mut num_bytes_added = 0u64;
+        while let Some(pending_aux_info) = stream.pending_aux_info_data.pop_front() {
+            // We don't handle the case where the aux_info_type is None - no idea what the semantics of that would be
+            assert!(pending_aux_info.aux_info_type.is_some());
+            let maybe_index = stream.aux_info.iter().position(|aux_info| {
+                (aux_info.aux_info_type == pending_aux_info.aux_info_type)
+                    && (aux_info.aux_info_type_parameter
+                        == pending_aux_info.aux_info_type_parameter)
+            });
+            let index: usize = match maybe_index {
+                Some(index) => index,
+                None => {
+                    // We did not already have a matching entry in the stream, add it
+                    let aux_info = AuxiliaryInformation {
+                        aux_info_type: pending_aux_info.aux_info_type,
+                        aux_info_type_parameter: pending_aux_info.aux_info_type_parameter,
+                        entries: Vec::new(),
+                    };
+                    stream.aux_info.push(aux_info);
+                    stream.aux_info.len() - 1
+                }
+            };
+            let pending_aux_info_data = gst::Buffer::from_slice(pending_aux_info.data);
+            assert!(pending_aux_info_data.size() <= u8::MAX as usize);
+            let entry_size = pending_aux_info_data.size() as u8;
+            buffers.add(pending_aux_info_data);
+            stream.aux_info[index]
+                .entries
+                .push(AuxiliaryInformationEntry {
+                    entry_offset: initial_offset + num_bytes_added,
+                    entry_len: entry_size,
+                });
+            num_bytes_added += entry_size as u64;
+        }
+        num_bytes_added
+    }
+
     fn drain_buffers(
         &self,
         settings: &Settings,
@@ -1108,7 +1192,7 @@ impl MP4Mux {
         buffers: &mut gst::BufferListRef,
     ) -> Result<(), gst::FlowError> {
         // Now we can start handling buffers
-        while let Some(idx) = self.find_earliest_stream(settings, state)? {
+        while let Some(idx) = self.find_earliest_stream(settings, state, buffers)? {
             let stream = &mut state.streams[idx];
             let buffer = stream.pending_buffer.take().unwrap();
 
@@ -1173,7 +1257,97 @@ impl MP4Mux {
             }
 
             let mut buffer = buffer.buffer;
-
+            #[cfg(feature = "v1_28")]
+            {
+                if settings.with_precision_timestamps {
+                    // Builds a TAITimestampPacket structure as defined in ISO/IEC 23001-17 Amendment 1, Section 8.1.2
+                    // That will be written out as `stai` aux info per Section 8.1.3.
+                    // See ISO/IEC 14496-12 Section 8.7.8 and 8.7.9 for more on aux info.
+                    if let Some(meta) = buffer
+                        .iter_meta::<gst::ReferenceTimestampMeta>()
+                        .find(|m| m.reference().can_intersect(&TAI1958_CAPS) && m.info().is_some())
+                    {
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "got TAI ReferenceTimestampMeta on the buffer"
+                        );
+                        let mut timestamp_packet = Vec::<u8>::with_capacity(9);
+                        timestamp_packet.extend(meta.timestamp().nseconds().to_be_bytes());
+                        state.last_tai_timestamp = meta.timestamp().nseconds();
+                        let iso23001_17_timestamp_info = meta.info().unwrap(); // checked in filter
+                        let mut timestamp_packet_flags = 0u8;
+                        if let Ok(synced) =
+                            iso23001_17_timestamp_info.get::<bool>("synchronization-state")
+                        {
+                            gst::trace!(
+                                CAT,
+                                imp = self,
+                                "synchronized to atomic source: {:?}",
+                                synced
+                            );
+                            if synced {
+                                timestamp_packet_flags |= 0x80u8;
+                            }
+                        } else {
+                            gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected synchronisation state, assuming not synchronised");
+                        }
+                        if let Ok(generation_failure) =
+                            iso23001_17_timestamp_info.get::<bool>("timestamp-generation-failure")
+                        {
+                            gst::trace!(
+                                CAT,
+                                imp = self,
+                                "timestamp generation failure: {:?}",
+                                generation_failure
+                            );
+                            if generation_failure {
+                                timestamp_packet_flags |= 0x40u8;
+                            }
+                        } else if meta.timestamp().nseconds() > state.last_tai_timestamp {
+                            gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected generation failure flag, timestamp looks OK, assuming OK");
+                        } else {
+                            gst::warning!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected generation failure flag and unexpected timestamp value, assuming generation failure");
+                            timestamp_packet_flags |= 0x40u8;
+                        }
+                        if let Ok(timestamp_is_modified) =
+                            iso23001_17_timestamp_info.get::<bool>("timestamp-is-modified")
+                        {
+                            gst::trace!(
+                                CAT,
+                                imp = self,
+                                "timestamp is modified: {:?}",
+                                timestamp_is_modified
+                            );
+                            if timestamp_is_modified {
+                                timestamp_packet_flags |= 0x20u8;
+                            }
+                        } else {
+                            gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected modification state value, assuming not modified");
+                        }
+                        timestamp_packet.extend(timestamp_packet_flags.to_be_bytes());
+                        stream.pending_aux_info_data.push_back(PendingAuxInfoEntry {
+                            aux_info_type: Some(*b"stai"),
+                            aux_info_type_parameter: 0,
+                            data: timestamp_packet,
+                        });
+                    } else {
+                        // generate a failure packet, because we always need aux info for a sample
+                        let mut timestamp_packet = Vec::<u8>::with_capacity(9);
+                        // The timestamp must monotonically increase
+                        let timestamp = state.last_tai_timestamp + 1;
+                        timestamp_packet.extend(timestamp.to_be_bytes());
+                        state.last_tai_timestamp = timestamp;
+                        let flags = 0x40u8; // not sync'd | generation failure | not modified,
+                        timestamp_packet.extend(flags.to_be_bytes());
+                        stream.pending_aux_info_data.push_back(PendingAuxInfoEntry {
+                            aux_info_type: Some(*b"stai"),
+                            aux_info_type_parameter: 0,
+                            data: timestamp_packet,
+                        });
+                    }
+                }
+            }
             stream.queued_chunk_time += duration;
             stream.queued_chunk_bytes += buffer.size() as u64;
 
@@ -1469,6 +1643,8 @@ impl MP4Mux {
                 max_bitrate,
                 avg_bitrate,
                 tai_clock_info,
+                aux_info: Vec::new(),
+                pending_aux_info_data: VecDeque::new(),
             });
         }
 
@@ -1545,6 +1721,12 @@ impl ObjectImpl for MP4Mux {
                     .blurb("Comma-separated list of 4-character brand codes (e.g. duke,sook)")
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("tai-precision-timestamps")
+                    .nick("Precision Timestamps")
+                    .blurb("Whether to encode ISO/IEC 23001-17 TAI timestamps as auxiliary data")
+                    .default_value(false)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -1600,6 +1782,11 @@ impl ObjectImpl for MP4Mux {
                 }
             }
 
+            "tai-precision-timestamps" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.with_precision_timestamps = value.get().expect("type checked upstream");
+            }
+
             _ => unimplemented!(),
         }
     }
@@ -1631,6 +1818,11 @@ impl ObjectImpl for MP4Mux {
                     .join(",");
 
                 Some(brands_str).to_value()
+            }
+
+            "tai-precision-timestamps" => {
+                let settings = self.settings.lock().unwrap();
+                settings.with_precision_timestamps.to_value()
             }
 
             _ => unimplemented!(),
@@ -2005,6 +2197,9 @@ impl AggregatorImpl for MP4Mux {
                         _ => {}
                     }
                 }
+                if settings.with_precision_timestamps {
+                    compatible_brands.insert(*b"iso6"); // required for saiz/saio support
+                }
             }
             if have_image_sequence && have_only_image_sequence {
                 major_brand = b"msf1";
@@ -2091,6 +2286,7 @@ impl AggregatorImpl for MP4Mux {
                     avg_bitrate: stream.avg_bitrate,
                     chunks: stream.chunks,
                     tai_clock_info: stream.tai_clock_info,
+                    auxiliary_info: stream.aux_info,
                 });
             }
 
