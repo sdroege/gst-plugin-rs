@@ -792,8 +792,19 @@ impl WhipServer {
     async fn post_handler(
         &self,
         body: warp::hyper::body::Bytes,
+        id: Option<String>,
     ) -> Result<http::Response<warp::hyper::Body>, warp::Rejection> {
-        let session_id = uuid::Uuid::new_v4().to_string();
+        let session_id = match id {
+            Some(id) => {
+                gst::debug!(CAT, imp = self, "got session id {id} from the URL");
+                id
+            }
+            None => {
+                gst::info!(CAT, imp = self, "no session id in the URL, generating UUID");
+                uuid::Uuid::new_v4().to_string()
+            }
+        };
+
         let (tx, mut rx) = mpsc::channel::<Option<SDPMessage>>(1);
         let wait_timeout = {
             let mut settings = self.settings.lock().unwrap();
@@ -986,7 +997,24 @@ impl WhipServer {
                 #[weak(rename_to = self_)]
                 self,
                 #[upgrade_or_panic]
-                move |body| async move { self_.post_handler(body).await }
+                move |body| async move { self_.post_handler(body, None).await }
+            ));
+
+        // POST /endpoint/<session-id>
+        let post_filter_with_id = warp::post()
+            .and(warp::path(ENDPOINT_PATH))
+            .and(warp::path::param::<String>())
+            .and(warp::path::end())
+            .and(warp::header::exact(
+                http::header::CONTENT_TYPE.as_str(),
+                CONTENT_SDP,
+            ))
+            .and(warp::body::bytes())
+            .and_then(glib::clone!(
+                #[weak(rename_to = self_)]
+                self,
+                #[upgrade_or_panic]
+                move |id, body| async move { self_.post_handler(body, Some(id)).await }
             ));
 
         // OPTIONS /endpoint
@@ -1029,7 +1057,7 @@ impl WhipServer {
             ));
 
         let api = prefix
-            .and(post_filter)
+            .and(post_filter.or(post_filter_with_id))
             .or(prefix.and(options_filter))
             .or(prefix.and(patch_filter))
             .or(prefix.and(delete_filter));
