@@ -171,7 +171,6 @@ pub struct PcapWriter {
         name="target-factory",
         get,
         set,
-        construct_only,
         type = Option<String>,
         member = target_factory,
         blurb = "Factory name to target")
@@ -180,7 +179,6 @@ pub struct PcapWriter {
         name="pad-path",
         get,
         set,
-        construct_only,
         type = Option<String>,
         member = pad_path,
         blurb = "Pad path to target")
