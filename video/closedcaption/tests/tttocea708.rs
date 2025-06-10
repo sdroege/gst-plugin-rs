@@ -243,3 +243,51 @@ fn test_tttocea708_output_gaps() {
     let event = h.pull_event().unwrap();
     assert_eq!(event.type_(), gst::EventType::Eos);
 }
+
+/* Here we verify that the element does not crash on large input buffers */
+#[test]
+fn test_tttocea708_large_input() {
+    init();
+
+    let mut h = gst_check::Harness::new_parse("tttocea708 mode=roll-up");
+    h.set_src_caps_str("text/x-raw");
+    h.set_sink_caps_str("closedcaption/x-cea-708,format=cc_data,framerate=60/1");
+
+    while h.events_in_queue() != 0 {
+        let _event = h.pull_event().unwrap();
+    }
+
+    let inbuf = new_timed_buffer(" This is going to be a very long#& buffer that will exceed the output length of a single DTVCCPacket.#&", 0.nseconds(), ClockTime::SECOND);
+    assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
+
+    h.push_event(gst::event::Eos::new());
+
+    loop {
+        let outbuf = h.pull().unwrap();
+        println!("pts {}", outbuf.pts().unwrap().display());
+        if outbuf.pts().unwrap() + outbuf.duration().unwrap() >= 200_000_000.nseconds() {
+            break;
+        }
+
+        let data = outbuf.map_readable().unwrap();
+        println!("data {:?}", &*data);
+        assert_ne!(&*data, &PADDING);
+    }
+
+    /* Padding */
+    loop {
+        let outbuf = h.pull().unwrap();
+        println!("pts {}", outbuf.pts().unwrap().display());
+        if outbuf.pts().unwrap() + outbuf.duration().unwrap() >= 1_000_000_000.nseconds() {
+            break;
+        }
+
+        let data = outbuf.map_readable().unwrap();
+        assert_eq!(&*data, &PADDING);
+    }
+
+    assert_eq!(h.events_in_queue(), 1);
+
+    let event = h.pull_event().unwrap();
+    assert_eq!(event.type_(), gst::EventType::Eos);
+}

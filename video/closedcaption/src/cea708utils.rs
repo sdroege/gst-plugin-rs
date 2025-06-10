@@ -145,7 +145,16 @@ impl Cea708ServiceWriter {
                 gst::trace!(CAT, "service is full");
                 break;
             }
-            if service.len() + code.byte_len() > available_bytes {
+            let service_header_bytes = if service.is_empty() {
+                if service.number() >= 7 {
+                    2
+                } else {
+                    1
+                }
+            } else {
+                0
+            };
+            if service_header_bytes + service.len() + code.byte_len() > available_bytes {
                 gst::trace!(CAT, "packet is full");
                 break;
             }
