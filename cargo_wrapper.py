@@ -94,7 +94,7 @@ if __name__ == "__main__":
 
     rustc_target = None
     if 'RUSTC' in env:
-        rustc_cmdline = shlex.split(env['RUSTC'])
+        rustc_cmdline = shlex.split(env['RUSTC'], posix=sys.platform != 'win32')
         # grab target from RUSTFLAGS
         rust_flags = rustc_cmdline[1:] + shlex.split(env.get('RUSTFLAGS', ''))
         if '--target' in rust_flags:
