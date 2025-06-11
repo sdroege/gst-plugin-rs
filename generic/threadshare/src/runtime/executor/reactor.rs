@@ -32,10 +32,7 @@ cfg_if::cfg_if! {
         mod windows;
         pub use windows::Registration;
     } else if #[cfg(any(
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "tvos",
-        target_os = "watchos",
+        target_vendor = "apple",
         target_os = "freebsd",
         target_os = "netbsd",
         target_os = "openbsd",
@@ -420,7 +417,7 @@ impl Reactor {
                     if let Some(source) = self.sources.get(ev.key) {
                         let mut state = source.state.lock().unwrap();
 
-                        // Collect wakers if a writability event was emitted.
+                        // Collect wakers if any event was emitted.
                         for &(dir, emitted) in &[(WRITE, ev.writable), (READ, ev.readable)] {
                             if emitted {
                                 state[dir].tick = tick;
