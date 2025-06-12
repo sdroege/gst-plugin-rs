@@ -475,9 +475,9 @@ impl State {
             // guaranteed to be non-overlapping (210ms limiter_buf difference).
             let (buf_read, buf_write, limiter_buf) = unsafe {
                 let buf = &mut &mut *self.buf as *mut &mut [f64];
-                let buf_read = (*buf).get_unchecked(self.buf_index..(self.buf_index + channels));
-                let buf_write =
-                    (*buf).get_unchecked_mut(self.prev_buf_index..(self.prev_buf_index + channels));
+                let buf_read = (&(*buf)).get_unchecked(self.buf_index..(self.buf_index + channels));
+                let buf_write = (&mut (*buf))
+                    .get_unchecked_mut(self.prev_buf_index..(self.prev_buf_index + channels));
                 let limiter_buf = self
                     .limiter_buf
                     .get_unchecked_mut(self.limiter_buf_index..(self.limiter_buf_index + channels));
