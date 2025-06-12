@@ -35,7 +35,7 @@ impl Registration {
     ///
     /// The provided file descriptor must be valid and not be closed while this object is alive.
     pub(crate) unsafe fn new(f: BorrowedFd<'_>) -> Self {
-        Self::Fd(f.as_raw_fd())
+        Self { raw: f.as_raw_fd() }
     }
 
     /// Registers the object into the reactor.
