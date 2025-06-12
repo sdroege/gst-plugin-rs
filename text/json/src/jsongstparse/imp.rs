@@ -103,7 +103,7 @@ enum Line<'a> {
 }
 
 impl State {
-    fn line(&mut self, drain: bool) -> Result<Option<Line>, (&[u8], serde_json::Error)> {
+    fn line(&mut self, drain: bool) -> Result<Option<Line<'_>>, (&[u8], serde_json::Error)> {
         let line = if self.replay_last_line {
             self.replay_last_line = false;
             &self.last_raw_line
@@ -320,7 +320,7 @@ impl JsonGstParse {
         &self,
         pts: impl Into<Option<gst::ClockTime>>,
         mut state: MutexGuard<State>,
-    ) -> MutexGuard<State> {
+    ) -> MutexGuard<'_, State> {
         if pts.into().opt_ge(state.segment.start()).unwrap_or(false) {
             state.seeking = false;
             state.discont = true;
