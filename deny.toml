@@ -57,9 +57,6 @@ wildcards = "allow"
 
 # Ignore various duplicated dependencies because librespot depends on an old versions
 [[bans.skip]]
-name = "hermit-abi"
-version = "0.3"
-[[bans.skip]]
 name = "quick-xml"
 version = "0.36"
 
@@ -214,9 +211,6 @@ version = "0.48"
 [[bans.skip]]
 name = "windows-sys"
 version = "0.52"
-[[bans.skip]]
-name = "windows-strings"
-version = "0.3"
 [[bans.skip]]
 name = "windows-interface"
 version = "0.57"
@@ -419,6 +413,11 @@ version = "0.4"
 [[bans.skip]]
 name = "webpki-root-certs"
 version = "0.26"
+
+# cfg-expr dependency
+[[bans.skip]]
+name = "target-lexicon"
+version = "0.12"
 
 [sources]
 unknown-registry = "deny"
