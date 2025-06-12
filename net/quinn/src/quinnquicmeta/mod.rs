@@ -16,7 +16,7 @@ impl QuinnQuicMeta {
         buffer: &mut gst::BufferRef,
         stream_id: u64,
         is_datagram: bool,
-    ) -> gst::MetaRefMut<Self, gst::meta::Standalone> {
+    ) -> gst::MetaRefMut<'_, Self, gst::meta::Standalone> {
         unsafe {
             let mut params = mem::ManuallyDrop::new(imp::QuinnQuicMetaParams {
                 stream_id,

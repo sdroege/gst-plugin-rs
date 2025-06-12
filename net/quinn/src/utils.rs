@@ -344,7 +344,7 @@ fn read_private_key_from_file(
 
 fn configure_server(
     ep_config: &QuinnQuicEndpointConfig,
-) -> Result<(ServerConfig, Vec<rustls_pki_types::CertificateDer>), Box<dyn Error>> {
+) -> Result<(ServerConfig, Vec<rustls_pki_types::CertificateDer<'_>>), Box<dyn Error>> {
     let (certs, key) = if ep_config.secure_conn {
         (
             read_certs_from_file(ep_config.certificate_file.clone())?,
