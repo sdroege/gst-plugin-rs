@@ -91,7 +91,7 @@ impl FindInstance {
         unsafe { NDIlib_find_wait_for_sources(self.0.as_ptr(), timeout_in_ms) }
     }
 
-    pub fn get_current_sources(&mut self) -> Vec<Source> {
+    pub fn get_current_sources(&mut self) -> Vec<Source<'_>> {
         unsafe {
             let mut no_sources = mem::MaybeUninit::uninit();
             let sources_ptr =
@@ -402,7 +402,7 @@ pub struct SendInstance(ptr::NonNull<::std::os::raw::c_void>);
 unsafe impl Send for SendInstance {}
 
 impl SendInstance {
-    pub fn builder(ndi_name: &str) -> SendBuilder {
+    pub fn builder(ndi_name: &str) -> SendBuilder<'_> {
         SendBuilder {
             ndi_name,
             clock_video: false,

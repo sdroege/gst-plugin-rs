@@ -14,7 +14,7 @@ impl NdiSinkAudioMeta {
     pub fn add(
         buffer: &mut gst::BufferRef,
         buffers: Vec<(gst::Buffer, gst_audio::AudioInfo, i64)>,
-    ) -> gst::MetaRefMut<Self, gst::meta::Standalone> {
+    ) -> gst::MetaRefMut<'_, Self, gst::meta::Standalone> {
         unsafe {
             // Manually dropping because gst_buffer_add_meta() takes ownership of the
             // content of the struct

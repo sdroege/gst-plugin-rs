@@ -38,7 +38,7 @@ impl NdiSrcMeta {
     pub fn add(
         buffer: &mut gst::BufferRef,
         ndi_buffer: Buffer,
-    ) -> gst::MetaRefMut<Self, gst::meta::Standalone> {
+    ) -> gst::MetaRefMut<'_, Self, gst::meta::Standalone> {
         unsafe {
             // Manually dropping because gst_buffer_add_meta() takes ownership of the
             // content of the struct
