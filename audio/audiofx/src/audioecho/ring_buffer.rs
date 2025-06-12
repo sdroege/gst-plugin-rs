@@ -22,7 +22,7 @@ impl RingBuffer {
         }
     }
 
-    pub fn iter(&mut self, delay: usize) -> RingBufferIter {
+    pub fn iter(&mut self, delay: usize) -> RingBufferIter<'_> {
         RingBufferIter::new(self, delay)
     }
 }
