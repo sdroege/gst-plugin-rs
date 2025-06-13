@@ -12,7 +12,6 @@ rust-version.workspace = true
 async-task = "4.3.0"
 cfg-if = "1"
 concurrent-queue = "2.2.0"
-flume = "0.11"
 futures = "0.3.28"
 gio.workspace = true
 gst.workspace = true
@@ -40,6 +39,7 @@ gst-check.workspace = true
 gst-app.workspace = true
 # Used by examples
 clap = { version = "4", features = ["derive"] }
+flume = "0.11"
 
 [lib]
 name = "gstthreadshare"
