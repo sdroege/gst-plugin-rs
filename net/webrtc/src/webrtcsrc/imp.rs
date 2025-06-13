@@ -895,10 +895,26 @@ impl Session {
                         obj = element,
                         "Getting transceiver for {stream_id} and index {i} with caps: {caps:#?}"
                     );
-                    let transceiver = webrtcbin.emit_by_name::<Option<gst_webrtc::WebRTCRTPTransceiver>>(
-                        "get-transceiver",
-                        &[&(i as i32)],
-                    ).unwrap_or_else(|| {
+                    let mut transceiver = None;
+                    let mut idx = 0i32;
+                    // find the transceiver with this mline
+                    loop {
+                        let Some(to_check) = webrtcbin
+                            .emit_by_name::<Option<gst_webrtc::WebRTCRTPTransceiver>>(
+                                "get-transceiver",
+                                &[&idx],
+                            )
+                        else {
+                            break;
+                        };
+                        let mline = to_check.property::<u32>("mlineindex");
+                        if mline as usize == i {
+                            transceiver = Some(to_check);
+                            break;
+                        }
+                        idx += 1;
+                    }
+                    let transceiver = transceiver.unwrap_or_else(|| {
                         gst::warning!(CAT, "Transceiver for idx {i} does not exist, GStreamer <= 1.24, adding it ourself");
                         webrtcbin.emit_by_name::<gst_webrtc::WebRTCRTPTransceiver>(
                             "add-transceiver",
