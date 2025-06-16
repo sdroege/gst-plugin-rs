@@ -474,10 +474,22 @@ impl State {
             // Safety: Index ranges are checked below and both slices from buf are
             // guaranteed to be non-overlapping (210ms limiter_buf difference).
             let (buf_read, buf_write, limiter_buf) = unsafe {
-                let buf = &mut &mut *self.buf as *mut &mut [f64];
-                let buf_read = (&(*buf)).get_unchecked(self.buf_index..(self.buf_index + channels));
-                let buf_write = (&mut (*buf))
-                    .get_unchecked_mut(self.prev_buf_index..(self.prev_buf_index + channels));
+                let (buf_read, buf_write) = {
+                    let (a1, a2) = self.buf.split_at_mut_unchecked(self.buf_index);
+                    let (buf_read, after_buf_read) = a2.split_at_mut_unchecked(channels);
+
+                    let buf_write = if self.prev_buf_index < self.buf_index {
+                        // Non-overlapping guarantee
+                        &mut a1[self.prev_buf_index..self.prev_buf_index + channels]
+                    } else {
+                        // Split happens at buf_index + channels
+                        let idx = self.prev_buf_index - (self.buf_index + channels);
+                        &mut after_buf_read[idx..idx + channels]
+                    };
+
+                    // Seal the read buffer
+                    (&*buf_read, buf_write)
+                };
                 let limiter_buf = self
                     .limiter_buf
                     .get_unchecked_mut(self.limiter_buf_index..(self.limiter_buf_index + channels));
