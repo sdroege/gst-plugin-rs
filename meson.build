@@ -352,8 +352,18 @@ else
 endif
 
 if get_option('skia').allowed()
+  # Add harfbuzz and freetype dependencies for skia plugin on Linux
+  if host_system == 'linux'
+    skia_extra_deps = {'harfbuzz': [], 'freetype2': [], 'fontconfig': []}
+  else
+    skia_extra_deps = {}
+  endif
+
   plugins += {
-    'skia': {'library': 'libgstskia'},
+    'skia': {
+      'library': 'libgstskia',
+      'extra-deps': skia_extra_deps,
+    },
   }
 endif
 
