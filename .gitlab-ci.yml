@@ -431,27 +431,34 @@ coverage:
       #  coverage_format: cobertura
       #  path: "coverage/cobertura.xml"
 
+.cerbero trigger changes: &cerbero_trigger_changes
+  changes:
+    paths:
+      - ".gitlab-ci.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "**/Cargo.toml"
+      - "**/*.rs"
+      - "**/*.c"
+
 cerbero trigger:
-  image: python:alpine
   needs: [ "trigger" ]
-  timeout: '4h'
-  tags:
-    - placeholder-job
+  trigger:
+    project: gstreamer/cerbero
+    branch: main
+    strategy: depend
   variables:
-    # We will build this cerbero branch in the cerbero trigger CI
-    CERBERO_UPSTREAM_BRANCH: 'main'
-  script:
-    - pip install python-gitlab
-    - python ci/cerbero/trigger_cerbero_pipeline.py
+    CI_GST_PLUGINS_RS_PATH: '$CI_PROJECT_PATH'
+    CI_GST_PLUGINS_RS_REF_NAME: '$CI_COMMIT_REF_NAME'
+    CI_GSTREAMER_TRIGGERED: 'true'
   rules:
     # Never run post merge
     - if: '$CI_PROJECT_NAMESPACE == "gstreamer"'
       when: never
-    - changes:
-        paths:
-          - ".gitlab-ci.yml"
-          - "Cargo.toml"
-          - "Cargo.lock"
-          - "**/Cargo.toml"
-          - "**/*.rs"
-          - "**/*.c"
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    # For merge reqest, we want to test user branch
+      <<: *cerbero_trigger_changes
+      variables:
+        CI_GST_PLUGINS_RS_PATH: '$CI_MERGE_REQUEST_SOURCE_PROJECT_PATH'
+        CI_GST_PLUGINS_RS_REF_NAME: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME'
+    - <<: *cerbero_trigger_changes
