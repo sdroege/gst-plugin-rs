@@ -398,11 +398,6 @@ version = "0.4"
 name = "webpki-root-certs"
 version = "0.26"
 
-# cfg-expr dependency
-[[bans.skip]]
-name = "target-lexicon"
-version = "0.12"
-
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
