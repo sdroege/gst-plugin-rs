@@ -168,7 +168,7 @@ async fn main() -> Result<(), Error> {
 
     println!("h for help");
 
-    let base_time = gst::SystemClock::obtain().time().unwrap();
+    let base_time = gst::SystemClock::obtain().time();
 
     let mut producers: HashMap<String, Producer> = HashMap::new();
     let mut consumers: HashMap<String, Consumer> = HashMap::new();

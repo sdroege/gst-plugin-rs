@@ -362,10 +362,7 @@ impl TracerImpl for BufferLateness {
             let Some(buffer_clock_time) = running_time.checked_add(base_time) else {
                 return;
             };
-            let pipeline_clock_time = match clock.time() {
-                Some(time) => time,
-                None => return,
-            };
+            let pipeline_clock_time = clock.time();
 
             log.push(LogLine {
                 timestamp: ts,

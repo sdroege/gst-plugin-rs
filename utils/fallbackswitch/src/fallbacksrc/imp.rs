@@ -4045,7 +4045,7 @@ impl FallbackSrc {
 
             gst::debug!(CAT, imp = imp, "Waiting for 1s before retrying");
             let clock = gst::SystemClock::obtain();
-            let wait_time = clock.time().unwrap() + gst::ClockTime::SECOND;
+            let wait_time = clock.time() + gst::ClockTime::SECOND;
             if fallback_source {
                 assert!(state
                     .fallback_source
@@ -4273,7 +4273,7 @@ impl FallbackSrc {
         }
 
         let clock = gst::SystemClock::obtain();
-        let wait_time = clock.time().unwrap() + state.settings.restart_timeout - elapsed;
+        let wait_time = clock.time() + state.settings.restart_timeout - elapsed;
         gst::debug!(
             CAT,
             imp = self,

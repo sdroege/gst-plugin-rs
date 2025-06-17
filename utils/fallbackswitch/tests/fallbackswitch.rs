@@ -542,7 +542,7 @@ fn setup_pipeline(
         loop {
             while let Some(clock_id) = clock.peek_next_pending_id().and_then(|clock_id| {
                 // Process if the clock ID is in the past or now
-                if clock.time().is_some_and(|time| time >= clock_id.time()) {
+                if clock.time() >= clock_id.time() {
                     Some(clock_id)
                 } else {
                     None
@@ -567,10 +567,7 @@ fn setup_pipeline(
             // at the top of the queue. We don't want to do a busy loop here.
             while clock.peek_next_pending_id().iter().any(|clock_id| {
                 // Sleep if the clock ID is in the future
-                // FIXME probably can expect clock.time()
-                clock
-                    .time()
-                    .is_none_or(|clock_time| clock_time < clock_id.time())
+                clock.time() < clock_id.time()
             }) {
                 use std::{thread, time};
 

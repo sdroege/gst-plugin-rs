@@ -384,9 +384,7 @@ impl ToggleRecord {
             let mut settings = self.settings.lock();
 
             if rec_state.time_start_block.is_none() {
-                rec_state.time_start_block = clock
-                    .as_ref()
-                    .map_or(state.current_running_time, |c| c.time());
+                rec_state.time_start_block = clock.as_ref().map(gst::Clock::time);
             }
             while !settings.record && !state.flushing {
                 gst::debug!(CAT, obj = pad, "Waiting for record=true");
@@ -411,7 +409,7 @@ impl ToggleRecord {
             if let Some(time_start_block) = rec_state.time_start_block {
                 // If we have a time_start_block it means the clock is there
                 let clock = clock.expect("Cannot find pipeline clock");
-                rec_state.blocked_duration += clock.time().unwrap() - time_start_block;
+                rec_state.blocked_duration += clock.time() - time_start_block;
                 if settings.live {
                     rec_state.running_time_offset = rec_state.blocked_duration.nseconds() as i64;
                 }
@@ -505,7 +503,7 @@ impl ToggleRecord {
         let settings_changed = match rec_state.recording_state {
             RecordingState::Recording if !settings.record => {
                 let clock = self.obj().clock().expect("Cannot find pipeline clock");
-                rec_state.time_start_block = Some(clock.time().unwrap());
+                rec_state.time_start_block = Some(clock.time());
                 gst::debug!(CAT, obj = pad, "Stopping recording");
                 rec_state.recording_state = RecordingState::Stopping;
                 true

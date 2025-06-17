@@ -243,7 +243,7 @@ impl RelationMeta2OnvifMeta {
                         .try_into()
                         .unwrap();
                     let utc_now = gst::ClockTime::from_nseconds(utc_now);
-                    let running_time_now = clock.time().unwrap() - base_time;
+                    let running_time_now = clock.time() - base_time;
 
                     let rt_diff = utc_now - running_time_now;
                     running_time_now + rt_diff

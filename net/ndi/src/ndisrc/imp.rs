@@ -958,8 +958,8 @@ impl NdiSrc {
                 gst::Clock::unadjust_with_calibration(clock_time, internal, external, num, denom);
         } else {
             // Otherwise measure the difference between both clocks and work with that.
-            let now_internal = state.clock.time().unwrap();
-            let now_external = external_clock.time().unwrap();
+            let now_internal = state.clock.time();
+            let now_external = external_clock.time();
 
             if now_internal > now_external {
                 let diff = now_internal - now_external;

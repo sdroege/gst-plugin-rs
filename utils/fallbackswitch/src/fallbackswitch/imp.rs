@@ -344,7 +344,7 @@ impl SinkState {
         let wait_until = running_time + base_time;
         let wait_until = wait_until.saturating_add(extra_time);
 
-        let now = clock.time()?;
+        let now = clock.time();
 
         /* If the buffer is already late, skip the clock wait */
         if wait_until < now {
@@ -569,7 +569,7 @@ impl FallbackSwitch {
 
         /* If we're already running behind, fire the timeout immediately */
         let now = clock.time();
-        if now.is_some_and(|now| wait_until <= now) {
+        if wait_until <= now {
             self.handle_timeout(state, settings);
             return true;
         }

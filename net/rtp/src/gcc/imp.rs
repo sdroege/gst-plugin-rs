@@ -449,7 +449,7 @@ impl Detector {
 
     fn update_rtts(&mut self, packets: &Vec<Packet>) {
         let mut rtt = Duration::nanoseconds(i64::MAX);
-        let now = ts2dur(self.clock.time().unwrap());
+        let now = ts2dur(self.clock.time());
         for packet in packets {
             rtt = (now - packet.departure).min(rtt);
         }
@@ -1082,7 +1082,7 @@ impl BandwidthEstimator {
         let clock = gst::SystemClock::obtain();
 
         bwe.imp().state.lock().unwrap().clock_entry =
-            Some(clock.new_single_shot_id(clock.time().unwrap() + dur2ts(BURST_TIME)));
+            Some(clock.new_single_shot_id(clock.time() + dur2ts(BURST_TIME)));
 
         self.srcpad.start_task(move || {
             let pause = || {
@@ -1119,7 +1119,7 @@ impl BandwidthEstimator {
             let list = {
                 let mut state = lock_state();
                 clock
-                    .single_shot_id_reinit(&clock_entry, clock.time().unwrap() + dur2ts(BURST_TIME))
+                    .single_shot_id_reinit(&clock_entry, clock.time() + dur2ts(BURST_TIME))
                     .unwrap();
                 state.clock_entry = Some(clock_entry);
                 state.create_buffer_list(&bwe)

@@ -23,7 +23,7 @@ async fn main() -> Result<(), Error> {
         sink_pipeline.bus().unwrap().stream(),
     ]);
 
-    let base_time = gst::SystemClock::obtain().time().unwrap();
+    let base_time = gst::SystemClock::obtain().time();
 
     src_pipeline.set_clock(Some(&gst::SystemClock::obtain()))?;
     src_pipeline.set_start_time(gst::ClockTime::NONE);

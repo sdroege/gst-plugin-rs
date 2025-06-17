@@ -734,7 +734,6 @@ impl MpegTsLiveSource {
             let new_pts = self
                 .external_clock
                 .adjust_unlocked(pts + base_time)
-                .expect("Couldn't adjust {pts}")
                 .saturating_sub(base_time);
             gst::debug!(
                 CAT,
@@ -788,7 +787,6 @@ impl MpegTsLiveSource {
                 let new_pts = self
                     .external_clock
                     .adjust_unlocked(pts + base_time)
-                    .expect("Couldn't adjust {pts}")
                     .saturating_sub(base_time);
                 gst::debug!(
                     CAT,

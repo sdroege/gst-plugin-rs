@@ -780,7 +780,7 @@ impl PushSrcImpl for SineSrc {
                 imp = self,
                 "Waiting until {}, now {}",
                 wait_until,
-                clock.time().display(),
+                clock.time(),
             );
             let (res, jitter) = id.wait();
             gst::log!(CAT, imp = self, "Waited res {:?} jitter {}", res, jitter);

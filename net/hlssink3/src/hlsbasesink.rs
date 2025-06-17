@@ -430,7 +430,7 @@ impl HlsBaseSink {
             {
                 let obj = self.obj();
                 let now_utc = Utc::now();
-                let now_gst = obj.clock().unwrap().time().unwrap();
+                let now_gst = obj.clock().unwrap().time();
                 let pts_clock_time = running_time + obj.base_time().unwrap();
 
                 let diff = now_gst.nseconds() as i64 - pts_clock_time.nseconds() as i64;

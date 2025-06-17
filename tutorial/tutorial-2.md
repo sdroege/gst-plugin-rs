@@ -695,7 +695,7 @@ For working in live mode, we have to add a few different parts in various places
                 imp = self,
                 "Waiting until {}, now {}",
                 wait_until,
-                clock.time().display(),
+                clock.time(),
             );
             let (res, jitter) = id.wait();
             gst::log!(
@@ -864,7 +864,7 @@ Now as a last step, we need to actually make use of the new struct we added arou
                 imp = self,
                 "Waiting until {}, now {}",
                 wait_until,
-                clock.time().display(),
+                clock.time(),
             );
             let (res, jitter) = id.wait();
             gst::log!(

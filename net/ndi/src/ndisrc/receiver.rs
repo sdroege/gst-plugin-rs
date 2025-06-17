@@ -329,7 +329,7 @@ impl Receiver {
                     } else if let Some((clock, base_time)) =
                         Option::zip(element.clock(), element.base_time())
                     {
-                        clock.time().map(|now| now.saturating_sub(base_time))
+                        Some(clock.time().saturating_sub(base_time))
                     } else {
                         None
                     };

@@ -307,7 +307,7 @@ fn setup_appsink(appsink: &gst_app::AppSink, name: &str, path: &Path, is_video: 
 
                 if state.start_date_time.is_none() {
                     let now_utc = Utc::now();
-                    let now_gst = sink.clock().unwrap().time().unwrap();
+                    let now_gst = sink.clock().unwrap().time();
                     let pts_clock_time = pts + sink.base_time().unwrap();
 
                     let diff = now_gst.checked_sub(pts_clock_time).unwrap();
