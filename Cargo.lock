@@ -2808,6 +2808,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-elevenlabs"
+version = "0.14.0-alpha.1"
+dependencies = [
+ "anyhow",
+ "futures",
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-audio",
+ "gstreamer-base",
+ "reqwest 0.12.20",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "gst-plugin-fallbackswitch"
 version = "0.14.0-alpha.1"
 dependencies = [

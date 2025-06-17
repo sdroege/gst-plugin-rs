@@ -7,6 +7,7 @@ option('analytics', type: 'feature', value: 'auto', description: 'Build analytic
 option('audiofx', type: 'feature', value: 'auto', description: 'Build audiofx plugin')
 option('claxon', type: 'feature', value: 'auto', description: 'Build claxon plugin')
 option('csound', type: 'feature', value: 'auto', description: 'Build csound plugin')
+option('elevenlabs', type: 'feature', value: 'auto', description: 'Build elevenlabs plugin')
 option('lewton', type: 'feature', value: 'auto', description: 'Build lewton plugin')
 option('spotify', type: 'feature', value: 'auto', description: 'Build spotify plugin')
 option('speechmatics', type: 'feature', value: 'auto', description: 'Build speechmatics plugin')

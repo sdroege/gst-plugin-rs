@@ -2721,6 +2721,152 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "elevenlabs": {
+        "description": "GStreamer ElevenLabs plugin",
+        "elements": {
+            "elevenlabssynthesizer": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "Text to Speech filter, using ElevenLabs",
+                "hierarchy": [
+                    "GstElevenLabsSynthesizer",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Audio/Text/Filter",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "audio/x-raw:\n           rate: { (int)22050, (int)48000, (int)44100, (int)24000, (int)16000, (int)8000 }\n       channels: 1\n         layout: interleaved\n         format: S16LE\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "api-key": {
+                        "blurb": "ElevenLabs API Key",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "language-code": {
+                        "blurb": "An optional language code (ISO 639-1), useful with certain models",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "latency": {
+                        "blurb": "Amount of milliseconds to allow ElevenLabs",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "2000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "model-id": {
+                        "blurb": "ElevenLabs Model ID, see https://help.elevenlabs.io/hc/en-us/articles/21811236079505-How-do-I-find-the-model-ID",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "eleven_flash_v2_5",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "overflow": {
+                        "blurb": "Defines how output audio with a longer duration than input text should be handled",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "clip (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstElevenLabsOverflow",
+                        "writable": true
+                    },
+                    "retry-with-speed": {
+                        "blurb": "When synthesis results in larger duration, retry with higher speed",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "voice-id": {
+                        "blurb": "ElevenLabs Voice ID, see https://elevenlabs.io/app/voice-library",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "9BWtsMINqrJLrRacOk9x",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstelevenlabs",
+        "license": "Proprietary",
+        "other-types": {
+            "GstElevenLabsOverflow": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Clip",
+                        "name": "clip",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Overlap",
+                        "name": "overlap",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Shift",
+                        "name": "shift",
+                        "value": "2"
+                    }
+                ]
+            }
+        },
+        "package": "gst-plugin-elevenlabs",
+        "source": "gst-plugin-elevenlabs",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "fallbackswitch": {
         "description": "GStreamer Fallback Switcher and Source Plugin",
         "elements": {
