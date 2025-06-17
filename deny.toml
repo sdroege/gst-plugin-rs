@@ -206,6 +206,9 @@ version = "0.48"
 name = "windows-sys"
 version = "0.52"
 [[bans.skip]]
+name = "windows-sys"
+version = "0.59"
+[[bans.skip]]
 name = "windows-interface"
 version = "0.57"
 [[bans.skip]]
