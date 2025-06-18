@@ -941,6 +941,14 @@ impl PaintableSink {
 
     #[cfg(any(target_os = "macos", target_os = "windows", feature = "gst-gl"))]
     fn initialize_gl_context_main(&self) {
+        #[cfg(feature = "gst-gl")]
+        {
+            #[cfg(not(any(feature = "waylandegl", feature = "x11glx", feature = "x11egl")))]
+            compile_error!(
+                "gtk4 requires at least one backend enabled: waylandegl, x11glx or x11egl"
+            );
+        }
+
         gst::debug!(CAT, imp = self, "Realizing GDK GL Context from main thread");
 
         let mut gl_context_guard = GL_CONTEXT.lock().unwrap();
@@ -1008,7 +1016,7 @@ impl PaintableSink {
 
         gdk_context.make_current();
 
-        let res = match gdk_context.type_().name() {
+        let res: Option<(gst_gl::GLDisplay, gst_gl::GLContext)> = match gdk_context.type_().name() {
             #[cfg(feature = "x11egl")]
             "GdkX11GLContextEGL" => self.initialize_x11egl(gdk_display),
             #[cfg(feature = "x11glx")]
