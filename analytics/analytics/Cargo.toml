@@ -1,12 +1,17 @@
 [package]
 name = "gst-plugin-analytics"
 version.workspace = true
-authors = ["Benjamin Gaignard <benjamin.gaignard@collabora.com>"]
+authors = ["Benjamin Gaignard <benjamin.gaignard@collabora.com>", "Sebastian Dröge <sebastian@centricular.com>"]
 repository.workspace = true
 license = "MPL-2.0"
 description = "GStreamer Rust Analytics Plugin"
 edition.workspace = true
 rust-version.workspace = true
+
+[lib]
+name = "gstrsanalytics"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
 
 [dependencies]
 gst = { workspace = true, features = ["v1_24"] }
@@ -18,10 +23,8 @@ chrono = { version = "0.4.31", default-features = false }
 xmltree = "0.11"
 glib = { workspace = true, features = ["v2_62"] }
 
-[lib]
-name = "gstrsanalytics"
-crate-type = ["cdylib", "rlib"]
-path = "src/lib.rs"
+[dev-dependencies]
+gst-check.workspace = true
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true
@@ -29,7 +32,16 @@ gst-plugin-version-helper.workspace = true
 [features]
 static = []
 capi = []
-doc = ["gst/v1_18"]
+doc = []
+v1_28 = ["gst-analytics/v1_28"]
+
+[[test]]
+name = "analyticscombiner"
+required-features = ["v1_28"]
+
+[[test]]
+name = "analyticssplitter"
+required-features = ["v1_28"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

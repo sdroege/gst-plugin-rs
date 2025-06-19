@@ -112,7 +112,10 @@ endforeach
 
 # kept in the same order as the `members` list in Cargo.toml
 plugins = {
-  'analytics': {'library': 'libgstrsanalytics'},
+  'analytics': {
+    'library': 'libgstrsanalytics',
+    'features': ['gst-rtp/v1_24', 'gst-base/v1_24', 'gst-video/v1_24'],
+  },
   'audiofx': {
     'library': 'libgstrsaudiofx',
     'examples': ['hrtfrender'],
@@ -227,8 +230,22 @@ plugins = {
   'vvdec': {
     'library': 'libgstvvdec',
     'extra-deps': {'libvvdec': ['>= 3.0']}
-  }
+  },
 }
+
+# The splitter/combiner requires 1.28+
+if get_option('analytics').allowed()
+  gst_analytics_dep = deps_cache['gstreamer-analytics-1.0']
+  if gst_analytics_dep.found() and gst_analytics_dep.version().version_compare('>= 1.28')
+    plugins_analytics = plugins['analytics']
+    plugins_analytics += {
+      'features': plugins_analytics['features'] + ['v1_28'],
+    }
+    plugins += {
+      'analytics': plugins_analytics
+    }
+  endif
+endif
 
 # Won't build on platforms where it bundles the sources because of:
 # https://github.com/qnighy/libwebp-sys2-rs/issues/12

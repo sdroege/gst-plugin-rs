@@ -8074,6 +8074,90 @@
     "rsanalytics": {
         "description": "GStreamer Rust Analytics Plugin",
         "elements": {
+            "analyticscombiner": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Analytics combiner / batcher element",
+                "hierarchy": [
+                    "GstAnalyticsCombiner",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Combiner/Analytics",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstAnalyticsCombinerSinkPad"
+                    },
+                    "src": {
+                        "caps": "multistream/x-analytics-batch(meta:GstAnalyticsBatchMeta):\n",
+                        "direction": "src",
+                        "presence": "always",
+                        "type": "GstAggregatorPad"
+                    }
+                },
+                "properties": {
+                    "batch-duration": {
+                        "blurb": "Batch Duration",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "100000000",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "force-live": {
+                        "blurb": "Always operate in live mode and aggregate on timeout regardless of whether any live sources are linked upstream",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
+            "analyticssplitter": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Analytics batch splitter element",
+                "hierarchy": [
+                    "GstAnalyticsSplitter",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Demuxer/Analytics",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "multistream/x-analytics-batch(meta:GstAnalyticsBatchMeta):\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src_%%u_%%u": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "rank": "primary"
+            },
             "onvifmeta2relationmeta": {
                 "author": "Benjamin Gaignard <benjamin.gaignard@collabora.com>",
                 "description": "Convert ONVIF metadata to relation metadata",
@@ -8142,6 +8226,70 @@
         "filename": "gstrsanalytics",
         "license": "MPL-2.0",
         "other-types": {
+            "GstAnalyticsCombinerBatchStrategy": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "All: Include all buffers that start inside the batch.",
+                        "name": "all",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "FirstInBatch: Include only the first buffer that starts inside the batch.",
+                        "name": "first-in-batch",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "FirstInBatchWithOverlap: Include only the first buffer that starts inside the batch unless there was a previously unused buffer at most half a batch duration earlier. If no buffer is available, allow taking a buffer up to half a batch duration later. The buffer closest to the batch start is included.",
+                        "name": "first-in-batch-with-overlap",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "LastInBatch: Include only the last buffer that starts inside the batch.",
+                        "name": "last-in-batch",
+                        "value": "3"
+                    }
+                ]
+            },
+            "GstAnalyticsCombinerSinkPad": {
+                "hierarchy": [
+                    "GstAnalyticsCombinerSinkPad",
+                    "GstAggregatorPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "batch-strategy": {
+                        "blurb": "Batching strategy to use for this stream",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "all (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstAnalyticsCombinerBatchStrategy",
+                        "writable": true
+                    },
+                    "index": {
+                        "blurb": "Index, must be consecutive and starting at 0 and is fixed up otherwise",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                }
+            },
             "GstRsOnvifNtpTimeSource": {
                 "kind": "enum",
                 "values": [

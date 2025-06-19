@@ -2678,6 +2678,7 @@ dependencies = [
  "gstreamer",
  "gstreamer-analytics",
  "gstreamer-base",
+ "gstreamer-check",
  "gstreamer-rtp",
  "gstreamer-video",
  "xmltree",
