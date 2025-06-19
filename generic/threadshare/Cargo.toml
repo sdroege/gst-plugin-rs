@@ -33,7 +33,7 @@ libc = "0.2"
 windows-sys = { version = ">=0.52, <=0.60", features = ["Win32_Foundation"] }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-getifaddrs = "0.1"
+getifaddrs = "0.2"
 
 [dev-dependencies]
 gst-check.workspace = true
