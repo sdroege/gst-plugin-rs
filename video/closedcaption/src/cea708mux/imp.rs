@@ -109,9 +109,15 @@ impl Default for State {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+struct Settings {
+    max_time: Option<gst::ClockTime>,
+}
+
 #[derive(Default)]
 pub struct Cea708Mux {
     state: Mutex<State>,
+    settings: Mutex<Settings>,
 }
 
 pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
@@ -351,6 +357,49 @@ impl AggregatorImpl for Cea708Mux {
         state.writer.push_packet(output);
         let _ = state.writer.write(fps, &mut data);
         state.n_frames += 1;
+
+        let settings = self.settings.lock().unwrap().clone();
+        if let Some(max_time) = settings.max_time {
+            let written_buffer_time = gst::ClockTime::from_nseconds(
+                state
+                    .writer
+                    .buffered_cea608_field1_duration()
+                    .max(state.writer.buffered_cea608_field2_duration())
+                    .max(state.writer.buffered_packet_duration())
+                    .as_nanos() as u64,
+            );
+            let max_pending_code_bytes = state
+                .pending_services
+                .values()
+                .map(|codes| codes.iter().map(|code| code.byte_len()).sum())
+                .max()
+                .unwrap_or(0);
+            let max_pending_code_time = gst::ClockTime::from_useconds(
+                (max_pending_code_bytes.div_ceil(2) as u64)
+                    .mul_div_ceil(2 * 1001 * 1_000_000, 9_600_000 / 8)
+                    .unwrap_or(0),
+            );
+
+            if written_buffer_time + max_pending_code_time > max_time {
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Stored data of {} has overrun the configured limit of {}, flushing",
+                    written_buffer_time.display(),
+                    max_time.display()
+                );
+                state.writer.flush();
+                state.pending_services.clear();
+
+                for pad in sinkpads.iter().map(|pad| {
+                    pad.downcast_ref::<super::Cea708MuxSinkPad>()
+                        .expect("Not a Cea708MuxSinkPad?!")
+                }) {
+                    let mut pad_state = pad.imp().pad_state.lock().unwrap();
+                    pad_state.ccp_parser.flush();
+                }
+            }
+        }
         drop(state);
 
         // remove 2 byte header that our cc_data format does not use
@@ -613,12 +662,21 @@ impl GstObjectImpl for Cea708Mux {}
 impl ObjectImpl for Cea708Mux {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecBoolean::builder("force-live")
-                .nick("Force live")
-                .blurb("Always operate in live mode and aggregate on timeout")
-                .default_value(DEFAULT_FORCE_LIVE)
-                .construct_only()
-                .build()]
+            vec![
+                glib::ParamSpecBoolean::builder("force-live")
+                    .nick("Force live")
+                    .blurb("Always operate in live mode and aggregate on timeout")
+                    .default_value(DEFAULT_FORCE_LIVE)
+                    .construct_only()
+                    .build(),
+                glib::ParamSpecUInt64::builder("max-time")
+                    .nick("Max Time")
+                    .blurb("Maximum amount of time that captions can be stored before output")
+                    .minimum(0)
+                    .maximum(u64::MAX)
+                    .default_value(u64::MAX)
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()
@@ -630,6 +688,10 @@ impl ObjectImpl for Cea708Mux {
                 self.obj()
                     .set_force_live(value.get().expect("type checked upstream"));
             }
+            "max-time" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.max_time = value.get().expect("Type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -637,6 +699,10 @@ impl ObjectImpl for Cea708Mux {
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "force-live" => self.obj().is_force_live().to_value(),
+            "max-time" => {
+                let settings = self.settings.lock().unwrap();
+                settings.max_time.to_value()
+            }
             _ => unimplemented!(),
         }
     }

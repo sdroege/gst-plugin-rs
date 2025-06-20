@@ -8715,6 +8715,20 @@
                         "readable": true,
                         "type": "gboolean",
                         "writable": true
+                    },
+                    "max-time": {
+                        "blurb": "Maximum amount of time that captions can be stored before output",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "18446744073709551615",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
                     }
                 },
                 "rank": "none"
