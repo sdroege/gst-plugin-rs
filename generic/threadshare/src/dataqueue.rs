@@ -35,7 +35,7 @@ static DATA_QUEUE_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DataQueueItem {
     Buffer(gst::Buffer),
     BufferList(gst::BufferList),

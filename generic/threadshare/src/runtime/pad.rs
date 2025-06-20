@@ -901,7 +901,7 @@ impl PadSink {
                                 gst::fixme!(
                                     RUNTIME_CAT,
                                     obj = gst_pad,
-                                    "Serialized Query not supported"
+                                    "Serialized Query not supported {query:?}"
                                 );
                                 false
                             }

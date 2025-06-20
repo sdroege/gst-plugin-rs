@@ -16165,6 +16165,142 @@
                 },
                 "rank": "none"
             },
+            "ts-intersink": {
+                "author": "François Laignel <francois@centricular.com>",
+                "description": "Thread-sharing inter-pipelines sink",
+                "hierarchy": [
+                    "GstTsInterSink",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Sink/Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "inter-context": {
+                        "blurb": "Context name of the inter elements to share with",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
+            "ts-intersrc": {
+                "author": "François Laignel <francois@centricular.com>",
+                "description": "Thread-sharing inter-pipelines source",
+                "hierarchy": [
+                    "GstTsInterSrc",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Source/Generic",
+                "pad-templates": {
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "context": {
+                        "blurb": "Context name to share threads with",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "context-wait": {
+                        "blurb": "Throttle poll loop to run at most once every this many ms",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "1000",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "inter-context": {
+                        "blurb": "Context name of the inter elements to share with",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "max-size-buffers": {
+                        "blurb": "Maximum number of buffers to queue (0=unlimited)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "default": "200",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "max-size-bytes": {
+                        "blurb": "Maximum number of bytes to queue (0=unlimited)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "default": "1048576",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "max-size-time": {
+                        "blurb": "Maximum number of nanoseconds to queue (0=unlimited)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "default": "1000000000",
+                        "max": "18446744073709551614",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
             "ts-jitterbuffer": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Simple jitterbuffer",
