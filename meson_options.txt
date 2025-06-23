@@ -1,5 +1,8 @@
 # Same order as members in Cargo.toml
 
+# analytics
+option('analytics', type: 'feature', value: 'auto', description: 'Build analytics plugin')
+
 # audio
 option('audiofx', type: 'feature', value: 'auto', description: 'Build audiofx plugin')
 option('claxon', type: 'feature', value: 'auto', description: 'Build claxon plugin')
@@ -34,7 +37,6 @@ option('ndi', type: 'feature', value: 'auto', description: 'Build ndi plugin')
 option('onvif', type: 'feature', value: 'auto', description: 'Build onvif plugin')
 option('raptorq', type: 'feature', value: 'auto', description: 'Build raptorq plugin')
 option('reqwest', type: 'feature', value: 'auto', description: 'Build reqwest plugin')
-option('relationmeta', type: 'feature', value: 'auto', description: 'Build relationmeta plugin')
 option('rtsp', type: 'feature', value: 'auto', description: 'Build rtsp plugin')
 option('rtp', type: 'feature', value: 'auto', description: 'Build rtp plugin')
 option('webrtc', type: 'feature', value: 'auto', yield: true, description: 'Build webrtc plugin')

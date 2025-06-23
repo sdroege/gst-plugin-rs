@@ -1,10 +1,10 @@
 [package]
-name = "gst-plugin-relationmeta"
+name = "gst-plugin-analytics"
 version.workspace = true
 authors = ["Benjamin Gaignard <benjamin.gaignard@collabora.com>"]
 repository.workspace = true
 license = "MPL-2.0"
-description = "GStreamer Rust Relation Meta Plugin"
+description = "GStreamer Rust Analytics Plugin"
 edition.workspace = true
 rust-version.workspace = true
 
@@ -19,7 +19,7 @@ xmltree = "0.11"
 glib = { workspace = true, features = ["v2_62"] }
 
 [lib]
-name = "gstrsrelationmeta"
+name = "gstrsanalytics"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 

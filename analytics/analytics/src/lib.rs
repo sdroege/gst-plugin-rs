@@ -8,9 +8,9 @@
 #![allow(clippy::non_send_fields_in_send_ty, unused_doc_comments)]
 
 /**
- * plugin-rsrelationmeta:
+ * plugin-rsanalytics:
  *
- * Since: plugins-rs-0.13.0
+ * Since: plugins-rs-0.14.0
  */
 use gst::glib;
 
@@ -32,7 +32,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 gst::plugin_define!(
-    rsrelationmeta,
+    rsanalytics,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
     concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),

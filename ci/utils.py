@@ -13,6 +13,7 @@ DIRS = [
 
 # Plugins whose name is prefixed by 'rs'
 RS_PREFIXED = [
+    'analytics',
     'audiofx',
     'closedcaption',
     'file',
@@ -25,7 +26,6 @@ RS_PREFIXED = [
     'rtp',
     'rtsp',
     'inter',
-    'relationmeta',
 ]
 
 OVERRIDE = {

@@ -2649,6 +2649,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-analytics"
+version = "0.14.0-alpha.1"
+dependencies = [
+ "chrono",
+ "glib",
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-analytics",
+ "gstreamer-base",
+ "gstreamer-rtp",
+ "gstreamer-video",
+ "xmltree",
+]
+
+[[package]]
 name = "gst-plugin-audiofx"
 version = "0.14.0-alpha.1"
 dependencies = [
@@ -3180,21 +3195,6 @@ dependencies = [
  "gstreamer",
  "gstreamer-check",
  "regex",
-]
-
-[[package]]
-name = "gst-plugin-relationmeta"
-version = "0.14.0-alpha.1"
-dependencies = [
- "chrono",
- "glib",
- "gst-plugin-version-helper",
- "gstreamer",
- "gstreamer-analytics",
- "gstreamer-base",
- "gstreamer-rtp",
- "gstreamer-video",
- "xmltree",
 ]
 
 [[package]]

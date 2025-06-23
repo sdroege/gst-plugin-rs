@@ -7913,6 +7913,103 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "rsanalytics": {
+        "description": "GStreamer Rust Analytics Plugin",
+        "elements": {
+            "onvifmeta2relationmeta": {
+                "author": "Benjamin Gaignard <benjamin.gaignard@collabora.com>",
+                "description": "Convert ONVIF metadata to relation metadata",
+                "hierarchy": [
+                    "GstOnvifMeta2RelationMeta",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Metadata",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "none"
+            },
+            "relationmeta2onvifmeta": {
+                "author": "Benjamin Gaignard <benjamin.gaignard@collabora.com>",
+                "description": "Convert relation metadata to ONVIF metadata",
+                "hierarchy": [
+                    "GstRelationMeta2OnvifMeta",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Metadata",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "time-source": {
+                        "blurb": "Time source for UTC timestamps",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "clock (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRsOnvifNtpTimeSource",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstrsanalytics",
+        "license": "MPL-2.0",
+        "other-types": {
+            "GstRsOnvifNtpTimeSource": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "UNIX time based on realtime clock.",
+                        "name": "clock",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Running time is in UTC",
+                        "name": "running-time",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Pipeline clock is UTC",
+                        "name": "clock-time",
+                        "value": "2"
+                    }
+                ]
+            }
+        },
+        "package": "gst-plugin-analytics",
+        "source": "gst-plugin-analytics",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "rsaudiofx": {
         "description": "GStreamer Rust Audio Effects Plugin",
         "elements": {
@@ -10518,103 +10615,6 @@
         },
         "package": "gst-plugin-png",
         "source": "gst-plugin-png",
-        "tracers": {},
-        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-    },
-    "rsrelationmeta": {
-        "description": "GStreamer Rust Relation Meta Plugin",
-        "elements": {
-            "onvifmeta2relationmeta": {
-                "author": "Benjamin Gaignard <benjamin.gaignard@collabora.com>",
-                "description": "Convert ONVIF metadata to relation metadata",
-                "hierarchy": [
-                    "GstOnvifMeta2RelationMeta",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Metadata",
-                "pad-templates": {
-                    "sink": {
-                        "caps": "ANY",
-                        "direction": "sink",
-                        "presence": "always"
-                    },
-                    "src": {
-                        "caps": "ANY",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "rank": "none"
-            },
-            "relationmeta2onvifmeta": {
-                "author": "Benjamin Gaignard <benjamin.gaignard@collabora.com>",
-                "description": "Convert relation metadata to ONVIF metadata",
-                "hierarchy": [
-                    "GstRelationMeta2OnvifMeta",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Metadata",
-                "pad-templates": {
-                    "sink": {
-                        "caps": "ANY",
-                        "direction": "sink",
-                        "presence": "always"
-                    },
-                    "src": {
-                        "caps": "ANY",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "properties": {
-                    "time-source": {
-                        "blurb": "Time source for UTC timestamps",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "clock (0)",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstRsOnvifNtpTimeSource",
-                        "writable": true
-                    }
-                },
-                "rank": "none"
-            }
-        },
-        "filename": "gstrsrelationmeta",
-        "license": "MPL-2.0",
-        "other-types": {
-            "GstRsOnvifNtpTimeSource": {
-                "kind": "enum",
-                "values": [
-                    {
-                        "desc": "UNIX time based on realtime clock.",
-                        "name": "clock",
-                        "value": "0"
-                    },
-                    {
-                        "desc": "Running time is in UTC",
-                        "name": "running-time",
-                        "value": "1"
-                    },
-                    {
-                        "desc": "Pipeline clock is UTC",
-                        "name": "clock-time",
-                        "value": "2"
-                    }
-                ]
-            }
-        },
-        "package": "gst-plugin-relationmeta",
-        "source": "gst-plugin-relationmeta",
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },

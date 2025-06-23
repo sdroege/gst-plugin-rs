@@ -26,6 +26,7 @@ PARSER.add_argument('--feature-deps', action="store_true", help="Get list of fea
 
 # Map plugin name to directory name, for those that does not match.
 RENAMES = {
+    'rsanalytics': 'analytics',
     'rsaudiofx': 'audiofx',
     'rsfile': 'file',
     'rsflv': 'flavors',
@@ -33,7 +34,6 @@ RENAMES = {
     'rsrtsp': 'rtsp',
     'rswebp': 'webp',
     'rsonvif': 'onvif',
-    'rsrelationmeta': 'relationmeta',
     'rstracers': 'tracers',
     'rsclosedcaption': 'closedcaption',
     'rswebrtc': 'webrtc',

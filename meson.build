@@ -92,7 +92,7 @@ endif
 if get_option('threadshare').allowed() or get_option('rtsp').allowed()
   deps += [['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net']]
 endif
-if get_option('relationmeta').allowed()
+if get_option('analytics').allowed()
   deps += [['gstreamer-analytics-1.0', 'gst-plugins-bad', 'gstanalytics_dep', 'gstanalytics']]
 endif
 
@@ -112,6 +112,7 @@ endforeach
 
 # kept in the same order as the `members` list in Cargo.toml
 plugins = {
+  'analytics': {'library': 'libgstrsanalytics'},
   'audiofx': {
     'library': 'libgstrsaudiofx',
     'examples': ['hrtfrender'],
@@ -160,7 +161,6 @@ plugins = {
   },
   'raptorq': {'library': 'libgstraptorq'},
   'reqwest': {'library': 'libgstreqwest'},
-  'relationmeta': {'library': 'libgstrsrelationmeta'},
   'rtsp': {'library': 'libgstrsrtsp'},
   'rtp': {'library': 'libgstrsrtp'},
   'webrtchttp': {'library': 'libgstwebrtchttp'},
