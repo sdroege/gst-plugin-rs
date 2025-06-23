@@ -4184,19 +4184,21 @@ impl BaseWebRTCSink {
 
     /// Check if the caps of a sink pad can be changed from `current` to `new` without requiring a WebRTC renegotiation
     fn input_caps_change_allowed(&self, current: &gst::CapsRef, new: &gst::CapsRef) -> bool {
-        let Some(current) = current.structure(0) else {
+        let mut current = cleanup_codec_caps(current.to_owned());
+        let current = current.get_mut().unwrap();
+        let mut new = cleanup_codec_caps(new.to_owned());
+        let new = new.get_mut().unwrap();
+
+        let Some(current) = current.structure_mut(0) else {
             return false;
         };
-        let Some(new) = new.structure(0) else {
+        let Some(new) = new.structure_mut(0) else {
             return false;
         };
 
         if current.name() != new.name() {
             return false;
         }
-
-        let mut current = current.to_owned();
-        let mut new = new.to_owned();
 
         // Allow changes of fields which should not be part of the SDP, and so can be updated without requiring
         // a renegotiation.
@@ -4215,7 +4217,7 @@ impl BaseWebRTCSink {
             new.remove_fields(VIDEO_ALLOWED_CHANGES.iter().copied());
 
             // Multiview can be part of SDP, but missing field should be treated the same as mono view.
-            fn remove_multiview(s: &mut gst::Structure) {
+            fn remove_multiview(s: &mut gst::StructureRef) {
                 let is_mono = match s.get::<VideoMultiviewMode>("multiview-mode") {
                     Ok(mode) => mode == VideoMultiviewMode::Mono,
                     Err(_) => true,
@@ -4224,8 +4226,8 @@ impl BaseWebRTCSink {
                     s.remove_fields(["multiview-mode", "multiview-flags"])
                 }
             }
-            remove_multiview(&mut current);
-            remove_multiview(&mut new);
+            remove_multiview(current);
+            remove_multiview(new);
         } else if caps_type.starts_with("audio/") {
             // TODO
         }
