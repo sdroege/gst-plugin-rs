@@ -4043,6 +4043,9 @@ impl BaseWebRTCSink {
                                     "seqnum-offset",
                                     "ssrc",
                                     "sprop-parameter-sets",
+                                    "sprop-vps",
+                                    "sprop-pps",
+                                    "sprop-sps",
                                     "a-framerate",
                                 ]);
                                 s.set("payload", codec.payload().unwrap());
