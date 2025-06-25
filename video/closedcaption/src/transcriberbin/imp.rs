@@ -126,13 +126,28 @@ struct CaptionChannel {
     caption_streams: HashSet<String>,
 }
 
+#[derive(Clone, Copy)]
+enum CustomOutputChannelType {
+    Synthesis,
+    Subtitle,
+}
+
+impl CustomOutputChannelType {
+    fn name(&self) -> &str {
+        match self {
+            Self::Synthesis => "synthesis",
+            Self::Subtitle => "subtitle",
+        }
+    }
+}
+
 #[derive(Clone)]
 struct CustomOutputChannel {
     bin_description: String,
     bin: gst::Bin,
     language: String,
     latency: gst::ClockTime,
-    suffix: String,
+    type_: CustomOutputChannelType,
 }
 
 /* Locking order: State, Settings, PadState, PadSettings */
@@ -346,10 +361,11 @@ impl TranscriberBin {
         Ok(())
     }
 
-    fn construct_synthesis_channel(
+    fn construct_custom_output_channel(
         &self,
         lang: &str,
         bin_description: &str,
+        type_: CustomOutputChannelType,
     ) -> Result<CustomOutputChannel, Error> {
         let bin = gst::Bin::new();
         let queue = gst::ElementFactory::make("queue").build()?;
@@ -379,44 +395,7 @@ impl TranscriberBin {
             bin,
             language: String::from(lang),
             latency,
-            suffix: "synthesis".to_string(),
-        })
-    }
-
-    fn construct_subtitle_channel(
-        &self,
-        lang: &str,
-        bin_description: &str,
-    ) -> Result<CustomOutputChannel, Error> {
-        let bin = gst::Bin::new();
-        let queue = gst::ElementFactory::make("queue").build()?;
-        let processor = gst::parse::bin_from_description_full(
-            bin_description,
-            true,
-            None,
-            gst::ParseFlags::NO_SINGLE_ELEMENT_BINS,
-        )?;
-
-        let latency = query_latency(&processor)?;
-
-        bin.add_many([&queue, &processor])?;
-        gst::Element::link_many([&queue, &processor])?;
-
-        queue.set_property("max-size-buffers", 0u32);
-        queue.set_property("max-size-time", 0u64);
-
-        let sinkpad = gst::GhostPad::with_target(&queue.static_pad("sink").unwrap()).unwrap();
-        bin.add_pad(&sinkpad)?;
-
-        let srcpad = gst::GhostPad::with_target(&processor.static_pad("src").unwrap()).unwrap();
-        bin.add_pad(&srcpad)?;
-
-        Ok(CustomOutputChannel {
-            bin_description: bin_description.to_string(),
-            bin,
-            language: String::from(lang),
-            latency,
-            suffix: "subtitle".to_string(),
+            type_,
         })
     }
 
@@ -1254,7 +1233,7 @@ impl TranscriberBin {
         internal_bin: &gst::Bin,
         serial: Option<u32>,
     ) -> Result<(), Error> {
-        let mut pad_name = format!("src_{}_{}", channel.suffix, channel.language);
+        let mut pad_name = format!("src_{}_{}", channel.type_.name(), channel.language);
         let srcpad = pad_transcription_bin.static_pad(&pad_name).unwrap();
 
         let _ = pad_transcription_bin.remove_pad(&srcpad);
@@ -1392,7 +1371,11 @@ impl TranscriberBin {
                 let bin_description = value.get::<String>()?;
                 pad_state.synthesis_channels.insert(
                     language.to_string(),
-                    self.construct_synthesis_channel(language, &bin_description)?,
+                    self.construct_custom_output_channel(
+                        language,
+                        &bin_description,
+                        CustomOutputChannelType::Synthesis,
+                    )?,
                 );
             }
 
@@ -1414,7 +1397,11 @@ impl TranscriberBin {
                 let bin_description = value.get::<String>()?;
                 pad_state.subtitle_channels.insert(
                     language.to_string(),
-                    self.construct_subtitle_channel(language, &bin_description)?,
+                    self.construct_custom_output_channel(
+                        language,
+                        &bin_description,
+                        CustomOutputChannelType::Subtitle,
+                    )?,
                 );
             }
 
@@ -1567,7 +1554,7 @@ impl TranscriberBin {
         &self,
         languages: &Option<gst::Structure>,
         channels_map: &mut HashMap<String, CustomOutputChannel>,
-        channel_type_logname: &str,
+        channel_type: CustomOutputChannelType,
     ) -> Result<(Vec<CustomOutputChannel>, Vec<CustomOutputChannel>), Error> {
         let mut updates = HashMap::new();
         let mut old_languages: HashSet<String> = channels_map.keys().cloned().collect();
@@ -1599,36 +1586,42 @@ impl TranscriberBin {
         for (language_code, update) in updates {
             match update {
                 CustomChannelUpdate::Remove => {
-                    let synthesis_channel = channels_map.remove(&language_code).unwrap();
+                    let channel = channels_map.remove(&language_code).unwrap();
 
-                    channels_to_remove.push(synthesis_channel);
+                    channels_to_remove.push(channel);
 
                     gst::debug!(
                         CAT,
                         imp = self,
-                        "{channel_type_logname} channel {language_code} will be removed"
+                        "{} channel {language_code} will be removed",
+                        channel_type.name()
                     );
                 }
                 CustomChannelUpdate::Upsert(bin_description) => {
-                    if let Some(synthesis_channel) = channels_map.remove(&language_code) {
-                        channels_to_remove.push(synthesis_channel);
+                    if let Some(channel) = channels_map.remove(&language_code) {
+                        channels_to_remove.push(channel);
 
                         gst::debug!(
                             CAT,
                             imp = self,
-                            "{channel_type_logname} channel {language_code} will be removed"
+                            "{} channel {language_code} will be removed",
+                            channel_type.name()
                         );
                     }
 
-                    let synthesis_channel =
-                        self.construct_synthesis_channel(&language_code, &bin_description)?;
-                    channels_to_add.push(synthesis_channel.clone());
-                    channels_map.insert(language_code.clone(), synthesis_channel);
+                    let channel = self.construct_custom_output_channel(
+                        &language_code,
+                        &bin_description,
+                        channel_type,
+                    )?;
+                    channels_to_add.push(channel.clone());
+                    channels_map.insert(language_code.clone(), channel);
 
                     gst::debug!(
                         CAT,
                         imp = self,
-                        "{channel_type_logname} channel {language_code} will be added"
+                        "{} channel {language_code} will be added",
+                        channel_type.name()
                     );
                 }
             }
@@ -1870,7 +1863,7 @@ impl TranscriberBin {
         serial: Option<u32>,
         channel: &CustomOutputChannel,
     ) -> Result<(), Error> {
-        let mut pad_name = format!("src_{}_{}", channel.suffix, channel.language);
+        let mut pad_name = format!("src_{}_{}", channel.type_.name(), channel.language);
         let srcpad = gst::GhostPad::builder_with_target(&channel.bin.static_pad("src").unwrap())
             .unwrap()
             .name(&pad_name)
@@ -1958,14 +1951,14 @@ impl TranscriberBin {
                 .prepare_custom_output_channel_updates(
                     &pad_settings.synthesis_languages,
                     &mut pad_state.synthesis_channels,
-                    "synthesis",
+                    CustomOutputChannelType::Synthesis,
                 )?;
 
             let (subtitle_channels_to_remove, subtitle_channels_to_add) = self
                 .prepare_custom_output_channel_updates(
                     &pad_settings.subtitle_languages,
                     &mut pad_state.subtitle_channels,
-                    "subtitle",
+                    CustomOutputChannelType::Subtitle,
                 )?;
 
             let (languages_to_remove, languages_to_add) =
@@ -2273,7 +2266,7 @@ impl TranscriberBin {
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
         use gst::QueryViewMut;
 
-        gst::log!(CAT, obj = pad, "Handling query {:?}", query);
+        gst::trace!(CAT, obj = pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Latency(q) => {
@@ -2364,7 +2357,7 @@ impl TranscriberBin {
     fn video_sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst::log!(CAT, obj = pad, "Handling event {:?}", event);
+        gst::trace!(CAT, obj = pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Caps(e) => {
                 let mut state = self.state.lock().unwrap();
