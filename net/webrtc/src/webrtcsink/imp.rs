@@ -3835,6 +3835,8 @@ impl BaseWebRTCSink {
                             media_idx,
                             media_str
                         );
+
+                        drop(session);
                         if let Some(_session) = state.end_session(&self.obj(), session_id) {
                             drop(state);
                             let settings = self.settings.lock().unwrap();
@@ -3862,6 +3864,7 @@ impl BaseWebRTCSink {
                         session_id,
                     );
 
+                    drop(session);
                     if let Some(_session) = state.end_session(&self.obj(), session_id) {
                         drop(state);
                         let settings = self.settings.lock().unwrap();
