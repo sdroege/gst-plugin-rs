@@ -22,6 +22,7 @@ mod inter;
 mod jitterbuffer;
 mod proxy;
 mod queue;
+mod rtpdtmfsrc;
 pub mod socket;
 mod tcpclientsrc;
 mod udpsink;
@@ -39,6 +40,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     jitterbuffer::register(plugin)?;
     proxy::register(plugin)?;
     queue::register(plugin)?;
+    rtpdtmfsrc::register(plugin)?;
     tcpclientsrc::register(plugin)?;
     udpsink::register(plugin)?;
     udpsrc::register(plugin)?;

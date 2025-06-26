@@ -3407,9 +3407,11 @@ dependencies = [
  "pkg-config",
  "polling",
  "rand 0.9.1",
+ "rtp-types",
  "rustix 1.0.7",
  "slab",
  "socket2",
+ "thiserror 2.0.12",
  "waker-fn",
  "windows-sys 0.59.0",
 ]

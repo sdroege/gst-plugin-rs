@@ -22,9 +22,11 @@ gst-rtp.workspace = true
 pin-project-lite = "0.2.0"
 polling = "3.1.0"
 rand = "0.9"
+rtp-types = "0.1"
 rustix = { version = "1.0", default-features = false, features = ["std", "fs", "net"] }
 slab = "0.4.7"
 socket2 = {features = ["all"], version = "0.5"}
+thiserror = "2"
 waker-fn = "1.1"
 bitflags = "2.6.0"
 libc = "0.2"
@@ -70,6 +72,10 @@ path = "examples/inter/simple.rs"
 [[test]]
 name = "ts-inter"
 path = "tests/inter.rs"
+
+[[test]]
+name = "ts-rtpdtmfsrc"
+path = "tests/rtpdtmfsrc.rs"
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true
