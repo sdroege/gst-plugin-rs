@@ -252,7 +252,7 @@ impl ObjectImpl for BaseWebRTCSrc {
                 settings.enable_control_data_channel.to_value()
             }
             "do-retransmission" => self.settings.lock().unwrap().do_retransmission.to_value(),
-            name => panic!("{} getter not implemented", name),
+            name => panic!("{name} getter not implemented"),
         }
     }
 
@@ -1833,7 +1833,7 @@ impl URIHandlerImpl for WebRTCSrc {
 
     fn set_uri(&self, uri: &str) -> Result<(), glib::Error> {
         let uri = Url::from_str(uri)
-            .map_err(|err| glib::Error::new(gst::URIError::BadUri, &format!("{:?}", err)))?;
+            .map_err(|err| glib::Error::new(gst::URIError::BadUri, &format!("{err:?}")))?;
 
         let socket_scheme = match uri.scheme() {
             "gstwebrtc" => Ok("ws"),
@@ -2393,7 +2393,7 @@ pub(super) mod janus {
             gst::debug!(CAT, imp = self, "parsing URI {uri}");
 
             let uri = Url::from_str(uri)
-                .map_err(|err| glib::Error::new(gst::URIError::BadUri, &format!("{:?}", err)))?;
+                .map_err(|err| glib::Error::new(gst::URIError::BadUri, &format!("{err:?}")))?;
 
             let socket_scheme = match uri.scheme() {
                 "gstjanusvr" => Ok("ws"),

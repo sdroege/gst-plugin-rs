@@ -330,7 +330,7 @@ fn test_cea708mux_inputs_overflow_output_new_service() {
     assert_eq!(service_numbers, (1..=6).collect::<Vec<_>>());
     for no in service_numbers {
         let codes = seen_services.get(&no).unwrap();
-        println!("service {no}: {:?}", codes);
+        println!("service {no}: {codes:?}");
         let offset = no as usize - 1;
         // one of the services will have a length that is 1 byte shorter than others due to size
         // limits of the packet.
@@ -425,7 +425,7 @@ fn test_cea708mux_output_overflow_max_time() {
     service_numbers.sort();
     assert_eq!(service_numbers, (1..=6).collect::<Vec<_>>());
     for (&no, codes) in seen_services.iter() {
-        println!("service {no}: {:?}", codes);
+        println!("service {no}: {codes:?}");
         let offset = no as usize - 1;
         assert_eq!(&codes[..10], &CODES[offset..offset + 10]);
     }

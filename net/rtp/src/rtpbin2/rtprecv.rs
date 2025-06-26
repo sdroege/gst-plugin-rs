@@ -452,7 +452,7 @@ impl RecvSession {
                         this.rtp_src_activatemode(pad, mode, active, id)
                     }
                 })
-                .name(format!("rtp_src_{}_{}_{}", id, pt, ssrc))
+                .name(format!("rtp_src_{id}_{pt}_{ssrc}"))
                 .build();
 
             srcpad.use_fixed_caps();
@@ -1798,7 +1798,7 @@ impl ElementImpl for RtpRecv {
                                 |this| this.rtp_sink_query(pad, query, id),
                             )
                         })
-                        .name(format!("rtp_sink_{}", id))
+                        .name(format!("rtp_sink_{id}"))
                         .build();
                     session.rtp_recv_sinkpad = Some(sinkpad.clone());
                     Some((sinkpad, None, id, vec![]))
@@ -1843,7 +1843,7 @@ impl ElementImpl for RtpRecv {
                                 |this| this.iterate_internal_links(pad),
                             )
                         })
-                        .name(format!("rtcp_sink_{}", id))
+                        .name(format!("rtcp_sink_{id}"))
                         .build();
                     session.rtcp_recv_sinkpad = Some(sinkpad.clone());
                     Some((sinkpad, None, id, vec![]))

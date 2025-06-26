@@ -323,7 +323,7 @@ fn test_opus_payloader_get_caps() {
     {
         let allowed_opus_caps = get_allowed_opus_caps_for_rtp_caps("OPUS", "stereo=(string)0");
 
-        eprintln!("OPUS stereo=0 => {:?}", allowed_opus_caps);
+        eprintln!("OPUS stereo=0 => {allowed_opus_caps:?}");
 
         assert_eq!(allowed_opus_caps.size(), 2);
 
@@ -345,7 +345,7 @@ fn test_opus_payloader_get_caps() {
     {
         let allowed_opus_caps = get_allowed_opus_caps_for_rtp_caps("OPUS", "stereo=(string)1");
 
-        eprintln!("OPUS stereo=1 => {:?}", allowed_opus_caps);
+        eprintln!("OPUS stereo=1 => {allowed_opus_caps:?}");
 
         assert_eq!(allowed_opus_caps.size(), 2);
 

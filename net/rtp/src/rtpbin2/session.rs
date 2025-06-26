@@ -1112,7 +1112,7 @@ impl Session {
         if have_fir {
             let ssrc = self.ensure_internal_send_src();
 
-            debug!("Generating FIR: {:?}", fir);
+            debug!("Generating FIR: {fir:?}");
             rtcp =
                 rtcp.add_packet(rtcp_types::PayloadFeedback::builder_owned(fir).sender_ssrc(ssrc));
         }

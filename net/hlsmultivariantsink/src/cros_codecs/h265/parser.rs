@@ -1595,7 +1595,7 @@ impl Parser {
 
         let level: u8 = r.read_bits(8)?;
         ptl.general_level_idc =
-            Level::n(level).with_context(|| format!("Unsupported level {}", level))?;
+            Level::n(level).with_context(|| format!("Unsupported level {level}"))?;
 
         for i in 0..sps_max_sub_layers_minus_1 as usize {
             ptl.sub_layer_profile_present_flag[i] = r.read_bit()?;
@@ -1695,7 +1695,7 @@ impl Parser {
                 if ptl.sub_layer_level_present_flag[i] {
                     let level: u8 = r.read_bits(8)?;
                     ptl.sub_layer_level_idc[i] =
-                        Level::n(level).with_context(|| format!("Unsupported level {}", level))?;
+                        Level::n(level).with_context(|| format!("Unsupported level {level}"))?;
                 }
             }
         }
@@ -1712,7 +1712,7 @@ impl Parser {
             1 => &mut sl.scaling_list_8x8[matrix_id as usize],
             2 => &mut sl.scaling_list_16x16[matrix_id as usize],
             3 => &mut sl.scaling_list_32x32[matrix_id as usize],
-            _ => panic!("Invalid size_id {}", size_id),
+            _ => panic!("Invalid size_id {size_id}"),
         };
 
         let src = if matrix_id < 3 {
@@ -1720,7 +1720,7 @@ impl Parser {
         } else if matrix_id <= 5 {
             &DEFAULT_SCALING_LIST_2
         } else {
-            panic!("Invalid matrix_id {}", matrix_id);
+            panic!("Invalid matrix_id {matrix_id}");
         };
 
         *dst = *src;

@@ -97,7 +97,7 @@ fn run_pipeline(pipeline: gst::Pipeline) -> Result<(), Error> {
                     "Error in element {:?}, {}",
                     err.src().map(|o| o.name()),
                     err.debug()
-                        .map(|d| format!("debug:\n{}", d))
+                        .map(|d| format!("debug:\n{d}"))
                         .unwrap_or(String::from("no debug"))
                 );
 

@@ -228,7 +228,7 @@ impl RtspSrc {
             scheme => {
                 return Err(glib::Error::new(
                     gst::URIError::UnsupportedProtocol,
-                    &format!("Unsupported URI scheme '{}'", scheme),
+                    &format!("Unsupported URI scheme '{scheme}'"),
                 ));
             }
         };
@@ -694,7 +694,7 @@ impl RtspSrc {
             .link(&manager.rtp_recv_sinkpad(rtpsession_n).unwrap())?;
         let templ = obj.pad_template("stream_%u").unwrap();
         let ghostpad = gst::GhostPad::builder_from_template(&templ)
-            .name(format!("stream_{}", rtpsession_n))
+            .name(format!("stream_{rtpsession_n}"))
             .build();
         gst::info!(CAT, "Adding ghost srcpad {}", ghostpad.name());
         obj.add_pad(&ghostpad)
@@ -997,7 +997,7 @@ impl RtspSrc {
                     };
                     gst::info!(CAT, "Setting rtpbin pad {} as ghostpad target", name);
                     let srcpad = obj
-                        .static_pad(&format!("stream_{}", stream_id))
+                        .static_pad(&format!("stream_{stream_id}"))
                         .expect("ghostpad should've been available already");
                     let ghostpad = srcpad
                         .downcast::<gst::GhostPad>()
@@ -1058,7 +1058,7 @@ impl RtspSrc {
                             continue;
                         };
                         let Some(s) = &session else {
-                            return Err(RtspError::Fatal(format!("Can't handle {:?} response, no SETUP", expected)).into());
+                            return Err(RtspError::Fatal(format!("Can't handle {expected:?} response, no SETUP")).into());
                         };
                         match expected {
                             Method::Play => {
@@ -1166,9 +1166,9 @@ impl RtspManager {
 
     fn rtp_recv_sinkpad(&self, rtpsession: usize) -> Option<gst::Pad> {
         let name = if self.using_rtp2 {
-            format!("rtp_sink_{}", rtpsession)
+            format!("rtp_sink_{rtpsession}")
         } else {
-            format!("recv_rtp_sink_{}", rtpsession)
+            format!("recv_rtp_sink_{rtpsession}")
         };
         gst::info!(CAT, "requesting {name} for receiving RTP");
         self.recv.request_pad_simple(&name)
@@ -1176,9 +1176,9 @@ impl RtspManager {
 
     fn rtcp_recv_sinkpad(&self, rtpsession: usize) -> Option<gst::Pad> {
         let name = if self.using_rtp2 {
-            format!("rtcp_sink_{}", rtpsession)
+            format!("rtcp_sink_{rtpsession}")
         } else {
-            format!("recv_rtcp_sink_{}", rtpsession)
+            format!("recv_rtcp_sink_{rtpsession}")
         };
         gst::info!(CAT, "requesting {name} for receiving RTCP");
         self.recv.request_pad_simple(&name)
@@ -1186,9 +1186,9 @@ impl RtspManager {
 
     fn rtcp_send_srcpad(&self, rtpsession: usize) -> Option<gst::Pad> {
         let name = if self.using_rtp2 {
-            format!("rtcp_src_{}", rtpsession)
+            format!("rtcp_src_{rtpsession}")
         } else {
-            format!("send_rtcp_src_{}", rtpsession)
+            format!("send_rtcp_src_{rtpsession}")
         };
         gst::info!(CAT, "requesting {name} for sending RTCP");
         self.send.request_pad_simple(&name)
@@ -1406,7 +1406,7 @@ impl RtspTaskState {
         for transport in transports.iter() {
             let Transport::Rtp(t) = transport else {
                 last_error =
-                    RtspError::Fatal(format!("Expected RTP transport, got {:#?}", transports));
+                    RtspError::Fatal(format!("Expected RTP transport, got {transports:#?}"));
                 continue;
             };
             // RTSP 2 specifies that we can have multiple SSRCs in the response

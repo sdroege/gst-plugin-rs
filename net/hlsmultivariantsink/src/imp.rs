@@ -451,8 +451,8 @@ fn hlssink_element(muxer_type: HlsMultivariantSinkMuxerType, sink_name: String) 
 
 fn hlssink_name(uri: String, muxer_type: HlsMultivariantSinkMuxerType) -> String {
     match muxer_type {
-        HlsMultivariantSinkMuxerType::Cmaf => format!("hlscmafsink-{}", uri).to_string(),
-        HlsMultivariantSinkMuxerType::MpegTs => format!("hlssink3-{}", uri).to_string(),
+        HlsMultivariantSinkMuxerType::Cmaf => format!("hlscmafsink-{uri}").to_string(),
+        HlsMultivariantSinkMuxerType::MpegTs => format!("hlssink3-{uri}").to_string(),
     }
 }
 

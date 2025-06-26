@@ -147,7 +147,7 @@ impl JitterBuffer {
         self.last_input_ts = Some(pts);
 
         self.base_times.get_or_insert_with(|| {
-            debug!("Selected base times {:?} {}", now, pts);
+            debug!("Selected base times {now:?} {pts}");
 
             (now, pts)
         });
@@ -208,7 +208,7 @@ impl JitterBuffer {
             }
         }
 
-        trace!("Polling at {:?}", now);
+        trace!("Polling at {now:?}");
 
         let Some(item) = self.items.first() else {
             return PollResult::Empty;
@@ -229,10 +229,7 @@ impl JitterBuffer {
 
         let duration_since_base_instant = now - base_instant;
 
-        trace!(
-            "Duration since base instant {:?}",
-            duration_since_base_instant
-        );
+        trace!("Duration since base instant {duration_since_base_instant:?}");
 
         let ts = pts.checked_sub(base_ts).unwrap();
         let deadline = Duration::from_nanos(ts) + self.latency;

@@ -214,15 +214,13 @@ fn parse_rtpmap(
         if pt >= 96 {
             return guess_rtpmap_from_pt(pt, media, s).map_err(|err| {
                 RtspError::Fatal(format!(
-                    "Could not get clock-rate from rtpmap {rtpmap}: {}",
-                    err
+                    "Could not get clock-rate from rtpmap {rtpmap}: {err}"
                 ))
             });
         } else {
             return guess_rtpmap_from_encoding_name(&encoding_name, media, s).map_err(|err| {
                 RtspError::Fatal(format!(
-                    "Could not get clock-rate from rtpmap {rtpmap}: {}",
-                    err
+                    "Could not get clock-rate from rtpmap {rtpmap}: {err}"
                 ))
             });
         }

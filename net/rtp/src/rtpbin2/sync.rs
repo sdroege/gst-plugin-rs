@@ -202,10 +202,7 @@ impl Context {
         let mut pts = match self.mode {
             TimestampingMode::Skew => {
                 let (skew_corrected, discont) = ssrc.observations.process(rtp_ext_ns, arrival_time);
-                trace!(
-                    "{ssrc_val:#08x} using skew corrected RTP ext: {}",
-                    skew_corrected
-                );
+                trace!("{ssrc_val:#08x} using skew corrected RTP ext: {skew_corrected}");
 
                 if discont {
                     ssrc.reset_times();
@@ -218,12 +215,12 @@ impl Context {
                 skew_corrected
             }
             TimestampingMode::Rtp => {
-                trace!("{ssrc_val:#08x} using uncorrected RTP ext: {}", rtp_ext_ns);
+                trace!("{ssrc_val:#08x} using uncorrected RTP ext: {rtp_ext_ns}");
 
                 rtp_ext_ns
             }
             TimestampingMode::Arrival => {
-                trace!("{ssrc_val:#08x} using arrival time: {}", arrival_time);
+                trace!("{ssrc_val:#08x} using arrival time: {arrival_time}");
 
                 arrival_time
             }
@@ -238,10 +235,10 @@ impl Context {
 
         // Base the PTS on the first arrival time
         pts += base_arrival_time;
-        trace!("{ssrc_val:#08x} added up base arrival time: {}", pts);
+        trace!("{ssrc_val:#08x} added up base arrival time: {pts}");
         // Now subtract the base PTS we calculated
         pts = pts.saturating_sub(base_pts);
-        trace!("{ssrc_val:#08x} subtracted base PTS: {}", base_pts);
+        trace!("{ssrc_val:#08x} subtracted base PTS: {base_pts}");
 
         trace!("{ssrc_val:#08x} PTS prior to potential SR offsetting: {pts}");
 
@@ -349,12 +346,12 @@ impl Context {
                     cname_largest_delay
                 });
 
-            trace!("{ssrc_val:#08x} Largest delay is {:?}", cname_largest_delay);
+            trace!("{ssrc_val:#08x} Largest delay is {cname_largest_delay:?}");
 
             if cname_largest_delay.all_sync {
                 let offset = (cname_largest_delay.largest_delay - delay.unwrap()) as u64;
 
-                trace!("{ssrc_val:#08x} applying offset {}", offset);
+                trace!("{ssrc_val:#08x} applying offset {offset}");
 
                 pts += offset;
             }
@@ -406,7 +403,7 @@ impl Observations {
         };
 
         trace!("Skew {}, min delta {}", self.skew, self.min_delta);
-        trace!("Outputting {}", out_time);
+        trace!("Outputting {out_time}");
 
         (out_time, false)
     }
@@ -415,16 +412,13 @@ impl Observations {
     // Fober, Orlarey and Letz, 2005, "Real Time Clock Skew Estimation over Network Delays":
     // http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.102.1546
     fn process(&mut self, remote_time: u64, local_time: u64) -> (u64, bool) {
-        trace!("Local time {}, remote time {}", local_time, remote_time,);
+        trace!("Local time {local_time}, remote time {remote_time}",);
 
         let (base_remote_time, base_local_time) =
             match (self.base_remote_time, self.base_local_time) {
                 (Some(remote), Some(local)) => (remote, local),
                 _ => {
-                    debug!(
-                        "Initializing base time: local {}, remote {}",
-                        local_time, remote_time,
-                    );
+                    debug!("Initializing base time: local {local_time}, remote {remote_time}",);
                     self.base_remote_time = Some(remote_time);
                     self.base_local_time = Some(local_time);
                     self.highest_remote_time = Some(remote_time);
@@ -447,25 +441,17 @@ impl Observations {
         let local_diff = local_time.saturating_sub(base_local_time);
         let delta = (local_diff as i64) - (remote_diff as i64);
 
-        trace!(
-            "Local diff {}, remote diff {}, delta {}",
-            local_diff,
-            remote_diff,
-            delta,
-        );
+        trace!("Local diff {local_diff}, remote diff {remote_diff}, delta {delta}",);
 
         if remote_diff > 0 && local_diff > 0 {
             let slope = (local_diff as f64) / (remote_diff as f64);
             if !(0.8..1.2).contains(&slope) {
-                warn!("Too small/big slope {}, resetting", slope);
+                warn!("Too small/big slope {slope}, resetting");
 
                 let discont = !self.deltas.is_empty();
                 *self = Observations::default();
 
-                debug!(
-                    "Initializing base time: local {}, remote {}",
-                    local_time, remote_time,
-                );
+                debug!("Initializing base time: local {local_time}, remote {remote_time}",);
                 self.base_remote_time = Some(remote_time);
                 self.base_local_time = Some(local_time);
                 self.highest_remote_time = Some(remote_time);
@@ -482,10 +468,7 @@ impl Observations {
             let discont = !self.deltas.is_empty();
             *self = Observations::default();
 
-            debug!(
-                "Initializing base time: local {}, remote {}",
-                local_time, remote_time,
-            );
+            debug!("Initializing base time: local {local_time}, remote {remote_time}",);
             self.base_remote_time = Some(remote_time);
             self.base_local_time = Some(local_time);
             self.highest_remote_time = Some(remote_time);

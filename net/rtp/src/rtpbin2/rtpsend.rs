@@ -729,7 +729,7 @@ impl ElementImpl for RtpSend {
                             )
                         })
                         .flags(gst::PadFlags::PROXY_CAPS)
-                        .name(format!("rtp_sink_{}", id))
+                        .name(format!("rtp_sink_{id}"))
                         .build();
                     let src_templ = self.obj().pad_template("rtp_src_%u").unwrap();
                     let srcpad = gst::Pad::builder_from_template(&src_templ)
@@ -740,7 +740,7 @@ impl ElementImpl for RtpSend {
                                 |this| this.iterate_internal_links(pad),
                             )
                         })
-                        .name(format!("rtp_src_{}", id))
+                        .name(format!("rtp_src_{id}"))
                         .build();
                     session.rtp_send_sinkpad = Some(sinkpad.clone());
                     session.rtp_send_srcpad = Some(srcpad.clone());
@@ -785,10 +785,10 @@ impl ElementImpl for RtpSend {
                                 |this| this.iterate_internal_links(pad),
                             )
                         })
-                        .name(format!("rtcp_src_{}", id))
+                        .name(format!("rtcp_src_{id}"))
                         .build();
 
-                    let stream_id = format!("{}/rtcp", id);
+                    let stream_id = format!("{id}/rtcp");
                     let stream_start = gst::event::StreamStart::builder(&stream_id).build();
                     let seqnum = stream_start.seqnum();
 

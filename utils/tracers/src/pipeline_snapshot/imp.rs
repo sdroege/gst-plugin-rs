@@ -149,7 +149,7 @@ impl std::str::FromStr for CleanupMode {
             "initial" => Ok(CleanupMode::Initial),
             "automatic" => Ok(CleanupMode::Automatic),
             "none" => Ok(CleanupMode::None),
-            _ => Err(format!("unknown cleanup mode: {}", s)),
+            _ => Err(format!("unknown cleanup mode: {s}")),
         }
     }
 }
@@ -183,7 +183,7 @@ impl std::str::FromStr for FolderMode {
             "none" => Ok(FolderMode::None),
             "numbered" => Ok(FolderMode::Numbered),
             "timed" => Ok(FolderMode::Timed),
-            _ => Err(format!("unknown folder mode: {}", s)),
+            _ => Err(format!("unknown folder mode: {s}")),
         }
     }
 }
@@ -621,7 +621,7 @@ impl PipelineSnapshot {
             let pipeline_ptr = if settings.dot_pipeline_ptr {
                 let pipeline_ptr: *const gst::ffi::GstPipeline = pipeline.to_glib_none().0;
 
-                format!("-{:?}", pipeline_ptr)
+                format!("-{pipeline_ptr:?}")
             } else {
                 "".to_string()
             };

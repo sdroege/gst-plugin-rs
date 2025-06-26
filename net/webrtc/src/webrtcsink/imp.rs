@@ -1874,7 +1874,7 @@ impl BaseWebRTCSink {
         let ssrc = self.generate_ssrc(webrtc_pads);
         let media_idx = webrtc_pads.len() as i32;
 
-        let Some(pad) = webrtcbin.request_pad_simple(&format!("sink_{}", media_idx)) else {
+        let Some(pad) = webrtcbin.request_pad_simple(&format!("sink_{media_idx}")) else {
             gst::error!(CAT, imp = self, "Failed to request pad from webrtcbin");
             gst::element_imp_error!(
                 self,
@@ -2021,7 +2021,7 @@ impl BaseWebRTCSink {
                 payloader_caps
             );
 
-            let Some(pad) = webrtcbin.request_pad_simple(&format!("sink_{}", media_idx)) else {
+            let Some(pad) = webrtcbin.request_pad_simple(&format!("sink_{media_idx}")) else {
                 gst::error!(CAT, imp = self, "Failed to request pad from webrtcbin");
                 gst::element_imp_error!(
                     self,

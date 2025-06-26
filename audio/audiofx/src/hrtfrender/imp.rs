@@ -271,7 +271,7 @@ impl HrtfRender {
 
                         // Convert to Right Handed, this is what HRTF crate expects
                         let new_sample_vector = Vec3 {
-                            z: new_sample_vector.z * -1.0,
+                            z: -new_sample_vector.z,
                             ..new_sample_vector
                         };
 

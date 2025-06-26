@@ -342,7 +342,7 @@ impl Signaller {
                 async move {
                     if let Err(err) = sender.send(msg).await {
                         this.obj()
-                            .emit_by_name::<()>("error", &[&format!("Error: {}", err)]);
+                            .emit_by_name::<()>("error", &[&format!("Error: {err}")]);
                     }
                 }
             ));
@@ -574,7 +574,7 @@ impl Signaller {
 
                     self.obj().emit_by_name::<()>(
                         "error",
-                        &[&format!("Unknown message from server: {}", msg)],
+                        &[&format!("Unknown message from server: {msg}")],
                     );
                 }
             }
@@ -585,7 +585,7 @@ impl Signaller {
             Ok(_) => (),
             Err(err) => {
                 self.obj()
-                    .emit_by_name::<()>("error", &[&format!("Error receiving: {}", err)]);
+                    .emit_by_name::<()>("error", &[&format!("Error receiving: {err}")]);
                 return ControlFlow::Break(());
             }
         }
@@ -740,7 +740,7 @@ impl SignallableImpl for Signaller {
             async move {
                 if let Err(err) = this.connect().await {
                     this.obj()
-                        .emit_by_name::<()>("error", &[&format!("Error receiving: {}", err)]);
+                        .emit_by_name::<()>("error", &[&format!("Error receiving: {err}")]);
                 }
             }
         ));
@@ -847,7 +847,7 @@ impl SignallableImpl for Signaller {
                         .await
                     {
                         this.obj()
-                            .emit_by_name::<()>("error", &[&format!("Error: {}", err)]);
+                            .emit_by_name::<()>("error", &[&format!("Error: {err}")]);
                     }
                 }
             ));

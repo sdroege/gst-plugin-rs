@@ -283,9 +283,9 @@ impl PadPushTimings {
 
             let mut include = true;
             let name = if let Some(ref parent_name) = parent_name {
-                format!("{}:{}", parent_name, pad_name)
+                format!("{parent_name}:{pad_name}")
             } else {
-                format!(":{}", pad_name)
+                format!(":{pad_name}")
             };
 
             if let Some(ref filter) = settings.include_filter {

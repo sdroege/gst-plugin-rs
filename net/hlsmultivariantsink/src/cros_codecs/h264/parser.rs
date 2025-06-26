@@ -827,7 +827,7 @@ impl Parser {
             3 => *default_scaling_list_inter,
             4 => scaling_list4x4[3],
             5 => scaling_list4x4[4],
-            _ => panic!("Unexpected value {}", i),
+            _ => panic!("Unexpected value {i}"),
         }
     }
 
@@ -845,7 +845,7 @@ impl Parser {
             3 => scaling_list8x8[1],
             4 => scaling_list8x8[2],
             5 => scaling_list8x8[3],
-            _ => panic!("Unexpected value {}", i),
+            _ => panic!("Unexpected value {i}"),
         }
     }
 
@@ -1079,7 +1079,7 @@ impl Parser {
         r.skip_bits(2)?;
 
         let level: u8 = r.read_bits(8)?;
-        sps.level_idc = Level::n(level).with_context(|| format!("Unsupported level {}", level))?;
+        sps.level_idc = Level::n(level).with_context(|| format!("Unsupported level {level}"))?;
         sps.seq_parameter_set_id = r.read_ue_max(31)?;
 
         if sps.profile_idc == 100

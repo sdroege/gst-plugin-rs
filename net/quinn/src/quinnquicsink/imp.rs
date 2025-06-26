@@ -1025,7 +1025,7 @@ impl QuinnQuicSink {
         match wait(&self.canceller, stream.stopped(), timeout) {
             Ok(r) => {
                 if let Err(e) = r {
-                    let err_msg = format!("Stream finish request error: {}", e);
+                    let err_msg = format!("Stream finish request error: {e}");
                     gst::error!(CAT, imp = self, "{}", err_msg);
                 } else {
                     gst::info!(CAT, imp = self, "Stream {} finished", stream.id());
@@ -1037,7 +1037,7 @@ impl QuinnQuicSink {
                     gst::warning!(CAT, imp = self, "{}", err_msg);
                 }
                 WaitError::FutureError(e) => {
-                    let err_msg = format!("Stream finish request future error: {}", e);
+                    let err_msg = format!("Stream finish request future error: {e}");
                     gst::error!(CAT, imp = self, "{}", err_msg);
                 }
             },

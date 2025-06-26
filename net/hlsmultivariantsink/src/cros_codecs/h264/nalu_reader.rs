@@ -58,7 +58,7 @@ impl<'a> NaluReader<'a> {
         match bit {
             1 => Ok(true),
             0 => Ok(false),
-            _ => panic!("Unexpected value {}", bit),
+            _ => panic!("Unexpected value {bit}"),
         }
     }
 

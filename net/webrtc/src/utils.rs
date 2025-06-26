@@ -1426,7 +1426,7 @@ mod tests {
         let actual = find_smallest_available_ext_id(ids);
 
         if actual != expected {
-            return Err(format!("Expected {}, got {}", expected, actual));
+            return Err(format!("Expected {expected}, got {actual}"));
         }
 
         Ok(())

@@ -204,7 +204,7 @@ impl QuinnQuicDemux {
                         .element_class()
                         .pad_template("stream_%u")
                         .unwrap();
-                    let stream_pad_name = format!("stream_{}", stream_id);
+                    let stream_pad_name = format!("stream_{stream_id}");
 
                     let srcpad = gst::Pad::builder_from_template(&templ)
                         .name(stream_pad_name.clone())

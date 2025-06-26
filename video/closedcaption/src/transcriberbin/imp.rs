@@ -461,7 +461,7 @@ impl TranscriberBin {
                 if let Some(channel) = cea608_channel {
                     builder = builder.property("cea608-channel", channel);
                 }
-                (builder.build()?, format!("sink_{}", service_no))
+                (builder.build()?, format!("sink_{service_no}"))
             }
         };
         let cccapsfilter = gst::ElementFactory::make("capsfilter").build()?;
@@ -515,7 +515,7 @@ impl TranscriberBin {
 
         pad_state
             .transcription_bin
-            .set_property("name", format!("transcription-bin-{}", pad_name));
+            .set_property("name", format!("transcription-bin-{pad_name}"));
 
         state
             .internal_bin
@@ -1158,7 +1158,7 @@ impl TranscriberBin {
             use std::collections::hash_map::Entry::*;
             if let Vacant(e) = pad_state.language_tees.entry(k.clone()) {
                 let tee = gst::ElementFactory::make("tee")
-                    .name(format!("tee-{}", k))
+                    .name(format!("tee-{k}"))
                     .property("allow-not-linked", true)
                     .build()?;
 
@@ -1255,7 +1255,7 @@ impl TranscriberBin {
         let _ = channel.bin.set_state(gst::State::Null);
 
         if let Some(serial) = serial {
-            pad_name = format!("{}_{}", pad_name, serial);
+            pad_name = format!("{pad_name}_{serial}");
         }
         let srcpad = transcription_bin.static_pad(&pad_name).unwrap();
         let _ = transcription_bin.remove_pad(&srcpad);
@@ -1655,7 +1655,7 @@ impl TranscriberBin {
             use std::collections::hash_map::Entry::*;
             if let Vacant(e) = pad_state.language_tees.entry(k.clone()) {
                 let tee = gst::ElementFactory::make("tee")
-                    .name(format!("tee-{}", k))
+                    .name(format!("tee-{k}"))
                     .property("allow-not-linked", true)
                     .build()?;
 
@@ -1872,7 +1872,7 @@ impl TranscriberBin {
         pad_transcription_bin.add_pad(&srcpad)?;
 
         if let Some(serial) = serial {
-            pad_name = format!("{}_{}", pad_name, serial);
+            pad_name = format!("{pad_name}_{serial}");
         }
 
         let srcpad = gst::GhostPad::builder_with_target(&srcpad)
@@ -3245,7 +3245,7 @@ impl TranscriberSinkPadState {
             return;
         };
 
-        let mut unsynced_pad_name = format!("unsynced_{}", srcpad_name);
+        let mut unsynced_pad_name = format!("unsynced_{srcpad_name}");
 
         if transcriber.static_pad(&unsynced_pad_name).is_some() {
             let srcpad = self
@@ -3254,7 +3254,7 @@ impl TranscriberSinkPadState {
                 .unwrap();
             let _ = self.transcription_bin.remove_pad(&srcpad);
             if let Some(serial) = self.serial {
-                unsynced_pad_name = format!("{}_{}", unsynced_pad_name, serial);
+                unsynced_pad_name = format!("{unsynced_pad_name}_{serial}");
             }
             let srcpad = state
                 .transcription_bin
@@ -3327,7 +3327,7 @@ impl TranscriberSinkPadState {
             self.transcription_bin.add_pad(&srcpad)?;
 
             if let Some(serial) = self.serial {
-                unsynced_pad_name = format!("{}_{}", unsynced_pad_name, serial);
+                unsynced_pad_name = format!("{unsynced_pad_name}_{serial}");
             }
 
             let srcpad = gst::GhostPad::builder_with_target(&srcpad)

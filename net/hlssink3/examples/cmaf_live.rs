@@ -204,7 +204,7 @@ fn write_master_playlist(pipeline: &gst::Pipeline, path: &PathBuf) {
 
     let mut alternatives = Vec::new();
     for i in 0..2 {
-        let name = format!("audio_{}", i);
+        let name = format!("audio_{i}");
         let language = if i == 0 {
             Some("enc".to_string())
         } else {

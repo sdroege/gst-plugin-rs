@@ -399,7 +399,7 @@ impl ElementImpl for TranslationBin {
         };
 
         let pad = gst::PadBuilder::<super::TranslationSrcPad>::from_template(templ)
-            .name(format!("translate_src_{}", serial))
+            .name(format!("translate_src_{serial}"))
             .build();
 
         self.obj().add_pad(pad.upcast_ref::<gst::Pad>()).unwrap();
