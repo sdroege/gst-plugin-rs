@@ -319,6 +319,20 @@ impl HlsBaseSink {
         }
     }
 
+    pub fn get_location(&self, fragment_id: u32) -> Option<String> {
+        let mut state = self.state.lock().unwrap();
+        let context = match state.context.as_mut() {
+            Some(context) => context,
+            None => {
+                gst::error!(CAT, imp = self, "Playlist is not configured",);
+
+                return None;
+            }
+        };
+
+        sprintf::sprintf!(&context.segment_template, fragment_id).ok()
+    }
+
     pub fn get_fragment_stream(&self, fragment_id: u32) -> Option<(gio::OutputStream, String)> {
         let mut state = self.state.lock().unwrap();
         let context = match state.context.as_mut() {

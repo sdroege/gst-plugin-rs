@@ -537,15 +537,28 @@ impl HlsSink3 {
             CAT,
             imp = self,
             "New segment location: {:?}",
-            state.current_segment_location.as_ref()
+            segment_file_location,
         );
 
         Ok(segment_file_location)
     }
 
     fn on_fragment_closed(&self, s: &gst::StructureRef, closed_at: gst::ClockTime) {
+        let obj = self.obj();
+        let base_imp = obj.upcast_ref::<HlsBaseSink>().imp();
+
         let mut state = self.state.lock().unwrap();
-        let location = match state.current_segment_location.take() {
+
+        let location = match s
+            .get::<u32>("fragment-id")
+            .ok()
+            // Try to get the location of the fragment we just closed, if splitmuxsink gave us the
+            // fragment id (1.26+)
+            .and_then(|fragment_id| base_imp.get_location(fragment_id))
+            // Else fallback to the last fragment location we generated, which is techincally wrong
+            // (because this is the current fragment in progress, not the last fragment closed)
+            .or_else(|| state.current_segment_location.take())
+        {
             Some(location) => location,
             None => {
                 gst::error!(CAT, imp = self, "Unknown segment location");
@@ -574,8 +587,6 @@ impl HlsSink3 {
         let running_time = state.fragment_running_time;
         drop(state);
 
-        let obj = self.obj();
-        let base_imp = obj.upcast_ref::<HlsBaseSink>().imp();
         let uri = base_imp.get_segment_uri(&location);
         let _ = base_imp.add_segment(
             &location,
