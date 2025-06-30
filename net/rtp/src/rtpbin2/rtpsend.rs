@@ -6,6 +6,18 @@
  *
  * RTP session management (sender).
  *
+ * ## Environment variables
+ *
+ * The underlying Runtime can be fine-tuned process-wide using the following env vars:
+ *
+ * * 'GST_RTPBIN2_RT_WORKER_THREADS': number of worker threads the Runtime will use (default: 1)
+ *   0 => number of cores available on the system.
+ * * 'GST_RTPBIN2_RT_MAX_BLOCKING_THREADS': limit for the number of threads in the blocking pool (default: 512).
+ *   When they push buffers, downstream events or handle downstream queries, rtpbin2 elements spawn
+ *   a thread from the blocking pool. This is to avoid blocking the worker thread which is shared
+ *   with other elements running on the same runtime.
+ * * 'GST_RTPBIN2_RT_THREAD_KEEP_ALIVE': timeout for a thread in the blocking pool in ms (default: 10s).
+ *
  * ## Example pipeline
  *
  * |[
@@ -37,7 +49,7 @@ use super::internal::{pt_clock_rate_from_caps, GstRustLogger, SharedRtpState, Sh
 use super::session::{RtcpSendReply, RtpProfile, SendReply, RTCP_MIN_REPORT_INTERVAL};
 use super::source::SourceState;
 
-use crate::rtpbin2::RUNTIME;
+use crate::rtpbin2;
 
 const DEFAULT_MIN_RTCP_INTERVAL: Duration = RTCP_MIN_REPORT_INTERVAL;
 const DEFAULT_REDUCED_SIZE_RTCP: bool = false;
@@ -210,10 +222,12 @@ impl SendSession {
         // when the plugin is statically linked.
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
         let session_id = self.internal_session.id;
-        RUNTIME.spawn(async move {
-            let future = Abortable::new(Self::rtcp_task(state, session_id), abort_registration);
-            future.await
-        });
+        rtpbin2::get_or_init_runtime()
+            .expect("initialized in change_state()")
+            .spawn(async move {
+                let future = Abortable::new(Self::rtcp_task(state, session_id), abort_registration);
+                future.await
+            });
 
         rtcp_task.replace(RtcpTask { abort_handle });
     }
@@ -246,17 +260,19 @@ impl SendSession {
 
             if let Some((rtcp_srcpad, data)) = send {
                 let acquired = sem.clone().acquire_owned().await;
-                RUNTIME.spawn_blocking(move || {
-                    let buffer = gst::Buffer::from_mut_slice(data);
-                    if let Err(e) = rtcp_srcpad.push(buffer) {
-                        gst::warning!(
-                            CAT,
-                            obj = rtcp_srcpad,
-                            "Failed to send rtcp data: flow return {e:?}"
-                        );
-                    }
-                    drop(acquired);
-                });
+                rtpbin2::get_or_init_runtime()
+                    .expect("initialized in change_state()")
+                    .spawn_blocking(move || {
+                        let buffer = gst::Buffer::from_mut_slice(data);
+                        if let Err(e) = rtcp_srcpad.push(buffer) {
+                            gst::warning!(
+                                CAT,
+                                obj = rtcp_srcpad,
+                                "Failed to send rtcp data: flow return {e:?}"
+                            );
+                        }
+                        drop(acquired);
+                    });
             }
         }
     }
@@ -934,6 +950,14 @@ impl ElementImpl for RtpSend {
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         match transition {
             gst::StateChange::NullToReady => {
+                if let Err(err) = rtpbin2::get_or_init_runtime() {
+                    self.post_error_message(gst::error_msg!(
+                        gst::LibraryError::Settings,
+                        ["Error initializing runtime: {err}"]
+                    ));
+                    return Err(gst::StateChangeError);
+                }
+
                 let settings = self.settings.lock().unwrap();
                 let rtp_id = settings.rtp_id.clone();
                 drop(settings);

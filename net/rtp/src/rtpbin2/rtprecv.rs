@@ -6,6 +6,18 @@
  *
  * RTP session management (receiver).
  *
+ * ## Environment variables
+ *
+ * The underlying Runtime can be fine-tuned process-wide using the following env vars:
+ *
+ * * 'GST_RTPBIN2_RT_WORKER_THREADS': number of worker threads the Runtime will use (default: 1)
+ *   0 => number of cores available on the system.
+ * * 'GST_RTPBIN2_RT_MAX_BLOCKING_THREADS': limit for the number of threads in the blocking pool (default: 512).
+ *   When they push buffers, downstream events or handle downstream queries, rtpbin2 elements spawn
+ *   a thread from the blocking pool. This is to avoid blocking the worker thread which is shared
+ *   with other elements running on the same runtime.
+ * * 'GST_RTPBIN2_RT_THREAD_KEEP_ALIVE': timeout for a thread in the blocking pool in ms (default: 10s).
+ *
  * ## Example pipeline
  *
  * |[
@@ -46,7 +58,7 @@ use super::session::{
 use super::source::SourceState;
 use super::sync;
 
-use crate::rtpbin2::RUNTIME;
+use crate::rtpbin2;
 
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(200);
 
@@ -395,37 +407,49 @@ impl RecvSession {
             let recv_flow_combiner = recv_flow_combiner.clone();
             let store = store.clone();
 
-            RUNTIME.block_on(async move {
-                let mut stream = JitterBufferStream::new(store);
-                while let Some(item) = stream.next().await {
-                    match item {
-                        JitterBufferItem::PacketList(list) => {
-                            let flow = pad.push_list(list);
-                            gst::trace!(CAT, obj = pad, "Pushed buffer list, flow ret {:?}", flow);
-                            let mut recv_flow_combiner = recv_flow_combiner.lock().unwrap();
-                            let _combined_flow = recv_flow_combiner.update_pad_flow(&pad, flow);
-                            // TODO: store flow, return only on session pads?
-                        }
-                        JitterBufferItem::Packet(buffer) => {
-                            let flow = pad.push(buffer);
-                            gst::trace!(CAT, obj = pad, "Pushed buffer, flow ret {:?}", flow);
-                            let mut recv_flow_combiner = recv_flow_combiner.lock().unwrap();
-                            let _combined_flow = recv_flow_combiner.update_pad_flow(&pad, flow);
-                            // TODO: store flow, return only on session pads?
-                        }
-                        JitterBufferItem::Event(event) => {
-                            let res = pad.push_event(event);
-                            gst::trace!(CAT, obj = pad, "Pushed serialized event, result: {}", res);
-                        }
-                        JitterBufferItem::Query(mut query, tx) => {
-                            // This is safe because the thread holding the original reference is waiting
-                            // for us exclusively
-                            let res = pad.peer_query(unsafe { query.as_mut() });
-                            let _ = tx.send(res);
+            rtpbin2::get_or_init_runtime()
+                .expect("initialized in change_state()")
+                .block_on(async move {
+                    let mut stream = JitterBufferStream::new(store);
+                    while let Some(item) = stream.next().await {
+                        match item {
+                            JitterBufferItem::PacketList(list) => {
+                                let flow = pad.push_list(list);
+                                gst::trace!(
+                                    CAT,
+                                    obj = pad,
+                                    "Pushed buffer list, flow ret {:?}",
+                                    flow
+                                );
+                                let mut recv_flow_combiner = recv_flow_combiner.lock().unwrap();
+                                let _combined_flow = recv_flow_combiner.update_pad_flow(&pad, flow);
+                                // TODO: store flow, return only on session pads?
+                            }
+                            JitterBufferItem::Packet(buffer) => {
+                                let flow = pad.push(buffer);
+                                gst::trace!(CAT, obj = pad, "Pushed buffer, flow ret {:?}", flow);
+                                let mut recv_flow_combiner = recv_flow_combiner.lock().unwrap();
+                                let _combined_flow = recv_flow_combiner.update_pad_flow(&pad, flow);
+                                // TODO: store flow, return only on session pads?
+                            }
+                            JitterBufferItem::Event(event) => {
+                                let res = pad.push_event(event);
+                                gst::trace!(
+                                    CAT,
+                                    obj = pad,
+                                    "Pushed serialized event, result: {}",
+                                    res
+                                );
+                            }
+                            JitterBufferItem::Query(mut query, tx) => {
+                                // This is safe because the thread holding the original reference is waiting
+                                // for us exclusively
+                                let res = pad.peer_query(unsafe { query.as_mut() });
+                                let _ = tx.send(res);
+                            }
                         }
                     }
-                }
-            })
+                })
         })?;
 
         gst::debug!(CAT, obj = pad, "Task started");
@@ -456,6 +480,7 @@ impl RecvSession {
         pt: u8,
         ssrc: u32,
     ) -> (RtpRecvSrcPad, bool) {
+        let settings = rtpbin.settings.lock().unwrap();
         if let Some(pad) = self
             .rtp_recv_srcpads
             .iter()
@@ -503,8 +528,6 @@ impl RecvSession {
                 .build();
 
             srcpad.use_fixed_caps();
-
-            let settings = rtpbin.settings.lock().unwrap();
 
             let recv_pad = RtpRecvSrcPad::new(
                 pt,
@@ -2041,6 +2064,14 @@ impl ElementImpl for RtpRecv {
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         match transition {
             gst::StateChange::NullToReady => {
+                if let Err(err) = rtpbin2::get_or_init_runtime() {
+                    self.post_error_message(gst::error_msg!(
+                        gst::LibraryError::Settings,
+                        ["Error initializing runtime: {err}"]
+                    ));
+                    return Err(gst::StateChangeError);
+                }
+
                 let settings = self.settings.lock().unwrap();
                 let mut state = self.state.lock().unwrap();
                 let rtp_id = settings.rtp_id.clone();
