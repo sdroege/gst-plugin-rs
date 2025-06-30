@@ -601,7 +601,7 @@ impl HlsSink3 {
             // Try to get the location of the fragment we just closed, if splitmuxsink gave us the
             // fragment id (1.26+)
             .and_then(|fragment_id| base_imp.get_location(fragment_id))
-            // Else fallback to the last fragment location we generated, which is techincally wrong
+            // Else fallback to the last fragment location we generated, which is technically wrong
             // (because this is the current fragment in progress, not the last fragment closed)
             .or_else(|| state.current_segment_location.take())
         {
