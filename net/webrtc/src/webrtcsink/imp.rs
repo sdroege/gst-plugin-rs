@@ -3767,12 +3767,14 @@ impl BaseWebRTCSink {
 
         if remove {
             let _ = state.sessions.remove(&session.id);
+            let session_id = session.id.clone();
+            drop(session);
             state.finalize_session(&self.obj(), Session(session_clone.clone()));
             drop(state_guard);
             let settings = self.settings.lock().unwrap();
             let signaller = settings.signaller.clone();
             drop(settings);
-            signaller.end_session(&session.id);
+            signaller.end_session(&session_id);
         }
     }
 
