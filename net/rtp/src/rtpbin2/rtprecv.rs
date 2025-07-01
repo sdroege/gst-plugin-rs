@@ -1298,6 +1298,10 @@ impl RtpRecv {
                         .store
                         .insert(id, JitterBufferItem::Query(query, query_tx));
 
+                    if let Some(waker) = jitterbuffer_store.waker.take() {
+                        waker.wake();
+                    }
+
                     drop(jitterbuffer_store);
 
                     // Now block until the jitterbuffer has processed the query
