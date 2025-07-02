@@ -379,7 +379,7 @@ impl Stream {
     }
 
     fn drain_all(&mut self) -> impl Iterator<Item = Gop> + '_ {
-        self.queued_gops.drain(..)
+        self.queued_gops.drain(..).rev()
     }
 
     fn flush(&mut self) {
