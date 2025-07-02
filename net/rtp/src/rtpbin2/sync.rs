@@ -119,7 +119,9 @@ impl Context {
     }
 
     pub fn has_clock_rate(&self, ssrc_val: u32) -> bool {
-        self.ssrcs.contains_key(&ssrc_val)
+        self.ssrcs
+            .get(&ssrc_val)
+            .is_some_and(|ssrc| ssrc.clock_rate.is_some())
     }
 
     fn disassociate(&mut self, ssrc_val: u32, cname: &str) {
