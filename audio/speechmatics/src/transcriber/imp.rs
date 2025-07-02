@@ -45,6 +45,14 @@ struct TranscriptDisplay {
     direction: String,
 }
 
+#[derive(serde::Deserialize, Debug, PartialEq)]
+#[allow(dead_code)]
+#[serde(rename_all = "lowercase")]
+enum Tag {
+    Profanity,
+    Disfluency,
+}
+
 #[derive(serde::Deserialize, Debug)]
 #[allow(dead_code)]
 struct TranscriptAlternative {
@@ -53,9 +61,9 @@ struct TranscriptAlternative {
     display: Option<TranscriptDisplay>,
     language: Option<String>,
     #[serde(default)]
-    tags: Vec<String>,
-    #[serde(default)]
     speaker: Option<String>,
+    #[serde(default)]
+    tags: Vec<Tag>,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -190,6 +198,7 @@ const DEFAULT_MAX_DELAY_MS: u32 = 0;
 const DEFAULT_LATENESS_MS: u32 = 0;
 const DEFAULT_JOIN_PUNCTUATION: bool = true;
 const DEFAULT_ENABLE_LATE_PUNCTUATION_HACK: bool = true;
+const DEFAULT_MASK_PROFANITIES: bool = false;
 const DEFAULT_DIARIZATION: SpeechmaticsTranscriberDiarization =
     SpeechmaticsTranscriberDiarization::None;
 const DEFAULT_MAX_SPEAKERS: u32 = 50;
@@ -207,6 +216,7 @@ struct Settings {
     enable_late_punctuation_hack: bool,
     diarization: SpeechmaticsTranscriberDiarization,
     max_speakers: u32,
+    mask_profanities: bool,
 }
 
 impl Default for Settings {
@@ -222,6 +232,7 @@ impl Default for Settings {
             enable_late_punctuation_hack: DEFAULT_ENABLE_LATE_PUNCTUATION_HACK,
             diarization: DEFAULT_DIARIZATION,
             max_speakers: DEFAULT_MAX_SPEAKERS,
+            mask_profanities: DEFAULT_MASK_PROFANITIES,
         }
     }
 }
@@ -800,11 +811,12 @@ impl TranscriberSrcPad {
                                 }
                             }
 
-                            let (lateness, join_punctuation) = {
+                            let (lateness, join_punctuation, mask_profanities) = {
                                 let settings = transcriber.imp().settings.lock().unwrap();
                                 (
                                     (settings.lateness_ms as f64 / 1_000.) as f32,
                                     settings.join_punctuation,
+                                    settings.mask_profanities,
                                 )
                             };
 
@@ -832,6 +844,16 @@ impl TranscriberSrcPad {
                             for item in transcript.results.iter_mut() {
                                 item.start_time += lateness + discont_offset;
                                 item.end_time += lateness + discont_offset;
+
+                                if mask_profanities {
+                                    for alternative in item.alternatives.iter_mut() {
+                                        if alternative.tags.contains(&Tag::Profanity) {
+                                            alternative.content =
+                                                std::iter::repeat_n("*", alternative.content.len())
+                                                    .collect();
+                                        }
+                                    }
+                                }
                             }
 
                             if !transcript.results.is_empty() {
@@ -1723,6 +1745,14 @@ impl ObjectImpl for Transcriber {
                     .blurb("The maximum number of speakers that may be detected with diarization=speaker")
                     .default_value(DEFAULT_MAX_SPEAKERS)
                     .build(),
+                glib::ParamSpecBoolean::builder("mask-profanities")
+                    .nick("Mask profanities")
+                    .blurb(
+                        "Mask profanities with * of the same length as the word"
+                    )
+                    .default_value(DEFAULT_MASK_PROFANITIES)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -1860,6 +1890,10 @@ impl ObjectImpl for Transcriber {
                 let mut settings = self.settings.lock().unwrap();
                 settings.max_speakers = value.get().expect("type checked upstream");
             }
+            "mask-profanities" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.mask_profanities = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -1917,6 +1951,10 @@ impl ObjectImpl for Transcriber {
             }
             "diarization" => self.settings.lock().unwrap().diarization.to_value(),
             "max-speakers" => self.settings.lock().unwrap().max_speakers.to_value(),
+            "mask-profanities" => {
+                let settings = self.settings.lock().unwrap();
+                settings.mask_profanities.to_value()
+            }
             _ => unimplemented!(),
         }
     }

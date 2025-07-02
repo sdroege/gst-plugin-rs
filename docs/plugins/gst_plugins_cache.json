@@ -15688,6 +15688,18 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "mask-profanities": {
+                        "blurb": "Mask profanities with * of the same length as the word",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "max-delay": {
                         "blurb": "Max delay to pass to the speechmatics API (0 = use latency)",
                         "conditionally-available": false,
