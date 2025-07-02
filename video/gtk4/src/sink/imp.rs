@@ -494,7 +494,7 @@ impl BaseSinkImpl for PaintableSink {
     }
 
     fn set_caps(&self, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        gst::debug!(CAT, imp = self, "Setting caps {caps:?}");
+        gst::info!(CAT, imp = self, "Setting caps {caps:?}");
 
         #[allow(unused_mut)]
         let mut video_info = None;
