@@ -25,6 +25,7 @@ use super::translate::{TextToCea608, DEFAULT_FPS_D, DEFAULT_FPS_N};
 const DEFAULT_MODE: Cea608Mode = Cea608Mode::RollUp2;
 const DEFAULT_ORIGIN_ROW: i32 = -1;
 const DEFAULT_ORIGIN_COLUMN: u32 = 0;
+const DEFAULT_SPEAKER_PREFIX: Option<&str> = None;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -32,6 +33,7 @@ struct Settings {
     origin_row: i32,
     origin_column: u32,
     roll_up_timeout: Option<gst::ClockTime>,
+    speaker_prefix: Option<String>,
 }
 
 impl Default for Settings {
@@ -41,6 +43,7 @@ impl Default for Settings {
             origin_row: DEFAULT_ORIGIN_ROW,
             origin_column: DEFAULT_ORIGIN_COLUMN,
             roll_up_timeout: gst::ClockTime::NONE,
+            speaker_prefix: DEFAULT_SPEAKER_PREFIX.map(String::from),
         }
     }
 }
@@ -52,6 +55,7 @@ struct State {
     json_input: bool,
     force_clear: bool,
     force_carriage_return: bool,
+    prefix_newline: bool,
     max_frame_no: u64,
 }
 
@@ -63,6 +67,7 @@ impl Default for State {
             json_input: false,
             force_clear: false,
             force_carriage_return: false,
+            prefix_newline: false,
             max_frame_no: 0,
         }
     }
@@ -223,15 +228,25 @@ impl TtToCea608 {
                     _ => settings.origin_row as u32,
                 };
 
-                let carriage_return = if state.force_carriage_return {
-                    Some(true)
-                } else {
-                    None
-                };
-
-                state.force_carriage_return = false;
-
                 for phrase in &phrases {
+                    let mut text = phrase.to_string();
+
+                    let carriage_return = if state.force_carriage_return {
+                        Some(true)
+                    } else {
+                        None
+                    };
+
+                    state.force_carriage_return = false;
+
+                    if state.prefix_newline {
+                        if let Some(prefix) = settings.speaker_prefix.as_ref() {
+                            text.insert_str(0, prefix);
+                        }
+                    }
+
+                    state.prefix_newline = false;
+
                     lines.lines.push(Line {
                         carriage_return,
                         column: None,
@@ -239,9 +254,10 @@ impl TtToCea608 {
                         chunks: vec![Chunk {
                             style: TextStyle::White,
                             underline: false,
-                            text: phrase.to_string(),
+                            text,
                         }],
                     });
+
                     if settings.mode == Cea608Mode::PopOn || settings.mode == Cea608Mode::PaintOn {
                         row += 1;
                     }
@@ -378,16 +394,16 @@ impl TtToCea608 {
                     return gst::Pad::event_default(pad, Some(&*self.obj()), event);
                 };
 
-                let insert_newline = match s.name().as_str() {
+                let (insert_newline, prefix_newline) = match s.name().as_str() {
                     "rstranscribe/final-transcript" => {
                         gst::debug!(CAT, imp = self, "transcript is final, inserting new line");
-                        true
+                        (true, false)
                     }
                     "rstranscribe/speaker-change" => {
                         gst::debug!(CAT, imp = self, "speaker change, inserting new line");
-                        true
+                        (true, true)
                     }
-                    _ => false,
+                    _ => (false, false),
                 };
 
                 if insert_newline {
@@ -396,6 +412,7 @@ impl TtToCea608 {
 
                     if !state.json_input && settings.mode.is_rollup() {
                         state.force_carriage_return = true;
+                        state.prefix_newline = prefix_newline;
                     }
                 }
 
@@ -476,6 +493,11 @@ impl ObjectImpl for TtToCea608 {
                     .default_value(u64::MAX)
                     .mutable_playing()
                     .build(),
+                glib::ParamSpecString::builder("speaker-prefix")
+                    .nick("Speaker Prefix")
+                    .blurb("The prefix to add when outputting a carriage return on speaker change")
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -522,6 +544,10 @@ impl ObjectImpl for TtToCea608 {
                 settings.roll_up_timeout = timeout;
                 state.translator.set_roll_up_timeout(timeout);
             }
+            "speaker-prefix" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.speaker_prefix = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -548,6 +574,10 @@ impl ObjectImpl for TtToCea608 {
                 } else {
                     u64::MAX.to_value()
                 }
+            }
+            "speaker-prefix" => {
+                let settings = self.settings.lock().unwrap();
+                settings.speaker_prefix.to_value()
             }
             _ => unimplemented!(),
         }
@@ -635,6 +665,7 @@ impl ElementImpl for TtToCea608 {
                 *state = State::default();
                 state.force_clear = false;
                 state.force_carriage_return = false;
+                state.prefix_newline = false;
                 state.translator.set_mode(settings.mode);
                 state
                     .translator

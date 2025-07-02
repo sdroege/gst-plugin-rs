@@ -9937,6 +9937,18 @@
                         "readable": true,
                         "type": "guint64",
                         "writable": true
+                    },
+                    "speaker-prefix": {
+                        "blurb": "The prefix to add when outputting a carriage return on speaker change",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
                     }
                 },
                 "rank": "none"
