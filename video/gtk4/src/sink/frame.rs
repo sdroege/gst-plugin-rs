@@ -9,9 +9,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use gst_video::prelude::*;
-
+use crate::sink::imp::PaintableSink;
+use crate::sink::imp::CAT;
 use gst_gl::prelude::*;
+use gst_video::subclass::prelude::*;
 use gtk::{gdk, glib};
 use std::{
     collections::{HashMap, HashSet},
@@ -692,6 +693,7 @@ impl Frame {
 
 impl Frame {
     pub(crate) fn new(
+        dbg_obj: &PaintableSink,
         buffer: &gst::Buffer,
         info: &VideoInfo,
         orientation: Orientation,
@@ -809,11 +811,44 @@ impl Frame {
         let mut frame = Self {
             frame: match frame {
                 Some(frame) => frame,
-                None => MappedFrame::SysMem {
-                    frame: gst_video::VideoFrame::from_buffer_readable(buffer.clone(), info)
-                        .map_err(|_| gst::FlowError::Error)?,
-                    orientation,
-                },
+                None => {
+                    let readable_frame = match buffer.n_memory() {
+                        1 => buffer.clone(),
+                        _ => {
+                            gst::debug!(CAT, imp = dbg_obj, "Buffer is not contiguous, copying");
+
+                            let mut copy_buffer = gst::Buffer::with_size(info.size()).unwrap();
+
+                            {
+                                let copy_buffer = copy_buffer.get_mut().unwrap();
+
+                                buffer
+                                    .copy_into(copy_buffer, gst::BUFFER_COPY_METADATA, 0..0)
+                                    .unwrap();
+
+                                let frame = gst_video::VideoFrameRef::from_buffer_ref_readable(
+                                    buffer, info,
+                                )
+                                .unwrap();
+                                let mut copy_frame =
+                                    gst_video::VideoFrameRef::from_buffer_ref_writable(
+                                        copy_buffer,
+                                        info,
+                                    )
+                                    .unwrap();
+
+                                frame.copy(&mut copy_frame).unwrap();
+                            }
+                            copy_buffer
+                        }
+                    };
+
+                    MappedFrame::SysMem {
+                        frame: gst_video::VideoFrame::from_buffer_readable(readable_frame, info)
+                            .map_err(|_| gst::FlowError::Error)?,
+                        orientation,
+                    }
+                }
             },
             overlays: vec![],
         };
