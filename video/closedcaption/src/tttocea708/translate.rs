@@ -391,6 +391,7 @@ impl TextToCea708 {
                 }
                 self.pen_location.column = origin_column as u8;
                 need_pen_location = true;
+                cleared = true;
             }
         }
 
@@ -437,11 +438,16 @@ impl TextToCea708 {
 
             for (i, chunk) in line.chunks.iter().enumerate() {
                 let (cr, mut prepend_space) = if i == 0 {
-                    (line.carriage_return, true)
+                    (
+                        line.carriage_return,
+                        line.carriage_return.map(|cr| !cr).unwrap_or(!cleared),
+                    )
                 } else {
                     (Some(false), false)
                 };
                 self.open_line(chunk, cr);
+
+                cleared = false;
 
                 if is_punctuation(&chunk.text) {
                     prepend_space = false;
@@ -463,9 +469,7 @@ impl TextToCea708 {
                         continue;
                     }
 
-                    let code = Code::from_char(c).unwrap_or(Code::Space);
-                    self.service_writer.push_codes(&[code]);
-                    self.pen_location.column += 1;
+                    let mut push_code = true;
 
                     if self.mode == Cea708Mode::RollUp {
                         /* In roll-up mode, we introduce carriage returns automatically.
@@ -488,8 +492,18 @@ impl TextToCea708 {
                             self.pen_location.column = self.origin_column as u8;
 
                             self.open_line(chunk, Some(true));
+
+                            push_code = !c.is_ascii_whitespace();
                         }
-                    } else if self.pen_location.column > 31 {
+                    }
+
+                    if push_code {
+                        let code = Code::from_char(c).unwrap_or(Code::Space);
+                        self.service_writer.push_codes(&[code]);
+                        self.pen_location.column += 1;
+                    }
+
+                    if self.mode != Cea708Mode::RollUp && self.pen_location.column > 31 {
                         if chars.peek().is_some() {
                             gst::warning!(CAT, "Dropping characters after 32nd column: {}", c);
                         }
