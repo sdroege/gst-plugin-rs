@@ -30,6 +30,7 @@ const DEFAULT_ORIGIN_COLUMN: u32 = 0;
 const DEFAULT_ROLL_UP_ROWS: u8 = 2;
 const DEFAULT_SERVICE_NO: u8 = 1;
 const DEFAULT_CEA608_CHANNEL: u8 = 0;
+const DEFAULT_SPEAKER_PREFIX: Option<&str> = None;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -40,6 +41,7 @@ struct Settings {
     origin_column: u32,
     origin_row: i32,
     roll_up_timeout: Option<gst::ClockTime>,
+    speaker_prefix: Option<String>,
 }
 
 impl Default for Settings {
@@ -52,6 +54,7 @@ impl Default for Settings {
             service_no: DEFAULT_SERVICE_NO,
             cea608_channel: DEFAULT_CEA608_CHANNEL,
             origin_column: DEFAULT_ORIGIN_COLUMN,
+            speaker_prefix: DEFAULT_SPEAKER_PREFIX.map(String::from),
         }
     }
 }
@@ -62,6 +65,8 @@ struct State {
     framerate: gst::Fraction,
     max_frame_no: u64,
     force_clear: bool,
+    force_carriage_return: bool,
+    prefix_newline: bool,
 }
 
 impl Default for State {
@@ -71,6 +76,8 @@ impl Default for State {
             framerate: gst::Fraction::new(DEFAULT_FPS_N, DEFAULT_FPS_D),
             max_frame_no: 0,
             force_clear: false,
+            force_carriage_return: false,
+            prefix_newline: false,
         }
     }
 }
@@ -191,6 +198,10 @@ impl TtToCea708 {
         let mut state = self.state.lock().unwrap();
         let settings = self.settings.lock().unwrap();
 
+        if state.force_clear {
+            state.force_carriage_return = false;
+        }
+
         let cea608_mode = match settings.mode {
             Cea708Mode::PaintOn => Cea608Mode::PaintOn,
             Cea708Mode::PopOn => Cea608Mode::PopOn,
@@ -225,16 +236,35 @@ impl TtToCea708 {
         };
 
         for phrase in &phrases {
+            let mut text = phrase.to_string();
+
+            let carriage_return = if state.force_carriage_return {
+                Some(true)
+            } else {
+                None
+            };
+
+            state.force_carriage_return = false;
+
+            if state.prefix_newline {
+                if let Some(prefix) = settings.speaker_prefix.as_ref() {
+                    text.insert_str(0, prefix);
+                }
+            }
+
+            state.prefix_newline = false;
+
             lines.lines.push(Line {
-                carriage_return: None,
+                carriage_return,
                 column: None,
                 row: Some(row),
                 chunks: vec![Chunk {
                     style: TextStyle::White,
                     underline: false,
-                    text: phrase.to_string(),
+                    text,
                 }],
             });
+
             if settings.mode == Cea708Mode::PopOn || settings.mode == Cea708Mode::PaintOn {
                 row += 1;
             }
@@ -360,6 +390,35 @@ impl TtToCea708 {
 
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
+            EventView::CustomDownstream(c) => {
+                let Some(s) = c.structure() else {
+                    return gst::Pad::event_default(pad, Some(&*self.obj()), event);
+                };
+
+                let (insert_newline, prefix_newline) = match s.name().as_str() {
+                    "rstranscribe/final-transcript" => {
+                        gst::debug!(CAT, imp = self, "transcript is final, inserting new line");
+                        (true, false)
+                    }
+                    "rstranscribe/speaker-change" => {
+                        gst::debug!(CAT, imp = self, "speaker change, inserting new line");
+                        (true, true)
+                    }
+                    _ => (false, false),
+                };
+
+                if insert_newline {
+                    let mut state = self.state.lock().unwrap();
+                    let settings = self.settings.lock().unwrap();
+
+                    if settings.mode == Cea708Mode::RollUp {
+                        state.force_carriage_return = true;
+                        state.prefix_newline = prefix_newline;
+                    }
+                }
+
+                true
+            }
             _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
@@ -456,6 +515,11 @@ impl ObjectImpl for TtToCea708 {
                     .default_value(DEFAULT_ORIGIN_COLUMN)
                     .mutable_playing()
                     .build(),
+                glib::ParamSpecString::builder("speaker-prefix")
+                    .nick("Speaker Prefix")
+                    .blurb("The prefix to add when outputting a carriage return on speaker change")
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -531,6 +595,10 @@ impl ObjectImpl for TtToCea708 {
                 settings.roll_up_rows = value.get::<u32>().expect("type checked upstream") as u8;
                 state.translator.set_roll_up_count(settings.roll_up_rows);
             }
+            "speaker-prefix" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.speaker_prefix = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -569,6 +637,10 @@ impl ObjectImpl for TtToCea708 {
             "roll-up-rows" => {
                 let settings = self.settings.lock().unwrap();
                 (settings.roll_up_rows as u32).to_value()
+            }
+            "speaker-prefix" => {
+                let settings = self.settings.lock().unwrap();
+                settings.speaker_prefix.to_value()
             }
             _ => unimplemented!(),
         }
@@ -649,6 +721,8 @@ impl ElementImpl for TtToCea708 {
                 let framerate = state.framerate;
                 *state = State::default();
                 state.force_clear = false;
+                state.force_carriage_return = false;
+                state.prefix_newline = false;
                 state.translator.set_mode(settings.mode);
                 state.translator.set_origin_column(settings.origin_column);
                 state.translator.set_framerate(framerate);
