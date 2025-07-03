@@ -242,29 +242,48 @@ fn video_format_to_memory_format(f: gst_video::VideoFormat) -> gdk::MemoryFormat
 }
 
 #[cfg(feature = "gtk_v4_20")]
-fn colorimetry_to_color_state(colorimetry: gst_video::VideoColorimetry) -> Option<gdk::ColorState> {
-    // Ignore incomplete colorimetries and fall back to format dependent default color states in
-    // GTK. This should make it easier to detect buggy sources and avoid confusing and unexpected
-    // output.
-    if colorimetry.primaries() == gst_video::VideoColorPrimaries::Unknown
-        || colorimetry.transfer() == gst_video::VideoTransferFunction::Unknown
-        || colorimetry.matrix() == gst_video::VideoColorMatrix::Unknown
-        || colorimetry.range() == gst_video::VideoColorRange::Unknown
-    {
-        return None;
-    }
-
+fn videoinfo_to_color_state(info: &gst_video::VideoInfo) -> Option<gdk::ColorState> {
+    let colorimetry = info.colorimetry();
     let color_params = gdk::CicpParams::new();
 
-    color_params.set_color_primaries(colorimetry.primaries().to_iso());
-    color_params.set_transfer_function(colorimetry.transfer().to_iso());
-    color_params.set_matrix_coefficients(colorimetry.matrix().to_iso());
+    let range = match (colorimetry.range(), info.is_rgb()) {
+        (gst_video::VideoColorRange::Range0_255, ..) => gdk::CicpRange::Full,
+        (gst_video::VideoColorRange::Range16_235, ..) => gdk::CicpRange::Narrow,
+        (.., true) => gdk::CicpRange::Full,
+        (.., false) => gdk::CicpRange::Narrow,
+    };
+    color_params.set_range(range);
 
-    match colorimetry.range() {
-        gst_video::VideoColorRange::Range0_255 => color_params.set_range(gdk::CicpRange::Full),
-        gst_video::VideoColorRange::Range16_235 => color_params.set_range(gdk::CicpRange::Narrow),
-        _ => panic!("Unhandled range"),
-    }
+    let matrix = match (colorimetry.matrix(), info.is_rgb()) {
+        (gst_video::VideoColorMatrix::Unknown, true) => gst_video::VideoColorMatrix::Rgb.to_iso(),
+        (gst_video::VideoColorMatrix::Unknown, false) => {
+            gst_video::VideoColorMatrix::Bt709.to_iso()
+        }
+        _ => colorimetry.matrix().to_iso(),
+    };
+    color_params.set_matrix_coefficients(matrix);
+
+    let tf = match (colorimetry.transfer(), info.is_rgb()) {
+        (gst_video::VideoTransferFunction::Unknown, true) => {
+            gst_video::VideoTransferFunction::Srgb.to_iso()
+        }
+        (gst_video::VideoTransferFunction::Unknown, false) => {
+            gst_video::VideoTransferFunction::Bt709.to_iso()
+        }
+        _ => colorimetry.transfer().to_iso(),
+    };
+    color_params.set_transfer_function(tf);
+
+    let primaries = match (colorimetry.primaries(), info.is_rgb()) {
+        (gst_video::VideoColorPrimaries::Unknown, true) => {
+            gst_video::VideoColorPrimaries::Bt709.to_iso()
+        }
+        (gst_video::VideoColorPrimaries::Unknown, false) => {
+            gst_video::VideoColorPrimaries::Bt709.to_iso()
+        }
+        _ => colorimetry.primaries().to_iso(),
+    };
+    color_params.set_color_primaries(primaries);
 
     match color_params.build_color_state() {
         Ok(color_state) => Some(color_state),
@@ -307,7 +326,7 @@ fn video_frame_to_memory_texture(
                 .set_bytes(Some(&glib::Bytes::from_owned(FrameWrapper(frame))))
                 .set_stride(rowstride);
 
-            if let Some(color_state) = colorimetry_to_color_state(info.colorimetry()) {
+            if let Some(color_state) = videoinfo_to_color_state(&info) {
                 builder = builder.set_color_state(&color_state);
             }
 
@@ -412,9 +431,7 @@ fn video_frame_to_gl_texture(
                         .set_format(format)
                         .set_sync(Some(sync_point));
 
-                    if let Some(color_state) =
-                        colorimetry_to_color_state(frame.info().colorimetry())
-                    {
+                    if let Some(color_state) = videoinfo_to_color_state(frame.info()) {
                         mut_builder = mut_builder.set_color_state(&color_state);
                     }
                     mut_builder
@@ -491,8 +508,15 @@ fn video_frame_to_dmabuf_texture(
 
     #[cfg(feature = "gtk_v4_20")]
     {
-        if let Some(color_state) = colorimetry_to_color_state(info.colorimetry()) {
-            builder = builder.set_color_state(Some(color_state).as_ref());
+        // Convert DRM fourcc to Gst VideoFormat if possible so we know whether the format is RGB or
+        // YCbCr. This is needed for cases where the colorimetry is not fully set. The fallback uses
+        // the DMA_DRM format which we assume is YCbCr.
+        let color_state = match info.to_video_info() {
+            Ok(v) => videoinfo_to_color_state(&v),
+            Err(_) => videoinfo_to_color_state(info),
+        };
+        if color_state.is_some() {
+            builder = builder.set_color_state(color_state.as_ref());
         }
     }
 
