@@ -2905,6 +2905,7 @@ dependencies = [
 name = "gst-plugin-analytics"
 version = "0.15.0-alpha.1"
 dependencies = [
+ "byte-slice-cast",
  "chrono",
  "glib",
  "gst-plugin-version-helper",

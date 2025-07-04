@@ -22,6 +22,7 @@ gst-analytics = { workspace = true }
 chrono = { version = "0.4.31", default-features = false }
 xmltree = "0.12"
 glib = { workspace = true, features = ["v2_62"] }
+byte-slice-cast = "1"
 
 [dev-dependencies]
 gst-check.workspace = true

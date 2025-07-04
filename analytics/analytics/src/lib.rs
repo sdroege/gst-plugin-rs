@@ -26,6 +26,9 @@ mod combiner;
 #[cfg(feature = "v1_28")]
 mod splitter;
 
+#[cfg(feature = "v1_28")]
+mod yoloxtensordec;
+
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     relationmeta2onvifmeta::register(plugin)?;
     onvifmeta2relationmeta::register(plugin)?;
@@ -39,6 +42,9 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         combiner::register(plugin)?;
         splitter::register(plugin)?;
     }
+
+    #[cfg(feature = "v1_28")]
+    yoloxtensordec::register(plugin)?;
 
     Ok(())
 }
