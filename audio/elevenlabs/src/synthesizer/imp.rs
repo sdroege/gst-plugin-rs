@@ -504,8 +504,6 @@ impl Synthesizer {
             state.send_abort_handle = Some(abort_handle);
         }
 
-        self.post_start("request", "transcription request sent");
-
         let ret = match RUNTIME.block_on(future) {
             Err(_) => {
                 gst::debug!(CAT, imp = self, "send aborted, returning flushing");
