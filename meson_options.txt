@@ -2,6 +2,7 @@
 
 # analytics
 option('analytics', type: 'feature', value: 'auto', description: 'Build analytics plugin')
+option('burn', type: 'feature', value: 'auto', description: 'Build burn plugin')
 
 # audio
 option('audiofx', type: 'feature', value: 'auto', description: 'Build audiofx plugin')

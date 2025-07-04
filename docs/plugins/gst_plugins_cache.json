@@ -2499,6 +2499,170 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "burn": {
+        "description": "GStreamer Burn plugin",
+        "elements": {
+            "burn-yoloxinference": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Runs inference on video frames via a YOLOX model",
+                "hierarchy": [
+                    "GstBurnYoloxInference",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Inference/Classification/Video",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-raw:\n         format: RGB\n          width: { (int)480, (int)640, (int)800, (int)1024 }\n         height: { (int)480, (int)640, (int)800, (int)1024 }\n      framerate: [ 0/1, 2147483647/1 ]\npixel-aspect-ratio: 1/1\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\n         format: RGB\n          width: { (int)480, (int)640, (int)800, (int)1024 }\n         height: { (int)480, (int)640, (int)800, (int)1024 }\n      framerate: [ 0/1, 2147483647/1 ]\npixel-aspect-ratio: 1/1\n        tensors: \"tensorgroups\\,\\ yolox-out\\=\\(/uniquelist\\)\\{\\ \\(caps\\)\\\"tensor/strided\\\\\\,\\\\\\ dims\\\\\\=\\\\\\(int\\\\\\)\\\\\\<\\\\\\ 1\\\\\\,\\\\\\ 0\\\\\\,\\\\\\ \\\\\\[\\\\\\ 5\\\\\\,\\\\\\ 2147483647\\\\\\ \\\\\\]\\\\\\ \\\\\\>\\\\\\,\\\\\\ dims-order\\\\\\=\\\\\\(string\\\\\\)row-major\\\\\\,\\\\\\ type\\\\\\=\\\\\\(string\\\\\\)float32\\\"\\ \\}\\;\"\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "backend-type": {
+                        "blurb": "Burn backend to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "nd-array (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstBurnBackendType",
+                        "writable": true
+                    },
+                    "cubecl-index-id": {
+                        "blurb": "Index ID that identifies the device number. For CubeCL-based backends only.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "cubecl-type-id": {
+                        "blurb": "Type ID that identifies the type of the device. For CubeCL-based backends only, -1 for default.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "model-type": {
+                        "blurb": "YOLOX model type to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "tiny (1)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstBurnYoloxModelType",
+                        "writable": true
+                    },
+                    "num-classes": {
+                        "blurb": "Number of output classes of the model. This must match the weights. Keep at 0 for pretrained models.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "weights-path": {
+                        "blurb": "Path to a PyTorch weights file for the model. This must match the model type and number of weights. Keep empty for pretrained models.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstburn",
+        "license": "MPL",
+        "other-types": {
+            "GstBurnBackendType": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "NdArray",
+                        "name": "nd-array",
+                        "value": "0"
+                    }
+                ]
+            },
+            "GstBurnYoloxModelType": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Nano",
+                        "name": "nano",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Tiny",
+                        "name": "tiny",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Small",
+                        "name": "small",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "Medium",
+                        "name": "medium",
+                        "value": "3"
+                    },
+                    {
+                        "desc": "Large",
+                        "name": "large",
+                        "value": "4"
+                    },
+                    {
+                        "desc": "ExtraLarge",
+                        "name": "extra-large",
+                        "value": "5"
+                    }
+                ]
+            }
+        },
+        "package": "gst-plugin-burn",
+        "source": "gst-plugin-burn",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "cdg": {
         "description": "GStreamer CDG codec Plugin",
         "elements": {

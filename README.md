@@ -238,6 +238,10 @@ You will find the following plugins in this repository:
 
       - `yoloxtensordec`: Tensor decoder for YOLOX tensors.
 
+    - `burn`:
+
+      - `burn-yoloxinference`: Object detection inference element based on YOLOX.
+
 ## Building
 
 gst-plugins-rs relies on [cargo-c](https://github.com/lu-zero/cargo-c/) to

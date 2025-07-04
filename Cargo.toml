@@ -6,6 +6,7 @@ members = [
     "version-helper",
 
     "analytics/analytics",
+    "analytics/burn",
 
     "audio/audiofx",
     "audio/audioparsers",
@@ -77,6 +78,7 @@ default-members = [
     "version-helper",
 
     "analytics/analytics",
+    "analytics/burn",
 
     "audio/audioparsers",
     "audio/audiofx",

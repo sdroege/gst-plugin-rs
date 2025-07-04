@@ -79,7 +79,7 @@ class CargoAnalyzer:
         return res
 
     def extract_version(self, feature_name):
-        if feature_name.startswith('v'):
+        if feature_name.startswith('v') and not feature_name == 'vulkan':
             verindex = 1
         elif feature_name.startswith('gst'):
             verindex = 3
