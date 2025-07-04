@@ -43,6 +43,7 @@ RENAMES = {
     'rsinter': 'inter',
     'textahead': 'ahead',
     'textwrap': 'wrap',
+    'textaccumulate': 'accumulate',
 }
 
 class CargoAnalyzer:

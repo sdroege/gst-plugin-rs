@@ -16213,6 +16213,85 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "textaccumulate": {
+        "description": "GStreamer Plugin for accumulating words into sentences",
+        "elements": {
+            "textaccumulate": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "Accumulates text",
+                "hierarchy": [
+                    "GstTextAccumulate",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Text/Filter",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "latency": {
+                        "blurb": "Amount of milliseconds to allow for accumulating",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "2000",
+                        "max": "-1",
+                        "min": "100",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "lateness": {
+                        "blurb": "By how many milliseconds to shift input timestamps forward for accumulating",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "timeout-terminators": {
+                        "blurb": "A regex for finding preferred break points when draining on timeout",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "\\,\\s|\\:\\s|\\;\\s",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gsttextaccumulate",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-textaccumulate",
+        "source": "gst-plugin-textaccumulate",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "textahead": {
         "description": "GStreamer Plugin for displaying upcoming text buffers ahead of time",
         "elements": {

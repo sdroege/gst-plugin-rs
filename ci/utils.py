@@ -32,6 +32,7 @@ OVERRIDE = {
     'ahead': 'textahead',
     'flavors': 'rsflv',
     'wrap': 'textwrap',
+    'accumulate': 'textaccumulate',
 }
 
 

@@ -48,6 +48,7 @@ option('webrtchttp', type: 'feature', value: 'auto', description: 'Build webrtch
 option('quinn', type: 'feature', value: 'auto', description: 'Build quinn plugin')
 
 # text
+option('textaccumulate', type: 'feature', value: 'auto', description: 'Build textaccumulate plugin')
 option('textahead', type: 'feature', value: 'auto', description: 'Build textahead plugin')
 option('json', type: 'feature', value: 'auto', description: 'Build json plugin')
 option('regex', type: 'feature', value: 'auto', description: 'Build regex plugin')

@@ -176,6 +176,7 @@ plugins = {
     'option-features': ['aws', 'livekit']
   },
 
+  'textaccumulate': {'library': 'libgsttextaccumulate'},
   'textahead': {'library': 'libgsttextahead'},
   'json': {'library': 'libgstjson'},
   'regex': {'library': 'libgstregex'},

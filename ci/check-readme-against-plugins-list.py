@@ -25,6 +25,7 @@ plugins_remap = {
     'rsflv': 'flavors',
     'textahead': 'ahead',
     'textwrap': 'wrap',
+    'textaccumulate': 'accumulate',
 }
 
 for plugin_name in plugins:

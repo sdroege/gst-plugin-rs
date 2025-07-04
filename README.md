@@ -162,6 +162,8 @@ You will find the following plugins in this repository:
     - `mp4`: A non-fragmented MP4 muxer for generating MP4 files.
 
   * `text`
+    - `accumulate`: A plugin for segmenting text, designed to work in a live context
+
     - `ahead`: A plugin to display upcoming text buffers ahead.
 
     - `json`: A plugin to convert a stream of JSON objects to a higher level wrapped NDJSON output.

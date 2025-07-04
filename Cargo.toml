@@ -44,6 +44,7 @@ members = [
     "net/webrtc/signalling",
     "net/quinn",
 
+    "text/accumulate",
     "text/ahead",
     "text/json",
     "text/regex",
@@ -105,6 +106,7 @@ default-members = [
     "net/ndi",
     "net/quinn",
 
+    "text/accumulate",
     "text/ahead",
     "text/json",
     "text/regex",
