@@ -824,7 +824,7 @@ impl RtpRecv {
             // XXX: Another option is to have us rewrite ssrc's instead of asking upstream to do
             // so.
             for ssrc in ssrc_collision {
-                pad.send_event(
+                pad.push_event(
                     gst::event::CustomUpstream::builder(
                         gst::Structure::builder("GstRTPCollision")
                             .field("ssrc", ssrc)
