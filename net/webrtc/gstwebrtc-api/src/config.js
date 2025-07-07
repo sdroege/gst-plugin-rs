@@ -47,7 +47,8 @@ const defaultConfig = Object.freeze({
           "stun:stun1.l.google.com:19302"
         ]
       }
-    ]
+    ],
+    bundlePolicy: "max-bundle"
   }
 });
 
