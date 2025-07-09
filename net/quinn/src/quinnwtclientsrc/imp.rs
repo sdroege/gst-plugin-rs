@@ -66,6 +66,7 @@ struct Started {
     thread_quit: Option<oneshot::Sender<()>>,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Default)]
 enum State {
     #[default]

@@ -43,6 +43,7 @@ struct Started {
     stream_idx: u64,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Default)]
 enum State {
     #[default]
