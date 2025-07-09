@@ -428,6 +428,7 @@ impl WhipClient {
                 }
             },
         };
+        self.obj().emit_by_name::<()>("shutdown", &[])
     }
 }
 
