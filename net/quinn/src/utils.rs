@@ -351,9 +351,10 @@ fn configure_server(
             read_private_key_from_file(ep_config.private_key_file.clone())?,
         )
     } else {
-        let rcgen::CertifiedKey { cert, key_pair } =
+        let rcgen::CertifiedKey { cert, signing_key } =
             rcgen::generate_simple_self_signed(vec![ep_config.server_name.clone()]).unwrap();
-        let priv_key = rustls_pki_types::PrivateKeyDer::try_from(key_pair.serialize_der()).unwrap();
+        let priv_key =
+            rustls_pki_types::PrivateKeyDer::try_from(signing_key.serialize_der()).unwrap();
         let cert_chain = vec![rustls_pki_types::CertificateDer::from(cert)];
 
         (cert_chain, priv_key)

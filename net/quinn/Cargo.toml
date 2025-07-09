@@ -21,13 +21,13 @@ quinn-proto = { version = "0.11.9", default-features = false, features = ["rustl
 rustls = { version = "0.23", default-features = false, features = ["std"] }
 rustls-pemfile = "2"
 rustls-pki-types = "1"
-rcgen = "0.13"
+rcgen = "0.14"
 bytes = "1.5.0"
 thiserror = "2"
 async-channel = "2.3"
 itertools = "0.14"
 env_logger = "0.11"
-web-transport-quinn = { version = "0.5.1", default-features = false, features = ["ring"] }
+web-transport-quinn = { version = "0.7", default-features = false, features = ["ring"] }
 url = "2.5.2"
 once_cell = "1.20.2"
 

@@ -535,6 +535,8 @@ impl QuinnWebTransportClientSrc {
             ))),
         }?;
 
+        drop(remotes);
+
         let client = client(&endpoint_config).map_err(|err| {
             WaitError::FutureError(gst::error_msg!(
                 gst::ResourceError::Failed,
@@ -542,7 +544,7 @@ impl QuinnWebTransportClientSrc {
             ))
         })?;
 
-        let session = client.connect(&url).await.map_err(|err| {
+        let session = client.connect(url).await.map_err(|err| {
             WaitError::FutureError(gst::error_msg!(
                 gst::ResourceError::Failed,
                 ["Failed to connect to server: {}", err]
