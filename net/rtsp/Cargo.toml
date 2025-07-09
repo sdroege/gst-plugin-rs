@@ -20,7 +20,7 @@ gst-pbutils = { workspace = true, features = ["v1_20"] }
 lru = "0.14"
 rtsp-types = "0.1"
 sdp-types = "0.1"
-socket2 = "0.5"
+socket2 = { version = "0.6", features = ["all"] }
 thiserror = "2"
 tokio = { version = "1.0", default-features = false, features = ["io-util", "macros", "net", "time", "rt-multi-thread", "sync"] }
 tokio-stream = "0.1"

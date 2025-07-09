@@ -25,7 +25,7 @@ rand = "0.9"
 rtp-types = "0.1"
 rustix = { version = "1.0", default-features = false, features = ["std", "fs", "net"] }
 slab = "0.4.7"
-socket2 = {features = ["all"], version = "0.5"}
+socket2 = {features = ["all"], version = "0.6"}
 thiserror = "2"
 waker-fn = "1.1"
 bitflags = "2.6.0"
