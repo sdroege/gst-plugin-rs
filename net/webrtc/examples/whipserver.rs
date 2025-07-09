@@ -50,7 +50,7 @@ fn unlink_video(pad: &gst::Pad, pipeline: &gst::Pipeline) {
     vc.set_state(gst::State::Null).unwrap();
     vsink.set_state(gst::State::Null).unwrap();
 
-    pipeline.remove_many([&q, &vsink]).unwrap();
+    pipeline.remove_many([&q, &vc, &vsink]).unwrap();
 }
 
 fn link_audio(pad: &gst::Pad, pipeline: &gst::Pipeline) {
@@ -94,7 +94,7 @@ fn unlink_audio(pad: &gst::Pad, pipeline: &gst::Pipeline) {
     ac.set_state(gst::State::Null).unwrap();
     asink.set_state(gst::State::Null).unwrap();
 
-    pipeline.remove_many([&aq, &asink]).unwrap();
+    pipeline.remove_many([&aq, &ac, &asink]).unwrap();
 }
 
 fn main() -> Result<(), Error> {
