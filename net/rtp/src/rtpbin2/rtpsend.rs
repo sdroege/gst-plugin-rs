@@ -1,5 +1,27 @@
 // SPDX-License-Identifier: MPL-2.0
 
+/**
+ * SECTION:element-rtpsend
+ * @see_also: rtprecv, rtpbin, rtpsession, rtpjitterbuffer.
+ *
+ * RTP session management (sender).
+ *
+ * ## Example pipeline
+ *
+ * |[
+ * gst-launch-1.0 \
+ *   audiotestsrc is-live=true ! opusenc ! rtpopuspay2 ! queue max-size-buffers=0 max-size-bytes=0 max-size-time=100000000 \
+ *   ! rtpsend name=send rtp-id=example-rtp-id \
+ *       send.rtp_src_0 ! udpsink port=5004 host=127.0.0.1 \
+ *       send.rtcp_src_0 ! udpsink port=5005 host=127.0.0.1 async=false \
+ *   rtprecv name=recv rtp-id=example-rtp-id \
+ *   udpsrc port=5007 caps='application/x-rtcp' ! recv.rtcp_sink_0
+ * ]| This will produce an Opus encoded audio stream and send it as RTP packets with RTCP
+ * over UDP ports 5004 & 5005. The pipeline expects RTCP to be sent back on UDP port 5007.
+ * See #rtprecv for an example of how to process such packets.
+ *
+ * Since: plugins-rs-0.13.0
+ */
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};

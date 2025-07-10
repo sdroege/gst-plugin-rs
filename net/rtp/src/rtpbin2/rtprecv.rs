@@ -1,5 +1,30 @@
 // SPDX-License-Identifier: MPL-2.0
 
+/**
+ * SECTION:element-rtprecv
+ * @see_also: rtpsend, rtpbin, rtpsession, rtpjitterbuffer.
+ *
+ * RTP session management (receiver).
+ *
+ * ## Example pipeline
+ *
+ * |[
+ * gst-launch-1.0 \
+ *  udpsrc port=5004 caps='application/x-rtp, media=audio, clock-rate=48000, encoding-name=OPUS, encoding-params=(string)1, sprop-stereo=(string)0, payload=96' \
+ *  ! queue max-size-bytes=0 max-size-buffers=0 max-size-time=200000000 ! recv.rtp_sink_0 \
+ *  udpsrc port=5005 caps='application/x-rtcp' \
+ *  ! recv.rtcp_sink_0 \
+ *  rtprecv name=recv rtp-id=example-rtp-id latency=200 \
+ *  ! rtpopusdepay2 ! opusdec ! audioconvert ! audioresample ! queue max-size-bytes=0 max-size-buffers=1 max-size-time=0 ! autoaudiosink \
+ *  rtpsend name=send rtp-id=example-rtp-id \
+ *  send.rtcp_src_0 ! udpsink port=5007 host=127.0.0.1 async=false
+ * ]| This will process incoming RTP & RTCP packets from UDP ports 5004 & 5005,
+ * provided the RTP packets contain an Opus encoded audio stream, and will send
+ * RTCP back to the sender on UDP port 5007.
+ * See #rtpsend for an example of how to produce such packets.
+ *
+ * Since: plugins-rs-0.13.0
+ */
 use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
 use std::ops::ControlFlow;
