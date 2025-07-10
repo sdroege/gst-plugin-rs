@@ -95,6 +95,33 @@ fn utc_time_to_running_time(
         .and_then(|res| res.checked_add(utc_time))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ChunkStrategy {
+    None,
+    Duration(gst::ClockTime),
+    Keyframe,
+}
+
+impl ChunkStrategy {
+    fn is_keyframe(&self) -> bool {
+        *self == ChunkStrategy::Keyframe
+    }
+
+    fn is_chunk_mode(&self) -> bool {
+        *self != ChunkStrategy::None
+    }
+}
+
+fn get_chunk_strategy(settings: &Settings) -> ChunkStrategy {
+    match settings.chunk_mode {
+        super::ChunkMode::Duration if settings.chunk_duration.is_some() => {
+            ChunkStrategy::Duration(settings.chunk_duration.unwrap())
+        }
+        super::ChunkMode::Keyframe => ChunkStrategy::Keyframe,
+        _ => ChunkStrategy::None,
+    }
+}
+
 pub static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "fmp4mux",
@@ -116,6 +143,8 @@ const DEFAULT_MANUAL_SPLIT: bool = false;
 const DEFAULT_OFFSET_TO_ZERO: bool = false;
 const DEFAULT_DECODE_TIME_OFFSET: gst::ClockTimeDiff = 0;
 const DEFAULT_START_FRAGMENT_SEQUENCE_NUMBER: u32 = 1;
+const DEFAULT_ENABLE_KEYFRAME_META: bool = false;
+const DEFAULT_CHUNK_MODE: super::ChunkMode = super::ChunkMode::None;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -133,6 +162,8 @@ struct Settings {
     manual_split: bool,
     decode_time_offset: gst::ClockTimeDiff,
     start_fragment_sequence_number: u32,
+    enable_keyframe_meta: bool,
+    chunk_mode: super::ChunkMode,
 }
 
 impl Default for Settings {
@@ -152,6 +183,8 @@ impl Default for Settings {
             manual_split: DEFAULT_MANUAL_SPLIT,
             decode_time_offset: DEFAULT_DECODE_TIME_OFFSET,
             start_fragment_sequence_number: DEFAULT_START_FRAGMENT_SEQUENCE_NUMBER,
+            enable_keyframe_meta: DEFAULT_ENABLE_KEYFRAME_META,
+            chunk_mode: DEFAULT_CHUNK_MODE,
         }
     }
 }
@@ -1568,41 +1601,21 @@ impl FMP4Mux {
         };
 
         // Check if this stream is filled enough now.
-        if let Some(chunk_duration) = settings.chunk_duration {
-            // In chunk mode
-            gst::trace!(
-                CAT,
-                obj = stream.sinkpad,
-                "Current chunk start {}, current fragment start {}",
-                chunk_start_pts,
-                fragment_start_pts,
-            );
+        match get_chunk_strategy(settings) {
+            ChunkStrategy::None => {
+                // In fragment-only mode
 
-            let chunk_end_pts = chunk_start_pts + chunk_duration;
-
-            if fragment_end_pts < chunk_end_pts {
+                // Check if the end of the latest finalized GOP is after the fragment end
                 gst::trace!(
                     CAT,
                     obj = stream.sinkpad,
-                    "Current chunk end {}, current fragment end {}. Fragment end before chunk end, extending fragment",
-                    chunk_end_pts,
+                    "Current fragment start {}, current fragment end {}",
+                    fragment_start_pts,
                     fragment_end_pts,
                 );
-            } else {
-                gst::trace!(
-                    CAT,
-                    obj = stream.sinkpad,
-                    "Current chunk end {}, current fragment end {}",
-                    chunk_end_pts,
-                    fragment_end_pts,
-                );
-            }
 
-            // First check if the next split should be the end of a fragment or the end of a chunk.
-            // If both are the same then a fragment split has preference.
-            if fragment_end_pts <= chunk_end_pts {
                 // If the first GOP already starts after the fragment end PTS then this stream is
-                // filled in the sense that it will not have any buffers for this chunk.
+                // filled in the sense that it will not have any buffers for this fragment.
                 if let Some(gop) = stream.queued_gops.back() {
                     gst::trace!(
                         CAT,
@@ -1612,6 +1625,225 @@ impl FMP4Mux {
                         gop.start_pts,
                         gop.end_pts,
                     );
+                    if gop.start_pts > fragment_end_pts {
+                        gst::debug!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Stream's first GOP starting after this fragment"
+                        );
+                        stream.fragment_filled = true;
+                        stream.late_gop = true;
+                        return;
+                    }
+                }
+
+                let (gop_idx, gop) = match stream
+                    .queued_gops
+                    .iter()
+                    .enumerate()
+                    .find(|(_gop_idx, gop)| gop.final_end_pts || stream.sinkpad.is_eos())
+                {
+                    Some(gop) => gop,
+                    None => {
+                        gst::trace!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Fragment mode but no GOP with final end PTS known yet"
+                        );
+                        return;
+                    }
+                };
+
+                gst::trace!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "GOP {gop_idx} start PTS {}, GOP end PTS {}",
+                    gop.start_pts,
+                    gop.end_pts,
+                );
+
+                if gop.end_pts >= fragment_end_pts {
+                    gst::debug!(
+                        CAT,
+                        obj = stream.sinkpad,
+                        "Stream queued enough data for this fragment"
+                    );
+                    stream.fragment_filled = true;
+                }
+            }
+            ChunkStrategy::Duration(chunk_duration) => {
+                gst::trace!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Current chunk start {}, current fragment start {}",
+                    chunk_start_pts,
+                    fragment_start_pts,
+                );
+
+                let chunk_end_pts = chunk_start_pts + chunk_duration;
+
+                if fragment_end_pts < chunk_end_pts {
+                    gst::trace!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Current chunk end {}, current fragment end {}. Fragment end before chunk end, extending fragment",
+                    chunk_end_pts,
+                    fragment_end_pts,
+                );
+                } else {
+                    gst::trace!(
+                        CAT,
+                        obj = stream.sinkpad,
+                        "Current chunk end {}, current fragment end {}",
+                        chunk_end_pts,
+                        fragment_end_pts,
+                    );
+                }
+
+                // First check if the next split should be the end of a fragment or the end of a chunk.
+                // If both are the same then a fragment split has preference.
+                if fragment_end_pts <= chunk_end_pts {
+                    // If the first GOP already starts after the fragment end PTS then this stream is
+                    // filled in the sense that it will not have any buffers for this chunk.
+                    if let Some(gop) = stream.queued_gops.back() {
+                        gst::trace!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "GOP {} start PTS {}, GOP end PTS {}",
+                            stream.queued_gops.len() - 1,
+                            gop.start_pts,
+                            gop.end_pts,
+                        );
+                        // If this GOP starts after the end of the current fragment, i.e. is not
+                        // included at all, then consider this stream filled as it won't contribute to
+                        // this fragment.
+                        //
+                        // However if the first buffer of the GOP is not actually a keyframe then we
+                        // previously drained a partial GOP because the GOP is ending too far after the
+                        // planned fragment end.
+                        if gop.start_pts > fragment_end_pts
+                            && !gop.buffers.first().is_some_and(|b| {
+                                b.buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
+                            })
+                        {
+                            gst::debug!(
+                                CAT,
+                                obj = stream.sinkpad,
+                                "Stream's first GOP starting after this fragment"
+                            );
+                            stream.fragment_filled = true;
+                            stream.late_gop = true;
+                            return;
+                        }
+                    }
+
+                    // We can only finish a fragment if a full GOP with final end PTS is queued and it
+                    // ends at or after the fragment end PTS.
+                    if let Some((gop_idx, gop)) = stream
+                        .queued_gops
+                        .iter()
+                        .enumerate()
+                        .find(|(_idx, gop)| gop.final_end_pts || stream.sinkpad.is_eos())
+                    {
+                        gst::trace!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "GOP {gop_idx} start PTS {}, GOP end PTS {}",
+                            gop.start_pts,
+                            gop.end_pts,
+                        );
+                        if gop.end_pts >= fragment_end_pts {
+                            gst::debug!(
+                                CAT,
+                                obj = stream.sinkpad,
+                                "Stream queued enough data for finishing this fragment"
+                            );
+                            stream.fragment_filled = true;
+                            return;
+                        }
+                    }
+                }
+
+                if !stream.fragment_filled {
+                    // If the first GOP already starts after the chunk end PTS then this stream is
+                    // filled in the sense that it will not have any buffers for this chunk.
+                    if let Some(gop) = stream.queued_gops.back() {
+                        gst::trace!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "GOP {} start PTS {}, GOP end PTS {}",
+                            stream.queued_gops.len() - 1,
+                            gop.start_pts,
+                            gop.end_pts,
+                        );
+                        if gop.start_pts > chunk_end_pts {
+                            gst::debug!(
+                                CAT,
+                                obj = stream.sinkpad,
+                                "Stream's first GOP starting after this chunk"
+                            );
+                            stream.chunk_filled = true;
+                            stream.late_gop = true;
+                            return;
+                        }
+                    }
+
+                    // We can only finish a chunk if a full GOP with final earliest PTS is queued.
+                    let (gop_idx, gop) = match stream
+                        .queued_gops
+                        .iter()
+                        .enumerate()
+                        .find(|(_idx, gop)| gop.final_earliest_pts || stream.sinkpad.is_eos())
+                    {
+                        Some(res) => res,
+                        None => {
+                            gst::trace!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Chunked mode and want to finish chunk but no GOP with final earliest PTS known yet",
+                        );
+                            return;
+                        }
+                    };
+
+                    gst::trace!(
+                        CAT,
+                        obj = stream.sinkpad,
+                        "GOP {gop_idx} start PTS {}, GOP end PTS {} (final {})",
+                        gop.start_pts,
+                        gop.end_pts,
+                        gop.final_end_pts || stream.sinkpad.is_eos(),
+                    );
+                    let last_pts = gop.buffers.last().map(|b| b.pts);
+
+                    if gop.end_pts >= chunk_end_pts
+                    // only if there's another GOP or at least one further buffer
+                    && (gop_idx > 0
+                        || last_pts.is_some_and(|last_pts| last_pts.saturating_sub(chunk_start_pts) > chunk_duration))
+                    {
+                        gst::debug!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Stream queued enough data for this chunk"
+                        );
+                        stream.chunk_filled = true;
+                    }
+                }
+            }
+            ChunkStrategy::Keyframe => {
+                // If the first GOP already starts after the fragment end PTS then this stream is
+                // filled in the sense that it will not have any buffers for this chunk.
+                if let Some(gop) = stream.queued_gops.back() {
+                    gst::trace!(
+                        CAT,
+                        obj = stream.sinkpad,
+                        "GOP {} start PTS {}, GOP end PTS {}, fragment end PTS {}",
+                        stream.queued_gops.len() - 1,
+                        gop.start_pts,
+                        gop.end_pts,
+                        fragment_end_pts
+                    );
+
                     // If this GOP starts after the end of the current fragment, i.e. is not
                     // included at all, then consider this stream filled as it won't contribute to
                     // this fragment.
@@ -1624,7 +1856,7 @@ impl FMP4Mux {
                             b.buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
                         })
                     {
-                        gst::debug!(
+                        gst::trace!(
                             CAT,
                             obj = stream.sinkpad,
                             "Stream's first GOP starting after this fragment"
@@ -1650,8 +1882,9 @@ impl FMP4Mux {
                         gop.start_pts,
                         gop.end_pts,
                     );
+
                     if gop.end_pts >= fragment_end_pts {
-                        gst::debug!(
+                        gst::trace!(
                             CAT,
                             obj = stream.sinkpad,
                             "Stream queued enough data for finishing this fragment"
@@ -1660,140 +1893,15 @@ impl FMP4Mux {
                         return;
                     }
                 }
-            }
 
-            if !stream.fragment_filled {
-                // If the first GOP already starts after the chunk end PTS then this stream is
-                // filled in the sense that it will not have any buffers for this chunk.
-                if let Some(gop) = stream.queued_gops.back() {
-                    gst::trace!(
-                        CAT,
-                        obj = stream.sinkpad,
-                        "GOP {} start PTS {}, GOP end PTS {}",
-                        stream.queued_gops.len() - 1,
-                        gop.start_pts,
-                        gop.end_pts,
-                    );
-                    if gop.start_pts > chunk_end_pts {
-                        gst::debug!(
-                            CAT,
-                            obj = stream.sinkpad,
-                            "Stream's first GOP starting after this chunk"
-                        );
-                        stream.chunk_filled = true;
-                        stream.late_gop = true;
-                        return;
-                    }
-                }
-
-                // We can only finish a chunk if a full GOP with final earliest PTS is queued.
-                let (gop_idx, gop) = match stream
-                    .queued_gops
-                    .iter()
-                    .enumerate()
-                    .find(|(_idx, gop)| gop.final_earliest_pts || stream.sinkpad.is_eos())
+                if Option::zip(
+                    stream.queued_gops.iter().find(|gop| gop.final_end_pts),
+                    stream.queued_gops.back(),
+                )
+                .is_some()
                 {
-                    Some(res) => res,
-                    None => {
-                        gst::trace!(
-                            CAT,
-                            obj = stream.sinkpad,
-                            "Chunked mode and want to finish chunk but no GOP with final earliest PTS known yet",
-                        );
-                        return;
-                    }
-                };
-
-                gst::trace!(
-                    CAT,
-                    obj = stream.sinkpad,
-                    "GOP {gop_idx} start PTS {}, GOP end PTS {} (final {})",
-                    gop.start_pts,
-                    gop.end_pts,
-                    gop.final_end_pts || stream.sinkpad.is_eos(),
-                );
-                let last_pts = gop.buffers.last().map(|b| b.pts);
-
-                if gop.end_pts >= chunk_end_pts
-                    // only if there's another GOP or at least one further buffer
-                    && (gop_idx > 0
-                        || last_pts.is_some_and(|last_pts| last_pts.saturating_sub(chunk_start_pts) > chunk_duration))
-                {
-                    gst::debug!(
-                        CAT,
-                        obj = stream.sinkpad,
-                        "Stream queued enough data for this chunk"
-                    );
                     stream.chunk_filled = true;
                 }
-            }
-        } else {
-            // In fragment-only mode
-
-            // Check if the end of the latest finalized GOP is after the fragment end
-            gst::trace!(
-                CAT,
-                obj = stream.sinkpad,
-                "Current fragment start {}, current fragment end {}",
-                fragment_start_pts,
-                fragment_end_pts,
-            );
-
-            // If the first GOP already starts after the fragment end PTS then this stream is
-            // filled in the sense that it will not have any buffers for this fragment.
-            if let Some(gop) = stream.queued_gops.back() {
-                gst::trace!(
-                    CAT,
-                    obj = stream.sinkpad,
-                    "GOP {} start PTS {}, GOP end PTS {}",
-                    stream.queued_gops.len() - 1,
-                    gop.start_pts,
-                    gop.end_pts,
-                );
-                if gop.start_pts > fragment_end_pts {
-                    gst::debug!(
-                        CAT,
-                        obj = stream.sinkpad,
-                        "Stream's first GOP starting after this fragment"
-                    );
-                    stream.fragment_filled = true;
-                    stream.late_gop = true;
-                    return;
-                }
-            }
-
-            let (gop_idx, gop) = match stream
-                .queued_gops
-                .iter()
-                .enumerate()
-                .find(|(_gop_idx, gop)| gop.final_end_pts || stream.sinkpad.is_eos())
-            {
-                Some(gop) => gop,
-                None => {
-                    gst::trace!(
-                        CAT,
-                        obj = stream.sinkpad,
-                        "Fragment mode but no GOP with final end PTS known yet"
-                    );
-                    return;
-                }
-            };
-
-            gst::trace!(
-                CAT,
-                obj = stream.sinkpad,
-                "GOP {gop_idx} start PTS {}, GOP end PTS {}",
-                gop.start_pts,
-                gop.end_pts,
-            );
-
-            if gop.end_pts >= fragment_end_pts {
-                gst::debug!(
-                    CAT,
-                    obj = stream.sinkpad,
-                    "Stream queued enough data for this fragment"
-                );
-                stream.fragment_filled = true;
             }
         }
     }
@@ -2116,18 +2224,21 @@ impl FMP4Mux {
         // fragment or chunk, for all other streams drain up to that position.
         let fragment_end_pts = fragment_end_pts.unwrap();
 
-        if let Some(chunk_duration) = settings.chunk_duration {
-            // Chunk mode
+        let chunk_strategy = get_chunk_strategy(settings);
 
+        if chunk_strategy.is_chunk_mode() {
             let dequeue_end_pts = if let Some(chunk_end_pts) = chunk_end_pts {
                 // Not the first stream
                 chunk_end_pts
+            } else if chunk_strategy.is_keyframe() {
+                stream.queued_gops.back().as_ref().unwrap().end_pts
             } else if fragment_filled {
                 // Fragment is filled, so only dequeue everything until the latest GOP
                 fragment_end_pts
             } else {
+                assert!(settings.chunk_duration.is_some());
                 // Fragment is not filled and we either have a full chunk or timeout
-                chunk_start_pts + chunk_duration
+                chunk_start_pts + settings.chunk_duration.unwrap()
             };
 
             gst::trace!(
@@ -2633,6 +2744,7 @@ impl FMP4Mux {
         let fragment_end_pts = state.fragment_end_pts;
         let chunk_start_pts = state.chunk_start_pts.unwrap();
         let fragment_start = fragment_start_pts == chunk_start_pts;
+        let chunk_mode = get_chunk_strategy(settings).is_chunk_mode();
 
         let fragment_filled = if settings.manual_split {
             // In manual-split mode we simply have to look at the first filled stream to
@@ -2645,7 +2757,7 @@ impl FMP4Mux {
             // In fragment mode, each chunk is a full fragment. Otherwise, in chunk mode,
             // this fragment is filled if it is filled for the first non-EOS stream
             // that has a GOP inside this chunk
-            settings.chunk_duration.is_none()
+            !chunk_mode
                 || state
                     .streams
                     .iter()
@@ -2692,10 +2804,11 @@ impl FMP4Mux {
         gst::info!(
             CAT,
             imp = self,
-            "Starting to drain at {} (fragment start {}, fragment end {}, chunk start {}, chunk end {})",
+            "Starting to drain at {} (fragment start {}, fragment end {}, filled {}, chunk start {}, chunk end {})",
             chunk_start_pts,
             fragment_start_pts,
             fragment_end_pts.display(),
+            fragment_filled,
             chunk_start_pts.display(),
             settings.chunk_duration.map(|duration| chunk_start_pts + duration).display(),
         );
@@ -2747,6 +2860,9 @@ impl FMP4Mux {
                         gop.start_pts
                             >= if fragment_filled {
                                 fragment_end_pts
+                            } else if settings.chunk_mode == super::ChunkMode::Keyframe {
+                                // Stream after chunk can never be true here
+                                chunk_start_pts + (gop.end_pts - gop.start_pts)
                             } else {
                                 chunk_start_pts + settings.chunk_duration.unwrap()
                             }
@@ -3182,12 +3298,14 @@ impl FMP4Mux {
 
         // TODO: Write sidx boxes before moof and rewrite once offsets are known
 
+        let add_keyframe_meta = state.streams.len() == 1 && settings.enable_keyframe_meta;
         let sequence_number = state.sequence_number;
         // If this is the last chunk of a fragment then increment the sequence number for the
         // start of the next fragment.
-        if fragment_filled {
+        if fragment_filled || get_chunk_strategy(settings).is_keyframe() {
             state.sequence_number = state.sequence_number.wrapping_add(1);
         }
+
         let (mut fmp4_fragment_header, moof_offset) =
             boxes::create_fmp4_fragment_header(super::FragmentHeaderConfiguration {
                 variant: self.obj().class().as_ref().variant,
@@ -3230,16 +3348,49 @@ impl FMP4Mux {
                 .copy_into(buffer, gst::BufferCopyFlags::META, ..);
         }
 
+        let moof_start = moof_offset /* Accounts for `styp` */;
         let moof_offset = state.current_offset
             + fmp4_header.as_ref().map(|h| h.size()).unwrap_or(0) as u64
             + moof_offset;
-
         let buffers_len = interleaved_buffers.len();
+
         for (idx, buffer) in interleaved_buffers.iter_mut().enumerate() {
-            // Fix up buffer flags, all other buffers are DELTA_UNIT
+            let is_keyframe = !buffer.buffer.flags().contains(gst::BufferFlags::DELTA_UNIT);
+            let buffer_size = buffer.buffer.size() as u64;
             let buffer_ref = buffer.buffer.make_mut();
+
+            // Fix up buffer flags, all other buffers are DELTA_UNIT
             buffer_ref.unset_flags(gst::BufferFlags::all());
             buffer_ref.set_flags(gst::BufferFlags::DELTA_UNIT);
+
+            if add_keyframe_meta && is_keyframe {
+                let kf_length = buffer_size + (fmp4_fragment_header.size() as u64 - moof_start);
+                let kf_offset = moof_start;
+                let kf_duration = fmp4_fragment_header
+                    .duration()
+                    .expect("fragment duration should be valid here");
+
+                let header = fmp4_fragment_header.get_mut().unwrap();
+                let mut m =
+                    gst::meta::CustomMeta::add(header, "FMP4KeyframeMeta").map_err(|err| {
+                        gst::error!(
+                            CAT,
+                            imp = self,
+                            "Failed to add keyframe meta with err: {err}",
+                        );
+                        gst::FlowError::Error
+                    })?;
+
+                // We chunk on key frame boundaries, so we will only ever have one.
+                let s = gst::Structure::builder("keyframe")
+                    .field("keyframe-duration", kf_duration)
+                    .field("keyframe-length", kf_length)
+                    .field("keyframe-offset", kf_offset)
+                    .build();
+
+                m.mut_structure().set("keyframe", s);
+                m.mut_structure().set("eos", at_eos);
+            }
 
             // Set the marker flag for the last buffer of the segment
             if idx == buffers_len - 1 {
@@ -3404,7 +3555,7 @@ impl FMP4Mux {
     }
 
     /// Create all streams.
-    fn create_streams(&self, state: &mut State) -> Result<(), gst::FlowError> {
+    fn create_streams(&self, settings: &Settings, state: &mut State) -> Result<(), gst::FlowError> {
         for pad in self
             .obj()
             .sink_pads()
@@ -3676,6 +3827,26 @@ impl FMP4Mux {
 
             st_a.cmp(&st_b)
         });
+
+        if settings.enable_keyframe_meta {
+            let video_streams = state
+                .streams
+                .iter()
+                .filter(|s| {
+                    let s = s.caps.structure(0).unwrap();
+                    s.name().starts_with("video/")
+                })
+                .collect::<Vec<_>>();
+
+            if video_streams.is_empty() || video_streams.len() > 1 {
+                gst::element_error!(
+                    self.obj(),
+                    gst::StreamError::WrongType,
+                    ("Invalid configuration"),
+                    ["Only single stream video is allowed with keyframe meta enabled"]
+                );
+            }
+        }
 
         Ok(())
     }
@@ -4088,6 +4259,42 @@ impl ObjectImpl for FMP4Mux {
                     .default_value(DEFAULT_START_FRAGMENT_SEQUENCE_NUMBER)
                     .mutable_ready()
                     .build(),
+               /**
+                 * GstFMP4Mux:enable-keyframe-meta:
+                 *
+                 * Writes key frame meta for use by `hlscmafsink`. The meta is a
+                 * GstStructure with the name `FMP4KeyframeMeta` with the following
+                 * fields.
+                 *
+                 * * "keyframe" GST_TYPE_STRUCTURE
+                 * * "eos"      G_TYPE_BOOLEAN
+                 *
+                 * The "keyframe" GstStructure in turn has the following fields.
+                 *
+                 * * "keyframe-length"   G_TYPE_UINT64
+                 * * "keyframe-offset"   G_TYPE_UINT64
+                 * * "keyframe-duration" GST_TYPE_CLOCKTIME
+                 *
+                 * Since: plugins-rs-0.15.0
+                 */
+                glib::ParamSpecBoolean::builder("enable-keyframe-meta")
+                    .nick("Write key frame meta")
+                    .blurb("Writes key frame meta for use by `hlscmafsink`")
+                    .default_value(DEFAULT_ENABLE_KEYFRAME_META)
+                    .mutable_ready()
+                    .build(),
+               /**
+                 * GstFMP4Mux:chunk-mode:
+                 *
+                 * Chunks on duration or key frames.
+                 *
+                 * Since: plugins-rs-0.15.0
+                 */
+                glib::ParamSpecEnum::builder_with_default("chunk-mode", DEFAULT_CHUNK_MODE)
+                    .nick("Chunk mode")
+                    .blurb("Mode to control chunking on key frame or duration")
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -4113,6 +4320,7 @@ impl ObjectImpl for FMP4Mux {
                 let mut settings = self.settings.lock().unwrap();
                 let chunk_duration = value.get().expect("type checked upstream");
                 if settings.chunk_duration != chunk_duration {
+                    settings.chunk_mode = super::ChunkMode::Duration;
                     settings.chunk_duration = chunk_duration;
                     let latency = settings
                         .chunk_duration
@@ -4178,6 +4386,14 @@ impl ObjectImpl for FMP4Mux {
                 settings.start_fragment_sequence_number =
                     value.get().expect("type checked upstream");
             }
+            "enable-keyframe-meta" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.enable_keyframe_meta = value.get().expect("type checked upstream");
+            }
+            "chunk-mode" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.chunk_mode = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -4242,6 +4458,14 @@ impl ObjectImpl for FMP4Mux {
             "start-fragment-sequence-number" => {
                 let settings = self.settings.lock().unwrap();
                 settings.start_fragment_sequence_number.to_value()
+            }
+            "enable-keyframe-meta" => {
+                let settings = self.settings.lock().unwrap();
+                settings.enable_keyframe_meta.to_value()
+            }
+            "chunk-mode" => {
+                let settings = self.settings.lock().unwrap();
+                settings.chunk_mode.to_value()
             }
             _ => unimplemented!(),
         }
@@ -4401,8 +4625,24 @@ impl AggregatorImpl for FMP4Mux {
             }
             EventView::Caps(caps) => {
                 let caps = caps.caps_owned();
+                let s = caps.structure(0).unwrap();
 
                 gst::trace!(CAT, obj = aggregator_pad, "Received caps {}", caps);
+
+                if s.name().starts_with("audio/") {
+                    let settings = self.settings.lock().unwrap();
+                    let enable_keyframe_meta = settings.enable_keyframe_meta;
+                    drop(settings);
+
+                    if enable_keyframe_meta {
+                        gst::element_error!(
+                            self.obj(),
+                            gst::StreamError::WrongType,
+                            ("Invalid configuration"),
+                            ["Audio not allowed with keyframe meta enabled"]
+                        );
+                    }
+                }
 
                 // Only care of caps if streams have been setup and the
                 // caps actually change in an incompatible way
@@ -4649,7 +4889,7 @@ impl AggregatorImpl for FMP4Mux {
 
             // Create streams
             if state.streams.is_empty() {
-                self.create_streams(&mut state)?;
+                self.create_streams(&settings, &mut state)?;
             }
 
             self.calculate_fragment_end_pts(&settings, &mut state);

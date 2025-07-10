@@ -2380,6 +2380,109 @@ fn test_chunking_single_stream_gops_after_fragment_end_after_next_chunk_end() {
 }
 
 #[test]
+fn test_chunking_on_keyframe_single_stream() {
+    init();
+
+    let caps = gst::Caps::builder("video/x-h264")
+        .field("width", 1920i32)
+        .field("height", 1080i32)
+        .field("framerate", gst::Fraction::new(30, 1))
+        .field("stream-format", "avc")
+        .field("alignment", "au")
+        .field("codec_data", gst::Buffer::with_size(1).unwrap())
+        .build();
+
+    let mut h = gst_check::Harness::new("cmafmux");
+
+    h.element()
+        .unwrap()
+        .set_property("fragment-duration", 10.seconds());
+    h.element()
+        .unwrap()
+        .set_property_from_str("chunk-mode", "keyframe");
+
+    h.set_src_caps(caps);
+    h.play();
+
+    for i in 0..20 {
+        let mut buffer = gst::Buffer::with_size(1).unwrap();
+        {
+            // Buffer every 0.5ms and key frame every 2s.
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(i * 500.mseconds());
+            buffer.set_dts(i * 500.mseconds());
+            buffer.set_duration(500.mseconds());
+            if i % 4 != 0 {
+                buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+
+        assert_eq!(h.push(buffer), Ok(gst::FlowSuccess::Ok));
+    }
+
+    // Crank the clock: this should bring us to the end of the first fragment
+    h.crank_single_clock_wait().unwrap();
+
+    let header = h.pull().unwrap();
+    assert_eq!(
+        header.flags(),
+        gst::BufferFlags::HEADER | gst::BufferFlags::DISCONT
+    );
+
+    // For 10s fragment duration with key frame every 2s, we expect 4 chunks.
+    for chunk in 0..4 {
+        let chunk_header = h.pull().unwrap();
+
+        if chunk == 0 {
+            assert_eq!(chunk_header.flags(), gst::BufferFlags::HEADER);
+        } else {
+            assert_eq!(
+                chunk_header.flags(),
+                gst::BufferFlags::HEADER | gst::BufferFlags::DELTA_UNIT
+            );
+        }
+
+        assert_eq!(chunk_header.pts(), Some(chunk * 2.seconds()));
+        assert_eq!(chunk_header.dts(), Some(chunk * 2.seconds()));
+        assert_eq!(chunk_header.duration(), Some(2.seconds()));
+
+        for buffer_idx in 0..4 {
+            let buffer = h.pull().unwrap();
+
+            if buffer_idx == 3 {
+                assert_eq!(
+                    buffer.flags(),
+                    gst::BufferFlags::MARKER | gst::BufferFlags::DELTA_UNIT
+                );
+            } else {
+                assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
+            }
+
+            assert_eq!(
+                buffer.pts(),
+                Some((chunk * 4 + buffer_idx) * 500.mseconds())
+            );
+            assert_eq!(
+                buffer.dts(),
+                Some((chunk * 4 + buffer_idx) * 500.mseconds())
+            );
+            assert_eq!(buffer.duration(), Some(500.mseconds()));
+        }
+    }
+
+    h.push_event(gst::event::Eos::new());
+
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::StreamStart);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Caps);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Segment);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Eos);
+}
+
+#[test]
 fn test_early_eos() {
     init();
 

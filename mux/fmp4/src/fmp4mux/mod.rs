@@ -41,12 +41,17 @@ glib::wrapper! {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    if !gst::meta::CustomMeta::is_registered("FMP4KeyframeMeta") {
+        gst::meta::CustomMeta::register("FMP4KeyframeMeta", &[]);
+    }
+
     #[cfg(feature = "doc")]
     {
         FMP4Mux::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
         FMP4MuxPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
         HeaderUpdateMode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
         WriteEdtsMode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        ChunkMode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
     gst::Element::register(
         Some(plugin),
@@ -427,4 +432,34 @@ impl SplitNowEvent {
 
         Some(Ok(SplitNowEvent { chunk }))
     }
+}
+
+/**
+ * GstFMP4MuxChunkMode:
+ *
+ * Whether chunking is done based on duration or key frames.
+ */
+#[allow(clippy::upper_case_acronyms)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, glib::Enum)]
+#[repr(i32)]
+#[enum_type(name = "GstFMP4MuxChunkMode")]
+pub(crate) enum ChunkMode {
+    /**
+     * GstFMP4MuxChunkMode:none:
+     *
+     * Chunk mode not set.
+     */
+    None,
+    /**
+     * GstFMP4MuxChunkMode:duration:
+     *
+     * Chunk based on duration.
+     */
+    Duration,
+    /**
+     * GstFMP4MuxChunkMode:keyframe:
+     *
+     * Chunk on key frame boundaries.
+     */
+    Keyframe,
 }
