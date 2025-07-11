@@ -1390,10 +1390,10 @@ impl RtpRecv {
                         session_inner.add_caps(caps);
                     }
                 } else {
-                    gst::warning!(
+                    gst::debug!(
                         CAT,
                         obj = pad,
-                        "input caps are missing payload or clock-rate fields"
+                        "input caps are missing payload or clock-rate fields, need to use pt-map"
                     );
                 }
                 true
