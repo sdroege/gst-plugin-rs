@@ -712,15 +712,36 @@ impl RtpRecv {
             let mut sync_context = self.sync_context.lock().unwrap();
             let sync_context = sync_context.as_mut().unwrap();
             if !sync_context.has_clock_rate(rtp.ssrc()) {
-                let Some(clock_rate) = session_inner.session.clock_rate_from_pt(rtp.payload_type())
-                else {
-                    gst::warning!(
-                        CAT,
-                        imp = self,
-                        "Have no clock-rate for payload type {}",
-                        rtp.payload_type()
-                    );
-                    return Ok(RecvRtpBuffer::Drop);
+                let clock_rate = match session_inner.session.clock_rate_from_pt(rtp.payload_type())
+                {
+                    Some(clock_rate) => clock_rate,
+                    None => {
+                        // See RFC 5761 Section 4: An RTP packet with the marker bit
+                        // and a payload type in this range is potentially an RTCP
+                        // packet, especially if we don't know about the payload type.
+                        //
+                        // FIXME: If this turns out to be too weak / strong of a check
+                        // we could make use of explicit signalling of rtcp-mux via the
+                        // caps based on the a=rtcp-mux SDP attribute or similar.
+                        if rtp.marker_bit() && (64..=95).contains(&rtp.payload_type()) {
+                            // If this is a valid RTCP packet then it was muxed with the RTP stream and can be
+                            // handled just fine.
+                            if rtcp_types::Compound::parse(&mapped)
+                                .is_ok_and(|mut rtcp| rtcp.next().is_some_and(|rtcp| rtcp.is_ok()))
+                            {
+                                drop(mapped);
+                                return Ok(RecvRtpBuffer::IsRtcp(buffer));
+                            }
+                        }
+
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Have no clock-rate for payload type {}",
+                            rtp.payload_type()
+                        );
+                        return Ok(RecvRtpBuffer::Drop);
+                    }
                 };
                 sync_context.set_clock_rate(rtp.ssrc(), clock_rate);
             }
