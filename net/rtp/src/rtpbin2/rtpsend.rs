@@ -430,10 +430,10 @@ impl RtpSend {
                         session.add_caps(caps.caps_owned());
                     }
                 } else {
-                    gst::warning!(
+                    gst::debug!(
                         CAT,
                         obj = pad,
-                        "input caps are missing payload or clock-rate fields"
+                        "input caps are missing payload or clock-rate fields, need to use pt-map"
                     );
                 }
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
