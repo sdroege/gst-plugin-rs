@@ -1325,9 +1325,7 @@ impl Session {
             (n_members, rtcp_bw)
         };
 
-        let min_rtcp_interval = if we_sent {
-            Duration::ZERO
-        } else if self.profile.is_feedback() {
+        let min_rtcp_interval = if self.profile.is_feedback() {
             // RFC 4585 3.4d), 3.5.1
             //
             // If not the first RTCP then Tmin is initialized to 0, otherwise to 1s.
