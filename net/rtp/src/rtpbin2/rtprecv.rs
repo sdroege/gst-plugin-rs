@@ -712,10 +712,16 @@ impl RtpRecv {
             let mut sync_context = self.sync_context.lock().unwrap();
             let sync_context = sync_context.as_mut().unwrap();
             if !sync_context.has_clock_rate(rtp.ssrc()) {
-                let clock_rate = session_inner
-                    .session
-                    .clock_rate_from_pt(rtp.payload_type())
-                    .unwrap();
+                let Some(clock_rate) = session_inner.session.clock_rate_from_pt(rtp.payload_type())
+                else {
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Have no clock-rate for payload type {}",
+                        rtp.payload_type()
+                    );
+                    return Ok(RecvRtpBuffer::Drop);
+                };
                 sync_context.set_clock_rate(rtp.ssrc(), clock_rate);
             }
 
