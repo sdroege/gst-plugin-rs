@@ -169,6 +169,7 @@ pub struct PlaylistContext {
 pub struct State {
     context: Option<PlaylistContext>,
     stream: Option<super::HlsBaseSinkGioOutputStream>,
+    iframe_context: Option<PlaylistContext>,
 }
 
 #[derive(Default)]
@@ -423,9 +424,40 @@ impl HlsBaseSink {
         });
     }
 
+    pub fn open_iframe_playlist(
+        &self,
+        playlist: Playlist,
+        segment_template: String,
+        playlist_location: String,
+    ) {
+        let mut state = self.state.lock().unwrap();
+        let settings = self.settings.lock().unwrap();
+
+        state.iframe_context = Some(PlaylistContext {
+            pdt_base_utc: None,
+            pdt_base_running_time: None,
+            playlist,
+            old_segment_locations: Vec::new(),
+            segment_template,
+            playlist_location,
+            max_num_segment_files: settings.max_num_segment_files,
+            playlist_length: settings.playlist_length,
+            single_media_file: false,
+        });
+    }
+
     pub fn close_playlist(&self) {
         let mut state = self.state.lock().unwrap();
         if let Some(mut context) = state.context.take() {
+            if context.playlist.is_rendering() {
+                context
+                    .playlist
+                    .stop(self.settings.lock().unwrap().enable_endlist);
+                let _ = self.write_playlist(&mut context);
+            }
+        }
+
+        if let Some(mut context) = state.iframe_context.take() {
             if context.playlist.is_rendering() {
                 context
                     .playlist
@@ -453,13 +485,12 @@ impl HlsBaseSink {
         }
     }
 
-    pub fn get_fragment_stream(&self, fragment_id: u32) -> Option<(gio::OutputStream, String)> {
+    pub fn get_stream_location(&self, fragment_id: u32) -> Option<String> {
         let mut state = self.state.lock().unwrap();
         let context = match state.context.as_mut() {
             Some(context) => context,
             None => {
                 gst::error!(CAT, imp = self, "Playlist is not configured",);
-
                 return None;
             }
         };
@@ -474,6 +505,24 @@ impl HlsBaseSink {
                 }
             };
 
+            gst::trace!(CAT, imp = self, "Segment location formatted: {}", location);
+
+            Some(location)
+        } else {
+            Some(settings.single_media_file.as_ref().unwrap().clone())
+        }
+    }
+
+    pub fn get_fragment_stream(&self, fragment_id: u32) -> Option<(gio::OutputStream, String)> {
+        let location = self.get_stream_location(fragment_id)?;
+
+        let settings = self.settings.lock().unwrap();
+        let is_single_media_file = settings.single_media_file.is_some();
+        drop(settings);
+
+        let mut state = self.state.lock().unwrap();
+
+        if !is_single_media_file {
             let stream = self.obj().emit_by_name::<Option<gio::OutputStream>>(
                 SIGNAL_GET_FRAGMENT_STREAM,
                 &[&location],
@@ -482,25 +531,22 @@ impl HlsBaseSink {
             gst::trace!(CAT, imp = self, "Segment location formatted: {}", location);
 
             Some((stream, location))
+        } else if state.stream.is_none() {
+            let stream = self.obj().emit_by_name::<Option<gio::OutputStream>>(
+                SIGNAL_GET_FRAGMENT_STREAM,
+                &[&location],
+            )?;
+
+            let gios = super::HlsBaseSinkGioOutputStream::new(stream);
+            let stream = gios.upcast_ref::<gio::OutputStream>().clone();
+
+            state.stream = Some(gios);
+
+            Some((stream, location))
         } else {
-            let location = settings.single_media_file.as_ref().unwrap().clone();
-            if state.stream.is_none() {
-                let stream = self.obj().emit_by_name::<Option<gio::OutputStream>>(
-                    SIGNAL_GET_FRAGMENT_STREAM,
-                    &[&location],
-                )?;
-
-                let gios = super::HlsBaseSinkGioOutputStream::new(stream);
-                let stream = gios.upcast_ref::<gio::OutputStream>().clone();
-
-                state.stream = Some(gios);
-
-                Some((stream, location))
-            } else {
-                let gios = state.stream.as_ref().unwrap();
-                let stream = gios.upcast_ref::<gio::OutputStream>().clone();
-                Some((stream, location))
-            }
+            let gios = state.stream.as_ref().unwrap();
+            let stream = gios.upcast_ref::<gio::OutputStream>().clone();
+            Some((stream, location))
         }
     }
 
@@ -597,7 +643,7 @@ impl HlsBaseSink {
             }
         }
 
-        let (init_segment_br, segment_br) = self.byte_ranges(context, &segment);
+        let (init_segment_br, segment_br) = self.byte_ranges(&segment);
 
         context.playlist.add_segment(segment);
 
@@ -625,6 +671,48 @@ impl HlsBaseSink {
                     .build(),
             );
         })
+    }
+
+    pub fn add_iframe_segment(
+        &self,
+        location: &str,
+        segment: MediaSegment,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let mut state = self.state.lock().unwrap();
+        let context = match state.iframe_context.as_mut() {
+            Some(context) => context,
+            None => {
+                gst::error!(CAT, imp = self, "I-Frame playlist is not configured",);
+
+                return Err(gst::FlowError::Error);
+            }
+        };
+
+        let (init_segment_br, segment_br) = self.byte_ranges(&segment);
+
+        context.playlist.add_segment(segment);
+
+        if context.playlist.is_type_undefined() {
+            context.old_segment_locations.push(location.to_string());
+        }
+
+        self.write_playlist(context)?;
+
+        let mut s = gst::Structure::builder("hls-iframe-segment-added").field("location", location);
+        if let Some(br) = init_segment_br {
+            s = s.field("initialization-segment-byte-range", br);
+        }
+        if let Some(br) = segment_br {
+            s = s.field("segment-byte-range", br);
+        }
+
+        self.post_message(
+            gst::message::Element::builder(s.build())
+                .src(&*self.obj())
+                .build(),
+        );
+
+        Ok(gst::FlowSuccess::Ok)
     }
 
     fn write_playlist(
@@ -758,28 +846,25 @@ impl HlsBaseSink {
 
     fn byte_ranges(
         &self,
-        context: &PlaylistContext,
         segment: &MediaSegment,
     ) -> (Option<gst::Structure>, Option<gst::Structure>) {
         let mut init_segment_br = None;
         let mut segment_br = None;
 
-        if context.single_media_file {
-            if let Some(ref map) = segment.map {
-                if let Some(br) = &map.byte_range {
-                    let mut s = gst::Structure::new_empty("byte-range");
-                    s.set("length", br.length);
-                    s.set("offset", br.offset.unwrap());
-                    init_segment_br = Some(s);
-                }
-            }
-
-            if let Some(ref br) = segment.byte_range {
+        if let Some(ref map) = segment.map {
+            if let Some(br) = &map.byte_range {
                 let mut s = gst::Structure::new_empty("byte-range");
                 s.set("length", br.length);
                 s.set("offset", br.offset.unwrap());
-                segment_br = Some(s)
+                init_segment_br = Some(s);
             }
+        }
+
+        if let Some(ref br) = segment.byte_range {
+            let mut s = gst::Structure::new_empty("byte-range");
+            s.set("length", br.length);
+            s.set("offset", br.offset.unwrap());
+            segment_br = Some(s)
         }
 
         (init_segment_br, segment_br)

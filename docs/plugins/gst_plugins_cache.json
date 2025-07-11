@@ -4894,6 +4894,18 @@
                     }
                 },
                 "properties": {
+                    "iframe-playlist-location": {
+                        "blurb": "Location of the I-frame playlist file to write",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "init-location": {
                         "blurb": "Location of the init fragment file to write",
                         "conditionally-available": false,

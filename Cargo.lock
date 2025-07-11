@@ -3187,6 +3187,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "gio",
+ "glib",
  "gst-plugin-fmp4",
  "gst-plugin-version-helper",
  "gstreamer",
@@ -3196,6 +3197,7 @@ dependencies = [
  "gstreamer-pbutils",
  "gstreamer-video",
  "m3u8-rs",
+ "mp4-atom 0.9.0",
  "sprintf",
 ]
 
@@ -3282,7 +3284,7 @@ dependencies = [
  "gstreamer-pbutils",
  "gstreamer-tag",
  "gstreamer-video",
- "mp4-atom",
+ "mp4-atom 0.8.1",
  "num-integer",
  "tempfile",
  "url",
@@ -5689,6 +5691,19 @@ name = "more-asserts"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fafa6961cabd9c63bcd77a45d7e3b7f3b552b70417831fb0f56db717e72407e"
+
+[[package]]
+name = "mp4-atom"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2815527524bdcb8bd572214c2a37c1d019d1263d0590a0f242aa1b4c193e161"
+dependencies = [
+ "derive_more",
+ "num",
+ "paste",
+ "thiserror 1.0.69",
+ "tracing",
+]
 
 [[package]]
 name = "mp4-atom"
