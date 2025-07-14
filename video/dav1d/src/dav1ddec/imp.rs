@@ -901,7 +901,7 @@ unsafe impl dav1d::PictureAllocator for super::Dav1dDec {
             params.set_align(cmp::max(params.align(), dav1d::PICTURE_ALIGNMENT - 1));
             params.set_padding(cmp::max(params.padding(), dav1d::PICTURE_ALIGNMENT));
 
-            config.set_allocator(None, Some(&params));
+            config.set_allocator(None::<&gst::Allocator>, Some(&params));
             config.add_option(gst_video::BUFFER_POOL_OPTION_VIDEO_META);
 
             let aligned_width = info.width().next_multiple_of(128);
