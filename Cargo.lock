@@ -178,9 +178,9 @@ dependencies = [
 
 [[package]]
 name = "async-compression"
-version = "0.4.25"
+version = "0.4.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40f6024f3f856663b45fd0c9b6f2024034a702f453549449e0d84a305900dad4"
+checksum = "ddb939d66e4ae03cee6091612804ba446b12878410cfa17f785f4dd67d4014e8"
 dependencies = [
  "flate2",
  "futures-core",
@@ -378,9 +378,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-rs"
-version = "1.13.1"
+version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93fcc8f365936c834db5514fc45aee5b1202d677e6b40e48468aaaa8183ca8c7"
+checksum = "08b5d4e069cbc868041a64bd68dc8cb39a0d79585cd6c5a24caa8c2d622121be"
 dependencies = [
  "aws-lc-sys",
  "zeroize",
@@ -388,9 +388,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-sys"
-version = "0.29.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61b1d86e7705efe1be1b569bab41d4fa1e14e220b60a160f78de2db687add079"
+checksum = "dbfd150b5dbdb988bcc8fb1fe787eb6b7ee6180ca24da683b61ea5405f3d43ff"
 dependencies = [
  "bindgen 0.69.5",
  "cc",
@@ -787,7 +787,7 @@ dependencies = [
  "aws-smithy-types",
  "bytes",
  "fastrand",
- "h2 0.3.26",
+ "h2 0.3.27",
  "http 0.2.12",
  "http-body 0.4.6",
  "http-body 1.0.1",
@@ -1119,7 +1119,7 @@ dependencies = [
 [[package]]
 name = "cairo-rs"
 version = "0.21.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#7507de59b316bb4579c15f7d50b16e23d37c17e7"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#fb2e1c69322e128b8ca98b203a24a62764150d97"
 dependencies = [
  "bitflags 2.9.1",
  "cairo-sys-rs",
@@ -1130,7 +1130,7 @@ dependencies = [
 [[package]]
 name = "cairo-sys-rs"
 version = "0.21.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#7507de59b316bb4579c15f7d50b16e23d37c17e7"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#fb2e1c69322e128b8ca98b203a24a62764150d97"
 dependencies = [
  "glib-sys",
  "libc",
@@ -1271,9 +1271,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.40"
+version = "4.5.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40b6887a1d8685cebccf115538db5c0efe625ccac9696ad45c409d96566e910f"
+checksum = "be92d32e80243a54711e5d7ce823c35c41c9d929dc4ab58e1276f625841aadf9"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -1281,9 +1281,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.40"
+version = "4.5.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0c66c08ce9f0c698cbce5c0279d0bb6ac936d8674174fe48f736533b964f59e"
+checksum = "707eab41e9622f9139419d573eca0900137718000c517d47da73045f54331c3d"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1293,9 +1293,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.5.40"
+version = "4.5.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2c7947ae4cc3d851207c1adb5b5e260ff0cca11446b1d6d1423788e442257ce"
+checksum = "ef4f52386a59ca4c860f7393bcf8abd8dfd91ecccc0f774635ff68e92eeef491"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -1484,9 +1484,9 @@ dependencies = [
 
 [[package]]
 name = "crc32fast"
-version = "1.4.2"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a97769d94ddab943e4510d138150169a2758b5ef3eb191a9ee688de3e23ef7b3"
+checksum = "9481c1c90cbf2ac953f07c8d4a58aa3945c425b7185c9154d67a65e4230da511"
 dependencies = [
  "cfg-if",
 ]
@@ -2321,7 +2321,7 @@ dependencies = [
 [[package]]
 name = "gdk-pixbuf"
 version = "0.21.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#7507de59b316bb4579c15f7d50b16e23d37c17e7"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#fb2e1c69322e128b8ca98b203a24a62764150d97"
 dependencies = [
  "gdk-pixbuf-sys",
  "gio",
@@ -2332,7 +2332,7 @@ dependencies = [
 [[package]]
 name = "gdk-pixbuf-sys"
 version = "0.21.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#7507de59b316bb4579c15f7d50b16e23d37c17e7"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#fb2e1c69322e128b8ca98b203a24a62764150d97"
 dependencies = [
  "gio-sys",
  "glib-sys",
@@ -2344,7 +2344,7 @@ dependencies = [
 [[package]]
 name = "gdk4"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#11275eb20eb01bfd840578067e73b520b466cb1b"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#fb0ab2dbdb4d882a38e524d2dbcfd1d214a4e1d1"
 dependencies = [
  "cairo-rs",
  "gdk-pixbuf",
@@ -2358,7 +2358,7 @@ dependencies = [
 [[package]]
 name = "gdk4-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#11275eb20eb01bfd840578067e73b520b466cb1b"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#fb0ab2dbdb4d882a38e524d2dbcfd1d214a4e1d1"
 dependencies = [
  "cairo-sys-rs",
  "gdk-pixbuf-sys",
@@ -2374,7 +2374,7 @@ dependencies = [
 [[package]]
 name = "gdk4-wayland"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#11275eb20eb01bfd840578067e73b520b466cb1b"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#fb0ab2dbdb4d882a38e524d2dbcfd1d214a4e1d1"
 dependencies = [
  "gdk4",
  "gdk4-wayland-sys",
@@ -2386,7 +2386,7 @@ dependencies = [
 [[package]]
 name = "gdk4-wayland-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#11275eb20eb01bfd840578067e73b520b466cb1b"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#fb0ab2dbdb4d882a38e524d2dbcfd1d214a4e1d1"
 dependencies = [
  "glib-sys",
  "libc",
@@ -2396,7 +2396,7 @@ dependencies = [
 [[package]]
 name = "gdk4-win32"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#11275eb20eb01bfd840578067e73b520b466cb1b"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#fb0ab2dbdb4d882a38e524d2dbcfd1d214a4e1d1"
 dependencies = [
  "gdk4",
  "gdk4-win32-sys",
@@ -2409,7 +2409,7 @@ dependencies = [
 [[package]]
 name = "gdk4-win32-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#11275eb20eb01bfd840578067e73b520b466cb1b"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#fb0ab2dbdb4d882a38e524d2dbcfd1d214a4e1d1"
 dependencies = [
  "gdk4-sys",
  "glib-sys",
@@ -2420,7 +2420,7 @@ dependencies = [
 [[package]]
 name = "gdk4-x11"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#11275eb20eb01bfd840578067e73b520b466cb1b"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#fb0ab2dbdb4d882a38e524d2dbcfd1d214a4e1d1"
 dependencies = [
  "gdk4",
  "gdk4-x11-sys",
@@ -2432,7 +2432,7 @@ dependencies = [
 [[package]]
 name = "gdk4-x11-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#11275eb20eb01bfd840578067e73b520b466cb1b"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#fb0ab2dbdb4d882a38e524d2dbcfd1d214a4e1d1"
 dependencies = [
  "gdk4-sys",
  "glib-sys",
@@ -2507,7 +2507,7 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 [[package]]
 name = "gio"
 version = "0.21.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#7507de59b316bb4579c15f7d50b16e23d37c17e7"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#fb2e1c69322e128b8ca98b203a24a62764150d97"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -2523,7 +2523,7 @@ dependencies = [
 [[package]]
 name = "gio-sys"
 version = "0.21.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#7507de59b316bb4579c15f7d50b16e23d37c17e7"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#fb2e1c69322e128b8ca98b203a24a62764150d97"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -2535,7 +2535,7 @@ dependencies = [
 [[package]]
 name = "glib"
 version = "0.21.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#7507de59b316bb4579c15f7d50b16e23d37c17e7"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#fb2e1c69322e128b8ca98b203a24a62764150d97"
 dependencies = [
  "bitflags 2.9.1",
  "futures-channel",
@@ -2555,7 +2555,7 @@ dependencies = [
 [[package]]
 name = "glib-macros"
 version = "0.21.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#7507de59b316bb4579c15f7d50b16e23d37c17e7"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#fb2e1c69322e128b8ca98b203a24a62764150d97"
 dependencies = [
  "heck 0.5.0",
  "proc-macro-crate",
@@ -2567,7 +2567,7 @@ dependencies = [
 [[package]]
 name = "glib-sys"
 version = "0.21.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#7507de59b316bb4579c15f7d50b16e23d37c17e7"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#fb2e1c69322e128b8ca98b203a24a62764150d97"
 dependencies = [
  "libc",
  "system-deps",
@@ -2582,7 +2582,7 @@ checksum = "a8d1add55171497b4705a648c6b583acafb01d58050a51727785f0b2c8e0a2b2"
 [[package]]
 name = "gobject-sys"
 version = "0.21.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#7507de59b316bb4579c15f7d50b16e23d37c17e7"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#fb2e1c69322e128b8ca98b203a24a62764150d97"
 dependencies = [
  "glib-sys",
  "libc",
@@ -2610,7 +2610,7 @@ dependencies = [
 [[package]]
 name = "graphene-rs"
 version = "0.21.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#7507de59b316bb4579c15f7d50b16e23d37c17e7"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#fb2e1c69322e128b8ca98b203a24a62764150d97"
 dependencies = [
  "glib",
  "graphene-sys",
@@ -2620,7 +2620,7 @@ dependencies = [
 [[package]]
 name = "graphene-sys"
 version = "0.21.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#7507de59b316bb4579c15f7d50b16e23d37c17e7"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#fb2e1c69322e128b8ca98b203a24a62764150d97"
 dependencies = [
  "glib-sys",
  "libc",
@@ -2642,7 +2642,7 @@ dependencies = [
 [[package]]
 name = "gsk4"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#11275eb20eb01bfd840578067e73b520b466cb1b"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#fb0ab2dbdb4d882a38e524d2dbcfd1d214a4e1d1"
 dependencies = [
  "cairo-rs",
  "gdk4",
@@ -2656,7 +2656,7 @@ dependencies = [
 [[package]]
 name = "gsk4-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#11275eb20eb01bfd840578067e73b520b466cb1b"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#fb0ab2dbdb4d882a38e524d2dbcfd1d214a4e1d1"
 dependencies = [
  "cairo-sys-rs",
  "gdk4-sys",
@@ -3188,7 +3188,7 @@ dependencies = [
  "quinn",
  "quinn-proto",
  "rcgen",
- "rustls 0.23.28",
+ "rustls 0.23.29",
  "rustls-pemfile 2.2.0",
  "rustls-pki-types",
  "serial_test",
@@ -3509,7 +3509,7 @@ name = "gst-plugin-version-helper"
 version = "0.8.1"
 dependencies = [
  "chrono",
- "toml_edit 0.23.0",
+ "toml_edit 0.23.1",
 ]
 
 [[package]]
@@ -3665,7 +3665,7 @@ dependencies = [
 [[package]]
 name = "gstreamer"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "cfg-if",
  "futures-channel",
@@ -3691,7 +3691,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-allocators"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3702,7 +3702,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-allocators-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3714,7 +3714,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-analytics"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3725,7 +3725,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-analytics-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib-sys",
  "gstreamer-sys",
@@ -3736,7 +3736,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-app"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -3750,7 +3750,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-app-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib-sys",
  "gstreamer-base-sys",
@@ -3762,7 +3762,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-audio"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "cfg-if",
  "glib",
@@ -3777,7 +3777,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-audio-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3790,7 +3790,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-base"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "atomic_refcell",
  "cfg-if",
@@ -3803,7 +3803,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-base-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3815,7 +3815,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-check"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3825,7 +3825,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-check-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3837,7 +3837,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3850,7 +3850,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-egl"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3862,7 +3862,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-egl-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib-sys",
  "gstreamer-gl-sys",
@@ -3873,7 +3873,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3887,7 +3887,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-wayland"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3899,7 +3899,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-wayland-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib-sys",
  "gstreamer-gl-sys",
@@ -3910,7 +3910,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-x11"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3922,7 +3922,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-gl-x11-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib-sys",
  "gstreamer-gl-sys",
@@ -3933,7 +3933,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-net"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "gio",
  "glib",
@@ -3944,7 +3944,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-net-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "gio-sys",
  "glib-sys",
@@ -3956,7 +3956,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-pbutils"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3970,7 +3970,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-pbutils-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -3984,7 +3984,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-rtp"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib",
  "gstreamer",
@@ -3995,7 +3995,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-rtp-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib-sys",
  "gstreamer-base-sys",
@@ -4007,7 +4007,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-sdp"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib",
  "gstreamer",
@@ -4017,7 +4017,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-sdp-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib-sys",
  "gstreamer-sys",
@@ -4028,7 +4028,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "cfg-if",
  "glib-sys",
@@ -4040,7 +4040,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-tag"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib",
  "gstreamer",
@@ -4051,7 +4051,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-tag-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -4063,7 +4063,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-utils"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "gstreamer",
  "gstreamer-app",
@@ -4074,7 +4074,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-video"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "cfg-if",
  "futures-channel",
@@ -4090,7 +4090,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-video-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -4103,7 +4103,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-webrtc"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib",
  "gstreamer",
@@ -4115,7 +4115,7 @@ dependencies = [
 [[package]]
 name = "gstreamer-webrtc-sys"
 version = "0.24.0"
-source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#aacf9796521082ba94b2f4ea69a7a15d8da8d111"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#9e4e5dafee7fd5635bc46f5897bbea224ed5fa9f"
 dependencies = [
  "glib-sys",
  "gstreamer-sdp-sys",
@@ -4127,7 +4127,7 @@ dependencies = [
 [[package]]
 name = "gtk4"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#11275eb20eb01bfd840578067e73b520b466cb1b"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#fb0ab2dbdb4d882a38e524d2dbcfd1d214a4e1d1"
 dependencies = [
  "cairo-rs",
  "field-offset",
@@ -4147,7 +4147,7 @@ dependencies = [
 [[package]]
 name = "gtk4-macros"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#11275eb20eb01bfd840578067e73b520b466cb1b"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#fb0ab2dbdb4d882a38e524d2dbcfd1d214a4e1d1"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -4158,7 +4158,7 @@ dependencies = [
 [[package]]
 name = "gtk4-sys"
 version = "0.10.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#11275eb20eb01bfd840578067e73b520b466cb1b"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#fb0ab2dbdb4d882a38e524d2dbcfd1d214a4e1d1"
 dependencies = [
  "cairo-sys-rs",
  "gdk-pixbuf-sys",
@@ -4175,9 +4175,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.3.26"
+version = "0.3.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81fe527a889e1532da5c525686d96d4c2e74cdd345badf8dfef9f6b39dd5f5e8"
+checksum = "0beca50380b1fc32983fc1cb4587bfa4bb9e78fc259aad4a0032d2080309222d"
 dependencies = [
  "bytes",
  "fnv",
@@ -4419,7 +4419,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-util",
- "h2 0.3.26",
+ "h2 0.3.27",
  "http 0.2.12",
  "http-body 0.4.6",
  "httparse",
@@ -4520,7 +4520,7 @@ dependencies = [
  "hyper 1.6.0",
  "hyper-util",
  "log",
- "rustls 0.23.28",
+ "rustls 0.23.29",
  "rustls-native-certs 0.8.1",
  "rustls-pki-types",
  "tokio",
@@ -5854,7 +5854,7 @@ dependencies = [
 [[package]]
 name = "pango"
 version = "0.21.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#7507de59b316bb4579c15f7d50b16e23d37c17e7"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#fb2e1c69322e128b8ca98b203a24a62764150d97"
 dependencies = [
  "gio",
  "glib",
@@ -5865,7 +5865,7 @@ dependencies = [
 [[package]]
 name = "pango-sys"
 version = "0.21.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#7507de59b316bb4579c15f7d50b16e23d37c17e7"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#fb2e1c69322e128b8ca98b203a24a62764150d97"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -5876,7 +5876,7 @@ dependencies = [
 [[package]]
 name = "pangocairo"
 version = "0.21.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#7507de59b316bb4579c15f7d50b16e23d37c17e7"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#fb2e1c69322e128b8ca98b203a24a62764150d97"
 dependencies = [
  "cairo-rs",
  "glib",
@@ -5888,7 +5888,7 @@ dependencies = [
 [[package]]
 name = "pangocairo-sys"
 version = "0.21.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#7507de59b316bb4579c15f7d50b16e23d37c17e7"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#fb2e1c69322e128b8ca98b203a24a62764150d97"
 dependencies = [
  "cairo-sys-rs",
  "glib-sys",
@@ -6449,7 +6449,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustc-hash 2.1.1",
- "rustls 0.23.28",
+ "rustls 0.23.29",
  "socket2 0.5.10",
  "thiserror 2.0.12",
  "tokio",
@@ -6470,7 +6470,7 @@ dependencies = [
  "rand 0.9.1",
  "ring",
  "rustc-hash 2.1.1",
- "rustls 0.23.28",
+ "rustls 0.23.29",
  "rustls-pki-types",
  "rustls-platform-verifier",
  "slab",
@@ -6642,9 +6642,9 @@ dependencies = [
 
 [[package]]
 name = "rcgen"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "218a7fbb357f6da42c9fd3610b1a5128d087d460e5386eaa5040705c464611dc"
+checksum = "49bc8ffa8a832eb1d7c8000337f8b0d2f4f2f5ec3cf4ddc26f125e3ad2451824"
 dependencies = [
  "pem",
  "ring",
@@ -6752,7 +6752,7 @@ dependencies = [
  "encoding_rs",
  "futures-core",
  "futures-util",
- "h2 0.3.26",
+ "h2 0.3.27",
  "http 0.2.12",
  "http-body 0.4.6",
  "hyper 0.14.32",
@@ -6844,9 +6844,9 @@ dependencies = [
 
 [[package]]
 name = "rgb"
-version = "0.8.51"
+version = "0.8.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a457e416a0f90d246a4c3288bd7a25b2304ca727f253f95be383dd17af56be8f"
+checksum = "0c6a884d2998352bb4daf0183589aec883f16a6da1f4dde84d8e2e9a5409a1ce"
 dependencies = [
  "bytemuck",
 ]
@@ -7032,16 +7032,16 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.28"
+version = "0.23.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7160e3e10bf4535308537f3c4e1641468cd0e485175d6163087c0393c7d46643"
+checksum = "2491382039b29b9b11ff08b76ff6c97cf287671dbb74f0be44bda389fffe9bd1"
 dependencies = [
  "aws-lc-rs",
  "log",
  "once_cell",
  "ring",
  "rustls-pki-types",
- "rustls-webpki 0.103.3",
+ "rustls-webpki 0.103.4",
  "subtle",
  "zeroize",
 ]
@@ -7122,10 +7122,10 @@ dependencies = [
  "jni",
  "log",
  "once_cell",
- "rustls 0.23.28",
+ "rustls 0.23.29",
  "rustls-native-certs 0.8.1",
  "rustls-platform-verifier-android",
- "rustls-webpki 0.103.3",
+ "rustls-webpki 0.103.4",
  "security-framework 3.2.0",
  "security-framework-sys",
  "webpki-root-certs 0.26.11",
@@ -7161,9 +7161,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.3"
+version = "0.103.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4a72fe2bcf7a6ac6fd7d0b9e5cb68aeb7d4c0a0271730218b3e92d43b4eb435"
+checksum = "0a17884ae0c1b773f1ccd2bd4a8c72f16da897310a98b0e84bf349ad5ead92fc"
 dependencies = [
  "aws-lc-rs",
  "ring",
@@ -7267,9 +7267,9 @@ dependencies = [
 
 [[package]]
 name = "sdd"
-version = "3.0.8"
+version = "3.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "584e070911c7017da6cb2eb0788d09f43d789029b5877d3e5ecc8acf86ceee21"
+checksum = "62f5557d2bbddd5afd236ba7856b0e494f5acc7ce805bb0774cc5674b20a06b4"
 
 [[package]]
 name = "sdp-types"
@@ -7987,9 +7987,9 @@ dependencies = [
 
 [[package]]
 name = "test-with"
-version = "0.15.2"
+version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bb2a43a245ab793321d71ff9f2be21785999c9aa5b2ea93dc507e97572be843"
+checksum = "e3c82f52ec88a4992bd0c46b8ef271c070c52689bf34f7effae7a26708cbf13d"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",
@@ -8195,7 +8195,7 @@ version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e727b36a1a0e8b74c376ac2211e40c2c8af09fb4013c60d910495810f008e9b"
 dependencies = [
- "rustls 0.23.28",
+ "rustls 0.23.29",
  "tokio",
 ]
 
@@ -8244,7 +8244,7 @@ checksum = "edc5f74e248dc973e0dbb7b74c7e0d6fcc301c694ff50049504004ef4d0cdcd9"
 dependencies = [
  "futures-util",
  "log",
- "rustls 0.23.28",
+ "rustls 0.23.29",
  "rustls-native-certs 0.8.1",
  "rustls-pki-types",
  "tokio",
@@ -8311,9 +8311,9 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.23.0"
+version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54449f7f7569ce6f57cda7812361961c0f6a77f720802537b5618585b4a7ff4c"
+checksum = "b1f23a5f4511b296579b6c83e437fe85fa7ece22e3ec44e45ddb975bcf57c3dd"
 dependencies = [
  "indexmap 2.10.0",
  "toml_datetime 0.7.0",
@@ -8323,9 +8323,9 @@ dependencies = [
 
 [[package]]
 name = "toml_parser"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5c1c469eda89749d2230d8156a5969a69ffe0d6d01200581cdc6110674d293e"
+checksum = "97200572db069e74c512a14117b296ba0a80a30123fbbb5aa1f4a348f639ca30"
 dependencies = [
  "winnow",
 ]
@@ -8511,7 +8511,7 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.8.5",
- "rustls 0.23.28",
+ "rustls 0.23.29",
  "rustls-pki-types",
  "sha1",
  "thiserror 1.0.69",
@@ -8923,7 +8923,7 @@ dependencies = [
  "quinn",
  "quinn-proto",
  "ring",
- "rustls 0.23.28",
+ "rustls 0.23.29",
  "rustls-native-certs 0.8.1",
  "thiserror 2.0.12",
  "tokio",
@@ -9445,9 +9445,9 @@ checksum = "271414315aff87387382ec3d271b52d7ae78726f5d44ac98b4f4030c91880486"
 
 [[package]]
 name = "winnow"
-version = "0.7.11"
+version = "0.7.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74c7b26e3480b707944fc872477815d29a8e429d2f93a1ce000f5fa84a15cbcd"
+checksum = "f3edebf492c8125044983378ecb5766203ad3b4c2f7a922bd7dd207f6d443e95"
 dependencies = [
  "memchr",
 ]
@@ -9489,9 +9489,9 @@ dependencies = [
 
 [[package]]
 name = "xml-rs"
-version = "0.8.26"
+version = "0.8.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a62ce76d9b56901b19a74f19431b0d8b3bc7ca4ad685a746dfd78ca8f4fc6bda"
+checksum = "6fd8403733700263c6eb89f192880191f1b83e332f7a20371ddcf421c4a337c7"
 
 [[package]]
 name = "xmlparser"
