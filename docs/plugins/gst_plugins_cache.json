@@ -9809,7 +9809,7 @@
                 "long-name": "TT to CEA-608",
                 "pad-templates": {
                     "sink": {
-                        "caps": "text/x-raw:\napplication/x-json:\n         format: cea608\n",
+                        "caps": "text/x-raw:\n         format: utf8\napplication/x-json:\n         format: cea608\n",
                         "direction": "sink",
                         "presence": "always"
                     },
@@ -9890,7 +9890,7 @@
                 "klass": "Generic",
                 "pad-templates": {
                     "sink": {
-                        "caps": "text/x-raw:\n",
+                        "caps": "text/x-raw:\n         format: utf8\n",
                         "direction": "sink",
                         "presence": "always"
                     },

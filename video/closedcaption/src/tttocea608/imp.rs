@@ -576,7 +576,9 @@ impl ElementImpl for TtToCea608 {
             {
                 let caps = caps.get_mut().unwrap();
 
-                let s = gst::Structure::builder("text/x-raw").build();
+                let s = gst::Structure::builder("text/x-raw")
+                    .field("format", "utf8")
+                    .build();
                 caps.append_structure(s);
 
                 let s = gst::Structure::builder("application/x-json")

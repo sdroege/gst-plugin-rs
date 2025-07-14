@@ -37,7 +37,7 @@ fn test_non_timed_buffer() {
     init();
 
     let mut h = gst_check::Harness::new_parse("tttocea608 mode=pop-on");
-    h.set_src_caps_str("text/x-raw");
+    h.set_src_caps_str("text/x-raw,format=utf8");
 
     let inbuf = gst::Buffer::from_slice("Hello");
 
@@ -50,7 +50,7 @@ fn test_one_timed_buffer_and_eos() {
     init();
 
     let mut h = gst_check::Harness::new_parse("tttocea608 mode=pop-on");
-    h.set_src_caps_str("text/x-raw");
+    h.set_src_caps_str("text/x-raw,format=utf8");
 
     while h.events_in_queue() != 0 {
         let _event = h.pull_event().unwrap();
@@ -149,7 +149,7 @@ fn test_erase_display_memory_non_spliced() {
     init();
 
     let mut h = gst_check::Harness::new_parse("tttocea608 mode=pop-on");
-    h.set_src_caps_str("text/x-raw");
+    h.set_src_caps_str("text/x-raw,format=utf8");
 
     while h.events_in_queue() != 0 {
         let _event = h.pull_event().unwrap();
@@ -191,7 +191,7 @@ fn test_erase_display_memory_spliced() {
     init();
 
     let mut h = gst_check::Harness::new_parse("tttocea608 mode=pop-on");
-    h.set_src_caps_str("text/x-raw");
+    h.set_src_caps_str("text/x-raw,format=utf8");
 
     while h.events_in_queue() != 0 {
         let _event = h.pull_event().unwrap();
@@ -237,7 +237,7 @@ fn test_output_gaps() {
     init();
 
     let mut h = gst_check::Harness::new_parse("tttocea608 mode=pop-on");
-    h.set_src_caps_str("text/x-raw");
+    h.set_src_caps_str("text/x-raw,format=utf8");
 
     while h.events_in_queue() != 0 {
         let _event = h.pull_event().unwrap();
@@ -311,7 +311,7 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
     init();
 
     let mut h = gst_check::Harness::new_parse("tttocea608 mode=roll-up2");
-    h.set_src_caps_str("text/x-raw");
+    h.set_src_caps_str("text/x-raw,format=utf8");
 
     while h.events_in_queue() != 0 {
         let _event = h.pull_event().unwrap();
@@ -427,7 +427,7 @@ fn test_word_wrap_roll_up() {
     init();
 
     let mut h = gst_check::Harness::new_parse("tttocea608 mode=roll-up2 origin-column=24");
-    h.set_src_caps_str("text/x-raw");
+    h.set_src_caps_str("text/x-raw,format=utf8");
 
     while h.events_in_queue() != 0 {
         let _event = h.pull_event().unwrap();
