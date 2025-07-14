@@ -21,6 +21,7 @@ gst-net   = { workspace = true, features = ["v1_20"] }
 gst-rtp   = { workspace = true, features = ["v1_20"] }
 gst-video = { workspace = true, features = ["v1_20"] }
 futures = "0.3"
+glib.workspace = true
 gio.workspace = true
 hex = "0.4.3"
 log = "0.4"
@@ -38,6 +39,8 @@ tokio-util = "0.7.15"
 [dev-dependencies]
 gst-check = { workspace = true, features = ["v1_20"] }
 gst-app   = { workspace = true, features = ["v1_20"] }
+tokio = { version = "1", default-features = false, features = ["macros", "signal"] }
+itertools = "0.14"
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true
@@ -51,6 +54,22 @@ path = "src/lib.rs"
 static = []
 capi = []
 doc = []
+
+[[example]]
+name = "rtpbin2-send"
+path = "examples/rtpbin2-send.rs"
+
+[[example]]
+name = "rtpbin2-recv"
+path = "examples/rtpbin2-recv.rs"
+
+[[example]]
+name = "rtpbin2-send-bundle"
+path = "examples/rtpbin2-send-bundle.rs"
+
+[[example]]
+name = "rtpbin2-recv-bundle"
+path = "examples/rtpbin2-recv-bundle.rs"
 
 [package.metadata.capi]
 min_version = "0.9.21"
