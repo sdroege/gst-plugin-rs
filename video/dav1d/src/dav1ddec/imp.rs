@@ -55,6 +55,7 @@ const DEFAULT_INLOOP_FILTERS: InloopFilterType = InloopFilterType::empty();
 
 struct State {
     decoder: dav1d::Decoder,
+    configured_max_frame_delay: u32,
     input_state: gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     output_info: Option<gst_video::VideoInfo>,
     video_meta_supported: bool,
@@ -356,6 +357,20 @@ impl Dav1dDec {
             pic.height()
         );
 
+        let frame_latency =
+            self.estimate_frame_delay(state.configured_max_frame_delay, state.n_cpus as u32) as u64;
+
+        let (fps_n, fps_d) = match (
+            input_state.info().fps().numer(),
+            input_state.info().fps().denom(),
+        ) {
+            (0, _) => (30, 1), // Pretend we're at 30fps if we don't know latency
+            n => n,
+        };
+
+        let latency = frame_latency * (fps_d as u64).seconds() / (fps_n as u64);
+
+        gst::debug!(CAT, imp = self, "Reporting latency of {}", latency);
         drop(state_guard);
 
         let instance = self.obj();
@@ -416,6 +431,8 @@ impl Dav1dDec {
                 .map_err(|_| gst::FlowError::NotNegotiated)?;
             output_state.set_info(info);
         }
+
+        self.obj().set_latency(latency, None);
 
         instance.negotiate(output_state)?;
         let out_state = instance.output_state().unwrap();
@@ -915,64 +932,6 @@ impl ElementImpl for Dav1dDec {
 }
 
 impl VideoDecoderImpl for Dav1dDec {
-    fn src_query(&self, query: &mut gst::QueryRef) -> bool {
-        match query.view_mut() {
-            gst::QueryViewMut::Latency(q) => {
-                let state_guard = self.state.lock().unwrap();
-                let max_frame_delay = {
-                    let settings = self.settings.lock().unwrap();
-                    settings.max_frame_delay
-                };
-
-                match *state_guard {
-                    Some(ref state) => match state.output_info {
-                        Some(ref info) => {
-                            let mut upstream_latency = gst::query::Latency::new();
-
-                            if self.obj().sink_pad().peer_query(&mut upstream_latency) {
-                                let (live, mut min, mut max) = upstream_latency.result();
-                                // For autodetection: 1 if live, else whatever dav1d gives us
-                                let frame_latency: u64 = if max_frame_delay < 0 && live {
-                                    1
-                                } else {
-                                    self.estimate_frame_delay(
-                                        max_frame_delay as u32,
-                                        state.n_cpus as u32,
-                                    )
-                                    .into()
-                                };
-
-                                let fps_n = match info.fps().numer() {
-                                    0 => 30, // Pretend we're at 30fps if we don't know latency,
-                                    n => n,
-                                };
-
-                                let latency = frame_latency * (info.fps().denom() as u64).seconds()
-                                    / (fps_n as u64);
-
-                                gst::debug!(CAT, imp = self, "Reporting latency of {}", latency);
-
-                                min += latency;
-                                max = max.opt_add(latency);
-                                q.set(live, min, max);
-
-                                true
-                            } else {
-                                // peer latency query failed
-                                false
-                            }
-                        }
-                        // output info not available => fps unknown
-                        None => false,
-                    },
-                    // no state yet
-                    None => false,
-                }
-            }
-            _ => VideoDecoderImplExt::parent_src_query(self, query),
-        }
-    }
-
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         {
             let mut state_guard = self.state.lock().unwrap();
@@ -1009,6 +968,7 @@ impl VideoDecoderImpl for Dav1dDec {
 
         gst::info!(CAT, imp = self, "Detected {} logical CPUs", n_cpus);
 
+        // For autodetection: 1 if live, else whatever dav1d gives us
         if settings.max_frame_delay == -1 {
             let mut latency_query = gst::query::Latency::new();
             let mut is_live = false;
@@ -1040,6 +1000,7 @@ impl VideoDecoderImpl for Dav1dDec {
 
         *state_guard = Some(State {
             decoder,
+            configured_max_frame_delay: max_frame_delay,
             input_state: input_state.clone(),
             output_info: None,
             video_meta_supported: false,
