@@ -37,7 +37,7 @@ fn test_ttcea708_non_timed_buffer() {
     init();
 
     let mut h = gst_check::Harness::new_parse("tttocea708 mode=pop-on cea608-channel=1");
-    h.set_src_caps_str("text/x-raw");
+    h.set_src_caps_str("text/x-raw,format=utf8");
     h.set_sink_caps_str("closedcaption/x-cea-708,format=cc_data,framerate=30/1");
 
     let inbuf = gst::Buffer::from_slice("Hello");
@@ -66,7 +66,7 @@ fn test_tttocea708_one_timed_buffer_and_eos() {
     init();
 
     let mut h = gst_check::Harness::new_parse("tttocea708 mode=pop-on cea608-channel=1");
-    h.set_src_caps_str("text/x-raw");
+    h.set_src_caps_str("text/x-raw,format=utf8");
     h.set_sink_caps_str("closedcaption/x-cea-708,format=cc_data,framerate=30/1");
 
     while h.events_in_queue() != 0 {
@@ -162,7 +162,7 @@ fn test_tttocea708_output_gaps() {
     init();
 
     let mut h = gst_check::Harness::new_parse("tttocea708 mode=pop-on cea608-channel=1");
-    h.set_src_caps_str("text/x-raw");
+    h.set_src_caps_str("text/x-raw,format=utf8");
     h.set_sink_caps_str("closedcaption/x-cea-708,format=cc_data,framerate=30/1");
 
     while h.events_in_queue() != 0 {
@@ -250,7 +250,7 @@ fn test_tttocea708_large_input() {
     init();
 
     let mut h = gst_check::Harness::new_parse("tttocea708 mode=roll-up");
-    h.set_src_caps_str("text/x-raw");
+    h.set_src_caps_str("text/x-raw,format=utf8");
     h.set_sink_caps_str("closedcaption/x-cea-708,format=cc_data,framerate=60/1");
 
     while h.events_in_queue() != 0 {
