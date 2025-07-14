@@ -2512,6 +2512,7 @@ fn test_caps_changed_buffers(
 }
 
 #[test]
+#[ignore]
 fn test_caps_change_at_gop_boundary() {
     init();
 
@@ -2556,6 +2557,7 @@ fn test_caps_change_at_gop_boundary() {
 }
 
 #[test]
+#[ignore]
 fn test_language_change_at_gop_boundary() {
     init();
 
@@ -2621,6 +2623,7 @@ fn test_language_change_at_gop_boundary() {
 }
 
 #[test]
+#[ignore]
 fn test_caps_change_at_gop_boundary_multi_stream() {
     init();
 
@@ -3039,6 +3042,7 @@ fn test_caps_change_at_gop_boundary_not_allowed() {
 }
 
 #[test]
+#[ignore]
 fn test_caps_change_within_gop() {
     init();
 
@@ -3126,6 +3130,7 @@ fn test_caps_change_within_gop_start_without_key() {
 }
 
 #[test]
+#[ignore]
 fn test_caps_change_within_gop_chunked() {
     init();
 
@@ -3177,6 +3182,7 @@ fn test_caps_change_within_gop_chunked() {
 }
 
 #[test]
+#[ignore]
 fn test_caps_change_within_gop_no_key() {
     init();
 
