@@ -62,6 +62,7 @@ struct State {
     // while passing frames to it to allow unlocking the state as the decoder
     // will call back into the element for allocations.
     decoder: Option<dav1d::Decoder<super::Dav1dDec>>,
+    configured_max_frame_delay: u32,
     input_state: gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     output_state:
         Option<gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>>,
@@ -825,6 +826,7 @@ unsafe impl dav1d::PictureAllocator for super::Dav1dDec {
         let colorimetry = imp.colorimetry_from_picture_parameters(params, &state.input_state);
         let chroma_site = imp.chroma_site_from_picture_parameters(params, &state.input_state);
 
+        let mut new_output_state = false;
         if state.output_state.as_ref().is_none_or(|state| {
             let info = state.info();
             info.format() != format
@@ -876,6 +878,7 @@ unsafe impl dav1d::PictureAllocator for super::Dav1dDec {
                 return Err(dav1d::Error::InvalidArgument);
             };
             state.output_state = Some(output_state.clone());
+            new_output_state = true;
 
             // At this point either a pool is available and we can directly pass pool buffers to
             // downstream, or we create our own internal pool now from which we allocate and then
@@ -934,7 +937,34 @@ unsafe impl dav1d::PictureAllocator for super::Dav1dDec {
         }
 
         // Must be set now
-        let pool = state.output_pool.as_ref().unwrap();
+        let pool = state.output_pool.as_ref().unwrap().clone();
+        let output_state = output_state.clone();
+
+        // Report the new latency
+        if new_output_state {
+            let frame_latency = self
+                .imp()
+                .estimate_frame_delay(state.configured_max_frame_delay, state.n_cpus as u32)
+                as u64;
+
+            let (fps_n, fps_d) = match (
+                output_state.info().fps().numer(),
+                output_state.info().fps().denom(),
+            ) {
+                (0, _) => (30, 1), // Pretend we're at 30fps if we don't know latency
+                n => n,
+            };
+
+            let latency = frame_latency * (fps_d as u64).seconds() / (fps_n as u64);
+
+            gst::debug!(CAT, obj = self, "Reporting latency of {}", latency);
+
+            drop(state_guard);
+
+            self.set_latency(latency, None);
+        } else {
+            drop(state_guard);
+        }
 
         let Ok(buffer) = pool.acquire_buffer(None) else {
             gst::error!(CAT, obj = self, "Failed to acquire buffer");
@@ -1164,63 +1194,6 @@ impl ElementImpl for Dav1dDec {
 }
 
 impl VideoDecoderImpl for Dav1dDec {
-    fn src_query(&self, query: &mut gst::QueryRef) -> bool {
-        match query.view_mut() {
-            gst::QueryViewMut::Latency(q) => {
-                let state_guard = self.state.lock().unwrap();
-                let max_frame_delay = {
-                    let settings = self.settings.lock().unwrap();
-                    settings.max_frame_delay
-                };
-
-                let n_cpus_and_fps = match *state_guard {
-                    Some(ref state) => {
-                        let fps = state.output_state.as_ref().map(|s| s.info().fps());
-
-                        fps.map(|fps| (state.n_cpus, fps))
-                    }
-                    None => None,
-                };
-                drop(state_guard);
-
-                if let Some((n_cpus, fps)) = n_cpus_and_fps {
-                    let mut upstream_latency = gst::query::Latency::new();
-
-                    if self.obj().sink_pad().peer_query(&mut upstream_latency) {
-                        let (live, mut min, mut max) = upstream_latency.result();
-                        // For autodetection: 1 if live, else whatever dav1d gives us
-                        let frame_latency = if max_frame_delay < 0 && live {
-                            1
-                        } else {
-                            self.estimate_frame_delay(max_frame_delay as u32, n_cpus as u32)
-                                .into()
-                        };
-
-                        let (fps_n, fps_d) = match (fps.numer(), fps.denom()) {
-                            (0, _) => (30, 1), // Pretend we're at 30fps if we don't know latency
-                            n => n,
-                        };
-
-                        let latency = frame_latency * (fps_d as u64).seconds() / (fps_n as u64);
-
-                        gst::debug!(CAT, imp = self, "Reporting latency of {}", latency);
-
-                        min += latency;
-                        max = max.opt_add(latency);
-                        q.set(live, min, max);
-
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            }
-            _ => VideoDecoderImplExt::parent_src_query(self, query),
-        }
-    }
-
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         {
             let mut state_guard = self.state.lock().unwrap();
@@ -1257,6 +1230,7 @@ impl VideoDecoderImpl for Dav1dDec {
 
         gst::info!(CAT, imp = self, "Detected {} logical CPUs", n_cpus);
 
+        // For autodetection: 1 if live, else whatever dav1d gives us
         if settings.max_frame_delay == -1 {
             let mut latency_query = gst::query::Latency::new();
             let mut is_live = false;
@@ -1290,6 +1264,7 @@ impl VideoDecoderImpl for Dav1dDec {
 
         *state_guard = Some(State {
             decoder: Some(decoder),
+            configured_max_frame_delay: max_frame_delay,
             input_state: input_state.clone(),
             output_state: None,
             output_pool: None,
