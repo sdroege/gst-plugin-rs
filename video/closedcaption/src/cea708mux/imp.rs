@@ -532,9 +532,10 @@ impl AggregatorImpl for Cea708Mux {
             return Some(buffer);
         };
         let segment = aggregator_pad.segment();
+
         segment
             .downcast_ref::<gst::ClockTime>()
-            .map(|segment| segment.clip(pts, pts))
+            .and_then(|segment| segment.clip(pts, pts))
             .map(|_| buffer)
     }
 }
