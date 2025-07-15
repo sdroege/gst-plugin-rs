@@ -6018,9 +6018,9 @@ dependencies = [
 
 [[package]]
 name = "rtcp-types"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce5248489db464de29835170cd1f6e19933146b0016789effc59cb53d9f13844"
+checksum = "d0f21b493eabbc715ef2107c4e022874c06769047b3008a9b645a86ea8048f61"
 dependencies = [
  "thiserror 1.0.69",
 ]
