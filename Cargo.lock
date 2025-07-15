@@ -3185,7 +3185,6 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-check",
  "itertools 0.14.0",
- "once_cell",
  "quinn",
  "quinn-proto",
  "rcgen",
