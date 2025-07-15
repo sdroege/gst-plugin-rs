@@ -26,7 +26,7 @@ hex = "0.4.3"
 log = "0.4"
 rand = { version = "0.9", default-features = false, features = ["std", "std_rng", "thread_rng" ] }
 rtp-types = { version = "0.1" }
-rtcp-types = { version = "0.1" }
+rtcp-types = { version = "0.2" }
 slab = "0.4.9"
 smallvec = { version = "1.11", features = ["union", "write", "const_generics", "const_new"] }
 thiserror = "2"

@@ -731,7 +731,7 @@ impl Session {
                         );
                     }
                 }
-                Ok(Packet::TransportFeedback(_)) | Ok(Packet::Unknown(_)) => (),
+                Ok(Packet::TransportFeedback(_)) | Ok(Packet::Xr(_)) | Ok(Packet::Unknown(_)) => (),
                 // TODO: in RFC4585 profile, need to listen for feedback messages and remove any
                 // that we would have sent
                 Err(_) => (),
