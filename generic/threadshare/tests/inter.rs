@@ -17,12 +17,14 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
-use futures::channel::oneshot;
+use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
 use gst::prelude::*;
 
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, AtomicU32, Ordering},
+    Arc,
+};
 use std::time::Duration;
 
 fn init() {
@@ -470,4 +472,246 @@ fn one_to_many_up_first() {
 
     // pipe_down_3 was set to Playing after pipe_up was shutdown
     assert!(samples_3.load(Ordering::SeqCst) == 0);
+}
+
+#[test]
+fn changing_inter_ctx() {
+    init();
+
+    let pipe_up1 = gst::Pipeline::with_name("upstream1::changing_inter_ctx");
+    let src1 = gst::ElementFactory::make("audiotestsrc")
+        .name("testsrc1::changing_inter_ctx")
+        .property("is-live", true)
+        .build()
+        .unwrap();
+    let capsfilter1 = gst::ElementFactory::make("capsfilter")
+        .name("capsfilter1::one_to_one_down_first")
+        .property(
+            "caps",
+            gst::Caps::builder("audio/x-raw")
+                .field("channels", 1i32)
+                .build(),
+        )
+        .build()
+        .unwrap();
+    let intersink1 = gst::ElementFactory::make("ts-intersink")
+        .name("intersink1::changing_inter_ctx")
+        .property("inter-context", "inter1::changing_inter_ctx")
+        .build()
+        .unwrap();
+
+    let upstream1_elems = [&src1, &capsfilter1, &intersink1];
+    pipe_up1.add_many(upstream1_elems).unwrap();
+    gst::Element::link_many(upstream1_elems).unwrap();
+
+    let pipe_up2 = gst::Pipeline::with_name("upstream2::changing_inter_ctx");
+    let src2 = gst::ElementFactory::make("audiotestsrc")
+        .name("testsrc2::changing_inter_ctx")
+        .property("is-live", true)
+        .build()
+        .unwrap();
+    let capsfilter2 = gst::ElementFactory::make("capsfilter")
+        .name("capsfilter2::one_to_one_down_first")
+        .property(
+            "caps",
+            gst::Caps::builder("audio/x-raw")
+                .field("channels", 2i32)
+                .build(),
+        )
+        .build()
+        .unwrap();
+    let intersink2 = gst::ElementFactory::make("ts-intersink")
+        .name("intersink2::changing_inter_ctx")
+        .property("inter-context", "inter2::changing_inter_ctx")
+        .build()
+        .unwrap();
+
+    let upstream2_elems = [&src2, &capsfilter2, &intersink2];
+    pipe_up2.add_many(upstream2_elems).unwrap();
+    gst::Element::link_many(upstream2_elems).unwrap();
+
+    let pipe_down = gst::Pipeline::with_name("downstream::changing_inter_ctx");
+    let intersrc = gst::ElementFactory::make("ts-intersrc")
+        .name("intersrc::changing_inter_ctx")
+        .property("context", "inter::changing_inter_ctx")
+        .property("context-wait", 20u32)
+        .build()
+        .unwrap();
+    let appsink = gst_app::AppSink::builder()
+        .name("appsink::changing_inter_ctx")
+        .build();
+
+    let downstream_elems = [&intersrc, appsink.upcast_ref()];
+    pipe_down.add_many(downstream_elems).unwrap();
+    gst::Element::link_many(downstream_elems).unwrap();
+
+    pipe_up1.set_base_time(gst::ClockTime::ZERO);
+    pipe_up1.set_start_time(gst::ClockTime::NONE);
+    pipe_up2.set_base_time(gst::ClockTime::ZERO);
+    pipe_up2.set_start_time(gst::ClockTime::NONE);
+    pipe_down.set_base_time(gst::ClockTime::ZERO);
+    pipe_down.set_start_time(gst::ClockTime::NONE);
+
+    let (mut caps_tx, mut caps_rx) = mpsc::channel(1);
+    let (mut n_buffers_tx, mut n_buffers_rx) = mpsc::channel(1);
+    let starting = Arc::new(AtomicBool::new(true));
+    appsink.set_callbacks(
+        gst_app::AppSinkCallbacks::builder()
+            .new_sample({
+                let starting = starting.clone();
+                let mut cur_caps = None;
+                let mut samples = 0;
+                let mut start_count = 0;
+                move |appsink| {
+                    if starting.fetch_and(false, Ordering::SeqCst) {
+                        cur_caps = None;
+                        samples = 0;
+                        start_count += 1;
+                    }
+
+                    let sample = appsink.pull_sample().unwrap();
+                    if let Some(caps) = sample.caps() {
+                        if cur_caps.as_ref().is_none() {
+                            cur_caps = Some(caps.to_owned());
+                            caps_tx.try_send(caps.to_owned()).unwrap();
+                        }
+                    }
+
+                    samples += 1;
+
+                    if samples == 10 {
+                        n_buffers_tx.try_send(()).unwrap();
+                        if start_count == 2 {
+                            return Err(gst::FlowError::Eos);
+                        }
+                    }
+
+                    Ok(gst::FlowSuccess::Ok)
+                }
+            })
+            .new_event(move |appsink| {
+                let obj = appsink.pull_object().unwrap();
+                if let Some(event) = obj.downcast_ref::<gst::Event>() {
+                    if let gst::EventView::FlushStop(_) = event.view() {
+                        println!("inter::changing_inter_ctx: appsink got FlushStop");
+                        starting.store(true, Ordering::SeqCst);
+                    }
+                }
+                // let basesink handle the event
+                false
+            })
+            .build(),
+    );
+
+    // Starting upstream first
+    pipe_up1.set_state(gst::State::Playing).unwrap();
+    pipe_up2.set_state(gst::State::Playing).unwrap();
+
+    // Connect downstream to pipe_up1 initially
+    intersrc.set_property("inter-context", "inter1::changing_inter_ctx");
+    pipe_down.set_state(gst::State::Playing).unwrap();
+
+    let mut bus_up1_stream = pipe_up1.bus().unwrap().stream();
+    let mut bus_up2_stream = pipe_up1.bus().unwrap().stream();
+    let mut bus_down_stream = pipe_down.bus().unwrap().stream();
+
+    futures::executor::block_on(async {
+        use gst::MessageView::*;
+
+        loop {
+            futures::select! {
+                caps = caps_rx.next() => {
+                    println!("inter::changing_inter_ctx: caps 1: {caps:?}");
+                    if let Some(caps) = caps {
+                        let s = caps.structure(0).unwrap();
+                        assert_eq!(s.get::<i32>("channels").unwrap(), 1);
+                    }
+                }
+                _ = n_buffers_rx.next() => {
+                    println!("inter::changing_inter_ctx: got n buffers 1");
+                    break;
+                }
+                msg = bus_up1_stream.next() => {
+                    let Some(msg) = msg else { continue };
+                    match msg.view() {
+                        Latency(_) => {
+                            let _ = pipe_up1.recalculate_latency();
+                        }
+                        Error(err) => unreachable!("inter::changing_inter_ctx {err:?}"),
+                        _ => (),
+                    }
+                }
+                msg = bus_up2_stream.next() => {
+                    let Some(msg) = msg else { continue };
+                    match msg.view() {
+                        Latency(_) => {
+                            let _ = pipe_up2.recalculate_latency();
+                        }
+                        Error(err) => unreachable!("inter::changing_inter_ctx {err:?}"),
+                        _ => (),
+                    }
+                }
+                msg = bus_down_stream.next() => {
+                    let Some(msg) = msg else { continue };
+                    match msg.view() {
+                        Latency(_) => {
+                            let _ = pipe_down.recalculate_latency();
+                        }
+                        Error(err) => unreachable!("inter::changing_inter_ctx {err:?}"),
+                        _ => (),
+                    }
+                }
+            };
+        }
+    });
+
+    println!("inter::changing_inter_ctx: changing now");
+    intersrc.set_property("inter-context", "inter2::changing_inter_ctx");
+
+    futures::executor::block_on(async {
+        use gst::MessageView::*;
+
+        loop {
+            println!("changing_inter_ctx: iter 2");
+
+            futures::select! {
+                caps = caps_rx.next() => {
+                    println!("inter::changing_inter_ctx: caps 2: {caps:?}");
+                    if let Some(caps) = caps {
+                        let s = caps.structure(0).unwrap();
+                        assert_eq!(s.get::<i32>("channels").unwrap(), 2);
+                    }
+                }
+                _ = n_buffers_rx.next() => {
+                    println!("inter::changing_inter_ctx: got n buffers 2");
+                    break;
+                }
+                msg = bus_up2_stream.next() => {
+                    let Some(msg) = msg else { continue };
+                    match msg.view() {
+                        Latency(_) => {
+                            let _ = pipe_up2.recalculate_latency();
+                        }
+                        Error(err) => unreachable!("inter::changing_inter_ctx {err:?}"),
+                        _ => (),
+                    }
+                }
+                msg = bus_down_stream.next() => {
+                    let Some(msg) = msg else { continue };
+                    match msg.view() {
+                        Latency(_) => {
+                            let _ = pipe_down.recalculate_latency();
+                        }
+                        Error(err) => unreachable!("inter::changing_inter_ctx {err:?}"),
+                        _ => (),
+                    }
+                }
+            };
+        }
+    });
+
+    println!("inter::changing_inter_ctx: stopping");
+    pipe_down.set_state(gst::State::Null).unwrap();
+    pipe_up2.set_state(gst::State::Null).unwrap();
+    pipe_up1.set_state(gst::State::Null).unwrap();
 }

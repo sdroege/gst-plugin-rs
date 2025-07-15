@@ -16622,7 +16622,7 @@
                         "blurb": "Context name of the inter elements to share with",
                         "conditionally-available": false,
                         "construct": false,
-                        "construct-only": true,
+                        "construct-only": false,
                         "controllable": false,
                         "default": "",
                         "mutable": "null",

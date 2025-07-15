@@ -39,7 +39,7 @@ getifaddrs = "0.2"
 
 [dev-dependencies]
 gst-check.workspace = true
-gst-app.workspace = true
+gst-app = { workspace = true, features = [ "v1_20" ] }
 # Used by examples
 clap = { version = "4", features = ["derive"] }
 flume = "0.11"

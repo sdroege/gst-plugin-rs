@@ -18,8 +18,6 @@
  * to function as though they were one without having to manually shuttle buffers,
  * events, queries, etc.
  *
- * This doesn't support dynamically changing `ts-intersink` for now.
- *
  * The `ts-intersink` & `ts-intersrc` elements take advantage of the `threadshare`
  * runtime, reducing the number of threads & context switches which would be
  * necessary with other forms of inter-pipelines elements.
@@ -534,6 +532,123 @@ impl InterSrc {
         local_ctx.as_ref().expect("set in prepare").shared.clone()
     }
 
+    fn join_inter_ctx_blocking(
+        &self,
+        inter_ctx_name: &str,
+        ts_ctx: Context,
+        dataqueue: DataQueue,
+    ) -> Result<(), gst::ErrorMessage> {
+        let elem = self.obj();
+
+        let inter_src_capacity = self.settings.lock().unwrap().inter_src_capacity;
+
+        let src_ctx = block_on(InterContextSrc::add(
+            inter_ctx_name.to_string(),
+            inter_src_capacity,
+            dataqueue.clone(),
+            elem.clone(),
+        ));
+
+        if self
+            .task
+            .prepare(
+                InterSrcTask::new(elem.clone(), dataqueue.clone()),
+                ts_ctx.clone(),
+            )
+            .block_on()
+            .is_err()
+        {
+            return Err(gst::error_msg!(
+                gst::ResourceError::OpenRead,
+                ["Failed to start Task"]
+            ));
+        }
+
+        *self.src_ctx.lock().unwrap() = Some(src_ctx);
+
+        Ok(())
+    }
+
+    fn change_inter_ctx_blocking(&self, target_inter_ctx: &str) -> Result<(), gst::ErrorMessage> {
+        if self.obj().current_state() <= gst::State::Null {
+            // Element not prepared yet => nothing to change
+            return Ok(());
+        }
+
+        let seqnum = gst::Seqnum::next();
+
+        if self.obj().current_state() != gst::State::Ready {
+            if let Err(err) = self.task.stop().block_on() {
+                return Err(gst::error_msg!(
+                    gst::ResourceError::Failed,
+                    ["Failed to stop current Task: {err}"]
+                ));
+            }
+
+            self.srcpad
+                .gst_pad()
+                .push_event(gst::event::FlushStart::builder().seqnum(seqnum).build());
+        }
+
+        if let Err(err) = self.task.unprepare().block_on() {
+            return Err(gst::error_msg!(
+                gst::ResourceError::Failed,
+                ["Failed to unprepare current Task: {err}"]
+            ));
+        }
+
+        // Remove the InterContextSrc from the InterContext
+        drop(self.src_ctx.lock().unwrap().take());
+
+        *self.upstream_latency.lock().unwrap() = None;
+
+        let dataqueue = self
+            .dataqueue
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("set in prepare");
+        let ts_ctx = self.ts_ctx.lock().unwrap().clone().expect("set in prepare");
+
+        gst::info!(
+            CAT,
+            imp = self,
+            "Joining new inter-context {target_inter_ctx}"
+        );
+
+        self.join_inter_ctx_blocking(target_inter_ctx, ts_ctx, dataqueue)?;
+
+        match self.obj().current_state() {
+            gst::State::Paused => {
+                self.srcpad
+                    .gst_pad()
+                    .push_event(gst::event::FlushStop::builder(true).seqnum(seqnum).build());
+
+                if let Err(err) = self.task.pause().block_on() {
+                    return Err(gst::error_msg!(
+                        gst::ResourceError::Failed,
+                        ["Failed to set new Task in Pause: {err}"]
+                    ));
+                }
+            }
+            gst::State::Playing => {
+                self.srcpad
+                    .gst_pad()
+                    .push_event(gst::event::FlushStop::builder(true).seqnum(seqnum).build());
+
+                if let Err(err) = self.task.start().block_on() {
+                    return Err(gst::error_msg!(
+                        gst::ResourceError::Failed,
+                        ["Failed to start new Task: {err}"]
+                    ));
+                }
+            }
+            _ => (),
+        }
+
+        Ok(())
+    }
+
     // Sets the upstream latency without blocking the caller.
     pub fn set_upstream_latency(&self, up_latency: gst::ClockTime) {
         if let Some(ref ts_ctx) = *self.ts_ctx.lock().unwrap() {
@@ -585,6 +700,7 @@ impl InterSrc {
                 ["Failed to acquire Context: {err}"]
             )
         })?;
+        *self.ts_ctx.lock().unwrap() = Some(ts_ctx.clone());
 
         let dataqueue = DataQueue::new(
             &self.obj().clone().upcast(),
@@ -605,38 +721,13 @@ impl InterSrc {
                 Some(settings.max_size_time)
             },
         );
+        *self.dataqueue.lock().unwrap() = Some(dataqueue.clone());
 
-        let obj = self.obj().clone();
-        let (ctx_name, inter_src_capacity) = {
-            let settings = self.settings.lock().unwrap();
-            (settings.inter_context.clone(), settings.inter_src_capacity)
-        };
+        let inter_ctx_name = self.settings.lock().unwrap().inter_context.to_string();
+        self.join_inter_ctx_blocking(&inter_ctx_name, ts_ctx, dataqueue)?;
 
-        block_on(async move {
-            let imp = obj.imp();
-            let src_ctx =
-                InterContextSrc::add(ctx_name, inter_src_capacity, dataqueue.clone(), obj.clone())
-                    .await;
-
-            *imp.src_ctx.lock().unwrap() = Some(src_ctx);
-            *imp.ts_ctx.lock().unwrap() = Some(ts_ctx.clone());
-            *imp.dataqueue.lock().unwrap() = Some(dataqueue.clone());
-
-            if imp
-                .task
-                .prepare(InterSrcTask::new(obj.clone(), dataqueue), ts_ctx)
-                .await
-                .is_ok()
-            {
-                gst::debug!(CAT, imp = imp, "Prepared");
-                Ok(())
-            } else {
-                Err(gst::error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Failed to start Task"]
-                ))
-            }
-        })
+        gst::debug!(CAT, imp = self, "Prepared");
+        Ok(())
     }
 
     fn unprepare(&self) {
@@ -760,7 +851,6 @@ impl ObjectImpl for InterSrc {
                     .blurb("Context name of the inter elements to share with")
                     .default_value(Some(DEFAULT_INTER_CONTEXT))
                     .readwrite()
-                    .construct_only()
                     .build(),
                 glib::ParamSpecUInt::builder("max-size-buffers")
                     .nick("Max Size Buffers")
@@ -791,33 +881,45 @@ impl ObjectImpl for InterSrc {
     }
 
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
-        let mut settings = self.settings.lock().unwrap();
         match pspec.name() {
             "max-size-buffers" => {
-                settings.max_size_buffers = value.get().expect("type checked upstream");
+                self.settings.lock().unwrap().max_size_buffers =
+                    value.get().expect("type checked upstream");
             }
             "max-size-bytes" => {
-                settings.max_size_bytes = value.get().expect("type checked upstream");
+                self.settings.lock().unwrap().max_size_bytes =
+                    value.get().expect("type checked upstream");
             }
             "max-size-time" => {
-                settings.max_size_time = value.get::<u64>().unwrap().nseconds();
+                self.settings.lock().unwrap().max_size_time =
+                    value.get::<u64>().unwrap().nseconds();
             }
             "context" => {
-                settings.context = value
+                self.settings.lock().unwrap().context = value
                     .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             "context-wait" => {
-                settings.context_wait = Duration::from_millis(
+                self.settings.lock().unwrap().context_wait = Duration::from_millis(
                     value.get::<u32>().expect("type checked upstream").into(),
                 );
             }
             "inter-context" => {
-                settings.inter_context = value
+                let target_inter_ctx = value
                     .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| DEFAULT_INTER_CONTEXT.into());
+
+                if target_inter_ctx == self.settings.lock().unwrap().inter_context {
+                    return;
+                }
+
+                if let Err(err) = self.change_inter_ctx_blocking(&target_inter_ctx) {
+                    gst::error!(CAT, imp = self, "Failed to change inter-context: {err}");
+                } else {
+                    self.settings.lock().unwrap().inter_context = target_inter_ctx;
+                }
             }
             _ => unimplemented!(),
         }
