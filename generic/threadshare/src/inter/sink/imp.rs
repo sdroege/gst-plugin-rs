@@ -306,7 +306,8 @@ impl ObjectImpl for InterSink {
                 .nick("Inter Context")
                 .blurb("Context name of the inter elements to share with")
                 .default_value(Some(DEFAULT_INTER_CONTEXT))
-                .flags(glib::ParamFlags::READWRITE | glib::ParamFlags::CONSTRUCT_ONLY)
+                .readwrite()
+                .construct_only()
                 .build()]
         });
 
