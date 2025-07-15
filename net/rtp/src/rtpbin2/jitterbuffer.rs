@@ -40,6 +40,7 @@ pub struct JitterBuffer {
     last_input_ts: Option<u64>,
     stats: Stats,
     flushing: bool,
+    can_forward_packets_when_empty: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -53,6 +54,7 @@ pub enum PollResult {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum QueueResult {
+    Forward(usize),
     Queued(usize),
     Late,
     Duplicate,
@@ -109,10 +111,17 @@ impl JitterBuffer {
                 num_pushed: 0,
             },
             flushing: true,
+            can_forward_packets_when_empty: false,
         }
     }
 
     pub fn queue_serialized_item(&mut self) -> QueueResult {
+        if self.items.is_empty() {
+            let id = self.packet_counter;
+            self.packet_counter += 1;
+            return QueueResult::Forward(id);
+        }
+
         let id = self.packet_counter;
         self.packet_counter += 1;
         let item = Item {
@@ -130,6 +139,7 @@ impl JitterBuffer {
         trace!("Flush changed from {} to {flushing}", self.flushing);
         self.flushing = flushing;
         self.last_output_seqnum = None;
+        self.can_forward_packets_when_empty = false;
     }
 
     pub fn queue_packet(&mut self, rtp: &RtpPacket, mut pts: u64, now: Instant) -> QueueResult {
@@ -181,6 +191,25 @@ impl JitterBuffer {
                 return QueueResult::Late;
             }
         }
+
+        if self.items.is_empty()
+            // can forward after the first packet's deadline has been reached
+            && self.can_forward_packets_when_empty
+            && self
+                .last_output_seqnum
+                .is_some_and(|last_output_seqnum| seqnum == last_output_seqnum.wrapping_add(1))
+        {
+            // No packets enqueued & seqnum is in order => can forward it immediately
+            self.last_output_seqnum = Some(seqnum);
+            let id = self.packet_counter;
+            self.packet_counter += 1;
+            self.stats.num_pushed += 1;
+
+            return QueueResult::Forward(id);
+        }
+
+        // TODO: if the segnum base is known (i.e. first seqnum in RTSP)
+        //       we could also Forward the initial Packet.
 
         let id = self.packet_counter;
         self.packet_counter += 1;
@@ -258,6 +287,7 @@ impl JitterBuffer {
             let packet = self.items.pop_first().unwrap();
 
             self.stats.num_pushed += 1;
+            self.can_forward_packets_when_empty = true;
 
             PollResult::Forward {
                 id: packet.id,
@@ -584,33 +614,31 @@ mod tests {
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
 
-        let QueueResult::Queued(id_first_serialized_item) = jb.queue_serialized_item() else {
+        let QueueResult::Forward(id_first_serialized_item) = jb.queue_serialized_item() else {
             unreachable!()
         };
+        assert_eq!(id_first_serialized_item, 0);
 
-        // query should be forwarded immediately
+        // query has been forwarded immediately
+        assert_eq!(jb.poll(now), PollResult::Empty);
+
+        let QueueResult::Queued(id_first_packet) = jb.queue_packet(&packet, 0, now) else {
+            unreachable!()
+        };
+        assert_eq!(id_first_packet, id_first_serialized_item + 1);
+        let QueueResult::Queued(id_second_serialized_item) = jb.queue_serialized_item() else {
+            unreachable!()
+        };
+        assert_eq!(id_second_serialized_item, id_first_packet + 1);
+
         assert_eq!(
             jb.poll(now),
             PollResult::Forward {
-                id: id_first_serialized_item,
-                discont: false
-            }
-        );
-
-        let QueueResult::Queued(id_first) = jb.queue_packet(&packet, 0, now) else {
-            unreachable!()
-        };
-        assert_eq!(
-            jb.poll(now),
-            PollResult::Forward {
-                id: id_first,
+                id: id_first_packet,
                 discont: true
             }
         );
 
-        let QueueResult::Queued(id_second_serialized_item) = jb.queue_serialized_item() else {
-            unreachable!()
-        };
         assert_eq!(
             jb.poll(now),
             PollResult::Forward {
@@ -621,16 +649,11 @@ mod tests {
 
         let rtp_data = generate_rtp_packet(0x12345678, 1, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id_second) = jb.queue_packet(&packet, 0, now) else {
+        let QueueResult::Forward(id_second_packet) = jb.queue_packet(&packet, 0, now) else {
             unreachable!()
         };
-        assert_eq!(
-            jb.poll(now),
-            PollResult::Forward {
-                id: id_second,
-                discont: false
-            }
-        );
+        assert_eq!(id_second_packet, id_second_serialized_item + 1);
+        assert_eq!(jb.poll(now), PollResult::Empty);
     }
 
     #[test]
@@ -643,11 +666,15 @@ mod tests {
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
 
-        let QueueResult::Queued(id_first_serialized_item) = jb.queue_serialized_item() else {
+        let QueueResult::Forward(_id_first_serialized_item) = jb.queue_serialized_item() else {
             unreachable!()
         };
 
         let QueueResult::Queued(id_first) = jb.queue_packet(&packet, 0, now) else {
+            unreachable!()
+        };
+
+        let QueueResult::Queued(id_second_serialized_item) = jb.queue_serialized_item() else {
             unreachable!()
         };
 
@@ -656,8 +683,8 @@ mod tests {
         jb.set_flushing(true);
         assert_eq!(jb.queue_packet(&packet, 0, now), QueueResult::Flushing);
 
-        assert_eq!(jb.poll(now), PollResult::Drop(id_first_serialized_item));
         assert_eq!(jb.poll(now), PollResult::Drop(id_first));
+        assert_eq!(jb.poll(now), PollResult::Drop(id_second_serialized_item));
         assert_eq!(jb.poll(now), PollResult::Flushing);
         assert_eq!(jb.poll(now), PollResult::Flushing);
 

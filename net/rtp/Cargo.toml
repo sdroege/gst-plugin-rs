@@ -33,6 +33,7 @@ thiserror = "2"
 time = { version = "0.3", default-features = false, features = ["std"] }
 # TODO: experiment with other async executors (mio, async-std, etc)
 tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "time", "sync"] }
+tokio-util = "0.7.15"
 
 [dev-dependencies]
 gst-check = { workspace = true, features = ["v1_20"] }
