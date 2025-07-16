@@ -13,7 +13,7 @@ gst.workspace = true
 gst-base.workspace = true
 gst-audio.workspace = true
 gst-video.workspace = true
-gst-plugin-gtk4 = { path = "../../video/gtk4", optional = true }
+gst-plugin-gtk4 = { path = "../../video/gtk4", optional = true, version = "0.14" }
 gtk = { workspace = true, optional = true }
 gio = { workspace = true, optional = true }
 parking_lot = "0.12"
