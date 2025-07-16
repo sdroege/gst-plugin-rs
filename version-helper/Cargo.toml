@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-version-helper"
-version = "0.8.1"
+version = "0.8.3"
 authors = ["Sajeer Ahamed <ahamedsajeer.15.15@cse.mrt.ac.lk>",
            "Sebastian Dröge <sebastian@centricular.com>"]
 categories = ["development-tools"]
