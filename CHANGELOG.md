@@ -5,6 +5,33 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.13.7] - 2025-07-16
+### Fixed
+- awss3sink: Write to S3 on output stream flush.
+- cea608overlay: Reset output size on flush stop.
+- cea708mux: Improve caption overflow handling.
+- cea708mux: Correctly clip input buffers on the segment.
+- cea708overlay: Reset output size on flush stop.
+- dav1ddec: Use video decoder base class API for latency reporting and notify
+  application about latency changes.
+- gopbuffer: Push GOPs in the correct order on EOS.
+- hlssink3: Use correct closed segment location when writing playlist.
+- janusvrwebrtcsink: Various websocket handling improvements.
+- mccparse: Use correct byte representation for "U".
+- rtpbin2: Fix race condition when handling serialized queries.
+- rtpbin2: Fix panic caused by race condition when retrieving clock-rate.
+- rtpbin2: Send SSRC collision event in the correct direction.
+- rtpbin2: Fix usage of min RTCP interval in senders.
+- rtpbin2: Drop packets with an unknown payload type or clock-rate instead of
+  panicking.
+- rtpbin2: Improve detection of RTP inline, rtcp-mux RTCP packets.
+- tttocea608: Disallow Pango markup as input.
+- tttocea708: Handle caption overflows better.
+- tttocea708: Disallow Pango markup as input.
+- webrtcsink: Fix a couple of deadlocks.
+- webrtcsink: Don't require an UUID for discovery to speed up startup on
+  systems with low entropy.
+
 ## [0.13.6] - 2025-05-13
 ### Fixed
 - buffer-lateness: Avoid integer overflows when logging.
@@ -670,7 +697,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.6...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.7...HEAD
+[0.13.7]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.6...0.13.7
 [0.13.6]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.5...0.13.6
 [0.13.5]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.4...0.13.5
 [0.13.4]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.3...0.13.4
