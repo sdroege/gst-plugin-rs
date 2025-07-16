@@ -140,3 +140,6 @@ name = "stream-selector-server"
 
 [[example]]
 name = "stream-selector-client"
+
+[package.metadata.gstreamer]
+release_date = "2025-07-16"
