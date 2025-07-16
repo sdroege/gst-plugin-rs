@@ -1952,7 +1952,7 @@ impl ObjectImpl for RtpBasePay2 {
                     .nick("Timestamp")
                     .blurb("RTP timestamp of the last packet")
                     .minimum(0)
-                    .maximum(u16::MAX as u32)
+                    .maximum(u32::MAX)
                     .read_only()
                     .build(),
                 glib::ParamSpecBoolean::builder("source-info")
