@@ -1501,7 +1501,10 @@ impl RtpRecv {
             RecvRtpBuffer::SsrcCollision(ssrc) => {
                 return self.handle_ssrc_collision(session, [ssrc])
             }
-            RecvRtpBuffer::IsRtcp(buffer) => return Self::rtcp_sink_chain(self, id, buffer),
+            RecvRtpBuffer::IsRtcp(buffer) => {
+                drop(state);
+                return Self::rtcp_sink_chain(self, id, buffer);
+            }
             RecvRtpBuffer::Drop => None,
             RecvRtpBuffer::Forward((buffer, jb)) => Some((buffer, jb)),
         };
