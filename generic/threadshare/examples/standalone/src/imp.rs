@@ -293,15 +293,6 @@ impl TestSrc {
 
         Ok(())
     }
-
-    fn pause(&self) -> Result<(), gst::ErrorMessage> {
-        let is_main_elem = self.settings.lock().unwrap().is_main_elem;
-        debug_or_trace!(CAT, is_main_elem, imp = self, "Pausing");
-        self.task.pause().block_on()?;
-        debug_or_trace!(CAT, is_main_elem, imp = self, "Paused");
-
-        Ok(())
-    }
 }
 
 #[glib::object_subclass]
@@ -457,8 +448,8 @@ impl ElementImpl for TestSrc {
                     gst::StateChangeError
                 })?;
             }
-            gst::StateChange::PlayingToPaused => {
-                self.pause().map_err(|_| gst::StateChangeError)?;
+            gst::StateChange::PausedToReady => {
+                self.stop().map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
                 self.unprepare();
@@ -477,9 +468,6 @@ impl ElementImpl for TestSrc {
             }
             gst::StateChange::PlayingToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
-            }
-            gst::StateChange::PausedToReady => {
-                self.stop().map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }

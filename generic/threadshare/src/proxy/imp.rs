@@ -1000,13 +1000,6 @@ impl ProxySrc {
         gst::debug!(SRC_CAT, imp = self, "Started");
         Ok(())
     }
-
-    fn pause(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(SRC_CAT, imp = self, "Pausing");
-        self.task.pause().block_on()?;
-        gst::debug!(SRC_CAT, imp = self, "Paused");
-        Ok(())
-    }
 }
 
 #[glib::object_subclass]
@@ -1173,8 +1166,8 @@ impl ElementImpl for ProxySrc {
                     gst::StateChangeError
                 })?;
             }
-            gst::StateChange::PlayingToPaused => {
-                self.pause().map_err(|_| gst::StateChangeError)?;
+            gst::StateChange::PausedToReady => {
+                self.stop().map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
                 self.unprepare();
@@ -1193,9 +1186,6 @@ impl ElementImpl for ProxySrc {
             }
             gst::StateChange::PlayingToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
-            }
-            gst::StateChange::PausedToReady => {
-                self.stop().map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }

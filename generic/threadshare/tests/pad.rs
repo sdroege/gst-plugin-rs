@@ -252,12 +252,6 @@ mod imp_src {
             self.task.start().await_maybe_on_context().unwrap();
             gst::debug!(SRC_CAT, imp = self, "Started");
         }
-
-        fn pause(&self) {
-            gst::debug!(SRC_CAT, imp = self, "Pausing");
-            self.task.pause().block_on().unwrap();
-            gst::debug!(SRC_CAT, imp = self, "Paused");
-        }
     }
 
     #[glib::object_subclass]
@@ -363,8 +357,8 @@ mod imp_src {
                         gst::StateChangeError
                     })?;
                 }
-                gst::StateChange::PlayingToPaused => {
-                    self.pause();
+                gst::StateChange::PausedToReady => {
+                    self.stop();
                 }
                 gst::StateChange::ReadyToNull => {
                     self.unprepare();
@@ -375,9 +369,6 @@ mod imp_src {
             let mut success = self.parent_change_state(transition)?;
 
             match transition {
-                gst::StateChange::PausedToReady => {
-                    self.stop();
-                }
                 gst::StateChange::PausedToPlaying => {
                     self.start();
                 }

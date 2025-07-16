@@ -204,18 +204,17 @@ fn one_to_one_up_first() {
     pipe_down.set_base_time(gst::ClockTime::ZERO);
     pipe_down.set_start_time(gst::ClockTime::NONE);
 
-    let (eos_tx, mut eos_rx) = oneshot::channel::<()>();
+    let (n_buf_tx, mut n_buf_rx) = oneshot::channel::<()>();
     appsink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             .new_sample({
                 let mut samples = 0;
-                let mut eos_tx = Some(eos_tx);
+                let mut eos_tx = Some(n_buf_tx);
                 move |appsink| {
                     let _ = appsink.pull_sample().unwrap();
                     samples += 1;
-                    if samples == 100 {
+                    if samples == 10 {
                         eos_tx.take().unwrap().send(()).unwrap();
-                        return Err(gst::FlowError::Eos);
                     }
 
                     Ok(gst::FlowSuccess::Ok)
@@ -236,8 +235,8 @@ fn one_to_one_up_first() {
 
         loop {
             futures::select! {
-                _ = eos_rx => {
-                    println!("inter::one_to_one_up_first got eos notif");
+                _ = n_buf_rx => {
+                    println!("inter::one_to_one_up_first got n_buf notif");
                     break;
                 }
                 msg = bus_up_stream.next() => {
@@ -325,9 +324,9 @@ fn one_to_many_up_first() {
         pipe_down.set_start_time(gst::ClockTime::NONE);
 
         let samples = Arc::new(AtomicU32::new(0));
-        let (mut eos_tx, eos_rx) = if num_buf.is_some() {
-            let (eos_tx, eos_rx) = oneshot::channel::<()>();
-            (Some(eos_tx), Some(eos_rx))
+        let (mut n_buf_tx, n_buf_rx) = if num_buf.is_some() {
+            let (n_buf_tx, n_buf_rx) = oneshot::channel::<()>();
+            (Some(n_buf_tx), Some(n_buf_rx))
         } else {
             (None, None)
         };
@@ -340,8 +339,7 @@ fn one_to_many_up_first() {
                         let cur = samples.fetch_add(1, Ordering::SeqCst);
                         if let Some(num_buf) = num_buf {
                             if cur + 1 == num_buf {
-                                eos_tx.take().unwrap().send(()).unwrap();
-                                return Err(gst::FlowError::Eos);
+                                n_buf_tx.take().unwrap().send(()).unwrap();
                             }
                         }
                         Ok(gst::FlowSuccess::Ok)
@@ -350,7 +348,7 @@ fn one_to_many_up_first() {
                 .build(),
         );
 
-        (pipe_down, samples, eos_rx)
+        (pipe_down, samples, n_buf_rx)
     }
 
     let pipe_up = gst::Pipeline::with_name("upstream::one_to_many_up_first");
@@ -375,12 +373,12 @@ fn one_to_many_up_first() {
     // Starting upstream first
     pipe_up.set_state(gst::State::Playing).unwrap();
 
-    let (pipe_down_1, samples_1, eos_rx_1) = build_pipe_down(1, 20);
-    let mut eos_rx_1 = eos_rx_1.unwrap();
+    let (pipe_down_1, samples_1, n_buf_rx_1) = build_pipe_down(1, 20);
+    let mut n_buf_rx_1 = n_buf_rx_1.unwrap();
     pipe_down_1.set_state(gst::State::Playing).unwrap();
 
-    let (pipe_down_2, samples_2, eos_rx_2) = build_pipe_down(2, 20);
-    let eos_rx_2 = eos_rx_2.unwrap();
+    let (pipe_down_2, samples_2, n_buf_rx_2) = build_pipe_down(2, 20);
+    let n_buf_rx_2 = n_buf_rx_2.unwrap();
     pipe_down_2.set_state(gst::State::Playing).unwrap();
 
     futures::executor::block_on(async {
@@ -392,8 +390,8 @@ fn one_to_many_up_first() {
 
         loop {
             futures::select! {
-                _ = eos_rx_1 => {
-                    println!("inter::one_to_many_up_first got eos notif");
+                _ = n_buf_rx_1 => {
+                    println!("inter::one_to_many_up_first got n_buf notif");
                     break;
                 }
                 msg_down_1 = bus_down_stream_1.next() => {
@@ -435,7 +433,7 @@ fn one_to_many_up_first() {
     assert_eq!(samples_1.load(Ordering::SeqCst), 20);
 
     // Waiting for pipe_down_2 to handle its buffers too
-    futures::executor::block_on(eos_rx_2).unwrap();
+    futures::executor::block_on(n_buf_rx_2).unwrap();
     pipe_down_2.set_state(gst::State::Null).unwrap();
     assert_eq!(samples_2.load(Ordering::SeqCst), 20);
 
@@ -561,12 +559,10 @@ fn changing_inter_ctx() {
                 let starting = starting.clone();
                 let mut cur_caps = None;
                 let mut samples = 0;
-                let mut start_count = 0;
                 move |appsink| {
                     if starting.fetch_and(false, Ordering::SeqCst) {
                         cur_caps = None;
                         samples = 0;
-                        start_count += 1;
                     }
 
                     let sample = appsink.pull_sample().unwrap();
@@ -581,9 +577,6 @@ fn changing_inter_ctx() {
 
                     if samples == 10 {
                         n_buffers_tx.try_send(()).unwrap();
-                        if start_count == 2 {
-                            return Err(gst::FlowError::Eos);
-                        }
                     }
 
                     Ok(gst::FlowSuccess::Ok)

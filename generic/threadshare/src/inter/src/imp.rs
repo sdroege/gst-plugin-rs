@@ -618,32 +618,17 @@ impl InterSrc {
 
         self.join_inter_ctx_blocking(target_inter_ctx, ts_ctx, dataqueue)?;
 
-        match self.obj().current_state() {
-            gst::State::Paused => {
-                self.srcpad
-                    .gst_pad()
-                    .push_event(gst::event::FlushStop::builder(true).seqnum(seqnum).build());
+        if self.obj().current_state() == gst::State::Playing {
+            self.srcpad
+                .gst_pad()
+                .push_event(gst::event::FlushStop::builder(true).seqnum(seqnum).build());
 
-                if let Err(err) = self.task.pause().block_on() {
-                    return Err(gst::error_msg!(
-                        gst::ResourceError::Failed,
-                        ["Failed to set new Task in Pause: {err}"]
-                    ));
-                }
+            if let Err(err) = self.task.start().block_on() {
+                return Err(gst::error_msg!(
+                    gst::ResourceError::Failed,
+                    ["Failed to start new Task: {err}"]
+                ));
             }
-            gst::State::Playing => {
-                self.srcpad
-                    .gst_pad()
-                    .push_event(gst::event::FlushStop::builder(true).seqnum(seqnum).build());
-
-                if let Err(err) = self.task.start().block_on() {
-                    return Err(gst::error_msg!(
-                        gst::ResourceError::Failed,
-                        ["Failed to start new Task: {err}"]
-                    ));
-                }
-            }
-            _ => (),
         }
 
         Ok(())
@@ -756,13 +741,6 @@ impl InterSrc {
         gst::debug!(CAT, imp = self, "Starting");
         self.task.start().await_maybe_on_context()?;
         gst::debug!(CAT, imp = self, "Started");
-        Ok(())
-    }
-
-    fn pause(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp = self, "Pausing");
-        self.task.pause().await_maybe_on_context()?;
-        gst::debug!(CAT, imp = self, "Paused");
         Ok(())
     }
 
@@ -1017,8 +995,8 @@ impl ElementImpl for InterSrc {
                     gst::StateChangeError
                 })?;
             }
-            gst::StateChange::PlayingToPaused => {
-                self.pause().map_err(|_| gst::StateChangeError)?;
+            gst::StateChange::PausedToReady => {
+                self.stop().map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
                 self.unprepare();
@@ -1037,9 +1015,6 @@ impl ElementImpl for InterSrc {
             }
             gst::StateChange::PlayingToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
-            }
-            gst::StateChange::PausedToReady => {
-                self.stop().map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
