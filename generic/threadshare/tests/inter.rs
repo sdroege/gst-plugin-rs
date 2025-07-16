@@ -429,13 +429,13 @@ fn one_to_many_up_first() {
     });
 
     pipe_down_1.set_state(gst::State::Null).unwrap();
-    // pipe_down_1 was set to stop after 20 buffers
-    assert_eq!(samples_1.load(Ordering::SeqCst), 20);
+    // pipe_down_1 was set to stop after 20 buffers (but more might have go through before we stopped)
+    assert!(samples_1.load(Ordering::SeqCst) >= 20);
 
     // Waiting for pipe_down_2 to handle its buffers too
     futures::executor::block_on(n_buf_rx_2).unwrap();
     pipe_down_2.set_state(gst::State::Null).unwrap();
-    assert_eq!(samples_2.load(Ordering::SeqCst), 20);
+    assert!(samples_2.load(Ordering::SeqCst) >= 20);
 
     pipe_up.set_state(gst::State::Null).unwrap();
     println!("up null");
