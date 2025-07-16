@@ -1164,18 +1164,18 @@ impl ObjectImpl for RTPDTMFSrc {
                     .maximum(u32::MAX)
                     .read_only()
                     .build(),
-                glib::ParamSpecInt::builder("timestamp-offset")
+                glib::ParamSpecInt64::builder("timestamp-offset")
                     .nick("Timestamp Offset")
                     .blurb("Offset to add to all outgoing timestamps (-1 = random)")
                     .minimum(-1)
-                    .maximum(u32::MAX as i32)
-                    .default_value(DEFAULT_TIMESTAMP_OFFSET.map_or(-1i32, |val| val as i32))
+                    .maximum(u32::MAX as i64)
+                    .default_value(DEFAULT_TIMESTAMP_OFFSET.map_or(-1, |val| val as i64))
                     .build(),
                 glib::ParamSpecInt::builder("seqnum-offset")
                     .nick("Sequence Number Offset")
                     .blurb("Offset to add to all outgoing seqnum (-1 => random)")
                     .minimum(-1)
-                    .maximum(i32::MAX)
+                    .maximum(u16::MAX as i32)
                     .default_value(DEFAULT_SEQNUM_OFFSET.map_or(-1i32, |val| val as i32))
                     .build(),
                 glib::ParamSpecUInt::builder("clock-rate")
@@ -1185,12 +1185,12 @@ impl ObjectImpl for RTPDTMFSrc {
                     .maximum(u32::MAX)
                     .default_value(DEFAULT_CLOCK_RATE)
                     .build(),
-                glib::ParamSpecUInt::builder("ssrc")
+                glib::ParamSpecInt64::builder("ssrc")
                     .nick("Synchronization Source (SSRC)")
                     .blurb("The SSRC of the packets (-1 => random)")
-                    .minimum(0)
-                    .maximum(u32::MAX)
-                    .default_value(DEFAULT_SSRC.unwrap_or(u32::MAX))
+                    .minimum(-1)
+                    .maximum(u32::MAX as i64)
+                    .default_value(DEFAULT_SSRC.map_or(-1, |val| val as i64))
                     .build(),
                 glib::ParamSpecUInt::builder("pt")
                     .nick("Payload Type")
@@ -1225,7 +1225,7 @@ impl ObjectImpl for RTPDTMFSrc {
                 settings.context_wait = Duration::from_millis(value.get::<u32>().unwrap().into());
             }
             "timestamp-offset" => {
-                settings.timestamp_offset = value.get::<i32>().unwrap().try_into().ok();
+                settings.timestamp_offset = value.get::<i64>().unwrap().try_into().ok();
             }
             "seqnum-offset" => {
                 settings.seqnum_offset = value.get::<i32>().unwrap().try_into().ok();
@@ -1234,7 +1234,7 @@ impl ObjectImpl for RTPDTMFSrc {
                 settings.clock_rate = value.get::<u32>().unwrap();
             }
             "ssrc" => {
-                settings.ssrc = value.get::<i32>().unwrap().try_into().ok();
+                settings.ssrc = value.get::<i64>().unwrap().try_into().ok();
             }
             "pt" => {
                 settings.pt = value.get::<u32>().unwrap().try_into().unwrap();
@@ -1253,21 +1253,10 @@ impl ObjectImpl for RTPDTMFSrc {
             "context-wait" => (settings.context_wait.as_millis() as u32).to_value(),
             "timestamp" => settings.timestamp.to_value(),
             "seqnum" => settings.seqnum.to_value(),
-            "timestamp-offset" => settings
-                .timestamp_offset
-                .and_then(|val| val.try_into().ok())
-                .unwrap_or(-1i32)
-                .to_value(),
-            "seqnum-offset" => settings
-                .seqnum_offset
-                .map_or(-1i32, |val| val as i32)
-                .to_value(),
+            "timestamp-offset" => settings.timestamp_offset.map_or(-1, i64::from).to_value(),
+            "seqnum-offset" => settings.seqnum_offset.map_or(-1i32, i32::from).to_value(),
             "clock-rate" => settings.clock_rate.to_value(),
-            "ssrc" => settings
-                .ssrc
-                .and_then(|val| val.try_into().ok())
-                .unwrap_or(-1i32)
-                .to_value(),
+            "ssrc" => settings.ssrc.map_or(-1, i64::from).to_value(),
             "pt" => (settings.pt as u32).to_value(),
             "packet-redundancy" => (settings.packet_redundancy as u32).to_value(),
             _ => unimplemented!(),
