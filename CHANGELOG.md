@@ -5,6 +5,82 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.14.0] - 2025-07-16
+### Changed
+- Update to gtk-rs-core 0.21 / gtk4-rs 0.10 / gstreamer-rs 0.24.
+- Update various dependencies.
+- Update MSRV to 1.83.
+- gtk4: Update minimum GTK version to 4.6 but require 4.10 by default.
+
+### Added
+- analytics: New plugin with `relationmeta2onvifmeta` element that converts
+  relation metadata to ONVIF metadata.
+- analytics: New `analyticscombiner` and `analyticssplitter` elements that
+  allow temporal batching of one or more streams.
+- awspolly: New AWS Polly based text-to-speech element.
+- cdpserviceinject: New element to inject CEA708 CDP service information.
+- dav1ddec: Support decoding into downstream-provided buffer pools.
+- elevenlabs: New speech synthesis elements based on ElevenLabs.
+- fallbacksrc: Add multi-stream support.
+- fmp4mux: Add `send-headers` and `split-at-running-time` action signals.
+- fmp4mux: Add support for caps changes.
+- fmp4mux: Add support for writing `edts` to handle audio priming.
+- fmp4mux: Add support for serialized `split-now` event.
+- fmp4mux: Add `send-force-keyunit`, `decode-time-offset` and
+  `start-fragment-sequence-number` properties.
+- fmp4mux: Write `prft` and `btrt` boxes.
+- fmp4mux: Add support for AC-3/EAC-3.
+- gtk4: Add colorimetry support.
+- gtk4: Add support for YUV memory textures.
+- hlscmafsink: Add `new-playlist` signal and `playlist-root-init` property.
+- hlssink3: Support NTP timestamp metadata.
+- janusvrwebrtcsrc: New Janus VideoRoom source element.
+- memory-tracer: New tracer to track memory usage.
+- mp4mux: Add support for edit lists and handle audio priming.
+- mp4mux: Support ISO/IEC 23001-17 uncompressed video.
+- mp4mux: Support HEIF output.
+- mp4mux: Write `btrt` box.
+- mp4mux: Add support for `taic` clock information box.
+- ndisrc: Add new clocked timestamp mode that provides a `gst::Clock` to the
+  pipeline.
+- onvimetadataextractor: New element that extracts ONVIF metadata from buffers
+  that can then be used by `rtponvifpay` for example.
+- pcap-writer: New tracer to write streams of arbitrary pads as PCAP files.
+- pipeline-snapshot: New tracer that allows to create snapshots of pipelines.
+- quinn: Support multiple stream connections in `quinnquicsrc`.
+- quinnquicmux/demux: New elements to support QUIC stream multiplexing and
+  support for it in the other elements.
+- quinnroqmux/demux: New elements to support RTP over QUIC (ROQ).
+- quinnserversink/clientsrc: New elements for QUIC-based WebTransport.
+- rtpamrpay2/depay2: New AMR NB/WB RTP payloader / depayloader.
+- rtpbin2: Reduce number of threads and make better use of thread pools.
+- skia: New skia-based compositor element.
+- speechmatics: New transcriber element based on Speechmatics.
+- spotifylyricssrc: New element to retrieve synchronized lyrics from Spotify.
+- closedcaption: Set of new elements that handle ST2038 streams and allow
+  extracting / inserting closed captions into them: `st2038ancdemux`,
+  `st2038ancmux`, `st2038anctocc` and `cctost2038anc`.
+- streamgrouper: New element that allows combining streams with different
+  group-ids in their stream-start events to use the same one.
+- transcriberbin: Various improvements and fixes.
+- transcriberbin: Add support for speech synthesis.
+- ts-intersrc/sink: New 1:N inter pipeline elements.
+- ts-rtpdtmfsrc: New RTP DTMF source element.
+- ts-proxysink: Add `event-types` property.
+- ts-udpsrc: Add `buffer-size` and `loop` properties.
+- ts-udpsrc/udpsink: Add `multicast-iface` property.
+- vvdec: New VVC/H266 decoder element using VVdeC.
+- webrtc: Add support for raw payload formats.
+- webrtcsink: Add support for answering SDP offers.
+- webrtcsink: Add generic data channel control mechanism and generic mechanism
+  to forward metas over the control channel.
+- webrtcsink: Add `define-encoder-bitrates` signal for customizing congestion
+  control behaviour.
+- webrtcsink: Add signal to configure congestion control mitigation modes.
+
+### Fixed
+- rtpgccbwe: Handle out-of-order packets better.
+
 ## [0.13.7] - 2025-07-16
 ### Fixed
 - awss3sink: Write to S3 on output stream flush.
@@ -697,7 +773,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.7...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.0...HEAD
+[0.14.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.7...0.14.0
 [0.13.7]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.6...0.13.7
 [0.13.6]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.5...0.13.6
 [0.13.5]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.4...0.13.5
