@@ -347,7 +347,7 @@ impl Signaller {
         .await??;
 
         // Channel for asynchronously sending out websocket message
-        let (mut ws_sink, mut ws_stream) = ws.split();
+        let (ws_sink, mut ws_stream) = ws.split();
 
         // 1000 is completely arbitrary, we simply don't want infinite piling
         // up of messages as with unbounded
@@ -401,7 +401,7 @@ impl Signaller {
 
                 gst::debug!(CAT, imp = this, "Done sending");
 
-                let _ = ws_sink.close().await;
+                let _ = ws_sink.close(None).await;
 
                 res.map_err(Into::into)
             }

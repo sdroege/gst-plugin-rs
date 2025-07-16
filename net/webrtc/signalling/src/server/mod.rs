@@ -135,7 +135,7 @@ impl Server {
         let (websocket_sender, mut websocket_receiver) = mpsc::channel::<String>(1000);
 
         let this_id_clone = this_id.clone();
-        let (mut ws_sink, mut ws_stream) = ws.split();
+        let (ws_sink, mut ws_stream) = ws.split();
         let send_task_handle = task::spawn(async move {
             let mut res = Ok(());
             loop {
@@ -166,7 +166,7 @@ impl Server {
 
             debug!(this_id = %this_id_clone, "Done sending");
 
-            let _ = ws_sink.close().await;
+            let _ = ws_sink.close(None).await;
 
             res.map_err(Into::into)
         });
