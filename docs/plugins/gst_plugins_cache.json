@@ -16387,7 +16387,7 @@
                 "klass": "Source/Test",
                 "pad-templates": {
                     "src": {
-                        "caps": "audio/x-raw:\n           rate: [ 8000, 2147483646 ]\n       channels: [ 1, 2147483646 ]\n         layout: interleaved\n         format: S16LE\n",
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: S16LE\n",
                         "direction": "src",
                         "presence": "always"
                     }
@@ -16445,14 +16445,40 @@
                         "type": "gboolean",
                         "writable": true
                     },
+                    "freq": {
+                        "blurb": "Frequency",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "440",
+                        "max": "-1",
+                        "min": "1",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
                     "is-live": {
-                        "blurb": "Whether to act as a live source",
+                        "blurb": "(Pseudo) live output",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
                         "default": "false",
-                        "mutable": "null",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "mute": {
+                        "blurb": "Mute",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "playing",
                         "readable": true,
                         "type": "gboolean",
                         "writable": true
@@ -16469,6 +16495,34 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "gint",
+                        "writable": true
+                    },
+                    "samples-per-buffer": {
+                        "blurb": "Number of samples per output buffer",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1024",
+                        "max": "-1",
+                        "min": "1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "volume": {
+                        "blurb": "Output volume",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0.8",
+                        "max": "10",
+                        "min": "-1.79769e+308",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gdouble",
                         "writable": true
                     }
                 },
