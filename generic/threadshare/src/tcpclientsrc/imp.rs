@@ -127,7 +127,10 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
         use gst::QueryViewMut;
         let ret = match query.view_mut() {
             QueryViewMut::Latency(q) => {
-                q.set(false, gst::ClockTime::ZERO, gst::ClockTime::NONE);
+                let latency =
+                    gst::ClockTime::try_from(imp.settings.lock().unwrap().context_wait).unwrap();
+                gst::debug!(CAT, obj = pad, "Reporting latency {latency}");
+                q.set(true, latency, gst::ClockTime::NONE);
                 true
             }
             QueryViewMut::Scheduling(q) => {
