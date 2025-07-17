@@ -11,6 +11,7 @@ rust-version.workspace = true
 [dependencies]
 async-task = "4.3.0"
 async-lock = "3.4.0"
+byte-slice-cast = "1.0"
 cfg-if = "1"
 concurrent-queue = "2.2.0"
 futures = "0.3.28"
