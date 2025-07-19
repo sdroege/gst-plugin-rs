@@ -757,6 +757,13 @@ impl Frame {
                         orientation,
                     });
                 }
+                if frame.is_some() {
+                    gst::debug!(
+                        CAT,
+                        imp = dbg_obj,
+                        "Created frame using DmabufTextureBuilder"
+                    );
+                }
             }
         }
 
@@ -805,6 +812,9 @@ impl Frame {
                     wrapped_context: wrapped_context.unwrap().clone(),
                     orientation,
                 });
+                if frame.is_some() {
+                    gst::debug!(CAT, imp = dbg_obj, "Created frame using GLTextureBuilder");
+                }
             }
         }
 
@@ -843,11 +853,17 @@ impl Frame {
                         }
                     };
 
-                    MappedFrame::SysMem {
+                    let frame = MappedFrame::SysMem {
                         frame: gst_video::VideoFrame::from_buffer_readable(readable_frame, info)
                             .map_err(|_| gst::FlowError::Error)?,
                         orientation,
-                    }
+                    };
+                    gst::debug!(
+                        CAT,
+                        imp = dbg_obj,
+                        "Created frame using MemoryTextureBuilder"
+                    );
+                    frame
                 }
             },
             overlays: vec![],
