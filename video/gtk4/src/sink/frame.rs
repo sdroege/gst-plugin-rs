@@ -713,8 +713,20 @@ impl Frame {
                 .peek_memory(0)
                 .is_memory_type::<gst_allocators::DmaBufMemory>()
         {
+            let drm_info;
+            let drm_info_ref = match info.dma_drm() {
+                Some(drm) => Some(drm),
+                None => match gst_video::VideoInfoDmaDrm::from_video_info(info, 0) {
+                    Ok(i) => {
+                        drm_info = Some(i);
+                        drm_info.as_ref()
+                    }
+                    Err(_) => None,
+                },
+            };
+
             if let Some((vmeta, info)) =
-                Option::zip(buffer.meta::<gst_video::VideoMeta>(), info.dma_drm())
+                Option::zip(buffer.meta::<gst_video::VideoMeta>(), drm_info_ref)
             {
                 let mut fds = [-1i32; 4];
                 let mut offsets = [0; 4];
