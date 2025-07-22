@@ -9103,6 +9103,9 @@
                     "GInitiallyUnowned",
                     "GObject"
                 ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
                 "klass": "Muxer",
                 "pad-templates": {
                     "sink_%%u": {
@@ -10065,7 +10068,20 @@
                     "GInitiallyUnowned",
                     "GObject"
                 ],
-                "kind": "object"
+                "kind": "object",
+                "properties": {
+                    "discarded-services": {
+                        "blurb": "List of services to discard",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    }
+                }
             },
             "GstSt2038AncMuxSinkPad": {
                 "hierarchy": [

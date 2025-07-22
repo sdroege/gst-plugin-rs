@@ -12,7 +12,7 @@ use gst::prelude::*;
 mod imp;
 
 glib::wrapper! {
-    pub struct Cea708Mux(ObjectSubclass<imp::Cea708Mux>) @extends gst_base::Aggregator, gst::Element, gst::Object;
+    pub struct Cea708Mux(ObjectSubclass<imp::Cea708Mux>) @extends gst_base::Aggregator, gst::Element, gst::Object, @implements gst::ChildProxy;
 }
 
 glib::wrapper! {
