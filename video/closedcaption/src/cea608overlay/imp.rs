@@ -108,11 +108,22 @@ impl Cea608Overlay {
             let overlay_caps = caps_clone.make_mut();
 
             if let Some(features) = overlay_caps.features_mut(0) {
+                let is_sysmem = features.is_empty()
+                    || features
+                        .iter()
+                        .all(|f| f == gst::CAPS_FEATURE_MEMORY_SYSTEM_MEMORY);
                 features.add(gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION);
                 let peercaps = self.srcpad.peer_query_caps(Some(&caps_clone));
                 downstream_accepts_meta = !peercaps.is_empty();
                 if downstream_accepts_meta {
                     caps = caps_clone;
+                } else if !is_sysmem {
+                    gst::element_imp_error!(
+                        self,
+                        gst::CoreError::Negotiation,
+                        ("Provided input caps with features but downstream does not support meta::GstVideoOverlayComposition")
+                    );
+                    return Err(gst::FlowError::NotNegotiated);
                 }
             }
         }
@@ -520,6 +531,7 @@ impl ElementImpl for Cea608Overlay {
             let caps = gst_video::VideoFormat::iter_raw()
                 .into_video_caps()
                 .unwrap()
+                .any_features()
                 .build();
 
             let sink_pad_template = gst::PadTemplate::new(
