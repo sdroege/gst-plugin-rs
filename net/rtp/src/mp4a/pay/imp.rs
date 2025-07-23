@@ -230,7 +230,7 @@ impl RtpBasePay2Impl for RtpMpeg4AudioPay {
         let mut rem_size = buffer_ref.size();
         while rem_size > 0xff {
             size_prefix.push(0xff);
-            rem_size >>= 8;
+            rem_size -= 0xff;
         }
         size_prefix.push(rem_size as u8);
 
