@@ -132,6 +132,7 @@ struct AudioTestSrcTask {
     need_initial_events: bool,
 
     volume: f64,
+    mute: bool,
     freq: f64,
     rate: u32,
     channels: usize,
@@ -162,6 +163,7 @@ impl AudioTestSrcTask {
             need_initial_events: true,
 
             volume: DEFAULT_VOLUME,
+            mute: DEFAULT_MUTE,
             freq: DEFAULT_FREQ as f64,
             rate: DEFAULT_RATE,
             channels: DEFAULT_CHANNELS,
@@ -302,7 +304,10 @@ impl TaskImpl for AudioTestSrcTask {
         self.is_live = settings.is_live;
         self.samples_per_buffer = settings.samples_per_buffer;
         self.num_buffers = settings.num_buffers;
+        // TODO handle live changes for these settings
         self.freq = settings.freq as f64;
+        self.volume = settings.volume;
+        self.mute = settings.mute;
 
         #[cfg(feature = "tuning")]
         {
@@ -395,7 +400,11 @@ impl TaskImpl for AudioTestSrcTask {
             let mut mapped = buffer_mut.map_writable().unwrap();
             let data = mapped.as_mut_slice_of::<i16>().unwrap();
             for chunk in data.chunks_exact_mut(self.channels) {
-                let value = (self.accumulator.sin() * self.volume * (i16::MAX as f64)) as i16;
+                let value = if self.mute {
+                    0
+                } else {
+                    (self.accumulator.sin() * self.volume * (i16::MAX as f64)) as i16
+                };
                 for sample in chunk {
                     *sample = value;
                 }
