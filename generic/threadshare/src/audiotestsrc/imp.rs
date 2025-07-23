@@ -403,7 +403,7 @@ impl TaskImpl for AudioTestSrcTask {
                 let value = if self.mute {
                     0
                 } else {
-                    (self.accumulator.sin() * self.volume * (i16::MAX as f64)) as i16
+                    (f64::sin(self.accumulator) * (i16::MAX as f64) * self.volume).round() as i16
                 };
                 for sample in chunk {
                     *sample = value;
@@ -411,7 +411,7 @@ impl TaskImpl for AudioTestSrcTask {
 
                 self.accumulator += self.step;
                 if self.accumulator >= 2.0 * std::f64::consts::PI {
-                    self.accumulator = -2.0 * std::f64::consts::PI;
+                    self.accumulator -= 2.0 * std::f64::consts::PI;
                 }
             }
         }
