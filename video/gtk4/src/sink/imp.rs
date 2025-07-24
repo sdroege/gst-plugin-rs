@@ -340,6 +340,34 @@ impl ElementImpl for PaintableSink {
                             gst_video::VideoFormat::Y42b,
                             #[cfg(feature = "gtk_v4_20")]
                             gst_video::VideoFormat::Y444,
+                            #[cfg(feature = "gtk_v4_20")]
+                            gst_video::VideoFormat::I42010le,
+                            #[cfg(feature = "gtk_v4_20")]
+                            gst_video::VideoFormat::I42010be,
+                            #[cfg(feature = "gtk_v4_20")]
+                            gst_video::VideoFormat::I42210le,
+                            #[cfg(feature = "gtk_v4_20")]
+                            gst_video::VideoFormat::I42210be,
+                            #[cfg(feature = "gtk_v4_20")]
+                            gst_video::VideoFormat::Y44410le,
+                            #[cfg(feature = "gtk_v4_20")]
+                            gst_video::VideoFormat::Y44410be,
+                            #[cfg(feature = "gtk_v4_20")]
+                            gst_video::VideoFormat::I42012le,
+                            #[cfg(feature = "gtk_v4_20")]
+                            gst_video::VideoFormat::I42012be,
+                            #[cfg(feature = "gtk_v4_20")]
+                            gst_video::VideoFormat::I42212le,
+                            #[cfg(feature = "gtk_v4_20")]
+                            gst_video::VideoFormat::I42212be,
+                            #[cfg(feature = "gtk_v4_20")]
+                            gst_video::VideoFormat::Y44412le,
+                            #[cfg(feature = "gtk_v4_20")]
+                            gst_video::VideoFormat::Y44412be,
+                            #[cfg(feature = "gtk_v4_20")]
+                            gst_video::VideoFormat::Y44416le,
+                            #[cfg(feature = "gtk_v4_20")]
+                            gst_video::VideoFormat::Y44416be,
                             #[cfg(feature = "gtk_v4_14")]
                             gst_video::VideoFormat::Bgrx,
                             #[cfg(feature = "gtk_v4_14")]
