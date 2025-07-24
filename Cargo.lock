@@ -146,7 +146,7 @@ checksum = "0ae92a5119aa49cdbcf6b9f893fe4e1d98b04ccbf82ee0584ad948a44a734dea"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -208,7 +208,7 @@ checksum = "3b43422f69d8ff38f95f1b2bb76517c91589a924d1559a0e935d7c8ce0274c11"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -230,7 +230,7 @@ checksum = "c7c24de15d275a1ecfd47a380fb4d5ec9bfe0933f309ed5e705b775596a3574d"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -247,7 +247,7 @@ checksum = "e539d3fca749fcee5236ab05e93a52867dd549cc157c8cb7f99595f3cedffdb5"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -964,7 +964,7 @@ dependencies = [
  "regex",
  "rustc-hash 1.1.0",
  "shlex",
- "syn 2.0.104",
+ "syn 2.0.106",
  "which",
 ]
 
@@ -985,7 +985,7 @@ dependencies = [
  "regex",
  "rustc-hash 2.1.1",
  "shlex",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1005,7 +1005,7 @@ dependencies = [
  "regex",
  "rustc-hash 2.1.1",
  "shlex",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1120,7 +1120,7 @@ dependencies = [
 [[package]]
 name = "cairo-rs"
 version = "0.22.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#dee86a39500f052f4d67531df138fa6096052012"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#a9bb1741e0eb02144edc89bec40e78a919337454"
 dependencies = [
  "bitflags 2.9.1",
  "cairo-sys-rs",
@@ -1131,7 +1131,7 @@ dependencies = [
 [[package]]
 name = "cairo-sys-rs"
 version = "0.22.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#dee86a39500f052f4d67531df138fa6096052012"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#a9bb1741e0eb02144edc89bec40e78a919337454"
 dependencies = [
  "glib-sys",
  "libc",
@@ -1301,7 +1301,7 @@ dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1629,7 +1629,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1640,7 +1640,7 @@ checksum = "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead"
 dependencies = [
  "darling_core",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1774,7 +1774,7 @@ dependencies = [
  "darling",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1784,7 +1784,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab63b0e2bf4d5928aff72e83a7dace85d7bba5fe12dcc3c5a572d78caffd3f3c"
 dependencies = [
  "derive_builder_core",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1804,7 +1804,7 @@ checksum = "bda628edc44c4bb645fbe0f758797143e4e07926f7ebf4e9bdfbd3d2ce621df3"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1833,7 +1833,7 @@ checksum = "97369cbbc041bc366949bc74d34658d6cda5621039731c6310521892a3a20ae0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1974,7 +1974,7 @@ checksum = "2f9ed6b3789237c8a0c1c505af1c7eb2c560df6186f01b098c3a1064ea532f38"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -2017,7 +2017,7 @@ checksum = "44f23cf4b44bfce11a86ace86f8a73ffdec849c9fd00a386a53d278bd9e81fb3"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -2289,7 +2289,7 @@ checksum = "162ee34ebcb7c64a8abebc059ce0fee27c2262618d7b60ed8faf72fef13c3650"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -2331,7 +2331,7 @@ dependencies = [
 [[package]]
 name = "gdk-pixbuf"
 version = "0.22.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#dee86a39500f052f4d67531df138fa6096052012"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#a9bb1741e0eb02144edc89bec40e78a919337454"
 dependencies = [
  "gdk-pixbuf-sys",
  "gio",
@@ -2342,7 +2342,7 @@ dependencies = [
 [[package]]
 name = "gdk-pixbuf-sys"
 version = "0.22.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#dee86a39500f052f4d67531df138fa6096052012"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#a9bb1741e0eb02144edc89bec40e78a919337454"
 dependencies = [
  "gio-sys",
  "glib-sys",
@@ -2354,7 +2354,7 @@ dependencies = [
 [[package]]
 name = "gdk4"
 version = "0.11.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#66c829ec57f203056f24aadbe4107d01410f7a26"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#133f092c36b0d4da00a8b00d97261f5e78a356a5"
 dependencies = [
  "cairo-rs",
  "gdk-pixbuf",
@@ -2368,7 +2368,7 @@ dependencies = [
 [[package]]
 name = "gdk4-sys"
 version = "0.11.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#66c829ec57f203056f24aadbe4107d01410f7a26"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#133f092c36b0d4da00a8b00d97261f5e78a356a5"
 dependencies = [
  "cairo-sys-rs",
  "gdk-pixbuf-sys",
@@ -2384,7 +2384,7 @@ dependencies = [
 [[package]]
 name = "gdk4-wayland"
 version = "0.11.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#66c829ec57f203056f24aadbe4107d01410f7a26"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#133f092c36b0d4da00a8b00d97261f5e78a356a5"
 dependencies = [
  "gdk4",
  "gdk4-wayland-sys",
@@ -2396,7 +2396,7 @@ dependencies = [
 [[package]]
 name = "gdk4-wayland-sys"
 version = "0.11.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#66c829ec57f203056f24aadbe4107d01410f7a26"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#133f092c36b0d4da00a8b00d97261f5e78a356a5"
 dependencies = [
  "glib-sys",
  "libc",
@@ -2406,7 +2406,7 @@ dependencies = [
 [[package]]
 name = "gdk4-win32"
 version = "0.11.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#66c829ec57f203056f24aadbe4107d01410f7a26"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#133f092c36b0d4da00a8b00d97261f5e78a356a5"
 dependencies = [
  "gdk4",
  "gdk4-win32-sys",
@@ -2419,7 +2419,7 @@ dependencies = [
 [[package]]
 name = "gdk4-win32-sys"
 version = "0.11.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#66c829ec57f203056f24aadbe4107d01410f7a26"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#133f092c36b0d4da00a8b00d97261f5e78a356a5"
 dependencies = [
  "gdk4-sys",
  "glib-sys",
@@ -2430,7 +2430,7 @@ dependencies = [
 [[package]]
 name = "gdk4-x11"
 version = "0.11.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#66c829ec57f203056f24aadbe4107d01410f7a26"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#133f092c36b0d4da00a8b00d97261f5e78a356a5"
 dependencies = [
  "gdk4",
  "gdk4-x11-sys",
@@ -2442,7 +2442,7 @@ dependencies = [
 [[package]]
 name = "gdk4-x11-sys"
 version = "0.11.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#66c829ec57f203056f24aadbe4107d01410f7a26"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#133f092c36b0d4da00a8b00d97261f5e78a356a5"
 dependencies = [
  "gdk4-sys",
  "glib-sys",
@@ -2517,7 +2517,7 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 [[package]]
 name = "gio"
 version = "0.22.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#dee86a39500f052f4d67531df138fa6096052012"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#a9bb1741e0eb02144edc89bec40e78a919337454"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -2533,19 +2533,19 @@ dependencies = [
 [[package]]
 name = "gio-sys"
 version = "0.22.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#dee86a39500f052f4d67531df138fa6096052012"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#a9bb1741e0eb02144edc89bec40e78a919337454"
 dependencies = [
  "glib-sys",
  "gobject-sys",
  "libc",
  "system-deps",
- "windows-sys 0.60.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
 name = "glib"
 version = "0.22.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#dee86a39500f052f4d67531df138fa6096052012"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#a9bb1741e0eb02144edc89bec40e78a919337454"
 dependencies = [
  "bitflags 2.9.1",
  "futures-channel",
@@ -2565,19 +2565,19 @@ dependencies = [
 [[package]]
 name = "glib-macros"
 version = "0.22.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#dee86a39500f052f4d67531df138fa6096052012"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#a9bb1741e0eb02144edc89bec40e78a919337454"
 dependencies = [
  "heck 0.5.0",
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
 name = "glib-sys"
 version = "0.22.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#dee86a39500f052f4d67531df138fa6096052012"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#a9bb1741e0eb02144edc89bec40e78a919337454"
 dependencies = [
  "libc",
  "system-deps",
@@ -2592,7 +2592,7 @@ checksum = "a8d1add55171497b4705a648c6b583acafb01d58050a51727785f0b2c8e0a2b2"
 [[package]]
 name = "gobject-sys"
 version = "0.22.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#dee86a39500f052f4d67531df138fa6096052012"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#a9bb1741e0eb02144edc89bec40e78a919337454"
 dependencies = [
  "glib-sys",
  "libc",
@@ -2620,7 +2620,7 @@ dependencies = [
 [[package]]
 name = "graphene-rs"
 version = "0.22.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#dee86a39500f052f4d67531df138fa6096052012"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#a9bb1741e0eb02144edc89bec40e78a919337454"
 dependencies = [
  "glib",
  "graphene-sys",
@@ -2630,7 +2630,7 @@ dependencies = [
 [[package]]
 name = "graphene-sys"
 version = "0.22.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#dee86a39500f052f4d67531df138fa6096052012"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#a9bb1741e0eb02144edc89bec40e78a919337454"
 dependencies = [
  "glib-sys",
  "libc",
@@ -2652,7 +2652,7 @@ dependencies = [
 [[package]]
 name = "gsk4"
 version = "0.11.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#66c829ec57f203056f24aadbe4107d01410f7a26"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#133f092c36b0d4da00a8b00d97261f5e78a356a5"
 dependencies = [
  "cairo-rs",
  "gdk4",
@@ -2666,7 +2666,7 @@ dependencies = [
 [[package]]
 name = "gsk4-sys"
 version = "0.11.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#66c829ec57f203056f24aadbe4107d01410f7a26"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#133f092c36b0d4da00a8b00d97261f5e78a356a5"
 dependencies = [
  "cairo-sys-rs",
  "gdk4-sys",
@@ -4178,7 +4178,7 @@ dependencies = [
 [[package]]
 name = "gtk4"
 version = "0.11.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#66c829ec57f203056f24aadbe4107d01410f7a26"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#133f092c36b0d4da00a8b00d97261f5e78a356a5"
 dependencies = [
  "cairo-rs",
  "field-offset",
@@ -4198,18 +4198,18 @@ dependencies = [
 [[package]]
 name = "gtk4-macros"
 version = "0.11.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#66c829ec57f203056f24aadbe4107d01410f7a26"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#133f092c36b0d4da00a8b00d97261f5e78a356a5"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
 name = "gtk4-sys"
 version = "0.11.0"
-source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#66c829ec57f203056f24aadbe4107d01410f7a26"
+source = "git+https://github.com/gtk-rs/gtk4-rs?branch=main#133f092c36b0d4da00a8b00d97261f5e78a356a5"
 dependencies = [
  "cairo-sys-rs",
  "gdk-pixbuf-sys",
@@ -4885,7 +4885,7 @@ checksum = "c34819042dc3d3971c46c2190835914dfbe0c3c13f61449b2997f4e9722dfa60"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -4993,7 +4993,7 @@ checksum = "03343451ff899767262ec32146f6d559dd759fdadf42ff0e227c7c48f72594b4"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -5716,7 +5716,7 @@ checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -5853,7 +5853,7 @@ checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -5909,7 +5909,7 @@ dependencies = [
 [[package]]
 name = "pango"
 version = "0.22.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#dee86a39500f052f4d67531df138fa6096052012"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#a9bb1741e0eb02144edc89bec40e78a919337454"
 dependencies = [
  "gio",
  "glib",
@@ -5920,7 +5920,7 @@ dependencies = [
 [[package]]
 name = "pango-sys"
 version = "0.22.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#dee86a39500f052f4d67531df138fa6096052012"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?branch=main#a9bb1741e0eb02144edc89bec40e78a919337454"
 dependencies = [
  "glib-sys",
  "gobject-sys",
@@ -6118,7 +6118,7 @@ checksum = "6e918e4ff8c4549eb882f14b3a4bc8c8bc93de829416eacf579f1207a8fbf861"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -6260,7 +6260,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff24dfcda44452b9816fff4cd4227e1bb73ff5a2f1bc1105aa92fb8565ce44d2"
 dependencies = [
  "proc-macro2",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -6311,7 +6311,7 @@ dependencies = [
  "proc-macro-error-attr2",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -6339,7 +6339,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52717f9a02b6965224f95ca2a81e2e0c5c43baacd28ca057577988930b6c3d5b"
 dependencies = [
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -6369,7 +6369,7 @@ dependencies = [
  "prost",
  "prost-types",
  "regex",
- "syn 2.0.104",
+ "syn 2.0.106",
  "tempfile",
 ]
 
@@ -6383,7 +6383,7 @@ dependencies = [
  "itertools 0.12.1",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -6743,7 +6743,7 @@ checksum = "1165225c21bff1f3bbce98f5a1f889949bc902d3575308cc7b0de30b4f6d27c7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -7418,7 +7418,7 @@ checksum = "5b0276cf7f2c73365f7157c8123c21cd9a50fbbd844757af28ca1f5925fc2a00"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -7493,7 +7493,7 @@ dependencies = [
  "darling",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -7518,7 +7518,7 @@ checksum = "5d69265a08751de7844521fd15003ae0a888e035773ba05695c5c759a6f89eef"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -7886,9 +7886,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.104"
+version = "2.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17b6f705963418cdb9927482fa304bc562ece2fdd4f616084c50b7023b435a40"
+checksum = "ede7c438028d4436d71104916910f5bb611972c5cfd7f89b8300a8186e6fada6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7918,7 +7918,7 @@ checksum = "728a70f3dbaf5bab7f0c4b1ac8d7ae5ea60a4b5549c8a5914361c99147a709d2"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -8037,7 +8037,7 @@ checksum = "451b374529930d7601b1eef8d32bc79ae870b6079b069401709c2a8bf9e75f36"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -8050,7 +8050,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "regex",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -8091,7 +8091,7 @@ checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -8102,7 +8102,7 @@ checksum = "7f7cf42b4507d8ea322120659672cf1b9dbb93f8f2d4ecfd6e51350ff5b17a1d"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -8210,7 +8210,7 @@ checksum = "6e06d43f1345a3bcd39f6a56dbb7dcab2ba47e68e8ac134855e7e2bdbaf8cab8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -8444,7 +8444,7 @@ checksum = "81383ab64e72a7a8b8e13130c49e3dab29def6d0c7d76a03087b3cf71c5c6903"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -8852,7 +8852,7 @@ dependencies = [
  "log",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
  "wasm-bindgen-shared",
 ]
 
@@ -8887,7 +8887,7 @@ checksum = "8ae87ea40c9f689fc23f209965b6fb8a99ad69aeeb0231408be24920604395de"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -9099,7 +9099,7 @@ checksum = "9107ddc059d5b6fbfbffdfa7a7fe3e22a226def0b2608f72e9d552763d3e1ad7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -9110,7 +9110,7 @@ checksum = "a47fddd13af08290e67f4acabf4b459f647552718f683a7b415d290ac744a836"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -9121,7 +9121,7 @@ checksum = "29bee4b38ea3cde66011baa44dba677c432a78593e202392d1e9070cf2a7fca7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -9132,7 +9132,7 @@ checksum = "bd9211b69f8dcdfa817bfd14bf1c97c9188afa36f4750130fcdf3f400eca9fa8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -9573,7 +9573,7 @@ checksum = "38da3c9736e16c5d3c8c597a9aaa5d1fa565d0532ae05e27c24aa62fb32c0ab6"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
  "synstructure",
 ]
 
@@ -9604,7 +9604,7 @@ checksum = "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -9615,7 +9615,7 @@ checksum = "9ecf5b4cc5364572d7f4c329661bcc82724222973f2cab6f050a4e5c22f75181"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -9635,7 +9635,7 @@ checksum = "d71e5d6e06ab090c67b5e44993ec16b72dcbaabc526db883a360057678b48502"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
  "synstructure",
 ]
 
@@ -9675,5 +9675,5 @@ checksum = "5b96237efa0c878c64bd89c436f661be4e46b2f3eff1ebb976f7ef2321d2f58f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
