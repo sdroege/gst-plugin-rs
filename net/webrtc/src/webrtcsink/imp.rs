@@ -593,7 +593,7 @@ fn make_converter_for_video_caps(caps: &gst::Caps, codec: &Codec) -> Result<gst:
 
     let ret = gst::Bin::default();
 
-    let (head, mut tail) = {
+    let (mut head, tail) = {
         if let Some(feature) = caps.features(0) {
             if feature.contains(NVMM_MEMORY_FEATURE)
                 // NVIDIA V4L2 encoders require NVMM memory as input and that requires using the
@@ -677,18 +677,18 @@ fn make_converter_for_video_caps(caps: &gst::Caps, codec: &Codec) -> Result<gst:
         }
     };
 
-    ret.add_pad(&gst::GhostPad::with_target(&head.static_pad("sink").unwrap()).unwrap())
-        .unwrap();
-
     if video_info.fps().numer() != 0 {
         let vrate = make_element("videorate", None)?;
         vrate.set_property("drop-only", true);
         vrate.set_property("skip-to-first", true);
 
         ret.add(&vrate)?;
-        tail.link(&vrate)?;
-        tail = vrate;
+        vrate.link(&head)?;
+        head = vrate;
     }
+
+    ret.add_pad(&gst::GhostPad::with_target(&head.static_pad("sink").unwrap()).unwrap())
+        .unwrap();
 
     ret.add_pad(&gst::GhostPad::with_target(&tail.static_pad("src").unwrap()).unwrap())
         .unwrap();
