@@ -1592,7 +1592,7 @@
                         "writable": true
                     },
                     "accumulator-lateness": {
-                        "blurb": "By how much to shift input timestamps forward for accumulating",
+                        "blurb": "By how much to shift input timestamps forward",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,

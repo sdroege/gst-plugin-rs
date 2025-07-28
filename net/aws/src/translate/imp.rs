@@ -22,22 +22,24 @@ use aws_sdk_translate::error::ProvideErrorMetadata;
 use futures::future::{abortable, AbortHandle};
 use gst::subclass::prelude::*;
 use gst::{glib, prelude::*};
-use std::sync::mpsc::RecvTimeoutError;
 use std::sync::LazyLock;
-use std::sync::{mpsc, Mutex};
+use std::sync::{Mutex, MutexGuard};
 
 #[allow(deprecated)]
 static AWS_BEHAVIOR_VERSION: LazyLock<aws_config::BehaviorVersion> =
     LazyLock::new(aws_config::BehaviorVersion::v2023_11_09);
 
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(2);
-const DEFAULT_ACCUMULATOR_LATENESS: gst::ClockTime = gst::ClockTime::from_seconds(0);
+const DEFAULT_LATENESS: gst::ClockTime = gst::ClockTime::from_seconds(0);
 const DEFAULT_REGION: &str = "us-east-1";
 const DEFAULT_INPUT_LANG_CODE: &str = "en-US";
 const DEFAULT_OUTPUT_LANG_CODE: &str = "fr-FR";
 const DEFAULT_TOKENIZATION_METHOD: TranslationTokenizationMethod =
     TranslationTokenizationMethod::SpanBased;
 const DEFAULT_BREVITY_ON: bool = false;
+
+const STANDARD_JOINABLE_PUNCTUATION: &str = "!.?,:;";
+const FRENCH_JOINABLE_PUNCTUATION: &str = ".,";
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -56,7 +58,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             latency: DEFAULT_LATENCY,
-            accumulator_lateness: DEFAULT_ACCUMULATOR_LATENESS,
+            accumulator_lateness: DEFAULT_LATENESS,
             input_language_code: String::from(DEFAULT_INPUT_LANG_CODE),
             output_language_code: String::from(DEFAULT_OUTPUT_LANG_CODE),
             access_key: None,
@@ -72,9 +74,8 @@ impl Default for Settings {
 struct InputItem {
     content: String,
     pts: gst::ClockTime,
-    rtime: gst::ClockTime,
     end_pts: gst::ClockTime,
-    is_punctuation: bool,
+    starts_with_joinable_punctuation: bool,
     discont: bool,
 }
 
@@ -82,10 +83,6 @@ struct InputItem {
 pub struct InputItems(Vec<InputItem>);
 
 impl InputItems {
-    fn start_rtime(&self) -> Option<gst::ClockTime> {
-        self.0.first().map(|item| item.rtime)
-    }
-
     fn start_pts(&self) -> Option<gst::ClockTime> {
         self.0.first().map(|item| item.pts)
     }
@@ -93,85 +90,6 @@ impl InputItems {
     fn discont(&self) -> bool {
         self.0.first().map(|item| item.discont).unwrap_or(false)
     }
-
-    fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    fn push(&mut self, item: InputItem) -> Result<(), Error> {
-        if item.discont && !self.is_empty() {
-            return Err(anyhow!("can't push discont item on non-empty accumulator"));
-        }
-
-        self.0.push(item);
-
-        Ok(())
-    }
-
-    fn drain(&mut self, up_to_punctuation: bool) -> Self {
-        let items = match up_to_punctuation {
-            true => {
-                if let Some(punctuation_index) = self.0.iter().rposition(|item| item.is_punctuation)
-                {
-                    let (items, trailing) = self.0.split_at(punctuation_index + 1);
-
-                    let items = items.to_vec();
-
-                    self.0 = trailing.to_vec();
-
-                    gst::log!(CAT, "drained up to punctuation: {items:?}");
-
-                    items
-                } else {
-                    gst::log!(CAT, "drained all items: {:?}", self.0);
-
-                    self.0.drain(..).collect()
-                }
-            }
-            false => {
-                gst::log!(CAT, "drained all items: {:?}", self.0);
-
-                self.0.drain(..).collect()
-            }
-        };
-
-        Self(items)
-    }
-
-    fn timeout(
-        &mut self,
-        now: gst::ClockTime,
-        upstream_min: gst::ClockTime,
-        lateness: gst::ClockTime,
-    ) -> Option<Self> {
-        if let Some(start_rtime) = self.start_rtime() {
-            if start_rtime + upstream_min + lateness < now {
-                gst::debug!(
-                    CAT,
-                    "draining on timeout: {start_rtime} + {upstream_min} + {lateness} < {now}",
-                );
-                Some(self.drain(true))
-            } else {
-                gst::trace!(
-                    CAT,
-                    "queued content is not late: {start_rtime} + {upstream_min} >= {now}"
-                );
-                None
-            }
-        } else {
-            gst::trace!(CAT, "no queued content, cannot be late");
-            None
-        }
-    }
-}
-
-enum TranslateInput {
-    Items(InputItems),
-    Gap {
-        pts: gst::ClockTime,
-        duration: Option<gst::ClockTime>,
-    },
-    Event(gst::Event),
 }
 
 enum TranslateOutput {
@@ -182,15 +100,11 @@ struct State {
     // (live, min, max)
     upstream_latency: Option<(bool, gst::ClockTime, Option<gst::ClockTime>)>,
     segment: Option<gst::FormattedSegment<gst::ClockTime>>,
-    accumulator: InputItems,
     client: Option<aws_sdk_translate::Client>,
     send_abort_handle: Option<AbortHandle>,
-    translate_tx: Option<mpsc::Sender<TranslateInput>>,
     discont: bool,
     seqnum: gst::Seqnum,
-    chained_one: bool,
     current_speaker: Option<String>,
-    task_started: bool,
 }
 
 impl Default for State {
@@ -198,15 +112,11 @@ impl Default for State {
         Self {
             upstream_latency: None,
             segment: None,
-            accumulator: InputItems(vec![]),
             client: None,
             send_abort_handle: None,
-            translate_tx: None,
             discont: false,
             seqnum: gst::Seqnum::next(),
-            chained_one: false,
             current_speaker: None,
-            task_started: false,
         }
     }
 }
@@ -258,17 +168,10 @@ impl Translate {
             FlushStart(_) => {
                 gst::info!(CAT, imp = self, "received flush start, disconnecting");
                 let ret = gst::Pad::event_default(pad, Some(&*self.obj()), event);
-                let _ = self.state.lock().unwrap().translate_tx.take();
-                let _ = self.srcpad.pause_task();
-                self.disconnect(false);
+                self.disconnect();
                 ret
             }
             StreamStart(_) => {
-                if let Err(err) = self.start_srcpad_task() {
-                    gst::error!(CAT, imp = self, "Failed to start srcpad task: {err}");
-                    return false;
-                }
-
                 self.state.lock().unwrap().seqnum = event.seqnum();
 
                 gst::debug!(
@@ -280,18 +183,20 @@ impl Translate {
 
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
+            Caps(_) => {
+                let caps = gst::Caps::builder("text/x-raw")
+                    .field("format", "utf8")
+                    .build();
+
+                let event = gst::event::Caps::builder(&caps)
+                    .seqnum(self.state.lock().unwrap().seqnum)
+                    .build();
+
+                self.srcpad.push_event(event)
+            }
             Segment(e) => {
                 {
                     let mut state = self.state.lock().unwrap();
-
-                    if state.segment.is_some() && state.chained_one {
-                        gst::element_imp_error!(
-                            self,
-                            gst::StreamError::Format,
-                            ["Multiple segments not supported"]
-                        );
-                        return false;
-                    }
 
                     let segment = match e.segment().clone().downcast::<gst::ClockTime>() {
                         Err(segment) => {
@@ -312,159 +217,19 @@ impl Translate {
 
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
-            Caps(_) => {
-                let caps = gst::Caps::builder("text/x-raw")
-                    .field("format", "utf8")
-                    .build();
-
-                let event = gst::event::Caps::builder(&caps)
-                    .seqnum(self.state.lock().unwrap().seqnum)
-                    .build();
-
-                self.srcpad.push_event(event)
-            }
-            Gap(gap) => {
-                let lateness = self.settings.lock().unwrap().accumulator_lateness;
-
-                let state = self.state.lock().unwrap();
-
-                let (pts, duration) = gap.get();
-
-                if state.accumulator.is_empty() {
-                    if let Some(translate_tx) = state.translate_tx.as_ref() {
-                        let _ = translate_tx.send(TranslateInput::Gap {
-                            pts: pts + lateness,
-                            duration,
-                        });
-                    }
-                }
-
-                true
-            }
-            Eos(_) => {
-                let translate_tx = self.state.lock().unwrap().translate_tx.take();
-                if let Some(translate_tx) = translate_tx {
-                    gst::debug!(CAT, imp = self, "received EOS, draining");
-                    let items = self.state.lock().unwrap().accumulator.drain(false);
-                    let _ = translate_tx.send(TranslateInput::Items(items));
-                }
-
-                true
-            }
             CustomDownstream(c) => {
                 let Some(s) = c.structure() else {
                     return gst::Pad::event_default(pad, Some(&*self.obj()), event);
                 };
 
-                let drain = match s.name().as_str() {
-                    "rstranscribe/final-transcript" => {
-                        gst::debug!(CAT, imp = self, "transcript is final, draining");
-                        true
-                    }
-                    "rstranscribe/speaker-change" => {
-                        gst::debug!(CAT, imp = self, "speaker change, draining");
-                        self.state.lock().unwrap().current_speaker =
-                            s.get::<String>("speaker").ok();
-                        true
-                    }
-                    _ => false,
-                };
-
-                if drain {
-                    let items = self.state.lock().unwrap().accumulator.drain(false);
-
-                    if let Some(translate_tx) = self.state.lock().unwrap().translate_tx.as_ref() {
-                        let _ = translate_tx.send(TranslateInput::Items(items));
-                        let _ = translate_tx.send(TranslateInput::Event(event));
-                    }
-
-                    true
-                } else {
-                    gst::Pad::event_default(pad, Some(&*self.obj()), event)
+                if s.name().as_str() == "rstranscribe/speaker-change" {
+                    gst::debug!(CAT, imp = self, "speaker change, draining");
+                    self.state.lock().unwrap().current_speaker = s.get::<String>("speaker").ok();
                 }
+
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
-        }
-    }
-
-    fn maybe_send(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let Some(now) = self.obj().current_running_time() else {
-            gst::trace!(
-                CAT,
-                imp = self,
-                "no current running time, we cannot be late"
-            );
-            return Ok(gst::FlowSuccess::Ok);
-        };
-
-        let Some(upstream_latency) = self.upstream_latency() else {
-            gst::trace!(CAT, imp = self, "no upstream latency, we cannot be late");
-            return Ok(gst::FlowSuccess::Ok);
-        };
-
-        let (upstream_live, upstream_min, _) = upstream_latency;
-
-        if !upstream_live {
-            gst::trace!(CAT, imp = self, "upstream isn't live, we are not late");
-            return Ok(gst::FlowSuccess::Ok);
-        }
-
-        let lateness = self.settings.lock().unwrap().accumulator_lateness;
-
-        loop {
-            let to_translate =
-                self.state
-                    .lock()
-                    .unwrap()
-                    .accumulator
-                    .timeout(now, upstream_min, lateness);
-            if let Some(to_translate) = to_translate {
-                self.do_send(to_translate)?;
-            } else {
-                return Ok(gst::FlowSuccess::Ok);
-            }
-        }
-    }
-
-    fn do_send(&self, to_translate: InputItems) -> Result<gst::FlowSuccess, gst::FlowError> {
-        if to_translate.is_empty() {
-            gst::trace!(CAT, imp = self, "nothing to send, returning early");
-            return Ok(gst::FlowSuccess::Ok);
-        }
-
-        let (future, abort_handle) = abortable(self.send(to_translate));
-
-        self.state.lock().unwrap().send_abort_handle = Some(abort_handle);
-
-        match RUNTIME.block_on(future) {
-            Err(_) => {
-                gst::debug!(CAT, imp = self, "send aborted, returning flushing");
-                Err(gst::FlowError::Flushing)
-            }
-            Ok(res) => match res {
-                Err(e) => {
-                    gst::element_imp_error!(
-                        self,
-                        gst::StreamError::Failed,
-                        ["Failed sending data: {}", e]
-                    );
-                    Err(gst::FlowError::Error)
-                }
-                Ok(mut output) => {
-                    let mut bufferlist = gst::BufferList::new();
-                    let bufferlist_mut = bufferlist.get_mut().unwrap();
-                    for item in output.drain(..) {
-                        match item {
-                            TranslateOutput::Item(buffer) => {
-                                gst::debug!(CAT, imp = self, "pushing {buffer:?}");
-                                bufferlist_mut.add(buffer);
-                            }
-                        }
-                    }
-
-                    self.srcpad.push_list(bufferlist)
-                }
-            },
         }
     }
 
@@ -483,9 +248,14 @@ impl Translate {
 
         let (client, segment, speaker) = {
             let state = self.state.lock().unwrap();
+
+            let Some(segment) = state.segment.clone() else {
+                return Err(anyhow!("buffer received before segment"));
+            };
+
             (
                 state.client.as_ref().unwrap().clone(),
-                state.segment.as_ref().unwrap().clone(),
+                segment,
                 state.current_speaker.clone(),
             )
         };
@@ -511,7 +281,7 @@ impl Translate {
         while let Some(item) = it.next() {
             let suffix = match it.peek() {
                 Some(next_item) => {
-                    if next_item.is_punctuation {
+                    if next_item.starts_with_joinable_punctuation {
                         ""
                     } else {
                         " "
@@ -530,7 +300,7 @@ impl Translate {
 
         let content: String = content.join("");
 
-        gst::log!(
+        gst::debug!(
             CAT,
             imp = self,
             "translating {content} with duration list: {ts_duration_list:?}"
@@ -672,108 +442,7 @@ impl Translate {
         Ok(())
     }
 
-    fn start_srcpad_task(&self) -> Result<(), gst::LoggableError> {
-        if self.state.lock().unwrap().task_started {
-            gst::debug!(CAT, imp = self, "Task started already");
-            return Ok(());
-        }
-
-        gst::debug!(CAT, imp = self, "starting source pad task");
-
-        self.ensure_connection()
-            .map_err(|err| gst::loggable_error!(CAT, "Failed to start pad task: {err}"))?;
-
-        let (translate_tx, translate_rx) = mpsc::channel();
-
-        self.state.lock().unwrap().translate_tx = Some(translate_tx);
-
-        let this_weak = self.downgrade();
-        let res = self.srcpad.start_task(move || loop {
-            let Some(this) = this_weak.upgrade() else {
-                break;
-            };
-
-            let timeout = match this.upstream_latency() {
-                Some((true, _min, _max)) => std::time::Duration::from_millis(100),
-                _ => std::time::Duration::MAX,
-            };
-
-            gst::trace!(CAT, imp = this, "now waiting with timeout {timeout:?}");
-
-            match translate_rx.recv_timeout(timeout) {
-                Ok(input) => {
-                    gst::trace!(CAT, imp = this, "received input on translate queue");
-
-                    match input {
-                        TranslateInput::Items(to_translate) => {
-                            if let Err(err) = this.do_send(to_translate) {
-                                if err != gst::FlowError::Flushing {
-                                    gst::element_error!(
-                                        this.obj(),
-                                        gst::StreamError::Failed,
-                                        ["Streaming failed: {}", err]
-                                    );
-                                }
-                                let _ = this.srcpad.pause_task();
-                            }
-                        }
-                        TranslateInput::Gap { pts, duration } => {
-                            let event = gst::event::Gap::builder(pts)
-                                .duration(duration)
-                                .seqnum(this.state.lock().unwrap().seqnum)
-                                .build();
-
-                            let _ = this.srcpad.push_event(event);
-                        }
-                        TranslateInput::Event(event) => {
-                            gst::debug!(CAT, imp = this, "Forwarding event {event:?}");
-                            let _ = this.srcpad.push_event(event);
-                        }
-                    }
-                }
-                Err(RecvTimeoutError::Timeout) => {
-                    gst::trace!(
-                        CAT,
-                        imp = this,
-                        "timed out waiting for input on translate queue"
-                    );
-
-                    if let Err(err) = this.maybe_send() {
-                        if err != gst::FlowError::Flushing {
-                            gst::element_error!(
-                                this.obj(),
-                                gst::StreamError::Failed,
-                                ["Streaming failed: {}", err]
-                            );
-                        }
-                        let _ = this.srcpad.pause_task();
-                    }
-                }
-                Err(RecvTimeoutError::Disconnected) => {
-                    gst::log!(CAT, imp = this, "translate queue disconnected, pushing EOS");
-
-                    let event = gst::event::Eos::builder()
-                        .seqnum(this.state.lock().unwrap().seqnum)
-                        .build();
-                    let _ = this.srcpad.push_event(event);
-                    let _ = this.srcpad.pause_task();
-                    break;
-                }
-            }
-        });
-
-        if res.is_err() {
-            return Err(gst::loggable_error!(CAT, "Failed to start pad task"));
-        }
-
-        self.state.lock().unwrap().task_started = true;
-
-        gst::debug!(CAT, imp = self, "started source pad task");
-
-        Ok(())
-    }
-
-    fn disconnect(&self, stop_task: bool) {
+    fn disconnect(&self) {
         let mut state = self.state.lock().unwrap();
 
         if let Some(abort_handle) = state.send_abort_handle.take() {
@@ -781,106 +450,160 @@ impl Translate {
             abort_handle.abort();
         }
 
-        let mut task_started = state.task_started;
-
-        if stop_task {
-            drop(state);
-            let _ = self.srcpad.stop_task();
-            state = self.state.lock().unwrap();
-            task_started = false;
-        }
-
-        *state = State {
-            task_started,
-            ..Default::default()
-        };
+        *state = State::default()
     }
 
-    fn sink_chain(
+    fn input_item_from_buffer(
         &self,
-        pad: &gst::Pad,
-        buffer: gst::Buffer,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        state: &mut State,
+        buffer: &gst::BufferRef,
+        is_french: bool,
+    ) -> Result<Option<InputItem>, gst::FlowError> {
+        let Some(pts) = buffer.pts() else {
+            gst::warning!(CAT, imp = self, "dropping first buffer without a PTS");
+            return Ok(None);
+        };
+
+        let end_pts = match buffer.duration() {
+            Some(duration) => duration + pts,
+            _ => pts,
+        };
+
         let data = buffer.map_readable().map_err(|_| {
-            gst::error!(CAT, obj = pad, "Can't map buffer readable");
+            gst::error!(CAT, imp = self, "Can't map buffer readable");
 
             gst::FlowError::Error
         })?;
 
         let data = String::from_utf8(data.to_vec()).map_err(|err| {
-            gst::error!(CAT, obj = pad, "Can't decode utf8: {}", err);
+            gst::error!(CAT, imp = self, "Can't decode utf8: {}", err);
 
             gst::FlowError::Error
         })?;
 
-        let drained_items = if buffer.flags().contains(gst::BufferFlags::DISCONT) {
-            let items = self.state.lock().unwrap().accumulator.drain(false);
-
-            gst::log!(CAT, imp = self, "draining on discont");
-
-            Some(items)
+        let joinable_punctuation = if is_french {
+            FRENCH_JOINABLE_PUNCTUATION
         } else {
-            None
+            STANDARD_JOINABLE_PUNCTUATION
         };
 
-        {
-            let mut state = self.state.lock().unwrap();
+        let starts_with_joinable_punctuation = data
+            .chars()
+            .next()
+            .map(|c| joinable_punctuation.contains(c))
+            .unwrap_or(false);
 
-            if let Some(items) = drained_items {
-                if let Some(translate_tx) = state.translate_tx.as_ref() {
-                    let _ = translate_tx.send(TranslateInput::Items(items));
-                }
+        let discont = state.discont;
+        state.discont = false;
 
-                state.discont = true;
+        Ok(Some(InputItem {
+            content: data,
+            pts,
+            end_pts,
+            starts_with_joinable_punctuation,
+            discont,
+        }))
+    }
+
+    fn do_send(
+        &self,
+        mut state: MutexGuard<State>,
+        to_translate: InputItems,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let (future, abort_handle) = abortable(self.send(to_translate));
+
+        state.send_abort_handle = Some(abort_handle);
+
+        drop(state);
+
+        match RUNTIME.block_on(future) {
+            Err(_) => {
+                gst::debug!(CAT, imp = self, "send aborted, returning flushing");
+                Err(gst::FlowError::Flushing)
             }
+            Ok(res) => match res {
+                Err(e) => {
+                    gst::element_imp_error!(
+                        self,
+                        gst::StreamError::Failed,
+                        ["Failed sending data: {}", e]
+                    );
+                    Err(gst::FlowError::Error)
+                }
+                Ok(mut output) => {
+                    let mut bufferlist = gst::BufferList::new();
+                    let bufferlist_mut = bufferlist.get_mut().unwrap();
+                    for item in output.drain(..) {
+                        match item {
+                            TranslateOutput::Item(buffer) => {
+                                gst::debug!(CAT, imp = self, "pushing {buffer:?}");
+                                bufferlist_mut.add(buffer);
+                            }
+                        }
+                    }
 
-            let Some(segment) = state.segment.as_ref() else {
-                gst::warning!(CAT, imp = self, "dropping buffer before segment");
-                return Ok(gst::FlowSuccess::Ok);
-            };
-
-            let Some(pts) = buffer.pts() else {
-                gst::warning!(CAT, imp = self, "dropping first buffer without a PTS");
-                return Ok(gst::FlowSuccess::Ok);
-            };
-
-            let end_pts = match buffer.duration() {
-                Some(duration) => duration + pts,
-                _ => pts,
-            };
-
-            let Some(rtime) = segment.to_running_time(pts) else {
-                gst::log!(CAT, imp = self, "clipping buffer outside segment");
-                return Ok(gst::FlowSuccess::Ok);
-            };
-
-            let is_punctuation = data.chars().all(|c| c.is_ascii_punctuation());
-
-            let discont = state.discont;
-            state.discont = false;
-
-            let item = InputItem {
-                content: data,
-                pts,
-                rtime,
-                end_pts,
-                is_punctuation,
-                discont,
-            };
-
-            gst::log!(CAT, imp = self, "queuing item on accumulator: {item:?}");
-            state.accumulator.push(item).unwrap();
-            state.chained_one = true;
-
-            gst::trace!(
-                CAT,
-                imp = self,
-                "accumulator is now {:#?}",
-                state.accumulator
-            );
-
-            Ok(gst::FlowSuccess::Ok)
+                    self.srcpad.push_list(bufferlist)
+                }
+            },
         }
+    }
+
+    fn sink_chain(
+        &self,
+        _pad: &gst::Pad,
+        buffer: gst::Buffer,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        self.ensure_connection().map_err(|err| {
+            gst::error!(CAT, "Failed to connect to AWS: {err:?}");
+            gst::FlowError::Error
+        })?;
+
+        let is_french = self
+            .settings
+            .lock()
+            .unwrap()
+            .input_language_code
+            .starts_with("fr-");
+
+        let mut state = self.state.lock().unwrap();
+
+        let to_translate =
+            if let Some(item) = self.input_item_from_buffer(&mut state, &buffer, is_french)? {
+                vec![item]
+            } else {
+                return Ok(gst::FlowSuccess::Ok);
+            };
+
+        self.do_send(state, InputItems(to_translate))
+    }
+
+    fn sink_chain_list(
+        &self,
+        _pad: &gst::Pad,
+        bufferlist: gst::BufferList,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        self.ensure_connection().map_err(|err| {
+            gst::error!(CAT, "Failed to connect to AWS: {err:?}");
+            gst::FlowError::Error
+        })?;
+
+        let is_french = self
+            .settings
+            .lock()
+            .unwrap()
+            .input_language_code
+            .starts_with("fr-");
+
+        let mut state = self.state.lock().unwrap();
+
+        let mut to_translate: Vec<InputItem> = vec![];
+        for buffer in bufferlist.iter() {
+            if let Some(item) = self.input_item_from_buffer(&mut state, buffer, is_french)? {
+                to_translate.push(item);
+            }
+        }
+
+        self.do_send(state, InputItems(to_translate))
     }
 
     fn prepare(&self) -> Result<(), gst::ErrorMessage> {
@@ -977,6 +700,13 @@ impl ObjectSubclass for Translate {
                     |translate| translate.sink_chain(pad, buffer),
                 )
             })
+            .chain_list_function(|pad, parent, buffer| {
+                Translate::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |translate| translate.sink_chain_list(pad, buffer),
+                )
+            })
             .event_function(|pad, parent, event| {
                 Translate::catch_panic_pad_function(
                     parent,
@@ -1022,23 +752,16 @@ impl ObjectImpl for Translate {
                 /**
                  * gstawstranslate:accumulator-lateness
                  *
-                 * the element will accumulate input text until a deadline is
-                 * reached, function of the first item running time and the
-                 * upstream latency.
-                 *
-                 * for live cases where overall latency is to be kept low at the
-                 * expense of synchronization, this property can be set to still
-                 * accumulate reasonable amounts of text for translation.
-                 *
-                 * the timestamps of the translated text will then be shifted forward
+                 * The timestamps of the translated text will be shifted forward
                  * by the value of this property.
                  *
-                 * since: plugins-rs-0.14.0
+                 * Deprecated:plugins-rs-0.15.0: use a textaccumulate element upstream instead
+                 * Since: plugins-rs-0.14.0
                  */
                 glib::ParamSpecUInt::builder("accumulator-lateness")
-                    .nick("Accumulator Latenness")
-                    .blurb("By how much to shift input timestamps forward for accumulating")
-                    .default_value(DEFAULT_ACCUMULATOR_LATENESS.mseconds() as u32)
+                    .nick("Lateness")
+                    .blurb("By how much to shift input timestamps forward")
+                    .default_value(DEFAULT_LATENESS.mseconds() as u32)
                     .mutable_ready()
                     .deprecated()
                     .build(),
@@ -1245,8 +968,7 @@ impl ElementImpl for Translate {
                 })?;
             }
             gst::StateChange::PausedToReady => {
-                let _ = self.state.lock().unwrap().translate_tx.take();
-                self.disconnect(true);
+                self.disconnect();
             }
             _ => (),
         }
@@ -1256,195 +978,5 @@ impl ElementImpl for Translate {
 
     fn provide_clock(&self) -> Option<gst::Clock> {
         Some(gst::SystemClock::obtain())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{InputItem, InputItems};
-
-    #[test]
-    fn accumulator_basic() {
-        let mut accumulator = InputItems(vec![]);
-
-        assert!(accumulator.is_empty());
-        assert_eq!(accumulator.start_rtime(), None);
-        assert_eq!(accumulator.start_pts(), None);
-        assert!(!accumulator.discont());
-        assert!(accumulator.drain(false).is_empty());
-
-        assert!(accumulator
-            .push(InputItem {
-                content: "0".into(),
-                pts: gst::ClockTime::from_nseconds(0),
-                rtime: gst::ClockTime::from_nseconds(0),
-                end_pts: gst::ClockTime::from_nseconds(1),
-                is_punctuation: false,
-                discont: true
-            })
-            .is_ok());
-
-        assert!(accumulator
-            .push(InputItem {
-                content: "2".into(),
-                pts: gst::ClockTime::from_nseconds(2),
-                rtime: gst::ClockTime::from_nseconds(2),
-                end_pts: gst::ClockTime::from_nseconds(3),
-                is_punctuation: false,
-                discont: false
-            })
-            .is_ok());
-
-        assert!(accumulator
-            .push(InputItem {
-                content: "10".into(),
-                pts: gst::ClockTime::from_nseconds(10),
-                rtime: gst::ClockTime::from_nseconds(20),
-                end_pts: gst::ClockTime::from_nseconds(10),
-                is_punctuation: false,
-                discont: true
-            })
-            .is_err());
-
-        assert!(!accumulator.is_empty());
-        assert_eq!(
-            accumulator.start_rtime(),
-            Some(gst::ClockTime::from_nseconds(0))
-        );
-        assert_eq!(
-            accumulator.start_pts(),
-            Some(gst::ClockTime::from_nseconds(0))
-        );
-        assert!(accumulator.discont());
-
-        assert!(!accumulator.drain(false).is_empty());
-    }
-
-    #[test]
-    fn test_accumulator_timeout() {
-        let mut accumulator = InputItems(vec![
-            InputItem {
-                content: "0".into(),
-                pts: gst::ClockTime::from_nseconds(0),
-                rtime: gst::ClockTime::from_nseconds(0),
-                end_pts: gst::ClockTime::from_nseconds(1),
-                is_punctuation: false,
-                discont: true,
-            },
-            InputItem {
-                content: "2".into(),
-                pts: gst::ClockTime::from_nseconds(2),
-                rtime: gst::ClockTime::from_nseconds(2),
-                end_pts: gst::ClockTime::from_nseconds(3),
-                is_punctuation: false,
-                discont: false,
-            },
-        ]);
-
-        let upstream_min = gst::ClockTime::from_nseconds(5);
-        let lateness = gst::ClockTime::from_nseconds(0);
-
-        assert!(accumulator
-            .timeout(gst::ClockTime::from_nseconds(5), upstream_min, lateness)
-            .is_none());
-
-        assert_eq!(
-            accumulator
-                .timeout(gst::ClockTime::from_nseconds(6), upstream_min, lateness)
-                .unwrap()
-                .0
-                .len(),
-            2
-        );
-
-        assert!(accumulator.is_empty());
-    }
-
-    #[test]
-    fn test_accumulator_timeout_punctuation() {
-        let mut accumulator = InputItems(vec![
-            InputItem {
-                content: "0".into(),
-                pts: gst::ClockTime::from_nseconds(0),
-                rtime: gst::ClockTime::from_nseconds(0),
-                end_pts: gst::ClockTime::from_nseconds(1),
-                is_punctuation: false,
-                discont: true,
-            },
-            InputItem {
-                content: ".".into(),
-                pts: gst::ClockTime::from_nseconds(2),
-                rtime: gst::ClockTime::from_nseconds(2),
-                end_pts: gst::ClockTime::from_nseconds(3),
-                is_punctuation: true,
-                discont: false,
-            },
-            InputItem {
-                content: "5".into(),
-                pts: gst::ClockTime::from_nseconds(5),
-                rtime: gst::ClockTime::from_nseconds(5),
-                end_pts: gst::ClockTime::from_nseconds(6),
-                is_punctuation: false,
-                discont: false,
-            },
-        ]);
-
-        let upstream_min = gst::ClockTime::from_nseconds(5);
-        let lateness = gst::ClockTime::from_nseconds(0);
-
-        assert!(accumulator
-            .timeout(gst::ClockTime::from_nseconds(5), upstream_min, lateness)
-            .is_none());
-
-        assert_eq!(
-            accumulator
-                .timeout(gst::ClockTime::from_nseconds(6), upstream_min, lateness)
-                .unwrap()
-                .0
-                .len(),
-            2
-        );
-
-        assert_eq!(accumulator.0.len(), 1);
-    }
-
-    #[test]
-    fn test_accumulator_lateness() {
-        let mut accumulator = InputItems(vec![
-            InputItem {
-                content: "0".into(),
-                pts: gst::ClockTime::from_nseconds(0),
-                rtime: gst::ClockTime::from_nseconds(0),
-                end_pts: gst::ClockTime::from_nseconds(1),
-                is_punctuation: false,
-                discont: true,
-            },
-            InputItem {
-                content: "2".into(),
-                pts: gst::ClockTime::from_nseconds(2),
-                rtime: gst::ClockTime::from_nseconds(2),
-                end_pts: gst::ClockTime::from_nseconds(3),
-                is_punctuation: false,
-                discont: false,
-            },
-        ]);
-
-        let upstream_min = gst::ClockTime::from_nseconds(5);
-        let lateness = gst::ClockTime::from_nseconds(10);
-
-        assert!(accumulator
-            .timeout(gst::ClockTime::from_nseconds(5), upstream_min, lateness)
-            .is_none());
-
-        assert_eq!(
-            accumulator
-                .timeout(gst::ClockTime::from_nseconds(16), upstream_min, lateness)
-                .unwrap()
-                .0
-                .len(),
-            2
-        );
-
-        assert!(accumulator.is_empty());
     }
 }

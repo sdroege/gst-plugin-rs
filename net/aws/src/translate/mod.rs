@@ -11,21 +11,6 @@
  *
  * `awstranslate` is an element that can be used to translate text from one
  * language to another.
- *
- * When working with live data, the element will accumulate input text until
- * the deadline is reached, comparing the current running time with the running
- * time of the input items and the upstream latency.
- *
- * At this point the input items will be drained up until the first item ending
- * with a punctuation symbol.
- *
- * The accumulator will also be drained upon receiving `rstranscribe/final-transcript`
- * and `rstranscribe/speaker-change` custom events.
- *
- * When the user wants to use a very low / no latency upstream, and is willing to
- * accept desynchronization in order to build up long-enough sentences for translation,
- * they can set the #GstAwsTranslate:accumulator-lateness property to shift the input
- * timestamps forward when accumulating.
  */
 use gst::glib;
 use gst::prelude::*;
