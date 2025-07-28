@@ -2384,6 +2384,8 @@ impl TranscriberBin {
                     }
                 }
 
+                drop(state);
+
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
