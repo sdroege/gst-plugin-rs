@@ -2190,7 +2190,7 @@ impl TranscriberBin {
         {
             let mut upstream_query = gst::query::Latency::new();
 
-            if pad.query(&mut upstream_query) {
+            if pad.peer_query(&mut upstream_query) {
                 let (_, upstream_min, _) = upstream_query.result();
 
                 if min < upstream_min {
