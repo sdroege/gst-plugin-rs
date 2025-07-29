@@ -88,8 +88,7 @@ impl TranslationBin {
         queue.sync_state_with_parent()?;
         translator.sync_state_with_parent()?;
 
-        tee.link(&queue)?;
-        queue.link(&translator)?;
+        gst::Element::link_many([tee, &queue, &translator])?;
 
         srcpad.set_target(Some(
             &translator
@@ -171,6 +170,8 @@ impl TranslationBin {
 
         transcriber.set_property("language-code", &language_code);
 
+        let accumulate = gst::ElementFactory::make("textaccumulate").build()?;
+
         let tee = gst::ElementFactory::make("tee")
             .property("allow-not-linked", true)
             .build()?;
@@ -178,13 +179,13 @@ impl TranslationBin {
 
         let obj = self.obj();
 
-        obj.add_many([&transcriber, &tee, &queue])?;
+        obj.add_many([&transcriber, &accumulate, &tee, &queue])?;
 
         transcriber.sync_state_with_parent()?;
+        accumulate.sync_state_with_parent()?;
         tee.sync_state_with_parent()?;
 
-        transcriber.link(&tee)?;
-        tee.link(&queue)?;
+        gst::Element::link_many([&transcriber, &accumulate, &tee, &queue])?;
 
         self.audio_sinkpad.set_target(Some(
             &transcriber
