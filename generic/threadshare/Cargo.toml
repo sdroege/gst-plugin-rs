@@ -75,6 +75,10 @@ name = "ts-inter"
 path = "tests/inter.rs"
 
 [[test]]
+name = "ts-pad"
+path = "tests/pad.rs"
+
+[[test]]
 name = "ts-rtpdtmfsrc"
 path = "tests/rtpdtmfsrc.rs"
 

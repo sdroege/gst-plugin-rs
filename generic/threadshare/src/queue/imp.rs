@@ -133,7 +133,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
         let imp = elem.imp();
 
         if let gst::EventView::FlushStop(..) = event.view() {
-            if let Err(err) = imp.task.flush_stop().await_maybe_on_context() {
+            if let Err(err) = imp.task.flush_stop().await {
                 gst::error!(CAT, obj = pad, "FlushStop failed {:?}", err);
                 gst::element_imp_error!(
                     imp,
@@ -141,7 +141,6 @@ impl PadSinkHandler for QueuePadSinkHandler {
                     ("Internal data stream error"),
                     ["FlushStop failed {:?}", err]
                 );
-                return false;
             }
         }
 
@@ -188,7 +187,6 @@ impl PadSrcHandler for QueuePadSrcHandler {
                         ("Internal data stream error"),
                         ["FlushStop failed {:?}", err]
                     );
-                    return false;
                 }
             }
             _ => (),
@@ -272,7 +270,6 @@ impl TaskImpl for QueueTask {
         let mut last_res = queue.last_res.lock().unwrap();
 
         self.dataqueue.start();
-
         *last_res = Ok(gst::FlowSuccess::Ok);
 
         gst::log!(CAT, obj = self.element, "Task started");
@@ -320,6 +317,13 @@ impl TaskImpl for QueueTask {
 
     async fn stop(&mut self) -> Result<(), gst::ErrorMessage> {
         gst::log!(CAT, obj = self.element, "Stopping task");
+        self.flush_start().await?;
+        gst::log!(CAT, obj = self.element, "Task stopped");
+        Ok(())
+    }
+
+    async fn flush_start(&mut self) -> Result<(), gst::ErrorMessage> {
+        gst::log!(CAT, obj = self.element, "Task flush start");
 
         let queue = self.element.imp();
         let mut last_res = queue.last_res.lock().unwrap();
@@ -333,25 +337,14 @@ impl TaskImpl for QueueTask {
 
         *last_res = Err(gst::FlowError::Flushing);
 
-        gst::log!(CAT, obj = self.element, "Task stopped");
+        gst::log!(CAT, obj = self.element, "Task flush started");
         Ok(())
     }
 
-    async fn flush_start(&mut self) -> Result<(), gst::ErrorMessage> {
-        gst::log!(CAT, obj = self.element, "Starting task flush");
-
-        let queue = self.element.imp();
-        let mut last_res = queue.last_res.lock().unwrap();
-
-        self.dataqueue.clear();
-
-        if let Some(mut pending_queue) = queue.pending_queue.lock().unwrap().take() {
-            pending_queue.notify_more_queue_space();
-        }
-
-        *last_res = Err(gst::FlowError::Flushing);
-
-        gst::log!(CAT, obj = self.element, "Task flush started");
+    async fn flush_stop(&mut self) -> Result<(), gst::ErrorMessage> {
+        gst::log!(CAT, obj = self.element, "Task flush stop");
+        self.start().await?;
+        gst::log!(CAT, obj = self.element, "Task flush stopped");
         Ok(())
     }
 }

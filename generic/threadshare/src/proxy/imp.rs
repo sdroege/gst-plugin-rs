@@ -679,7 +679,6 @@ impl PadSrcHandler for ProxySrcPadHandler {
                         ("Internal data stream error"),
                         ["FlushStart failed {:?}", err]
                     );
-                    return false;
                 }
             }
             EventView::FlushStop(..) => {
@@ -691,7 +690,6 @@ impl PadSrcHandler for ProxySrcPadHandler {
                         ("Internal data stream error"),
                         ["FlushStop failed {:?}", err]
                     );
-                    return false;
                 }
             }
             _ => (),
@@ -798,13 +796,8 @@ impl TaskImpl for ProxySrcTask {
         let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
         let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
 
-        shared_ctx.last_res = Ok(gst::FlowSuccess::Ok);
-
-        if let Some(pending_queue) = shared_ctx.pending_queue.as_mut() {
-            pending_queue.notify_more_queue_space();
-        }
-
         self.dataqueue.start();
+        shared_ctx.last_res = Ok(gst::FlowSuccess::Ok);
 
         gst::log!(SRC_CAT, obj = self.element, "Task started");
         Ok(())
@@ -858,13 +851,20 @@ impl TaskImpl for ProxySrcTask {
 
     async fn stop(&mut self) -> Result<(), gst::ErrorMessage> {
         gst::log!(SRC_CAT, obj = self.element, "Stopping task");
+        self.flush_start().await?;
+        gst::log!(SRC_CAT, obj = self.element, "Task stopped");
+        Ok(())
+    }
+
+    async fn flush_start(&mut self) -> Result<(), gst::ErrorMessage> {
+        gst::log!(SRC_CAT, obj = self.element, "Task flush start");
 
         let proxysrc = self.element.imp();
         let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
         let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
 
-        self.dataqueue.clear();
         self.dataqueue.stop();
+        self.dataqueue.clear();
 
         shared_ctx.last_res = Err(gst::FlowError::Flushing);
 
@@ -872,22 +872,14 @@ impl TaskImpl for ProxySrcTask {
             pending_queue.notify_more_queue_space();
         }
 
-        gst::log!(SRC_CAT, obj = self.element, "Task stopped");
+        gst::log!(SRC_CAT, obj = self.element, "Task flush started");
         Ok(())
     }
 
-    async fn flush_start(&mut self) -> Result<(), gst::ErrorMessage> {
-        gst::log!(SRC_CAT, obj = self.element, "Starting task flush");
-
-        let proxysrc = self.element.imp();
-        let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
-        let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
-
-        self.dataqueue.clear();
-
-        shared_ctx.last_res = Err(gst::FlowError::Flushing);
-
-        gst::log!(SRC_CAT, obj = self.element, "Task flush started");
+    async fn flush_stop(&mut self) -> Result<(), gst::ErrorMessage> {
+        gst::log!(SRC_CAT, obj = self.element, "Task flush stop");
+        self.start().await?;
+        gst::log!(SRC_CAT, obj = self.element, "Task flush stopped");
         Ok(())
     }
 }
