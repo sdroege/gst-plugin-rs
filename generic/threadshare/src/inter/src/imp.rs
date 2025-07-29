@@ -493,11 +493,7 @@ impl TaskImpl for InterSrcTask {
 
     async fn stop(&mut self) -> Result<(), gst::ErrorMessage> {
         gst::log!(CAT, obj = self.elem, "Stopping task");
-
-        self.dataqueue.stop();
-        self.dataqueue.clear();
-        self.got_first_item = false;
-
+        self.flush_start().await?;
         gst::log!(CAT, obj = self.elem, "Task stopped");
 
         Ok(())
@@ -506,6 +502,7 @@ impl TaskImpl for InterSrcTask {
     async fn flush_start(&mut self) -> Result<(), gst::ErrorMessage> {
         gst::log!(CAT, obj = self.elem, "Starting task flush");
 
+        self.dataqueue.stop();
         self.dataqueue.clear();
         self.got_first_item = false;
 
