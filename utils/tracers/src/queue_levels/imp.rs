@@ -99,8 +99,44 @@ static APPSRC_TYPE: LazyLock<glib::Type> = LazyLock::new(|| {
     }
 });
 
+static TS_INTERSRC_TYPE: LazyLock<glib::Type> = LazyLock::new(|| {
+    if let Some(queue) = gst::ElementFactory::find("ts-intersrc").and_then(|f| f.load().ok()) {
+        queue.element_type()
+    } else {
+        gst::warning!(CAT, "Can't instantiate ts-intersrc element");
+        glib::Type::INVALID
+    }
+});
+
+static TS_PROXYSRC_TYPE: LazyLock<glib::Type> = LazyLock::new(|| {
+    if let Some(queue) = gst::ElementFactory::find("ts-proxysrc").and_then(|f| f.load().ok()) {
+        queue.element_type()
+    } else {
+        gst::warning!(CAT, "Can't instantiate ts-proxysrc element");
+        glib::Type::INVALID
+    }
+});
+
+static TS_QUEUE_TYPE: LazyLock<glib::Type> = LazyLock::new(|| {
+    if let Some(queue) = gst::ElementFactory::find("ts-queue").and_then(|f| f.load().ok()) {
+        queue.element_type()
+    } else {
+        gst::warning!(CAT, "Can't instantiate ts-queue element");
+        glib::Type::INVALID
+    }
+});
+
 fn is_queue_type(type_: glib::Type) -> bool {
-    [*QUEUE_TYPE, *QUEUE2_TYPE, *MULTIQUEUE_TYPE, *APPSRC_TYPE].contains(&type_)
+    [
+        *QUEUE_TYPE,
+        *QUEUE2_TYPE,
+        *MULTIQUEUE_TYPE,
+        *APPSRC_TYPE,
+        *TS_INTERSRC_TYPE,
+        *TS_PROXYSRC_TYPE,
+        *TS_QUEUE_TYPE,
+    ]
+    .contains(&type_)
 }
 
 #[derive(Debug)]
