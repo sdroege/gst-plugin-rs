@@ -648,6 +648,21 @@ impl ObjectImpl for Queue {
                     .maximum(u64::MAX - 1)
                     .default_value(DEFAULT_MAX_SIZE_TIME.nseconds())
                     .build(),
+                glib::ParamSpecUInt::builder("current-level-buffers")
+                    .nick("Current Level Buffers")
+                    .blurb("Current number of buffers in the queue")
+                    .read_only()
+                    .build(),
+                glib::ParamSpecUInt::builder("current-level-bytes")
+                    .nick("Current Level Bytes")
+                    .blurb("Current amount of data in the queue (bytes)")
+                    .read_only()
+                    .build(),
+                glib::ParamSpecUInt64::builder("current-level-time")
+                    .nick("Current Level Time")
+                    .blurb("Current amount of data in the queue (in ns)")
+                    .read_only()
+                    .build(),
             ]
         });
 
@@ -682,13 +697,42 @@ impl ObjectImpl for Queue {
     }
 
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        let settings = self.settings.lock().unwrap();
         match pspec.name() {
-            "max-size-buffers" => settings.max_size_buffers.to_value(),
-            "max-size-bytes" => settings.max_size_bytes.to_value(),
-            "max-size-time" => settings.max_size_time.nseconds().to_value(),
-            "context" => settings.context.to_value(),
-            "context-wait" => (settings.context_wait.as_millis() as u32).to_value(),
+            "max-size-buffers" => self.settings.lock().unwrap().max_size_buffers.to_value(),
+            "max-size-bytes" => self.settings.lock().unwrap().max_size_bytes.to_value(),
+            "max-size-time" => self
+                .settings
+                .lock()
+                .unwrap()
+                .max_size_time
+                .nseconds()
+                .to_value(),
+            "current-level-buffers" => self
+                .dataqueue
+                .lock()
+                .unwrap()
+                .as_ref()
+                .map_or(0, |d| d.cur_level_buffers())
+                .to_value(),
+            "current-level-bytes" => self
+                .dataqueue
+                .lock()
+                .unwrap()
+                .as_ref()
+                .map_or(0, |d| d.cur_level_bytes())
+                .to_value(),
+            "current-level-time" => self
+                .dataqueue
+                .lock()
+                .unwrap()
+                .as_ref()
+                .map_or(gst::ClockTime::ZERO, |d| d.cur_level_time())
+                .nseconds()
+                .to_value(),
+            "context" => self.settings.lock().unwrap().context.to_value(),
+            "context-wait" => {
+                (self.settings.lock().unwrap().context_wait.as_millis() as u32).to_value()
+            }
             _ => unimplemented!(),
         }
     }
