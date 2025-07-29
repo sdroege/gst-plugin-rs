@@ -80,8 +80,9 @@ struct DataQueueInner {
     state: DataQueueState,
     queue: VecDeque<DataQueueItem>,
 
-    cur_size_buffers: u32,
-    cur_size_bytes: u32,
+    cur_level_buffers: u32,
+    cur_level_bytes: u32,
+    cur_level_time: gst::ClockTime,
     max_size_buffers: Option<u32>,
     max_size_bytes: Option<u32>,
     max_size_time: Option<gst::ClockTime>,
@@ -110,8 +111,9 @@ impl DataQueue {
             src_pad: src_pad.clone(),
             state: DataQueueState::Stopped,
             queue: VecDeque::new(),
-            cur_size_buffers: 0,
-            cur_size_bytes: 0,
+            cur_level_buffers: 0,
+            cur_level_bytes: 0,
+            cur_level_time: gst::ClockTime::ZERO,
             max_size_buffers,
             max_size_bytes,
             max_size_time: max_size_time.into(),
@@ -121,6 +123,18 @@ impl DataQueue {
 
     pub fn state(&self) -> DataQueueState {
         self.0.lock().unwrap().state
+    }
+
+    pub fn cur_level_buffers(&self) -> u32 {
+        self.0.lock().unwrap().cur_level_buffers
+    }
+
+    pub fn cur_level_bytes(&self) -> u32 {
+        self.0.lock().unwrap().cur_level_bytes
+    }
+
+    pub fn cur_level_time(&self) -> gst::ClockTime {
+        self.0.lock().unwrap().cur_level_time
     }
 
     pub fn start(&self) {
@@ -170,6 +184,10 @@ impl DataQueue {
             }
         }
 
+        inner.cur_level_buffers = 0;
+        inner.cur_level_bytes = 0;
+        inner.cur_level_time = gst::ClockTime::ZERO;
+
         gst::debug!(DATA_QUEUE_CAT, obj = inner.element, "Data queue cleared");
     }
 
@@ -195,58 +213,63 @@ impl DataQueue {
         );
 
         let (count, bytes) = item.size();
-        let queue_ts = inner.queue.iter().filter_map(|i| i.timestamp()).next();
+        let queue_ts = inner.queue.iter().find_map(|i| i.timestamp());
         let ts = item.timestamp();
 
         if let Some(max) = inner.max_size_buffers {
-            if max <= inner.cur_size_buffers {
+            if max <= inner.cur_level_buffers {
                 gst::debug!(
                     DATA_QUEUE_CAT,
                     obj = inner.element,
                     "Queue is full (buffers): {} <= {}",
                     max,
-                    inner.cur_size_buffers
+                    inner.cur_level_buffers
                 );
                 return Err(item);
             }
         }
 
         if let Some(max) = inner.max_size_bytes {
-            if max <= inner.cur_size_bytes {
+            if max <= inner.cur_level_bytes {
                 gst::debug!(
                     DATA_QUEUE_CAT,
                     obj = inner.element,
                     "Queue is full (bytes): {} <= {}",
                     max,
-                    inner.cur_size_bytes
+                    inner.cur_level_bytes
                 );
                 return Err(item);
             }
         }
 
         // FIXME: Use running time
-        if let (Some(max), Some(queue_ts), Some(ts)) = (inner.max_size_time, queue_ts, ts) {
+        let level = if let (Some(queue_ts), Some(ts)) = (queue_ts, ts) {
             let level = if queue_ts > ts {
                 queue_ts - ts
             } else {
                 ts - queue_ts
             };
 
-            if max <= level {
+            if inner.max_size_time.opt_le(level).unwrap_or(false) {
                 gst::debug!(
                     DATA_QUEUE_CAT,
                     obj = inner.element,
                     "Queue is full (time): {} <= {}",
-                    max,
+                    inner.max_size_time.display(),
                     level
                 );
                 return Err(item);
             }
-        }
+
+            level
+        } else {
+            gst::ClockTime::ZERO
+        };
 
         inner.queue.push_back(item);
-        inner.cur_size_buffers += count;
-        inner.cur_size_bytes += bytes;
+        inner.cur_level_buffers += count;
+        inner.cur_level_bytes += bytes;
+        inner.cur_level_time = level;
 
         inner.wake();
 
@@ -273,8 +296,8 @@ impl DataQueue {
                             );
 
                             let (count, bytes) = item.size();
-                            inner.cur_size_buffers -= count;
-                            inner.cur_size_bytes -= bytes;
+                            inner.cur_level_buffers -= count;
+                            inner.cur_level_bytes -= bytes;
 
                             return Some(item);
                         }
