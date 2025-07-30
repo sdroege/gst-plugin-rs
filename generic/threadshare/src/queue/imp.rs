@@ -269,7 +269,12 @@ impl TaskImpl for QueueTask {
         let queue = self.element.imp();
         let mut last_res = queue.last_res.lock().unwrap();
 
+        if let Some(pending_queue) = queue.pending_queue.lock().unwrap().as_mut() {
+            pending_queue.notify_more_queue_space();
+        }
+
         self.dataqueue.start();
+
         *last_res = Ok(gst::FlowSuccess::Ok);
 
         gst::log!(CAT, obj = self.element, "Task started");

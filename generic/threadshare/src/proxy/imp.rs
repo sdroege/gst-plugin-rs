@@ -796,7 +796,12 @@ impl TaskImpl for ProxySrcTask {
         let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
         let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
 
+        if let Some(pending_queue) = shared_ctx.pending_queue.as_mut() {
+            pending_queue.notify_more_queue_space();
+        }
+
         self.dataqueue.start();
+
         shared_ctx.last_res = Ok(gst::FlowSuccess::Ok);
 
         gst::log!(SRC_CAT, obj = self.element, "Task started");
