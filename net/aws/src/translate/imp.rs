@@ -37,6 +37,7 @@ const DEFAULT_INPUT_LANG_CODE: &str = "en-US";
 const DEFAULT_OUTPUT_LANG_CODE: &str = "fr-FR";
 const DEFAULT_TOKENIZATION_METHOD: TranslationTokenizationMethod =
     TranslationTokenizationMethod::SpanBased;
+const DEFAULT_BREVITY_ON: bool = false;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -48,6 +49,7 @@ struct Settings {
     secret_access_key: Option<String>,
     session_token: Option<String>,
     tokenization_method: TranslationTokenizationMethod,
+    brevity_on: bool,
 }
 
 impl Default for Settings {
@@ -61,6 +63,7 @@ impl Default for Settings {
             secret_access_key: None,
             session_token: None,
             tokenization_method: DEFAULT_TOKENIZATION_METHOD,
+            brevity_on: DEFAULT_BREVITY_ON,
         }
     }
 }
@@ -466,7 +469,7 @@ impl Translate {
     }
 
     async fn send(&self, to_translate: InputItems) -> Result<Vec<TranslateOutput>, Error> {
-        let (input_lang, output_lang, latency, tokenization_method, lateness) = {
+        let (input_lang, output_lang, latency, tokenization_method, lateness, brevity_on) = {
             let settings = self.settings.lock().unwrap();
             (
                 settings.input_language_code.clone(),
@@ -474,6 +477,7 @@ impl Translate {
                 settings.latency,
                 settings.tokenization_method,
                 settings.accumulator_lateness,
+                settings.brevity_on,
             )
         };
 
@@ -532,10 +536,19 @@ impl Translate {
             "translating {content} with duration list: {ts_duration_list:?}"
         );
 
+        let mut translate_settings_builder =
+            aws_sdk_translate::types::TranslationSettings::builder();
+
+        if brevity_on {
+            translate_settings_builder =
+                translate_settings_builder.set_brevity(Some(aws_sdk_translate::types::Brevity::On));
+        }
+
         let translated_text = client
             .translate_text()
             .set_source_language_code(Some(input_lang))
             .set_target_language_code(Some(output_lang.clone()))
+            .set_settings(Some(translate_settings_builder.build()))
             .set_text(Some(content))
             .send()
             .await
@@ -1007,20 +1020,20 @@ impl ObjectImpl for Translate {
                     .deprecated()
                     .build(),
                 /**
-                 * GstAwsTranslate:accumulator-lateness
+                 * gstawstranslate:accumulator-lateness
                  *
-                 * The element will accumulate input text until a deadline is
+                 * the element will accumulate input text until a deadline is
                  * reached, function of the first item running time and the
                  * upstream latency.
                  *
-                 * For live cases where overall latency is to be kept low at the
+                 * for live cases where overall latency is to be kept low at the
                  * expense of synchronization, this property can be set to still
                  * accumulate reasonable amounts of text for translation.
                  *
-                 * The timestamps of the translated text will then be shifted forward
+                 * the timestamps of the translated text will then be shifted forward
                  * by the value of this property.
                  *
-                 * Since: plugins-rs-0.14.0
+                 * since: plugins-rs-0.14.0
                  */
                 glib::ParamSpecUInt::builder("accumulator-lateness")
                     .nick("Accumulator Latenness")
@@ -1060,6 +1073,21 @@ impl ObjectImpl for Translate {
                     .nick("Translations tokenization method")
                     .blurb("The tokenization method to apply")
                     .default_value(DEFAULT_TOKENIZATION_METHOD)
+                    .mutable_ready()
+                    .build(),
+                /**
+                 * gstawstranslate:brevity-on
+                 *
+                 * Turn on the brevity feature, only available for some languages.
+                 *
+                 * https://docs.aws.amazon.com/translate/latest/dg/customizing-translations-brevity.html
+                 *
+                 * since: plugins-rs-0.15.0
+                 */
+                glib::ParamSpecBoolean::builder("brevity-on")
+                    .nick("Brevity On")
+                    .blurb("Whether brevity should be turned on")
+                    .default_value(DEFAULT_BREVITY_ON)
                     .mutable_ready()
                     .build(),
             ]
@@ -1115,6 +1143,7 @@ impl ObjectImpl for Translate {
             "tokenization-method" => {
                 self.settings.lock().unwrap().tokenization_method = value.get().unwrap()
             }
+            "brevity-on" => self.settings.lock().unwrap().brevity_on = value.get().unwrap(),
             _ => unimplemented!(),
         }
     }
@@ -1150,6 +1179,7 @@ impl ObjectImpl for Translate {
                 settings.output_language_code.to_value()
             }
             "tokenization-method" => self.settings.lock().unwrap().tokenization_method.to_value(),
+            "brevity-on" => self.settings.lock().unwrap().brevity_on.to_value(),
             _ => unimplemented!(),
         }
     }
