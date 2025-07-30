@@ -41,17 +41,17 @@ tokio-rustls = { version = "0.26", default-features = false, features = ["loggin
 rustls-pemfile = "2"
 rustls-pki-types = "1"
 
-aws-config = { version = "~1.5.18", optional = true }
-# needs this constraint to prevent adding aws-smithy-http 0.62 too
-aws-smithy-runtime = { version = "~1.7.8", optional = true }
-aws-smithy-runtime-api = { version = "~1.7.4", optional = true }
+aws-config = { version = "1.0", default-features = false, features = ["credentials-process", "rt-tokio"], optional = true }
+aws-sdk-sso = { version = "1.0", default-features = false, features = ["rt-tokio", "rustls"], optional = true }
+aws-sdk-sts = { version = "1.0", default-features = false, features = ["rt-tokio", "rustls"], optional = true }
 aws-types = { version = "1.0", optional = true }
 aws-credential-types = { version = "1.0", optional = true }
-aws-sigv4 = { version = "~1.2.9", optional = true }
-aws-smithy-http = { version = "0.60", features = [ "rt-tokio" ], optional = true }
+aws-sigv4 = { version = "1.0", optional = true }
+aws-smithy-http = { version = "0.62", features = [ "rt-tokio" ], optional = true }
+aws-smithy-http-client = { version = "1.1.1", default-features = false, features = ["hyper-014", "legacy-rustls-ring"], optional = true }
 aws-smithy-types = { version = "1.0", optional = true }
-aws-sdk-kinesisvideo = { version =  "~1.62.0", optional = true }
-aws-sdk-kinesisvideosignaling = { version = "~1.61.0", optional = true }
+aws-sdk-kinesisvideo = { version =  "1.0", optional = true, default-features = false, features = ["rt-tokio", "rustls"] }
+aws-sdk-kinesisvideosignaling = { version = "1.0", optional = true, default-features = false, features = ["rt-tokio", "rustls"] }
 http = { version = "1.0", optional = true }
 data-encoding = {version = "2.3.3", optional = true }
 url-escape = { version = "0.1.1", optional = true }
@@ -93,9 +93,10 @@ static = []
 capi = []
 doc = []
 
-aws = ["dep:aws-config", "dep:aws-smithy-runtime", "dep:aws-smithy-runtime-api", "dep:aws-types", "dep:aws-credential-types",
-       "dep:aws-sigv4", "dep:aws-smithy-http", "dep:aws-smithy-types", "dep:aws-sdk-kinesisvideo",
-       "dep:aws-sdk-kinesisvideosignaling", "dep:data-encoding", "dep:http", "dep:url-escape"]
+aws = ["dep:aws-config", "dep:aws-types", "dep:aws-credential-types", "dep:aws-sigv4",
+       "dep:aws-smithy-http", "dep:aws-smithy-types", "dep:aws-sdk-kinesisvideo",
+       "dep:aws-sdk-kinesisvideosignaling", "dep:data-encoding", "dep:http", "dep:url-escape", "dep:aws-smithy-http-client",
+       "dep:aws-sdk-sso", "dep:aws-sdk-sts"]
 janus = ["dep:http"]
 livekit = ["dep:livekit-protocol", "dep:livekit-api"]
 whip = ["dep:async-recursion", "dep:reqwest", "dep:warp", "dep:ctrlc"]

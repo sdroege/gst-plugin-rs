@@ -129,6 +129,7 @@ default-members = [
 
 [profile.release]
 lto = "thin"
+codegen-units = 1
 opt-level = 3
 debug = true
 panic = 'unwind'
