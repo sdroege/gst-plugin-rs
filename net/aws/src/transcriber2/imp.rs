@@ -92,6 +92,7 @@ struct State {
     receive_handle: Option<tokio::task::JoinHandle<()>>,
     partial_index: usize,
     seqnum: gst::Seqnum,
+    task_started: bool,
 }
 
 impl Default for State {
@@ -109,6 +110,7 @@ impl Default for State {
             receive_handle: None,
             partial_index: 0,
             seqnum: gst::Seqnum::next(),
+            task_started: false,
         }
     }
 }
@@ -391,6 +393,11 @@ impl Transcriber {
     }
 
     fn start_srcpad_task(&self) -> Result<(), gst::LoggableError> {
+        if self.state.lock().unwrap().task_started {
+            gst::debug!(CAT, imp = self, "Task started already");
+            return Ok(());
+        }
+
         gst::debug!(CAT, imp = self, "starting source pad task");
 
         self.ensure_connection()
@@ -488,6 +495,8 @@ impl Transcriber {
         if res.is_err() {
             return Err(gst::loggable_error!(CAT, "Failed to start pad task"));
         }
+
+        self.state.lock().unwrap().task_started = true;
 
         gst::debug!(CAT, imp = self, "started source pad task");
 
@@ -817,6 +826,8 @@ impl Transcriber {
             handle.abort();
         }
 
+        let mut task_started = state.task_started;
+
         // Make sure the task is fully stopped before resetting the state,
         // in order not to break expectations such as in_segment being
         // present while the task is still processing items
@@ -824,9 +835,13 @@ impl Transcriber {
             drop(state);
             let _ = self.srcpad.stop_task();
             state = self.state.lock().unwrap();
+            task_started = false;
         }
 
-        *state = State::default();
+        *state = State {
+            task_started,
+            ..Default::default()
+        };
     }
 
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
