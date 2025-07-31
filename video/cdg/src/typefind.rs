@@ -64,11 +64,11 @@ fn compute_probability(typefind: &mut TypeFind) -> TypeFindProbability {
     for offset in (0..len).step_by(step as usize) {
         let proba = match cdg_packets_ratio(typefind, offset as i64, search_window) {
             0..=5 => TypeFindProbability::None,
-            6..=10 => TypeFindProbability::Possible,
-            _ => TypeFindProbability::Likely,
+            6..=10 => TypeFindProbability::Minimum,
+            _ => TypeFindProbability::Possible,
         };
 
-        if proba == TypeFindProbability::Likely {
+        if proba == TypeFindProbability::Possible {
             return proba;
         }
 
