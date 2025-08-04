@@ -645,7 +645,6 @@ impl State {
                         }
                         Ok(None) => break,
                         Err(err) => {
-                            dbg!(&header);
                             gst::warning!(
                                 CAT,
                                 imp = imp,
