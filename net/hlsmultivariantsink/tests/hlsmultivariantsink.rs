@@ -559,7 +559,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant() -> Resu
     #[rustfmt::skip]
         assert_eq!(
             r###"#EXTM3U
-#EXT-X-VERSION:4
+#EXT-X-VERSION:6
 #EXT-X-MEDIA:TYPE=AUDIO,URI="hi-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="en",NAME="English",DEFAULT=YES
 #EXT-X-MEDIA:TYPE=AUDIO,URI="mid-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="fr",NAME="French"
 #EXT-X-STREAM-INF:BANDWIDTH=2500,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
@@ -755,7 +755,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_rela
     #[rustfmt::skip]
         assert_eq!(
             r###"#EXTM3U
-#EXT-X-VERSION:4
+#EXT-X-VERSION:6
 #EXT-X-MEDIA:TYPE=AUDIO,URI="hi-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="en",NAME="English",DEFAULT=YES
 #EXT-X-MEDIA:TYPE=AUDIO,URI="mid-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="fr",NAME="French"
 #EXT-X-STREAM-INF:BANDWIDTH=2500,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
@@ -947,7 +947,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_single_video_variant() -> Result
     #[rustfmt::skip]
     assert_eq!(
         r###"#EXTM3U
-#EXT-X-VERSION:4
+#EXT-X-VERSION:6
 #EXT-X-MEDIA:TYPE=AUDIO,URI="hi-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="en",NAME="English",DEFAULT=YES
 #EXT-X-MEDIA:TYPE=AUDIO,URI="mid-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="fr",NAME="French"
 #EXT-X-STREAM-INF:BANDWIDTH=2500,CODECS="avc1.640028,mp4a.40.2",AUDIO="aac"
@@ -1159,7 +1159,7 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
     #[rustfmt::skip]
     assert_eq!(
         r###"#EXTM3U
-#EXT-X-VERSION:4
+#EXT-X-VERSION:6
 #EXT-X-MEDIA:TYPE=AUDIO,URI="hi-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="en",NAME="English",DEFAULT=YES
 #EXT-X-STREAM-INF:BANDWIDTH=2500,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
 hi/video.m3u8
