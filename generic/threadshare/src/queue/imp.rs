@@ -336,11 +336,11 @@ impl TaskImpl for QueueTask {
         self.dataqueue.stop();
         self.dataqueue.clear();
 
+        *last_res = Err(gst::FlowError::Flushing);
+
         if let Some(mut pending_queue) = queue.pending_queue.lock().unwrap().take() {
             pending_queue.notify_more_queue_space();
         }
-
-        *last_res = Err(gst::FlowError::Flushing);
 
         gst::log!(CAT, obj = self.element, "Task flush started");
         Ok(())
@@ -471,6 +471,13 @@ impl Queue {
                     .unwrap_or(true)
                 {
                     if pending_queue.is_none() {
+                        // Lock order: last_res, then pending_queue
+                        drop(pending_queue);
+                        if *self.last_res.lock().unwrap() == Err(gst::FlowError::Flushing) {
+                            return Err(gst::FlowError::Flushing);
+                        }
+                        pending_queue = self.pending_queue.lock().unwrap();
+
                         *pending_queue = Some(PendingQueue {
                             more_queue_space_sender: None,
                             scheduled: false,
