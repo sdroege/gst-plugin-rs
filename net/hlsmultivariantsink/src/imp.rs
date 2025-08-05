@@ -1871,10 +1871,17 @@ impl HlsMultivariantSink {
         let multivariant_playlist_filename = path::Path::new(&multivariant_playlist_location)
             .to_str()
             .expect("multivariant playlist path to string conversion failed");
+        let muxer_type = settings.muxer_type;
         drop(settings);
 
+        let version = if muxer_type == HlsMultivariantSinkMuxerType::Cmaf {
+            Some(6)
+        } else {
+            Some(4)
+        };
+
         let playlist = MasterPlaylist {
-            version: Some(4),
+            version,
             variants: variant_streams,
             alternatives,
             ..Default::default()
