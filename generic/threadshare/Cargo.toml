@@ -79,6 +79,18 @@ name = "ts-pad"
 path = "tests/pad.rs"
 
 [[test]]
+name = "ts-pipeline"
+path = "tests/pipeline.rs"
+
+[[test]]
+name = "ts-proxy"
+path = "tests/proxy.rs"
+
+[[test]]
+name = "ts-queue"
+path = "tests/queue.rs"
+
+[[test]]
 name = "ts-rtpdtmfsrc"
 path = "tests/rtpdtmfsrc.rs"
 

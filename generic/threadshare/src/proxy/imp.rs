@@ -406,6 +406,10 @@ impl ProxySink {
                     .unwrap_or(true)
                 {
                     if shared_ctx.pending_queue.is_none() {
+                        if shared_ctx.last_res == Err(gst::FlowError::Flushing) {
+                            return Err(gst::FlowError::Flushing);
+                        }
+
                         shared_ctx.pending_queue = Some(PendingQueue::default());
                     }
 
