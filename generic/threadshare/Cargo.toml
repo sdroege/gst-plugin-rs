@@ -33,7 +33,7 @@ getifaddrs = "0.2"
 libc = "0.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-sys = { version = ">=0.52, <=0.60", features = ["Win32_Foundation", "Win32_Networking"] }
+windows-sys = { version = ">=0.52, <=0.60", features = ["Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock"] }
 
 [dev-dependencies]
 gst-check.workspace = true
