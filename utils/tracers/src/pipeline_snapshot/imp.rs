@@ -507,7 +507,7 @@ impl PipelineSnapshot {
                 loop {
                     gst::debug!(CAT, "Connecting to WebSocket server at {}", host);
                     if let Err(e) = Self::handle_websocket(obj.clone(), host.clone()).await {
-                        gst::warning!(
+                        gst::debug!(
                             CAT,
                             "WebSocket {} connection failed: {}. Retrying in 5 seconds...",
                             host,
