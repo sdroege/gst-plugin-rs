@@ -1186,6 +1186,7 @@ impl ElementImpl for Transcriber {
                 })?;
             }
             gst::StateChange::PausedToReady => {
+                let _ = self.state.lock().unwrap().result_rx.take();
                 self.disconnect(true);
             }
             _ => (),
