@@ -8769,6 +8769,43 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "rsaudioparsers": {
+        "description": "GStreamer Rust Audio Parsers Plugin",
+        "elements": {
+            "s302mparse": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Extracts metadata from an S302M audio stream",
+                "hierarchy": [
+                    "GstS302MParse",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Parser/Audio",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-smpte-302m:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "audio/x-smpte-302m:\n         parsed: true\n       channels: { (int)2, (int)4, (int)6, (int)8 }\n           rate: 48000\n          depth: { (int)16, (int)20, (int)24 }\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "primary + 1"
+            }
+        },
+        "filename": "gstrsaudioparsers",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-audioparsers",
+        "source": "gst-plugin-audioparsers",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "rsclosedcaption": {
         "description": "GStreamer Rust Closed Caption Plugin",
         "elements": {

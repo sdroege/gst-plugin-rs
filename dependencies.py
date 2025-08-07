@@ -28,6 +28,7 @@ PARSER.add_argument('--feature-deps', action="store_true", help="Get list of fea
 RENAMES = {
     'rsanalytics': 'analytics',
     'rsaudiofx': 'audiofx',
+    'rsaudioparsers': 'audioparsers',
     'rsfile': 'file',
     'rsflv': 'flavors',
     'rsrtp': 'rtp',

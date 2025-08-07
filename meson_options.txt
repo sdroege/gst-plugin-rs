@@ -5,6 +5,7 @@ option('analytics', type: 'feature', value: 'auto', description: 'Build analytic
 
 # audio
 option('audiofx', type: 'feature', value: 'auto', description: 'Build audiofx plugin')
+option('audioparsers', type: 'feature', value: 'auto', description: 'Build audioparsers plugin')
 option('claxon', type: 'feature', value: 'auto', description: 'Build claxon plugin')
 option('csound', type: 'feature', value: 'auto', description: 'Build csound plugin')
 option('elevenlabs', type: 'feature', value: 'auto', description: 'Build elevenlabs plugin')

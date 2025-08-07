@@ -15,6 +15,7 @@ DIRS = [
 RS_PREFIXED = [
     'analytics',
     'audiofx',
+    'audioparsers',
     'closedcaption',
     'file',
     'onvif',

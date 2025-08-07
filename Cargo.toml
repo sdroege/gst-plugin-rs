@@ -8,6 +8,7 @@ members = [
     "analytics/analytics",
 
     "audio/audiofx",
+    "audio/audioparsers",
     "audio/claxon",
     "audio/csound",
     "audio/elevenlabs",
@@ -75,6 +76,7 @@ default-members = [
 
     "analytics/analytics",
 
+    "audio/audioparsers",
     "audio/audiofx",
     "audio/claxon",
     "audio/lewton",

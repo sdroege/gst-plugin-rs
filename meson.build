@@ -120,6 +120,9 @@ plugins = {
     'library': 'libgstrsaudiofx',
     'examples': ['hrtfrender'],
   },
+  'audioparsers': {
+    'library': 'libgstrsaudioparsers',
+  },
   'claxon': {'library': 'libgstclaxon'},
   # csound has a non-trivial external dependency, see below
   'lewton': {'library': 'libgstlewton'},

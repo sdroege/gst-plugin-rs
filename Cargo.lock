@@ -2706,6 +2706,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-audioparsers"
+version = "0.15.0-alpha.1"
+dependencies = [
+ "gst-plugin-version-helper",
+ "gstreamer",
+]
+
+[[package]]
 name = "gst-plugin-aws"
 version = "0.15.0-alpha.1"
 dependencies = [

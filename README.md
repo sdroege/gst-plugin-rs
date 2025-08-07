@@ -87,6 +87,8 @@ You will find the following plugins in this repository:
       - `ebur128level`: Filter for measuring audio loudness according to EBU R-128.
       - `hrtfrender`: Filter for rendering audio according to a [head-related transfer
         function](https://en.wikipedia.org/wiki/Head-related_transfer_function).
+    - `audioparsers`: Audio parser elements
+      - `s302mparse`: Parser for SMPTE S302M audio elementary streams.
 
     - `claxon`: A FLAC decoder based on the [Claxon](https://github.com/ruuda/claxon) library.
 
