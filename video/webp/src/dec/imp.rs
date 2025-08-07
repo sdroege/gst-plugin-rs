@@ -96,7 +96,7 @@ impl Decoder<'_> {
         }
     }
 
-    fn next(&mut self) -> Option<Frame> {
+    fn next(&mut self) -> Option<Frame<'_>> {
         let mut buf = std::ptr::null_mut();
         let buf_ptr: *mut *mut u8 = &mut buf;
         let mut timestamp: i32 = 0;
