@@ -325,8 +325,8 @@ impl SccParse {
         &self,
         tc: TimeCode,
         data: Vec<u8>,
-        mut state: MutexGuard<State>,
-    ) -> Result<MutexGuard<State>, gst::FlowError> {
+        mut state: MutexGuard<'_, State>,
+    ) -> Result<MutexGuard<'_, State>, gst::FlowError> {
         gst::trace!(
             CAT,
             imp = self,
@@ -732,7 +732,7 @@ impl SccParse {
         self.handle_buffer(Some(buffer))
     }
 
-    fn flush(&self, mut state: MutexGuard<State>) -> MutexGuard<State> {
+    fn flush(&self, mut state: MutexGuard<'_, State>) -> MutexGuard<'_, State> {
         state.reader.clear();
         state.parser.reset();
         if let Some(pull) = &mut state.pull {
