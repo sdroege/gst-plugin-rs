@@ -142,7 +142,7 @@ impl State {
     fn line(
         &mut self,
         drain: bool,
-    ) -> Result<Option<MccLine>, (&[u8], winnow::error::ContextError)> {
+    ) -> Result<Option<MccLine<'_>>, (&[u8], winnow::error::ContextError)> {
         let line = if self.replay_last_line {
             self.replay_last_line = false;
             &self.last_raw_line
@@ -466,8 +466,8 @@ impl MccParse {
     fn handle_skipped_line(
         &self,
         tc: TimeCode,
-        mut state: MutexGuard<State>,
-    ) -> Result<MutexGuard<State>, gst::FlowError> {
+        mut state: MutexGuard<'_, State>,
+    ) -> Result<MutexGuard<'_, State>, gst::FlowError> {
         let (framerate, drop_frame) = parse_timecode_rate(state.timecode_rate)?;
         let timecode = state.handle_timecode(self, framerate, drop_frame, tc)?;
         let nsecs = timecode.time_since_daily_jam();
@@ -495,8 +495,8 @@ impl MccParse {
         tc: TimeCode,
         data: Vec<u8>,
         format: Format,
-        mut state: MutexGuard<State>,
-    ) -> Result<MutexGuard<State>, gst::FlowError> {
+        mut state: MutexGuard<'_, State>,
+    ) -> Result<MutexGuard<'_, State>, gst::FlowError> {
         let (framerate, drop_frame) = parse_timecode_rate(state.timecode_rate)?;
         let events = state.create_events(self, Some(format), framerate);
         let timecode = state.handle_timecode(self, framerate, drop_frame, tc)?;
@@ -829,7 +829,7 @@ impl MccParse {
         self.handle_buffer(Some(buffer), false)
     }
 
-    fn flush(&self, mut state: MutexGuard<State>) -> MutexGuard<State> {
+    fn flush(&self, mut state: MutexGuard<'_, State>) -> MutexGuard<'_, State> {
         state.reader.clear();
         state.parser.reset();
         if let Some(pull) = &mut state.pull {

@@ -15,6 +15,7 @@
 use gst::glib;
 use gst::prelude::*;
 
+#[allow(unused)]
 mod cros_codecs;
 mod imp;
 

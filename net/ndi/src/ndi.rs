@@ -631,7 +631,7 @@ impl VideoFrame {
     }
 
     #[cfg(feature = "advanced-sdk")]
-    pub fn compressed_packet(&self) -> Option<CompressedPacket> {
+    pub fn compressed_packet(&self) -> Option<CompressedPacket<'_>> {
         use byteorder::{LittleEndian, ReadBytesExt};
         use std::io::Cursor;
         use std::slice;
@@ -987,7 +987,7 @@ impl AudioFrame {
     }
 
     #[cfg(feature = "advanced-sdk")]
-    pub fn compressed_packet(&self) -> Option<CompressedPacket> {
+    pub fn compressed_packet(&self) -> Option<CompressedPacket<'_>> {
         use byteorder::{LittleEndian, ReadBytesExt};
         use std::io::Cursor;
         use std::slice;

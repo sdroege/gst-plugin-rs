@@ -1246,7 +1246,7 @@ fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
                     let stbl = &moov.trak.first().unwrap().mdia.minf.stbl;
                     let saio = stbl.saio.as_ref().unwrap();
                     let saiz = stbl.saiz.as_ref().unwrap();
-                    if mdat_data.is_some() {
+                    if let Some(ref mdat_data) = mdat_data {
                         assert_eq!(
                             saio.aux_info.as_ref().unwrap().aux_info_type,
                             b"stai".into()
@@ -1262,18 +1262,16 @@ fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
                             let len = saiz.default_sample_info_size as u64;
                             let offset_into_mdat_start = (offset - mdat_offset) as usize;
                             let offset_into_mdat_end = offset_into_mdat_start + len as usize;
-                            let vec = &mdat_data.as_ref().unwrap()
-                                [offset_into_mdat_start..offset_into_mdat_end]
-                                .to_vec();
-                            assert_eq!(vec.len(), 9);
+                            let slice = &mdat_data[offset_into_mdat_start..offset_into_mdat_end];
+                            assert_eq!(slice.len(), 9);
                             let mut timestamp_bytes: [u8; 8] = [0; 8];
-                            timestamp_bytes.copy_from_slice(&vec.as_slice()[0..8]);
+                            timestamp_bytes.copy_from_slice(&slice[0..8]);
                             let timestamp = u64::from_be_bytes(timestamp_bytes);
                             assert_eq!(
                                 timestamp,
                                 tai_nanos_initial_offset + (i as u64) * tai_nanos_per_frame_step
                             );
-                            assert_eq!(vec[8], 0x80);
+                            assert_eq!(slice[8], 0x80);
                         }
                     } else {
                         panic!("mdat should not be none");
