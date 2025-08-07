@@ -1215,6 +1215,7 @@ impl ElementImpl for Translate {
                 })?;
             }
             gst::StateChange::PausedToReady => {
+                let _ = self.state.lock().unwrap().translate_tx.take();
                 self.disconnect(true);
             }
             _ => (),
