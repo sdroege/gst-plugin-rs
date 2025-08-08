@@ -94,6 +94,7 @@ struct HlsCmafSinkState {
     segment_idx: u32,
     init_segment: Option<m3u8_rs::Map>,
     new_header: bool,
+    offset: u64,
 }
 
 #[derive(Default)]
@@ -414,32 +415,65 @@ impl HlsCmafSink {
         Playlist::new(playlist, turn_vod, true)
     }
 
-    fn on_init_segment(&self) -> Result<gio::OutputStreamWrite<gio::OutputStream>, String> {
+    fn on_init_segment(
+        &self,
+        init_segment_size: u64,
+    ) -> Result<gio::OutputStreamWrite<gio::OutputStream>, String> {
         let settings = self.settings.lock().unwrap();
-        let mut state = self.state.lock().unwrap();
-        let location = match sprintf::sprintf!(&settings.init_location, state.init_idx) {
-            Ok(location) => location,
-            Err(err) => {
-                gst::error!(CAT, imp = self, "Couldn't build file name, err: {:?}", err,);
-                return Err(String::from("Invalid init segment file pattern"));
-            }
-        };
 
-        let stream = self
-            .obj()
-            .emit_by_name::<Option<gio::OutputStream>>(SIGNAL_GET_INIT_STREAM, &[&location])
-            .ok_or_else(|| String::from("Error while getting fragment stream"))?
-            .into_write();
+        let (stream, location, byte_range) = if !base_imp!(self).is_single_media_file() {
+            let state = self.state.lock().unwrap();
+
+            match sprintf::sprintf!(&settings.init_location, state.init_idx) {
+                Ok(location) => {
+                    let stream = self
+                        .obj()
+                        .emit_by_name::<Option<gio::OutputStream>>(
+                            SIGNAL_GET_INIT_STREAM,
+                            &[&location],
+                        )
+                        .ok_or_else(|| String::from("Error while getting init stream"))?
+                        .into_write();
+
+                    (stream, location, None)
+                }
+                Err(err) => {
+                    gst::error!(CAT, imp = self, "Couldn't build file name, err: {:?}", err,);
+                    return Err(String::from("Invalid init segment file pattern"));
+                }
+            }
+        } else {
+            let (stream, location) = self.on_new_fragment().map_err(|err| {
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Couldn't get fragment stream for init segment, {err}",
+                );
+                String::from("Couldn't get fragment stream for init segment")
+            })?;
+
+            (
+                stream,
+                location,
+                Some(m3u8_rs::ByteRange {
+                    length: init_segment_size,
+                    offset: Some(0),
+                }),
+            )
+        };
 
         let uri =
             base_imp!(self).get_segment_uri(&location, settings.playlist_root_init.as_deref());
 
+        let mut state = self.state.lock().unwrap();
         state.init_segment = Some(m3u8_rs::Map {
             uri,
+            byte_range,
             ..Default::default()
         });
         state.new_header = true;
         state.init_idx += 1;
+        state.offset = init_segment_size;
 
         Ok(stream)
     }
@@ -463,6 +497,7 @@ impl HlsCmafSink {
         running_time: Option<gst::ClockTime>,
         location: String,
         timestamp: Option<DateTime<Utc>>,
+        byte_range: Option<m3u8_rs::ByteRange>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let uri = base_imp!(self).get_segment_uri(&location, None);
         let mut state = self.state.lock().unwrap();
@@ -483,6 +518,7 @@ impl HlsCmafSink {
                 uri,
                 duration: duration.mseconds() as f32 / 1_000f32,
                 map,
+                byte_range,
                 ..Default::default()
             },
         )
@@ -496,7 +532,7 @@ impl HlsCmafSink {
             .flags()
             .contains(gst::BufferFlags::DISCONT | gst::BufferFlags::HEADER)
         {
-            let mut stream = self.on_init_segment().map_err(|err| {
+            let mut stream = self.on_init_segment(first.size() as u64).map_err(|err| {
                 gst::error!(
                     CAT,
                     imp = self,
@@ -561,6 +597,18 @@ impl HlsCmafSink {
             gst::FlowError::Error
         })?;
 
-        self.add_segment(duration, running_time, location, None)
+        let byte_range = if base_imp!(self).is_single_media_file() {
+            let length = buffer_list.calculate_size() as u64;
+
+            let mut state = self.state.lock().unwrap();
+            let offset = Some(state.offset);
+            state.offset += length;
+
+            Some(m3u8_rs::ByteRange { length, offset })
+        } else {
+            None
+        };
+
+        self.add_segment(duration, running_time, location, None, byte_range)
     }
 }

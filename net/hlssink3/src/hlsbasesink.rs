@@ -57,6 +57,26 @@ pub enum HlsProgramDateTimeReference {
     BufferReferenceTimestamp = 2,
 }
 
+// We need to keep an OutputStream around for writing to the same file
+// to support the single media file use case. OutputStream not being
+// thread safe, use this wrapper to keep an OutputStream around in State.
+struct GioOutputStream {
+    stream: gio::OutputStream,
+}
+
+unsafe impl Send for GioOutputStream {}
+unsafe impl Sync for GioOutputStream {}
+
+impl GioOutputStream {
+    pub fn new(stream: gio::OutputStream) -> Self {
+        Self { stream }
+    }
+
+    pub fn as_output_stream(&self) -> gio::OutputStream {
+        self.stream.clone()
+    }
+}
+
 struct Settings {
     playlist_location: String,
     playlist_root: Option<String>,
@@ -65,6 +85,7 @@ struct Settings {
     enable_program_date_time: bool,
     program_date_time_reference: HlsProgramDateTimeReference,
     enable_endlist: bool,
+    single_media_file: Option<String>,
 }
 
 impl Default for Settings {
@@ -77,6 +98,7 @@ impl Default for Settings {
             enable_program_date_time: DEFAULT_PROGRAM_DATE_TIME_TAG,
             program_date_time_reference: DEFAULT_PROGRAM_DATE_TIME_REFERENCE,
             enable_endlist: DEFAULT_ENDLIST,
+            single_media_file: None,
         }
     }
 }
@@ -90,11 +112,13 @@ pub struct PlaylistContext {
     playlist_location: String,
     max_num_segment_files: usize,
     playlist_length: u32,
+    single_media_file: bool,
 }
 
 #[derive(Default)]
 pub struct State {
     context: Option<PlaylistContext>,
+    stream: Option<GioOutputStream>,
 }
 
 #[derive(Default)]
@@ -163,6 +187,10 @@ impl ObjectImpl for HlsBaseSink {
                     .blurb("Write \"EXT-X-ENDLIST\" tag to manifest at the end of stream")
                     .default_value(DEFAULT_ENDLIST)
                     .build(),
+                glib::ParamSpecString::builder("single-media-file")
+                    .nick("Single media file")
+                    .blurb("Location of the single media file to write (media playlist will use byte-range addressing)")
+                    .build(),
             ]
         });
 
@@ -208,6 +236,11 @@ impl ObjectImpl for HlsBaseSink {
             "enable-endlist" => {
                 settings.enable_endlist = value.get().expect("type checked upstream");
             }
+            "single-media-file" => {
+                settings.single_media_file = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
+            }
             _ => unimplemented!(),
         };
     }
@@ -228,6 +261,7 @@ impl ObjectImpl for HlsBaseSink {
                 .to_value(),
             "program-date-time-reference" => settings.program_date_time_reference.to_value(),
             "enable-endlist" => settings.enable_endlist.to_value(),
+            "single-media-file" => settings.single_media_file.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -335,6 +369,7 @@ impl HlsBaseSink {
             playlist_location: settings.playlist_location.clone(),
             max_num_segment_files: settings.max_num_segment_files,
             playlist_length: settings.playlist_length,
+            single_media_file: settings.single_media_file.is_some(),
         });
     }
 
@@ -351,17 +386,21 @@ impl HlsBaseSink {
     }
 
     pub fn get_location(&self, fragment_id: u32) -> Option<String> {
-        let mut state = self.state.lock().unwrap();
-        let context = match state.context.as_mut() {
-            Some(context) => context,
-            None => {
-                gst::error!(CAT, imp = self, "Playlist is not configured",);
+        let settings = self.settings.lock().unwrap();
+        if settings.single_media_file.is_none() {
+            let mut state = self.state.lock().unwrap();
+            let context = match state.context.as_mut() {
+                Some(context) => context,
+                None => {
+                    gst::error!(CAT, imp = self, "Playlist is not configured",);
+                    return None;
+                }
+            };
 
-                return None;
-            }
-        };
-
-        sprintf::sprintf!(&context.segment_template, fragment_id).ok()
+            sprintf::sprintf!(&context.segment_template, fragment_id).ok()
+        } else {
+            settings.single_media_file.clone()
+        }
     }
 
     pub fn get_fragment_stream(&self, fragment_id: u32) -> Option<(gio::OutputStream, String)> {
@@ -375,22 +414,42 @@ impl HlsBaseSink {
             }
         };
 
-        let location = match sprintf::sprintf!(&context.segment_template, fragment_id) {
-            Ok(file_name) => file_name,
-            Err(err) => {
-                gst::error!(CAT, imp = self, "Couldn't build file name, err: {:?}", err,);
+        let settings = self.settings.lock().unwrap();
+        if settings.single_media_file.is_none() {
+            let location = match sprintf::sprintf!(&context.segment_template, fragment_id) {
+                Ok(file_name) => file_name,
+                Err(err) => {
+                    gst::error!(CAT, imp = self, "Couldn't build file name, err: {:?}", err,);
+                    return None;
+                }
+            };
 
-                return None;
-            }
-        };
+            let stream = self.obj().emit_by_name::<Option<gio::OutputStream>>(
+                SIGNAL_GET_FRAGMENT_STREAM,
+                &[&location],
+            )?;
 
-        gst::trace!(CAT, imp = self, "Segment location formatted: {}", location);
+            gst::trace!(CAT, imp = self, "Segment location formatted: {}", location);
 
-        let stream = self
-            .obj()
-            .emit_by_name::<Option<gio::OutputStream>>(SIGNAL_GET_FRAGMENT_STREAM, &[&location])?;
+            Some((stream, location))
+        } else {
+            let location = settings.single_media_file.as_ref().unwrap().clone();
 
-        Some((stream, location))
+            let stream = if let Some(s) = &state.stream {
+                s.as_output_stream()
+            } else {
+                let stream = self.obj().emit_by_name::<Option<gio::OutputStream>>(
+                    SIGNAL_GET_FRAGMENT_STREAM,
+                    &[&location],
+                )?;
+
+                state.stream = Some(GioOutputStream::new(stream.clone()));
+
+                stream
+            };
+
+            Some((stream, location))
+        }
     }
 
     pub fn get_segment_uri(&self, location: &str, prefix: Option<&str>) -> String {
@@ -563,7 +622,10 @@ impl HlsBaseSink {
             gst::FlowError::Error
         })?;
 
-        if context.playlist.is_type_undefined() && context.max_num_segment_files > 0 {
+        let delete_fragment = context.playlist.is_type_undefined()
+            && context.max_num_segment_files > 0
+            && !context.single_media_file;
+        if delete_fragment {
             // Cleanup old segments from filesystem
             while context.old_segment_locations.len() > context.max_num_segment_files {
                 let old_segment_location = context.old_segment_locations.remove(0);
@@ -622,5 +684,10 @@ impl HlsBaseSink {
                 err.to_string()
             );
         });
+    }
+
+    pub fn is_single_media_file(&self) -> bool {
+        let settings = self.settings.lock().unwrap();
+        settings.single_media_file.is_some()
     }
 }
