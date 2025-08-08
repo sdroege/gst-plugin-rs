@@ -9,8 +9,8 @@ pub enum ModeError {
     #[error("sizelength & constantsize can't be both defined")]
     BothAuSizeLenAndConstantSize,
 
-    #[error("Neither sizelength nor constantsize are defined, need at least one of them")]
-    NeitherAuSizeLenNorConstantSize,
+    #[error("no AU length parameters defined: need sizelength, constantsize, or constantduration")]
+    MissingAuLengthParameters,
 
     #[error("indexlength > 0 but indexdeltalength not defined")]
     MandatoryIndexDeltaLength,
@@ -83,13 +83,14 @@ impl ModeConfig {
 
         let size_len = Self::parse_int::<u8>(s, "sizelength")?;
         let constant_size = Self::parse_int::<u32>(s, "constantsize")?;
+        let constant_duration = Self::parse_int::<u32>(s, "constantduration")?;
 
         if size_len != 0 && constant_size != 0 {
             Err(BothAuSizeLenAndConstantSize)?;
         }
 
-        if size_len == 0 && constant_size == 0 {
-            Err(NeitherAuSizeLenNorConstantSize)?;
+        if size_len == 0 && constant_size == 0 && constant_duration == 0 {
+            Err(MissingAuLengthParameters)?;
         }
 
         // § 3.2.1
@@ -116,7 +117,7 @@ impl ModeConfig {
             stream_state_indication: Self::parse_int::<u8>(s, "streamstateindication")?,
             auxiliary_data_size_len: Self::parse_int::<u8>(s, "auxiliarydatasizelength")?,
             constant_size,
-            constant_duration: Self::parse_int::<u32>(s, "constantduration")?,
+            constant_duration,
             max_displacement: Self::parse_int::<u32>(s, "maxdisplacement")?,
         })
     }
@@ -161,8 +162,8 @@ impl ModeConfig {
             Err(BothAuSizeLenAndConstantSize)?;
         }
 
-        if self.size_len == 0 && self.constant_size == 0 {
-            Err(NeitherAuSizeLenNorConstantSize)?;
+        if self.size_len == 0 && self.constant_size == 0 && self.constant_duration == 0 {
+            Err(MissingAuLengthParameters)?;
         }
 
         if self.index_len > 0 && self.index_delta_len == 0 {
