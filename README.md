@@ -172,7 +172,6 @@ Replace `x86_64-unknown-linux-gnu` with your system's Rust target triple (`rustc
 The plugin can also be installed system-wide:
 
 ```
-$ cargo cbuild -p gst-plugin-cdg --prefix=/usr
 $ cargo cinstall -p gst-plugin-cdg --prefix=/usr
 ```
 
