@@ -440,7 +440,7 @@ impl AggregatorImpl for AnalyticsCombiner {
 
                         let Some(stream_caps) = streams
                             .get(pad_index)
-                            .map(|v| v.get::<gst::Caps>().unwrap())
+                            .and_then(|v| v.get::<Option<gst::Caps>>().unwrap())
                         else {
                             continue;
                         };
@@ -532,11 +532,11 @@ impl AggregatorImpl for AnalyticsCombiner {
                         return None;
                     };
                     let caps = caps.caps_owned();
-                    Some(caps)
+                    Some(Some(caps))
                 })
                 .unwrap_or_else(|| {
-                    gst::warning!(CAT, obj = pad, "No caps for pad, using empty caps for now");
-                    gst::Caps::new_empty()
+                    gst::warning!(CAT, obj = pad, "No caps for pad, using NULL caps for now");
+                    None::<gst::Caps>
                 });
 
             streams.append(caps);
