@@ -16,7 +16,7 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 
 struct Stream {
     pad: gst::Pad,
-    caps: gst::Caps,
+    caps: Option<gst::Caps>,
 }
 
 struct State {
@@ -240,7 +240,7 @@ impl AnalyticsSplitter {
                 };
                 let streams = streams
                     .iter()
-                    .map(|v| v.get::<gst::Caps>().unwrap())
+                    .map(|v| v.get::<Option<gst::Caps>>().unwrap())
                     .collect::<Vec<_>>();
 
                 let mut state_guard = self.state.lock().unwrap();
@@ -410,7 +410,7 @@ impl AnalyticsSplitter {
 
                         let Some(stream_caps) = streams
                             .get(pad_index)
-                            .map(|v| v.get::<gst::Caps>().unwrap())
+                            .and_then(|v| v.get::<Option<gst::Caps>>().unwrap())
                         else {
                             continue;
                         };

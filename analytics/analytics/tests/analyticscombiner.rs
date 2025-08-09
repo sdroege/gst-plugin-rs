@@ -185,11 +185,11 @@ fn test_combine_multi() {
         .get::<gst::ArrayRef>("streams")
         .unwrap()
         .iter()
-        .map(|v| v.get::<gst::Caps>().unwrap())
+        .map(|v| v.get::<Option<gst::Caps>>().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(streams.len(), 2);
-    assert_eq!(&streams[0], &h0_caps);
-    assert_eq!(&streams[1], &h1_caps);
+    assert_eq!(streams[0].as_ref(), Some(&h0_caps));
+    assert_eq!(streams[1].as_ref(), Some(&h1_caps));
 
     let ev = h0.pull_event().unwrap();
     assert_eq!(ev.type_(), gst::EventType::Segment);
@@ -374,10 +374,10 @@ fn test_strategy_all() {
         .get::<gst::ArrayRef>("streams")
         .unwrap()
         .iter()
-        .map(|v| v.get::<gst::Caps>().unwrap())
+        .map(|v| v.get::<Option<gst::Caps>>().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(streams.len(), 1);
-    assert_eq!(&streams[0], &h_caps);
+    assert_eq!(streams[0].as_ref(), Some(&h_caps));
 
     let ev = h.pull_event().unwrap();
     assert_eq!(ev.type_(), gst::EventType::Segment);
@@ -557,10 +557,10 @@ fn test_strategy_first() {
         .get::<gst::ArrayRef>("streams")
         .unwrap()
         .iter()
-        .map(|v| v.get::<gst::Caps>().unwrap())
+        .map(|v| v.get::<Option<gst::Caps>>().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(streams.len(), 1);
-    assert_eq!(&streams[0], &h_caps);
+    assert_eq!(streams[0].as_ref(), Some(&h_caps));
 
     let ev = h.pull_event().unwrap();
     assert_eq!(ev.type_(), gst::EventType::Segment);
@@ -740,10 +740,10 @@ fn test_strategy_first_with_overlap() {
         .get::<gst::ArrayRef>("streams")
         .unwrap()
         .iter()
-        .map(|v| v.get::<gst::Caps>().unwrap())
+        .map(|v| v.get::<Option<gst::Caps>>().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(streams.len(), 1);
-    assert_eq!(&streams[0], &h_caps);
+    assert_eq!(streams[0].as_ref(), Some(&h_caps));
 
     let ev = h.pull_event().unwrap();
     assert_eq!(ev.type_(), gst::EventType::Segment);
@@ -923,10 +923,10 @@ fn test_strategy_last() {
         .get::<gst::ArrayRef>("streams")
         .unwrap()
         .iter()
-        .map(|v| v.get::<gst::Caps>().unwrap())
+        .map(|v| v.get::<Option<gst::Caps>>().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(streams.len(), 1);
-    assert_eq!(&streams[0], &h_caps);
+    assert_eq!(streams[0].as_ref(), Some(&h_caps));
 
     let ev = h.pull_event().unwrap();
     assert_eq!(ev.type_(), gst::EventType::Segment);
@@ -1156,11 +1156,11 @@ fn test_combine_multi_initial_gap() {
         .get::<gst::ArrayRef>("streams")
         .unwrap()
         .iter()
-        .map(|v| v.get::<gst::Caps>().unwrap())
+        .map(|v| v.get::<Option<gst::Caps>>().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(streams.len(), 2);
-    assert_eq!(&streams[0], &h0_caps);
-    assert_eq!(&streams[1], &gst::Caps::new_empty());
+    assert_eq!(streams[0].as_ref(), Some(&h0_caps));
+    assert_eq!(streams[1].as_ref(), None);
 
     let ev = h0.pull_event().unwrap();
     assert_eq!(ev.type_(), gst::EventType::Segment);
@@ -1177,11 +1177,11 @@ fn test_combine_multi_initial_gap() {
         .get::<gst::ArrayRef>("streams")
         .unwrap()
         .iter()
-        .map(|v| v.get::<gst::Caps>().unwrap())
+        .map(|v| v.get::<Option<gst::Caps>>().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(streams.len(), 2);
-    assert_eq!(&streams[0], &h0_caps);
-    assert_eq!(&streams[1], &h1_caps);
+    assert_eq!(streams[0].as_ref(), Some(&h0_caps));
+    assert_eq!(streams[1].as_ref(), Some(&h1_caps));
 
     let ev = h0.pull_event().unwrap();
     assert_eq!(ev.type_(), gst::EventType::Eos);
