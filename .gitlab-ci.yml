@@ -340,6 +340,14 @@ check commits:
     - ci/check-for-symlinks.sh
     - ci/check-meson-version.sh
 
+check readme:
+  extends: '.debian:12-stable'
+  stage: "lint"
+  tags: [ 'placeholder-job' ]
+  needs: []
+  script:
+    - ci/check-readme-against-plugins-list.py
+
 clippy:
   extends: '.debian:12-stable'
   needs:
