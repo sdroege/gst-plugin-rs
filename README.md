@@ -13,9 +13,26 @@ your development environment.
 You will find the following plugins in this repository:
 
   * `generic`
+
     - `file`: A Rust implementation of the standard `filesrc` and `filesink` elements
 
+    - `gopbuffer`: Stores a minimum duration of data delimited by discrete GOPs (Group of Picture).
+
+    - `inter`: 1:N wormhole for sending data from one pipeline to another within the same process using the [`StreamProducer` API](https://docs.rs/gstreamer-utils/latest/gstreamer_utils/struct.StreamProducer.html).
+
+        - `intersink`: send data to one or more `intersrc` within the same process.
+
+        - `intersrc`: receive data from an `intersink` in the same process.
+
+    - `originalbuffer`:
+
+        - `originalbuffersave`: Saves a reference to the buffer in a meta so it can later be restored again after transformations such as downscaling before inference.
+
+        - `originalbufferrestore`: Restores the original buffer previously saved by `originalbuffersave`.
+
     - `sodium`: Elements to perform encryption and decryption using [libsodium](https://libsodium.org).
+
+    - `streamgrouper`: Filter element that makes all the incoming streams use the same group-id.
 
     - `threadshare`: Some popular threaded elements reimplemented using common thread-sharing infrastructure.
 
@@ -28,7 +45,13 @@ You will find the following plugins in this repository:
       - `awstranscriber`: an element wrapping the AWS Transcriber service.
       - `awstranscribeparse`: an element parsing the packets of the AWS Transcriber service.
 
+    - `hlsmultivariantsink`: Create multi-variant HLS playlists with alternate renditions and variant streams.
+
     - `hlssink3`: An element for generating MPEG-TS HLS streams.
+
+    - `mpegtslive`:
+
+      - `mpegtslivesrc`: Wraps MPEG-TS sources such as `udpsrc` or `srtsrc` and provides a live clock based on the stream's PCR.
 
     - `ndi`: An [NDI](https://www.newtek.com/ndi/) plugin containing a source, sink and device provider.
 
@@ -48,6 +71,10 @@ You will find the following plugins in this repository:
 
       - `rtpgccbwe`: RTP bandwidth estimator based on the Google Congestion Control algorithm.
 
+    - `rtsp`:
+
+      - `rtspsrc2`: New Rust implementation of a Real Time Streaming Protocol (RTSP) (RFC 2326, 7826) source element.
+
     - `webrtc`: WebRTC elements, with batteries included Sink elements for specific signalling protocols.
 
     - `webrtchttp`: Simple WebRTC HTTP elements (WHIP/WHEP).
@@ -65,7 +92,15 @@ You will find the following plugins in this repository:
 
     - `csound`: A plugin to implement audio effects using the [Csound](https://csound.com/) library.
 
+    - `elevenlabs`:
+
+      - `elevenlabssynthesizer`: Generate audio speech from text using the [ElevenLabs](https://elevenlabs.io) API/service.
+
     - `lewton`: A Vorbis decoder based on the [lewton](https://github.com/RustAudio/lewton) library.
+
+    - `speechmatics`:
+
+      - `speechmaticstranscriber`: Speech to text transcription using [Speechmatics](https://www.speechmatics.com/speech-to-text)
 
     - `spotify`: A plugin to access content from [Spotify](https://www.spotify.com/) based on the [librespot](https://github.com/librespot-org/) library.
 
@@ -104,10 +139,16 @@ You will find the following plugins in this repository:
 
     - `rav1e`: AV1 encoder based on the [rav1e](https://github.com/xiph/rav1e) library.
 
+    - `skia`:
+
+      - `skiacompositor`: Video compositor based on [Skia](https://skia.org) graphics library.
+
     - `videofx`: Plugin with various video filters.
       - `roundedcorners`: Element to make the corners of a video rounded via the alpha channel.
       - `colordetect`: A pass-through filter able to detect the dominant color(s) on incoming frames, using [color-thief](https://github.com/RazrFalcon/color-thief-rs).
       - `videocompare`: Compare similarity of video frames. The element can use different hashing algorithms like [Blockhash](https://github.com/commonsmachinery/blockhash-rfc), [DSSIM](https://kornel.ski/dssim), and others.
+
+    - `vvdec`: VVC/H.266 decoder based on [VVdeC](https://github.com/fraunhoferhhi/vvdec), the Fraunhofer Versatile Video Decoder.
 
     - `webp`: WebP decoder based on the [libwebp-sys-2](https://github.com/qnighy/libwebp-sys2-rs) library.
 
@@ -150,6 +191,18 @@ You will find the following plugins in this repository:
         Contains a script for visualization.
 
     - `uriplaylistbin`: Helper bin to gaplessly play a list of URIs.
+
+  * `analytics`
+
+    - `analytics`:
+
+      - `analyticscombiner`: Analytics combiner / batcher element
+
+      - `analyticssplitter`: Analytics batch splitter element
+
+      - `onvifmeta2relationmeta`: Convert ONVIF metadata to relation metas
+
+      - `relationmeta2onvifmeta`: Convert relation metadata to ONVIF metas
 
 ## Building
 
