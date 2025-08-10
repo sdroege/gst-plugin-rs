@@ -133,7 +133,7 @@ opt-level = 1
 lto = "off"
 
 [workspace.package]
-version = "0.14.0"
+version = "0.14.1"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 edition = "2021"
 rust-version = "1.83"
