@@ -5,6 +5,34 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.14.1] - 2025-08-10
+### Fixed
+- Various new clippy 1.89 warnings.
+- awstranscriber2 / awstranslate: Handle multiple stream-start events.
+- hlssmultivariantsink: Set correct master playlist version.
+- mpegtslivesrc: Remove leftover debug message.
+- rtpbasepay2: Fix `timestamp` property's range.
+- rtpbin2: Add examples.
+- rtprecv: Fix deadlock when receiving muxed RTCP on the RTP pad.
+- threadshare: Fix flushing in various elements.
+- transcriberbin: Fix latency handling.
+- transcriberbin: Don't hold mutex while sending caps event.
+- ts-audiotestsrc: Fix element to behave in a more expected way.
+- ts-proxysrc / ts-proxysink: Fix race condition on shutdown.
+- ts-rtpdtmfsrc: Fix various property ranges.
+- ts-intersrc / ts-udpsrc / ts-tcpclientsrc: Fix latency handling.
+
+### Added
+- cea608overlay / cea708overlay: Add support for dmabuf, GL and other memory
+  types.
+- threadshare: Add `cur-level-XXX` properties to queue-like elements.
+
+### Changed
+- Update a couple of dependencies.
+- pipeline-snapshot: Reduce WebSocket connection log level.
+- webrtcsink: Move `videorate` before conversion to potentially improve
+  performance.
+
 ## [0.14.0] - 2025-07-16
 ### Changed
 - Update to gtk-rs-core 0.21 / gtk4-rs 0.10 / gstreamer-rs 0.24.
@@ -773,7 +801,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.0...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.1...HEAD
+[0.14.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.0...0.14.1
 [0.14.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.7...0.14.0
 [0.13.7]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.6...0.13.7
 [0.13.6]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.5...0.13.6
