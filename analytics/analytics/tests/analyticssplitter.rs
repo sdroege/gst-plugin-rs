@@ -166,9 +166,6 @@ fn test_combine_split_multi() {
 }
 
 #[test]
-#[ignore]
-// See https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/merge_requests/2444
-// https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/9522
 fn test_combine_split_multi_with_initial_gap() {
     init();
 
