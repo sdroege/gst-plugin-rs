@@ -1332,7 +1332,7 @@ impl Transcriber {
             gst::error_msg!(gst::CoreError::Failed, ["Failed to connect: {}", err])
         })?;
 
-        let (ws_sink, mut ws_stream) = ws.split();
+        let (mut ws_sink, mut ws_stream) = ws.split();
 
         let late_punctuation_factor = if settings.enable_late_punctuation_hack {
             2

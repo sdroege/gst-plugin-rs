@@ -347,7 +347,7 @@ impl Signaller {
         .await??;
 
         // Channel for asynchronously sending out websocket message
-        let (ws_sink, mut ws_stream) = ws.split();
+        let (mut ws_sink, mut ws_stream) = ws.split();
 
         // 1000 is completely arbitrary, we simply don't want infinite piling
         // up of messages as with unbounded

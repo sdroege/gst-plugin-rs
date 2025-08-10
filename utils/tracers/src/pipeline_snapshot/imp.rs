@@ -450,7 +450,7 @@ impl PipelineSnapshot {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let url = url::Url::parse(&host)?;
         let (ws_stream, _) = async_tungstenite::tokio::connect_async(url).await?;
-        let (write, mut read) = ws_stream.split();
+        let (mut write, mut read) = ws_stream.split();
 
         gst::debug!(CAT, "Connected to WebSocket server at {}", host);
         write
