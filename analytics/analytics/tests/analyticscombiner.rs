@@ -935,6 +935,9 @@ fn test_strategy_last() {
 }
 
 #[test]
+#[ignore]
+// See https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/merge_requests/2444
+// https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/9522
 fn test_combine_multi_initial_gap() {
     init();
 
