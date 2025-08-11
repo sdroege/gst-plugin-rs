@@ -199,6 +199,7 @@ struct SourceBin {
     // Actual source element, e.g. uridecodebin3
     source: gst::Element,
     pending_restart: bool,
+    running: bool,
     is_live: bool,
     is_image: bool,
 
@@ -647,11 +648,15 @@ impl ObjectImpl for FallbackSrc {
             "status" => {
                 let state_guard = self.state.lock();
 
-                // If we have no state then we'r stopped
+                // If we have no state then we're stopped
                 let state = match &*state_guard {
                     None => return Status::Stopped.to_value(),
                     Some(ref state) => state,
                 };
+
+                if !state.source.running {
+                    return Status::Stopped.to_value();
+                }
 
                 // If any restarts/retries are pending, we're retrying
                 if state.source.pending_restart
@@ -1161,6 +1166,7 @@ impl FallbackSrc {
             bin,
             source,
             pending_restart: false,
+            running: false,
             is_live: false,
             is_image: false,
             restart_timeout: None,
@@ -1235,6 +1241,7 @@ impl FallbackSrc {
             bin,
             source,
             pending_restart: false,
+            running: false,
             is_live: false,
             is_image: false,
             restart_timeout: None,
@@ -1696,6 +1703,7 @@ impl FallbackSrc {
             &mut state.source
         };
 
+        source.running = transition.next() > gst::State::Ready;
         if transition.current() <= transition.next() && source.pending_restart {
             gst::debug!(
                 CAT,
@@ -2847,6 +2855,9 @@ impl FallbackSrc {
         if source.pending_restart {
             gst::debug!(CAT, imp = self, "Has pending restart");
             return;
+        } else if !source.running {
+            gst::debug!(CAT, imp = self, "Was shut down");
+            return;
         }
 
         gst::log!(
@@ -3836,6 +3847,14 @@ impl FallbackSrc {
                 if fallback_source { "fallback " } else { "" }
             );
             return;
+        } else if !source.running {
+            gst::debug!(
+                CAT,
+                imp = self,
+                "{}source was shut down",
+                if fallback_source { "fallback " } else { "" }
+            );
+            return;
         }
 
         // Increase retry count only if there was no pending restart
@@ -3892,35 +3911,20 @@ impl FallbackSrc {
                     );
                     return;
                 }
-                Some(State {
-                    source:
-                        SourceBin {
-                            pending_restart: false,
-                            ..
-                        },
-                    ..
-                }) if !fallback_source => {
-                    gst::debug!(
-                        CAT,
-                        imp = imp,
-                        "Restarting {}source not needed anymore",
-                        if fallback_source { "fallback " } else { "" }
-                    );
+                Some(State { source, .. })
+                    if !fallback_source && (!source.pending_restart || !source.running) =>
+                {
+                    gst::debug!(CAT, imp = imp, "Restarting source not needed anymore");
                     return;
                 }
                 Some(State {
-                    fallback_source:
-                        Some(SourceBin {
-                            pending_restart: false,
-                            ..
-                        }),
+                    fallback_source: Some(ref source),
                     ..
-                }) if fallback_source => {
+                }) if fallback_source && (!source.pending_restart || !source.running) => {
                     gst::debug!(
                         CAT,
                         imp = imp,
-                        "Restarting {}source not needed anymore",
-                        if fallback_source { "fallback " } else { "" }
+                        "Restarting fallback source not needed anymore",
                     );
                     return;
                 }
@@ -3997,35 +4001,20 @@ impl FallbackSrc {
                     );
                     return;
                 }
-                Some(State {
-                    source:
-                        SourceBin {
-                            pending_restart: false,
-                            ..
-                        },
-                    ..
-                }) if !fallback_source => {
-                    gst::debug!(
-                        CAT,
-                        imp = imp,
-                        "Restarting {}source not needed anymore",
-                        if fallback_source { "fallback " } else { "" }
-                    );
+                Some(State { source, .. })
+                    if !fallback_source && (!source.pending_restart || !source.running) =>
+                {
+                    gst::debug!(CAT, imp = imp, "Restarting source not needed anymore");
                     return;
                 }
                 Some(State {
-                    fallback_source:
-                        Some(SourceBin {
-                            pending_restart: false,
-                            ..
-                        }),
+                    fallback_source: Some(ref source),
                     ..
-                }) if fallback_source => {
+                }) if fallback_source && (!source.pending_restart || !source.running) => {
                     gst::debug!(
                         CAT,
                         imp = imp,
-                        "Restarting {}source not needed anymore",
-                        if fallback_source { "fallback " } else { "" }
+                        "Restarting fallback source not needed anymore",
                     );
                     return;
                 }
@@ -4083,35 +4072,23 @@ impl FallbackSrc {
                                 );
                                 return;
                             }
-                            Some(State {
-                                source:
-                                    SourceBin {
-                                        pending_restart: false,
-                                        ..
-                                    },
-                                ..
-                            }) if !fallback_source => {
-                                gst::debug!(
-                                    CAT,
-                                    imp = imp,
-                                    "Restarting {}source not needed anymore",
-                                    if fallback_source { "fallback " } else { "" }
-                                );
+                            Some(State { source, .. })
+                                if !fallback_source
+                                    && (!source.pending_restart || !source.running) =>
+                            {
+                                gst::debug!(CAT, imp = imp, "Restarting source not needed anymore");
                                 return;
                             }
                             Some(State {
-                                fallback_source:
-                                    Some(SourceBin {
-                                        pending_restart: false,
-                                        ..
-                                    }),
+                                fallback_source: Some(ref source),
                                 ..
-                            }) if fallback_source => {
+                            }) if fallback_source
+                                && (!source.pending_restart || !source.running) =>
+                            {
                                 gst::debug!(
                                     CAT,
                                     imp = imp,
-                                    "Restarting {}source not needed anymore",
-                                    if fallback_source { "fallback " } else { "" }
+                                    "Restarting fallback source not needed anymore",
                                 );
                                 return;
                             }
@@ -4256,6 +4233,14 @@ impl FallbackSrc {
                 CAT,
                 imp = self,
                 "Not scheduling {}source restart timeout because source is pending restart already",
+                if fallback_source { "fallback " } else { "" },
+            );
+            return;
+        } else if !source.running {
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Not scheduling {}source restart timeout because source was shut down",
                 if fallback_source { "fallback " } else { "" },
             );
             return;
