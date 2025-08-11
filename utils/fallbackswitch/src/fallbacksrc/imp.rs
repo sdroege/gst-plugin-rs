@@ -1489,7 +1489,9 @@ impl FallbackSrc {
                 if transition != gst::StateChange::ReadyToNull {
                     let _ = source.set_state(gst::State::Null);
                     let mut state_guard = self.state.lock();
-                    let state = state_guard.as_mut().expect("no state");
+                    let Some(ref mut state) = &mut *state_guard else {
+                        return;
+                    };
                     self.handle_source_error(
                         state,
                         RetryReason::StateChangeFailure,
@@ -1509,7 +1511,9 @@ impl FallbackSrc {
                 );
 
                 let mut state_guard = self.state.lock();
-                let state = state_guard.as_mut().expect("no state");
+                let Some(ref mut state) = &mut *state_guard else {
+                    return;
+                };
 
                 let source = if fallback_source {
                     if let Some(ref mut source) = state.fallback_source {
@@ -3203,7 +3207,9 @@ impl FallbackSrc {
                             );
                             let _ = source.set_state(gst::State::Null);
                             let mut state_guard = imp.state.lock();
-                            let state = state_guard.as_mut().expect("no state");
+                            let Some(ref mut state) = &mut *state_guard else {
+                                return;
+                            };
                             imp.handle_source_error(
                                 state,
                                 RetryReason::StateChangeFailure,
@@ -3213,7 +3219,9 @@ impl FallbackSrc {
                             element.notify("statistics");
                         } else {
                             let mut state_guard = imp.state.lock();
-                            let state = state_guard.as_mut().expect("no state");
+                            let Some(ref mut state) = &mut *state_guard else {
+                                return;
+                            };
                             let source = if fallback_source {
                                 if let Some(source) = &state.fallback_source {
                                     source
