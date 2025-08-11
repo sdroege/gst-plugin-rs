@@ -8,17 +8,27 @@ import json
 import sys
 
 # Read README.md
-with open('README.md') as f:
+with open('README.md', encoding='utf-8') as f:
     readme = f.read()
 
 # Read plugins doc cache
-with open('docs/plugins/gst_plugins_cache.json', 'r') as f:
+with open('docs/plugins/gst_plugins_cache.json', 'r', encoding='utf-8') as f:
     docs = json.load(f)
+
+# === utility functions ===
+
+
+def entry_exists(bullet_name):
+    bullet_line = f'- `{bullet_name}`:'
+    return bullet_line in readme
+
+# === Plugins ===
+
 
 plugins = list(docs.keys())
 
 missing_plugins = []
-covered_plugins = []
+missing_factories = []
 
 # Some plugins are listed with their subdir which doesn't match the plugin name
 plugins_remap = {
@@ -28,37 +38,57 @@ plugins_remap = {
     'textaccumulate': 'accumulate',
 }
 
-for plugin_name in plugins:
-    if plugin_name in plugins_remap:
-        plugin_name = plugins_remap[plugin_name]
+factories_remap = {}
 
-    plugin_bullet_line = f'- `{plugin_name}`:'
-    if plugin_name.startswith('rs'):
-        name2 = plugin_name[2:]
-        plugin_bullet_line2 = f'- `{name2}`:'
+for plugin_name in plugins:
+
+    plugin = docs[plugin_name]
+
+    name = plugins_remap.get(plugin_name, plugin_name)
+
+    exists = entry_exists(name)
+
+    if not exists and name.startswith('rs'):
+        name = name[2:]
+        exists = entry_exists(name)
+
+    print('===================================')
+    print()
+
+    if not exists:
+        print(f'Plugin {name}: Missing!')
+        missing_plugins += [name]
     else:
-        plugin_bullet_line2 = plugin_bullet_line
-    if not plugin_bullet_line in readme and not plugin_bullet_line2 in readme:
-        print(f'{plugin_name}: Missing!')
-        missing_plugins += [plugin_name]
-    else:
-        print(f'{plugin_name}: Ok')
+        print(f'Plugin {name}: Ok')
+
+    print()
+
+    plugin_name = name
+
+    factories = list(plugin['elements'].keys())
+
+    for factory_name in factories:
+        name = factories_remap.get(factory_name, factory_name)
+
+        exists = entry_exists(name)
+
+        if not exists:
+            print(f' - {name}: Missing!')
+            missing_factories += [f'{plugin_name}/{name}']
+        else:
+            print(f' - {name}: Ok')
+
+    print()
+
+print('===================================')
+print()
 
 if missing_plugins:
-    sys.exit(
-        '\nMissing plugins in README.md:\n - {}'.format('\n - '.join(missing_plugins)))
+    print('Missing plugins in README.md:\n - {}\n'.format(
+        '\n - '.join(missing_plugins)))
 
-sys.exit(0)
+if missing_factories:
+    print('Missing elements or plugin factories in README.md:\n - {}\n'.format(
+        '\n - '.join(missing_factories)))
 
-# FIXME: for later if we want full coverage of all element names too
-'''
-factories = []
-
-for plugin_name in plugins:
-    plugin = docs[plugin_name]
-    #print(json.dumps(plugin, indent=4))
-    factories += list(plugin['elements'].keys())
-
-print()
-print('Elements:', factories)
-'''
+sys.exit(1 if missing_plugins or missing_factories else 0)
