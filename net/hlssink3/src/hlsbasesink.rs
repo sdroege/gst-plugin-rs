@@ -545,6 +545,8 @@ impl HlsBaseSink {
             }
         }
 
+        let (init_segment_br, segment_br) = self.byte_ranges(context, &segment);
+
         context.playlist.add_segment(segment);
 
         if context.playlist.is_type_undefined() {
@@ -559,6 +561,12 @@ impl HlsBaseSink {
             if let Some(ts) = timestamp {
                 s = s.field("timestamp", ts.timestamp());
             };
+            if let Some(br) = init_segment_br {
+                s = s.field("initialization-segment-byte-range", br);
+            }
+            if let Some(br) = segment_br {
+                s = s.field("segment-byte-range", br);
+            }
             self.post_message(
                 gst::message::Element::builder(s.build())
                     .src(&*self.obj())
@@ -689,5 +697,34 @@ impl HlsBaseSink {
     pub fn is_single_media_file(&self) -> bool {
         let settings = self.settings.lock().unwrap();
         settings.single_media_file.is_some()
+    }
+
+    fn byte_ranges(
+        &self,
+        context: &PlaylistContext,
+        segment: &MediaSegment,
+    ) -> (Option<gst::Structure>, Option<gst::Structure>) {
+        let mut init_segment_br = None;
+        let mut segment_br = None;
+
+        if context.single_media_file {
+            if let Some(ref map) = segment.map {
+                if let Some(br) = &map.byte_range {
+                    let mut s = gst::Structure::new_empty("byte-range");
+                    s.set("length", br.length);
+                    s.set("offset", br.offset.unwrap());
+                    init_segment_br = Some(s);
+                }
+            }
+
+            if let Some(ref br) = segment.byte_range {
+                let mut s = gst::Structure::new_empty("byte-range");
+                s.set("length", br.length);
+                s.set("offset", br.offset.unwrap());
+                segment_br = Some(s)
+            }
+        }
+
+        (init_segment_br, segment_br)
     }
 }

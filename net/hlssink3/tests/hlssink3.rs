@@ -14,7 +14,7 @@ use std::sync::LazyLock;
 use std::sync::{mpsc, Arc, Mutex};
 
 mod common;
-use crate::common::{extract_byteranges, validate_byterange_sequence};
+use crate::common::{get_byte_ranges, validate_byterange_sequence, ByteRange};
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -213,7 +213,7 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
                     }
                 }
             }
-            MessageView::Error(..) => unreachable!(),
+            MessageView::Error(err) => panic!("{err}"),
             _ => (),
         }
     }
@@ -611,6 +611,7 @@ fn test_hlssink3_video_with_single_media_file() -> Result<(), ()> {
         BUFFER_NB
     );
 
+    let mut byte_ranges: Vec<ByteRange> = Vec::new();
     let mut eos = false;
     let bus = pipeline.bus().unwrap();
     while let Some(msg) = bus.timed_pop(gst::ClockTime::NONE) {
@@ -624,13 +625,16 @@ fn test_hlssink3_video_with_single_media_file() -> Result<(), ()> {
                 if let Some(structure) = msg.structure() {
                     if structure.has_name("hls-segment-added") {
                         let location = structure.get::<String>("location").unwrap();
+                        let byte_range = get_byte_ranges(structure);
+                        byte_ranges.extend(byte_range);
+
                         hls_messages_sender
                             .try_send(HlsSinkEvent::SegmentAddedMessage(location))
                             .expect("Send segment added event");
                     }
                 }
             }
-            MessageView::Error(..) => unreachable!(),
+            MessageView::Error(err) => panic!("{err}"),
             _ => (),
         }
     }
@@ -648,9 +652,7 @@ fn test_hlssink3_video_with_single_media_file() -> Result<(), ()> {
         actual_messages.push(event);
     }
 
-    let contents = playlist_content.lock().unwrap();
-
-    let byte_ranges = extract_byteranges(contents.as_str());
+    eprintln!("Playlist byte ranges: {byte_ranges:?}");
     // We only validate the byte range tag. The actual value of byte
     // range can differ from each run and hence we do not validate
     // the entire playlist.

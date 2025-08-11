@@ -6,57 +6,30 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ByteRange {
     length: u64,
     offset: u64,
 }
 
-#[allow(dead_code)]
-pub fn extract_map_byterange(input: &str) -> Option<ByteRange> {
-    input
-        .lines()
-        .find(|line| line.starts_with("#EXT-X-MAP:"))
-        .and_then(|line| {
-            line.find("BYTERANGE=\"")
-                .and_then(|start| {
-                    let content_start = start + "BYTERANGE=\"".len();
-                    line[content_start..]
-                        .find('"')
-                        .map(|end| &line[content_start..content_start + end])
-                })
-                .and_then(|byterange_str| {
-                    let mut parts = byterange_str.split('@');
-                    match (parts.next(), parts.next()) {
-                        (Some(len_str), Some(off_str)) => {
-                            let length = len_str.parse::<u64>().ok()?;
-                            let offset = off_str.parse::<u64>().ok()?;
-                            Some(ByteRange { length, offset })
-                        }
-                        _ => None,
-                    }
-                })
-        })
-}
+pub fn get_byte_ranges(s: &gst::StructureRef) -> Vec<ByteRange> {
+    let mut ranges = Vec::new();
 
-pub fn extract_byteranges(input: &str) -> Vec<ByteRange> {
-    input
-        .split('\n')
-        .filter(|line| line.starts_with("#EXT-X-BYTERANGE:"))
-        .filter_map(|line| {
-            line.strip_prefix("#EXT-X-BYTERANGE:").and_then(|content| {
-                let mut parts = content.split('@');
-                match (parts.next(), parts.next()) {
-                    (Some(len_str), Some(off_str)) => {
-                        let length = len_str.parse::<u64>().ok()?;
-                        let offset = off_str.parse::<u64>().ok()?;
-                        Some(ByteRange { length, offset })
-                    }
-                    _ => None,
-                }
-            })
-        })
-        .collect()
+    if let Ok(br) = s.get::<gst::Structure>("initialization-segment-byte-range") {
+        let length = br.get::<u64>("length").unwrap();
+        let offset = br.get::<u64>("offset").unwrap();
+        assert!(length != 0);
+        ranges.push(ByteRange { length, offset })
+    }
+
+    if let Ok(br) = s.get::<gst::Structure>("segment-byte-range") {
+        let length = br.get::<u64>("length").unwrap();
+        let offset = br.get::<u64>("offset").unwrap();
+        assert!(length != 0);
+        ranges.push(ByteRange { length, offset })
+    }
+
+    ranges
 }
 
 pub fn validate_byterange_sequence(ranges: &[ByteRange]) -> bool {

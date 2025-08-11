@@ -159,6 +159,7 @@ fn test_hlscmafsink_video_with_single_media_file() -> Result<(), ()> {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
+    let mut byte_ranges: Vec<ByteRange> = Vec::new();
     let mut eos = false;
     let bus = pipeline.bus().unwrap();
     while let Some(msg) = bus.timed_pop(gst::ClockTime::NONE) {
@@ -172,13 +173,16 @@ fn test_hlscmafsink_video_with_single_media_file() -> Result<(), ()> {
                 if let Some(structure) = msg.structure() {
                     if structure.has_name("hls-segment-added") {
                         let location = structure.get::<String>("location").unwrap();
+                        let byte_range = get_byte_ranges(structure);
+                        byte_ranges.extend(byte_range);
+
                         hls_messages_sender
                             .try_send(HlsSinkEvent::SegmentAddedMessage(location))
                             .expect("Send segment added event");
                     }
                 }
             }
-            MessageView::Error(..) => unreachable!(),
+            MessageView::Error(err) => panic!("{err}"),
             _ => (),
         }
     }
@@ -196,17 +200,11 @@ fn test_hlscmafsink_video_with_single_media_file() -> Result<(), ()> {
         actual_messages.push(event);
     }
 
-    let contents = playlist_content.lock().unwrap();
-
-    let mut map_byte_range = Vec::new();
-    map_byte_range.push(extract_map_byterange(contents.as_str()).unwrap());
-    let byte_ranges = extract_byteranges(contents.as_str());
-    map_byte_range.extend(byte_ranges);
-
+    eprintln!("Playlist byte ranges: {byte_ranges:?}");
     // We only validate the byte range and map tag. The actual value of
     // byte range can differ from each run and hence we do not validate
     // the entire playlist.
-    assert!(validate_byterange_sequence(&map_byte_range));
+    assert!(validate_byterange_sequence(&byte_ranges));
 
     let expected_messages = {
         use self::HlsSinkEvent::*;
