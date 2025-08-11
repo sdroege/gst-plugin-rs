@@ -17,8 +17,6 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use m3u8_rs::{MediaPlaylist, MediaPlaylistType, MediaSegment};
-use std::io::Write;
-use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
@@ -36,89 +34,6 @@ macro_rules! base_imp {
     ($i:expr) => {
         $i.obj().upcast_ref::<HlsBaseSink>().imp()
     };
-}
-
-// `splitmuxsink` does not know the size of the fragment written out by
-// the muxer. We track this by using a wrapper around the OutputStream.
-// Implementing Write trait for this allows passing it to a WriteOutputStream.
-#[derive(Clone)]
-struct CountingOutputStream {
-    inner: Arc<Mutex<CountingOutputStreamInner>>,
-}
-
-impl CountingOutputStream {
-    pub fn new(stream: gio::OutputStream) -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(CountingOutputStreamInner::new(stream))),
-        }
-    }
-
-    pub fn out_bytes(&self) -> u64 {
-        let inner = self.inner.lock().unwrap();
-        inner.out_bytes()
-    }
-}
-
-impl Write for CountingOutputStream {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let mut inner = self.inner.lock().unwrap();
-        inner.write(buf)
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        let mut inner = self.inner.lock().unwrap();
-        inner.flush()
-    }
-}
-
-struct CountingOutputStreamInner {
-    stream: gio::OutputStream,
-    data: Vec<u8>,
-    out_bytes: u64,
-}
-
-unsafe impl Send for CountingOutputStreamInner {}
-unsafe impl Sync for CountingOutputStreamInner {}
-
-impl CountingOutputStreamInner {
-    pub fn new(stream: gio::OutputStream) -> Self {
-        Self {
-            stream,
-            data: Vec::new(),
-            out_bytes: 0,
-        }
-    }
-
-    pub fn out_bytes(&self) -> u64 {
-        self.out_bytes
-    }
-
-    fn inner_flush(&mut self) -> std::io::Result<()> {
-        let data_len = self.data.len() as u64;
-        if data_len == 0 {
-            return Ok(());
-        }
-
-        let data: Vec<u8> = self.data.drain(0..).collect();
-
-        let mut s = self.stream.clone().into_write();
-        s.write(&data).unwrap();
-
-        self.out_bytes = data_len;
-
-        Ok(())
-    }
-}
-
-impl Write for CountingOutputStreamInner {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.data.extend_from_slice(buf);
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.inner_flush()
-    }
 }
 
 /// Offset between NTP and UNIX epoch in seconds.
@@ -246,7 +161,6 @@ struct HlsSink3State {
     fragment_running_time: Option<gst::ClockTime>,
     current_segment_location: Option<String>,
     fragment_start_timestamp: Option<DateTime<Utc>>,
-    stream: Option<CountingOutputStream>,
     offset: u64,
 }
 
@@ -630,7 +544,25 @@ impl HlsSink3 {
             (false, playlist_type)
         };
 
-        let version = if i_frames_only || base_imp!(self).is_single_media_file() {
+        let is_single_media_file = base_imp!(self).is_single_media_file();
+        if is_single_media_file {
+            // `splitmuxsink` will stop the sink on every fragment,
+            // don't do that for single media file case as we need
+            // to keep the stream around for writing.
+            let giostreamsink = self.settings.lock().unwrap().giostreamsink.clone();
+            if giostreamsink.has_property_with_type("close-on-stop", bool::static_type()) {
+                giostreamsink.set_property("close-on-stop", false);
+            } else {
+                gst::element_imp_error!(
+                    self,
+                    gst::ResourceError::Settings,
+                    ("Invalid configuration"),
+                    ["Single media file support with hlssink3 needs GStreamer 1.24 or later"]
+                );
+            }
+        }
+
+        let version = if i_frames_only || is_single_media_file {
             Some(4)
         } else {
             Some(3)
@@ -668,29 +600,17 @@ impl HlsSink3 {
         state.fragment_running_time = running_time;
 
         let settings = self.settings.lock().unwrap();
-        let stream = if base_imp!(self).is_single_media_file() {
-            if state.stream.is_none() {
-                let gios = CountingOutputStream::new(fragment_stream);
-                let stream =
-                    gio::WriteOutputStream::new(gios.clone()).upcast::<gio::OutputStream>();
-                state.stream = Some(gios);
-                stream
-            } else {
-                gio::WriteOutputStream::new(state.stream.as_ref().unwrap().clone())
-                    .upcast::<gio::OutputStream>()
-            }
-        } else {
-            gst::info!(
-                CAT,
-                imp = self,
-                "New segment location: {:?}",
-                segment_file_location,
-            );
 
-            fragment_stream
-        };
+        gst::info!(
+            CAT,
+            imp = self,
+            "New segment location: {:?}",
+            segment_file_location,
+        );
 
-        settings.giostreamsink.set_property("stream", &stream);
+        settings
+            .giostreamsink
+            .set_property("stream", &fragment_stream);
 
         Ok(segment_file_location)
     }
@@ -745,8 +665,8 @@ impl HlsSink3 {
         let running_time = state.fragment_running_time;
         let fragment_start_timestamp = state.fragment_start_timestamp.take();
         let byte_range = if base_imp!(self).is_single_media_file() {
-            let length = state.stream.as_ref().unwrap().out_bytes();
             let offset = state.offset;
+            let length = base_imp!(self).out_bytes() as u64 - offset;
             state.offset += length;
             Some(m3u8_rs::ByteRange {
                 length,

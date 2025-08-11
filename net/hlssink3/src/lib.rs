@@ -20,6 +20,13 @@ pub mod hlssink3;
 mod playlist;
 
 glib::wrapper! {
+    pub struct HlsBaseSinkGioOutputStream(ObjectSubclass<hlsbasesink::HlsBaseSinkGioOutputStream>) @extends gio::OutputStream;
+}
+
+unsafe impl Send for HlsBaseSinkGioOutputStream {}
+unsafe impl Sync for HlsBaseSinkGioOutputStream {}
+
+glib::wrapper! {
     pub struct HlsBaseSink(ObjectSubclass<hlsbasesink::HlsBaseSink>) @extends gst::Bin, gst::Element, gst::Object;
 }
 

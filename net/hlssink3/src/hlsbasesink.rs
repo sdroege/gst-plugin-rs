@@ -10,6 +10,7 @@
 use crate::playlist::Playlist;
 use chrono::{DateTime, Duration, Utc};
 use gio::prelude::*;
+use gio::subclass::prelude::OutputStreamImpl;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -17,8 +18,7 @@ use m3u8_rs::MediaSegment;
 use std::fs;
 use std::io::Write;
 use std::path;
-use std::sync::LazyLock;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 
 const DEFAULT_PLAYLIST_LOCATION: &str = "playlist.m3u8";
 const DEFAULT_MAX_NUM_SEGMENT_FILES: u32 = 10;
@@ -60,20 +60,70 @@ pub enum HlsProgramDateTimeReference {
 // We need to keep an OutputStream around for writing to the same file
 // to support the single media file use case. OutputStream not being
 // thread safe, use this wrapper to keep an OutputStream around in State.
-struct GioOutputStream {
-    stream: gio::OutputStream,
+#[derive(Default)]
+pub struct HlsBaseSinkGioOutputStream {
+    stream: Mutex<Option<gio::OutputStream>>,
+    out_bytes: Mutex<usize>,
 }
 
-unsafe impl Send for GioOutputStream {}
-unsafe impl Sync for GioOutputStream {}
+unsafe impl Send for HlsBaseSinkGioOutputStream {}
+unsafe impl Sync for HlsBaseSinkGioOutputStream {}
 
-impl GioOutputStream {
-    pub fn new(stream: gio::OutputStream) -> Self {
-        Self { stream }
+#[glib::object_subclass]
+impl ObjectSubclass for HlsBaseSinkGioOutputStream {
+    const NAME: &'static str = "GstHlsBaseSinkGioOutputStream";
+    type Type = super::HlsBaseSinkGioOutputStream;
+    type ParentType = gio::OutputStream;
+}
+
+impl ObjectImpl for HlsBaseSinkGioOutputStream {}
+
+impl OutputStreamImpl for HlsBaseSinkGioOutputStream {
+    fn write(
+        &self,
+        buffer: &[u8],
+        cancellable: Option<&gio::Cancellable>,
+    ) -> Result<usize, glib::Error> {
+        let stream = self.stream.lock().unwrap();
+        if let Some(ref s) = *stream {
+            s.write_all(buffer, cancellable)?;
+            let mut out_bytes = self.out_bytes.lock().unwrap();
+            *out_bytes += buffer.len();
+            return Ok(buffer.len());
+        }
+
+        Ok(0)
     }
 
-    pub fn as_output_stream(&self) -> gio::OutputStream {
-        self.stream.clone()
+    fn close(&self, cancellable: Option<&gio::Cancellable>) -> Result<(), glib::Error> {
+        let stream = self.stream.lock().unwrap().take();
+        if let Some(ref s) = stream {
+            s.close(cancellable)?;
+        }
+
+        Ok(())
+    }
+
+    fn flush(&self, cancellable: Option<&gio::Cancellable>) -> Result<(), glib::Error> {
+        let stream = self.stream.lock().unwrap();
+        if let Some(ref s) = *stream {
+            s.flush(cancellable)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl super::HlsBaseSinkGioOutputStream {
+    pub fn new(stream: gio::OutputStream) -> Self {
+        let obj = glib::Object::new::<Self>();
+        *obj.imp().stream.lock().unwrap() = Some(stream);
+        obj
+    }
+
+    pub fn out_bytes(&self) -> usize {
+        let out_bytes = self.imp().out_bytes.lock().unwrap();
+        *out_bytes
     }
 }
 
@@ -118,7 +168,7 @@ pub struct PlaylistContext {
 #[derive(Default)]
 pub struct State {
     context: Option<PlaylistContext>,
-    stream: Option<GioOutputStream>,
+    stream: Option<super::HlsBaseSinkGioOutputStream>,
 }
 
 #[derive(Default)]
@@ -434,21 +484,23 @@ impl HlsBaseSink {
             Some((stream, location))
         } else {
             let location = settings.single_media_file.as_ref().unwrap().clone();
-
-            let stream = if let Some(s) = &state.stream {
-                s.as_output_stream()
-            } else {
+            if state.stream.is_none() {
                 let stream = self.obj().emit_by_name::<Option<gio::OutputStream>>(
                     SIGNAL_GET_FRAGMENT_STREAM,
                     &[&location],
                 )?;
 
-                state.stream = Some(GioOutputStream::new(stream.clone()));
+                let gios = super::HlsBaseSinkGioOutputStream::new(stream);
+                let stream = gios.upcast_ref::<gio::OutputStream>().clone();
 
-                stream
-            };
+                state.stream = Some(gios);
 
-            Some((stream, location))
+                Some((stream, location))
+            } else {
+                let gios = state.stream.as_ref().unwrap();
+                let stream = gios.upcast_ref::<gio::OutputStream>().clone();
+                Some((stream, location))
+            }
         }
     }
 
@@ -697,6 +749,11 @@ impl HlsBaseSink {
     pub fn is_single_media_file(&self) -> bool {
         let settings = self.settings.lock().unwrap();
         settings.single_media_file.is_some()
+    }
+
+    pub fn out_bytes(&self) -> usize {
+        let state = self.state.lock().unwrap();
+        state.stream.as_ref().unwrap().out_bytes()
     }
 
     fn byte_ranges(
