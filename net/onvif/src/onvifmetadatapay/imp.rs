@@ -152,12 +152,14 @@ impl RTPBasePayloadImpl for OnvifMetadataPay {
         let payload_size = gst_rtp::calc_payload_len(mtu, 0, 0) as usize;
 
         let mut chunks = utf8.as_bytes().chunks(payload_size).peekable();
+        let mut chunk_offset: usize = 0;
         let mut buflist = gst::BufferList::new_sized((utf8.len() / payload_size) + 1);
 
         {
             let buflist_mut = buflist.get_mut().unwrap();
 
             while let Some(chunk) = chunks.next() {
+                let chunk_end = chunk_offset + chunk.len();
                 let mut outbuf = gst::Buffer::new_rtp_with_sizes(chunk.len() as u32, 0, 0)
                     .map_err(|err| {
                         gst::element_imp_error!(
@@ -171,6 +173,23 @@ impl RTPBasePayloadImpl for OnvifMetadataPay {
 
                 {
                     let outbuf_mut = outbuf.get_mut().unwrap();
+                    buffer
+                        .buffer()
+                        .copy_into(
+                            outbuf_mut,
+                            gst::BUFFER_COPY_METADATA,
+                            chunk_offset..chunk_end,
+                        )
+                        .map_err(|err| {
+                            gst::element_imp_error!(
+                                self,
+                                gst::ResourceError::Write,
+                                ["Failed to copy metadata into output buffer: {}", err]
+                            );
+
+                            gst::FlowError::Error
+                        })?;
+
                     outbuf_mut.set_pts(pts);
                     outbuf_mut.set_dts(dts);
 
@@ -185,6 +204,7 @@ impl RTPBasePayloadImpl for OnvifMetadataPay {
                 }
 
                 buflist_mut.add(outbuf);
+                chunk_offset = chunk_end;
             }
         }
 
