@@ -946,19 +946,33 @@ impl State {
     ) -> bool {
         let prev_bitrate = Bitrate::min(self.target_bitrate_on_delay, self.target_bitrate_on_loss);
 
+        // Ensure min_bitrate <= max_bitrate to avoid panic in clamp()
+        let (min_bitrate, max_bitrate) = if self.min_bitrate <= self.max_bitrate {
+            (self.min_bitrate, self.max_bitrate)
+        } else {
+            gst::error!(
+                CAT,
+                obj = bwe,
+                "min_bitrate ({}) > max_bitrate ({}), using max_bitrate for both to avoid panic",
+                self.min_bitrate,
+                self.max_bitrate
+            );
+            (self.max_bitrate, self.max_bitrate)
+        };
+
         match controller_type {
             ControllerType::Loss => {
-                self.target_bitrate_on_loss = bitrate.clamp(self.min_bitrate, self.max_bitrate)
+                self.target_bitrate_on_loss = bitrate.clamp(min_bitrate, max_bitrate)
             }
 
             ControllerType::Delay => {
-                self.target_bitrate_on_delay = bitrate.clamp(self.min_bitrate, self.max_bitrate)
+                self.target_bitrate_on_delay = bitrate.clamp(min_bitrate, max_bitrate)
             }
         }
 
         let target_bitrate =
             Bitrate::min(self.target_bitrate_on_delay, self.target_bitrate_on_loss)
-                .clamp(self.min_bitrate, self.max_bitrate);
+                .clamp(min_bitrate, max_bitrate);
 
         if target_bitrate == prev_bitrate {
             return false;
