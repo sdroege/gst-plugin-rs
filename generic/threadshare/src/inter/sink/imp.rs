@@ -214,7 +214,6 @@ impl PadSinkHandler for InterSinkPadHandler {
 pub struct InterSink {
     sinkpad: PadSink,
     sink_ctx: Mutex<Option<InterContextSink>>,
-    upstream_latency: Mutex<Option<gst::ClockTime>>,
     got_first_buffer: AtomicBool,
     settings: Mutex<Settings>,
 }
@@ -246,10 +245,6 @@ impl InterSink {
         }
 
         Ok(gst::FlowSuccess::Ok)
-    }
-
-    pub fn latency(&self) -> Option<gst::ClockTime> {
-        *self.upstream_latency.lock().unwrap()
     }
 
     fn prepare(&self) -> Result<(), gst::ErrorMessage> {
@@ -288,9 +283,15 @@ impl InterSink {
     }
 
     fn stop(&self) {
-        gst::debug!(CAT, imp = self, "Stopped");
+        gst::debug!(CAT, imp = self, "Stopping");
+
         self.got_first_buffer.store(false, Ordering::SeqCst);
-        *self.upstream_latency.lock().unwrap() = gst::ClockTime::NONE;
+
+        let shared_ctx = self.shared_ctx();
+        block_on(async move {
+            shared_ctx.write().await.upstream_latency = None;
+        });
+
         gst::debug!(CAT, imp = self, "Stopped");
     }
 }
@@ -308,7 +309,6 @@ impl ObjectSubclass for InterSink {
                 InterSinkPadHandler,
             ),
             sink_ctx: Mutex::new(None),
-            upstream_latency: Mutex::new(gst::ClockTime::NONE),
             got_first_buffer: AtomicBool::new(false),
             settings: Mutex::new(Settings::default()),
         }
@@ -388,13 +388,14 @@ impl ElementImpl for InterSink {
 
         if let gst::EventView::Latency(lat_evt) = event.view() {
             let latency = lat_evt.latency();
-            *self.upstream_latency.lock().unwrap() = Some(latency);
 
             let obj = self.obj().clone();
             let shared_ctx = self.shared_ctx();
 
             let _ = block_on_or_add_sub_task(async move {
-                let shared_ctx = shared_ctx.read().await;
+                let mut shared_ctx = shared_ctx.write().await;
+                shared_ctx.upstream_latency = Some(latency);
+
                 if shared_ctx.sources.is_empty() {
                     gst::info!(CAT, obj = obj, "No sources to set upstream latency");
                 } else {

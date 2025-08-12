@@ -49,6 +49,7 @@ struct InterContextInner {
     dataqueues: Slab<DataQueue>,
     sources: Slab<src::InterSrc>,
     sinkpad: Option<gst::Pad>,
+    upstream_latency: Option<gst::ClockTime>,
 }
 
 impl InterContextInner {
@@ -58,6 +59,7 @@ impl InterContextInner {
             dataqueues: Slab::new(),
             sources: Slab::new(),
             sinkpad: None,
+            upstream_latency: None,
         }
     }
 }
