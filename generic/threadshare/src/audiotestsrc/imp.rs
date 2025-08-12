@@ -668,7 +668,6 @@ impl ObjectImpl for AudioTestSrc {
                 settings.context_wait = Duration::from_millis(value.get::<u32>().unwrap().into());
             }
             "samples-per-buffer" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.samples_per_buffer = value.get().expect("type checked upstream");
                 drop(settings);
 
