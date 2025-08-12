@@ -362,21 +362,7 @@ impl InterSrcTask {
         let shared_ctx = imp.shared_ctx();
         let shared_ctx = shared_ctx.read().await;
 
-        let Some(ref sinkpad) = shared_ctx.sinkpad else {
-            gst::info!(
-                CAT,
-                imp = imp,
-                "sinkpad is gone before we could get latency"
-            );
-            return Err(gst::FlowError::Error);
-        };
-
-        let sinkpad_parent = sinkpad.parent().expect("sinkpad should have a parent");
-        let intersink = sinkpad_parent
-            .downcast_ref::<crate::inter::sink::InterSink>()
-            .expect("sinkpad parent should be a ts-intersink");
-
-        if let Some(latency) = intersink.imp().latency() {
+        if let Some(latency) = shared_ctx.upstream_latency {
             imp.set_upstream_latency_priv(latency);
         } else {
             gst::log!(CAT, imp = imp, "Upstream latency is still unknown");
