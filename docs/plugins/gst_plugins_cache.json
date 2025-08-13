@@ -16528,6 +16528,31 @@
                 },
                 "rank": "none"
             },
+            "ts-blocking-adapter": {
+                "author": "François Laignel <francois@centricular.com>",
+                "description": "Converts a blocking downstream branch into an async backpressure",
+                "hierarchy": [
+                    "GstTsBlockingAdapter",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "none"
+            },
             "ts-input-selector": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Simple input selector element",
