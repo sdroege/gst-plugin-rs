@@ -1201,9 +1201,18 @@ impl RtpRecv {
                     // FIXME: Should block if too many packets are stored here because the source pad task
                     // is blocked
 
+                    // Make sure not to deadlock, e.g.:
+                    // 1. 1st buffer is currently being handled by the src pad's task => holds semaphore.
+                    // 2. 1st buffer reaches downstream AudioDecoder => Latency query.
+                    // 3. src pad's task still holding semaphore while relaying Latency query.
+                    // 4. `src_query()` calls `Pad::default()` which calls `iterate_internal_links()`.
+                    // 5. `iterate_internal_links()` tries to acquire the `state` `Mutex`.
+                    // => deadlock.
+                    drop(state);
                     let _src_pad_permit = rtpbin2::get_or_init_runtime()
                         .expect("initialized in change_state()")
                         .block_on(buffer.recv_src_pad.semaphore.acquire());
+                    state = self.state.lock().unwrap();
 
                     let mut jb_store = buffer.recv_src_pad.jitter_buffer_store.lock().unwrap();
 
