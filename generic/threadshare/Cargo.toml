@@ -14,6 +14,7 @@ async-lock = "3.4.0"
 byte-slice-cast = "1.0"
 cfg-if = "1"
 concurrent-queue = "2.2.0"
+flume = "0.11"
 futures = "0.3.28"
 gio.workspace = true
 gst.workspace = true
@@ -40,7 +41,6 @@ gst-check.workspace = true
 gst-app = { workspace = true, features = [ "v1_20" ] }
 # Used by examples
 clap = { version = "4", features = ["derive"] }
-flume = "0.11"
 
 [lib]
 name = "gstthreadshare"
@@ -90,6 +90,10 @@ path = "tests/queue.rs"
 [[test]]
 name = "ts-rtpdtmfsrc"
 path = "tests/rtpdtmfsrc.rs"
+
+[[test]]
+name = "ts-blocking-adapter"
+path = "tests/blocking_adapter.rs"
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true

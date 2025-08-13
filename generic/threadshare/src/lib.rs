@@ -16,6 +16,7 @@ pub mod runtime;
 
 mod appsrc;
 mod audiotestsrc;
+mod blocking_adapter;
 pub mod dataqueue;
 mod inputselector;
 mod inter;
@@ -35,6 +36,7 @@ use gst::glib;
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     appsrc::register(plugin)?;
     audiotestsrc::register(plugin)?;
+    blocking_adapter::register(plugin)?;
     inputselector::register(plugin)?;
     inter::register(plugin)?;
     jitterbuffer::register(plugin)?;
