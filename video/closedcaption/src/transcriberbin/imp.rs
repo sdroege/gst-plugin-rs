@@ -2601,10 +2601,10 @@ impl ObjectImpl for TranscriberBin {
                 settings.cc_caps = value.get().expect("type checked upstream");
             }
             "caption-source" => {
+                let s = self.state.lock().unwrap();
                 let mut settings = self.settings.lock().unwrap();
                 settings.caption_source = value.get().expect("type checked upstream");
 
-                let s = self.state.lock().unwrap();
                 if let Some(state) = s.as_ref() {
                     if state.cccombiner.has_property("input-meta-processing") {
                         match settings.caption_source {
