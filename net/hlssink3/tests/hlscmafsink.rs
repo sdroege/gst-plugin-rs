@@ -205,6 +205,7 @@ fn test_hlscmafsink_video_with_single_media_file() -> Result<(), ()> {
     // byte range can differ from each run and hence we do not validate
     // the entire playlist.
     assert!(validate_byterange_sequence(&byte_ranges));
+    assert!(all_ranges_non_overlapping(&byte_ranges));
 
     let expected_messages = {
         use self::HlsSinkEvent::*;

@@ -12,6 +12,12 @@ pub struct ByteRange {
     offset: u64,
 }
 
+impl ByteRange {
+    fn end(&self) -> u64 {
+        self.offset + self.length
+    }
+}
+
 pub fn get_byte_ranges(s: &gst::StructureRef) -> Vec<ByteRange> {
     let mut ranges = Vec::new();
 
@@ -42,4 +48,24 @@ pub fn validate_byterange_sequence(ranges: &[ByteRange]) -> bool {
         let next = &pair[1];
         next.offset == current.offset + current.length
     })
+}
+
+fn ranges_overlap(a: &ByteRange, b: &ByteRange) -> bool {
+    a.offset < b.end() && b.offset < a.end()
+}
+
+pub fn all_ranges_non_overlapping(ranges: &[ByteRange]) -> bool {
+    if ranges.len() <= 1 {
+        return true; // 0 or 1 range cannot overlap
+    }
+
+    for i in 0..ranges.len() {
+        for j in (i + 1)..ranges.len() {
+            if ranges_overlap(&ranges[i], &ranges[j]) {
+                return false;
+            }
+        }
+    }
+
+    true
 }

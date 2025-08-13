@@ -14,7 +14,7 @@ use std::sync::LazyLock;
 use std::sync::{mpsc, Arc, Mutex};
 
 mod common;
-use crate::common::{get_byte_ranges, validate_byterange_sequence, ByteRange};
+use crate::common::*;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -657,6 +657,7 @@ fn test_hlssink3_video_with_single_media_file() -> Result<(), ()> {
     // range can differ from each run and hence we do not validate
     // the entire playlist.
     assert!(validate_byterange_sequence(&byte_ranges));
+    assert!(all_ranges_non_overlapping(&byte_ranges));
 
     let expected_messages = {
         use self::HlsSinkEvent::*;
