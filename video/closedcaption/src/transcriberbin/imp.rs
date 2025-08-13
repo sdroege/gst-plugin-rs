@@ -16,6 +16,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use std::sync::LazyLock;
+use std::sync::MutexGuard;
 
 use super::{CaptionSource, MuxMethod};
 
@@ -2175,19 +2176,21 @@ impl TranscriberBin {
         );
     }
 
-    fn query_upstream_latency(&self, state: &State) -> gst::ClockTime {
+    fn query_upstream_latency(&self, state_guard: MutexGuard<Option<State>>) -> gst::ClockTime {
+        let state = state_guard.as_ref().unwrap();
         let mut min = gst::ClockTime::from_seconds(0);
 
-        for pad in state
-            .audio_sink_pads
-            .values()
-            .map(|p| p.upcast_ref::<gst::Pad>())
-            .chain(
-                [&self.video_sinkpad]
-                    .iter()
-                    .map(|p| p.upcast_ref::<gst::Pad>()),
-            )
-        {
+        let pads = Iterator::chain(
+            state
+                .audio_sink_pads
+                .values()
+                .map(|p| p.clone().upcast::<gst::Pad>()),
+            std::iter::once(&self.video_sinkpad).map(|p| p.clone().upcast::<gst::Pad>()),
+        )
+        .collect::<Vec<_>>();
+        drop(state_guard);
+
+        for pad in pads {
             let mut upstream_query = gst::query::Latency::new();
 
             if pad.peer_query(&mut upstream_query) {
@@ -2270,11 +2273,12 @@ impl TranscriberBin {
 
         match query.view_mut() {
             QueryViewMut::Latency(q) => {
-                let state = self.state.lock().unwrap();
-                if let Some(state) = state.as_ref() {
-                    let upstream_min = self.query_upstream_latency(state);
-                    let min =
-                        upstream_min + self.our_latency(state, &self.settings.lock().unwrap());
+                let state_guard = self.state.lock().unwrap();
+                if let Some(ref state) = &*state_guard {
+                    let our_latency = self.our_latency(state, &self.settings.lock().unwrap());
+                    let upstream_min = self.query_upstream_latency(state_guard);
+
+                    let min = upstream_min + our_latency;
 
                     gst::debug!(CAT, imp = self, "calculated latency: {}", min);
 
