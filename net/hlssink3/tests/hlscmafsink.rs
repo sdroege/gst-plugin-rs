@@ -21,6 +21,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
+        gstfmp4::plugin_register_static().expect("Need cmafmux for hlscmafsink test");
         gsthlssink3::plugin_register_static().expect("hlscmafsink test");
     });
 }

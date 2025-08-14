@@ -23,6 +23,7 @@ gst-check.workspace = true
 gst-pbutils = { workspace = true, features = ["v1_20"] }
 m3u8-rs = "6.0"
 anyhow = "1"
+gst-plugin-fmp4 = { path = "../../mux/fmp4" }
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true

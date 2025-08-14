@@ -3006,6 +3006,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "gio",
+ "gst-plugin-fmp4",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-app",
