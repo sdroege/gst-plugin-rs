@@ -4841,6 +4841,18 @@
                         "readable": true,
                         "type": "GstHlsProgramDateTimeReference",
                         "writable": true
+                    },
+                    "single-media-file": {
+                        "blurb": "Location of the single media file to write (media playlist will use byte-range addressing)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
                     }
                 },
                 "signals": {
