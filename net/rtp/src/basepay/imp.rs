@@ -1559,7 +1559,7 @@ impl RtpBasePay2 {
     fn handle_buffer(
         &self,
         _settings: &Settings,
-        buffer: gst::Buffer,
+        mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         // Check if renegotiation is needed.
         if self.src_pad.check_reconfigure() {
@@ -1594,8 +1594,17 @@ impl RtpBasePay2 {
         }
 
         if buffer.pts().is_none() {
-            gst::error!(CAT, imp = self, "Buffers without PTS");
-            return Err(gst::FlowError::Error);
+            if let Some(last_pts) = state.last_pts {
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Buffer without PTS, reusing last PTS {last_pts}"
+                );
+                buffer.make_mut().set_pts(last_pts);
+            } else {
+                gst::error!(CAT, imp = self, "First buffer without PTS");
+                return Err(gst::FlowError::Error);
+            }
         };
 
         // TODO: Should we drain on DISCONT here, or leave it to the subclass?
