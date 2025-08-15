@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 
-import hashlib
-import re
 import glob
 import os
+import shlex
 import shutil
 import subprocess
 import sys
-import shlex
 from argparse import ArgumentParser
 from pathlib import Path as P
 
@@ -21,13 +19,13 @@ PARSER.add_argument('prefix', type=P)
 PARSER.add_argument('libdir', type=P)
 PARSER.add_argument('--version', default=None)
 PARSER.add_argument('--bin', default=None, type=P)
-PARSER.add_argument('--features', nargs="+", default=[])
-PARSER.add_argument('--packages', nargs="+", default=[])
-PARSER.add_argument('--examples', nargs="+", default=[])
-PARSER.add_argument('--lib-suffixes', nargs="+", default=[])
+PARSER.add_argument('--features', nargs='+', default=[])
+PARSER.add_argument('--packages', nargs='+', default=[])
+PARSER.add_argument('--examples', nargs='+', default=[])
+PARSER.add_argument('--lib-suffixes', nargs='+', default=[])
 PARSER.add_argument('--exe-suffix')
 PARSER.add_argument('--depfile')
-PARSER.add_argument('--disable-doc', action="store_true", default=False)
+PARSER.add_argument('--disable-doc', action='store_true', default=False)
 
 
 def shlex_join(args):
@@ -38,8 +36,8 @@ def shlex_join(args):
 
 def generate_depfile_for(fpath):
     file_stem = fpath.parent / fpath.stem
-    depfile_content = ""
-    with open(f"{file_stem}.d", 'r') as depfile:
+    depfile_content = ''
+    with open(f'{file_stem}.d', 'r') as depfile:
         for l in depfile.readlines():
             if l.startswith(str(file_stem)):
                 # We can't blindly split on `:` because on Windows that's part
@@ -54,10 +52,10 @@ def generate_depfile_for(fpath):
                     output = l[:-1]
                     srcs = ''
                 else:
-                    output, srcs = l.split(": ", maxsplit=2)
+                    output, srcs = l.split(': ', maxsplit=2)
 
                 all_deps = []
-                for src in srcs.split(" "):
+                for src in srcs.split(' '):
                     all_deps.append(src)
                     src = P(src)
                     if src.name == 'lib.rs':
@@ -67,16 +65,16 @@ def generate_depfile_for(fpath):
                         if cargo_toml.exists():
                             all_deps.append(str(cargo_toml))
 
-                depfile_content += f"{output}: {' '.join(all_deps)}\n"
+                depfile_content += f'{output}: {' '.join(all_deps)}\n'
 
     return depfile_content
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     opts = PARSER.parse_args()
     logdir = opts.root_dir / 'meson-logs'
     logfile_path = logdir / f'{opts.src_dir.name}-cargo-wrapper.log'
-    logfile = open(logfile_path, mode="w", buffering=1, encoding='utf-8')
+    logfile = open(logfile_path, mode='w', buffering=1, encoding='utf-8')
 
     print(opts, file=logfile)
     cargo_target_dir = opts.build_dir / 'target'
@@ -119,7 +117,7 @@ if __name__ == "__main__":
         # cargo test
         cargo_cmd = ['cargo', 'ctest', '--no-fail-fast', '--color=always']
     else:
-        print("Unknown command:", opts.command, file=logfile)
+        print('Unknown command:', opts.command, file=logfile)
         sys.exit(1)
 
     if rustc_target:
@@ -132,8 +130,9 @@ if __name__ == "__main__":
         cargo_cmd.extend(['--bin', opts.bin.name])
     else:
         if not opts.examples:
-            cargo_cmd.extend(['--prefix', opts.prefix, '--libdir',
-                              opts.prefix / opts.libdir])
+            cargo_cmd.extend(
+                ['--prefix', opts.prefix, '--libdir', opts.prefix / opts.libdir]
+            )
         for p in opts.packages:
             cargo_cmd.extend(['-p', p])
         for e in opts.examples:
@@ -151,27 +150,29 @@ if __name__ == "__main__":
     if opts.command == 'build':
         target_dir = cargo_target_dir / '**' / opts.target
         if opts.bin:
-            exe = glob.glob(str(target_dir / opts.bin) + opts.exe_suffix, recursive=True)[0]
+            exe = glob.glob(
+                str(target_dir / opts.bin) + opts.exe_suffix, recursive=True
+            )[0]
             shutil.copy2(exe, opts.build_dir)
             depfile_content = generate_depfile_for(P(exe))
         else:
             # Copy so files to build dir
-            depfile_content = ""
+            depfile_content = ''
             for suffix in opts.lib_suffixes:
                 for f in glob.glob(str(target_dir / f'*.{suffix}'), recursive=True):
                     libfile = P(f)
 
                     depfile_content += generate_depfile_for(libfile)
 
-                    copied_file = (opts.build_dir / libfile.name)
+                    copied_file = opts.build_dir / libfile.name
                     try:
                         if copied_file.stat().st_mtime == libfile.stat().st_mtime:
-                            print(f"{copied_file} has not changed.", file=logfile)
+                            print(f'{copied_file} has not changed.', file=logfile)
                             continue
                     except FileNotFoundError:
                         pass
 
-                    print(f"Copying {copied_file}", file=logfile)
+                    print(f'Copying {copied_file}', file=logfile)
                     shutil.copy2(f, opts.build_dir)
             # Copy examples to builddir
             for example in opts.examples:
@@ -197,8 +198,7 @@ if __name__ == "__main__":
             if dest.exists():
                 dest.unlink()
             # move() takes paths from Python3.9 on
-            if ((sys.version_info.major >= 3) and (sys.version_info.minor >= 9)):
+            if (sys.version_info.major >= 3) and (sys.version_info.minor >= 9):
                 shutil.move(f, uninstalled)
             else:
                 shutil.move(str(f), str(uninstalled))
-
