@@ -6,6 +6,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 from argparse import ArgumentParser
 from pathlib import Path as P
 
@@ -34,10 +35,22 @@ def shlex_join(args):
     return ' '.join([shlex.quote(arg) for arg in args])
 
 
-def generate_depfile_for(fpath):
+def generate_depfile_for(fpath, build_start_time, logfile=None):
     file_stem = fpath.parent / fpath.stem
     depfile_content = ''
-    with open(f'{file_stem}.d', 'r') as depfile:
+    depfile_path = P(f'{file_stem}.d')
+
+    print(f'Checking {depfile_path}', file=logfile)
+
+    # Skip depfiles that are older than the current build start time
+    # This avoids stale depfiles from previous branch builds
+    if depfile_path.stat().st_mtime < build_start_time:
+        print(
+            f'{depfile_path} was not generated in our last run, ignoring', file=logfile
+        )
+        return depfile_content
+
+    with open(depfile_path, 'r') as depfile:
         for l in depfile.readlines():
             if l.startswith(str(file_stem)):
                 # We can't blindly split on `:` because on Windows that's part
@@ -148,6 +161,7 @@ if __name__ == '__main__':
         except subprocess.SubprocessError:
             sys.exit(1)
 
+    build_start_time = time.time()
     run(cargo_cmd, env)
 
     if opts.command == 'build':
@@ -157,7 +171,7 @@ if __name__ == '__main__':
                 str(target_dir / opts.bin) + opts.exe_suffix, recursive=True
             )[0]
             shutil.copy2(exe, opts.build_dir)
-            depfile_content = generate_depfile_for(P(exe))
+            depfile_content = generate_depfile_for(P(exe), build_start_time, logfile)
         else:
             # Copy so files to build dir
             depfile_content = ''
@@ -165,7 +179,9 @@ if __name__ == '__main__':
                 for f in glob.glob(str(target_dir / f'*.{suffix}'), recursive=True):
                     libfile = P(f)
 
-                    depfile_content += generate_depfile_for(libfile)
+                    depfile_content += generate_depfile_for(
+                        libfile, build_start_time, logfile
+                    )
 
                     copied_file = opts.build_dir / libfile.name
                     try:
@@ -182,7 +198,9 @@ if __name__ == '__main__':
                 example_glob = str(target_dir / 'examples' / example) + opts.exe_suffix
                 exe = glob.glob(example_glob, recursive=True)[0]
                 shutil.copy2(exe, opts.build_dir)
-                depfile_content += generate_depfile_for(P(exe))
+                depfile_content += generate_depfile_for(
+                    P(exe), build_start_time, logfile
+                )
 
         with open(opts.depfile, 'w') as depfile:
             depfile.write(depfile_content)
