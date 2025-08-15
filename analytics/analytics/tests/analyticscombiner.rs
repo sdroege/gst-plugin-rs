@@ -86,37 +86,39 @@ fn test_combine_multi() {
     assert_eq!(streams.len(), 2);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 10);
-    for (idx, buffer) in buffers.iter().enumerate() {
-        assert_eq!(
-            buffer.stream_id(),
-            Some(sink_0.stream_id().unwrap().as_gstr())
-        );
-        assert_eq!(
-            buffer.segment(),
-            Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
-        );
-        assert_eq!(buffer.caps().as_ref(), Some(&h0_caps));
-        let b = buffer.buffer().unwrap();
+    assert_eq!(
+        stream.stream_id(),
+        Some(sink_0.stream_id().unwrap().as_gstr())
+    );
+    assert_eq!(
+        stream.segment(),
+        Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
+    );
+    assert_eq!(stream.caps().as_ref(), Some(&h0_caps));
+
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 10);
+    for (idx, object) in objects.iter().enumerate() {
+        let b = object.downcast_ref::<gst::Buffer>().unwrap();
         assert_eq!(b.pts(), Some(idx as u64 * 20.mseconds()));
         assert_eq!(b.duration(), Some(20.mseconds()));
     }
     let stream = &streams[1];
     assert_eq!(stream.index(), 1);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 5);
-    for (idx, buffer) in buffers.iter().enumerate() {
-        assert_eq!(
-            buffer.stream_id(),
-            Some(sink_1.stream_id().unwrap().as_gstr())
-        );
-        assert_eq!(
-            buffer.segment(),
-            Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
-        );
-        assert_eq!(buffer.caps().as_ref(), Some(&h1_caps));
-        let b = buffer.buffer().unwrap();
+    assert_eq!(
+        stream.stream_id(),
+        Some(sink_1.stream_id().unwrap().as_gstr())
+    );
+    assert_eq!(
+        stream.segment(),
+        Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
+    );
+    assert_eq!(stream.caps().as_ref(), Some(&h1_caps));
+
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 5);
+    for (idx, object) in objects.iter().enumerate() {
+        let b = object.downcast_ref::<gst::Buffer>().unwrap();
         assert_eq!(b.pts(), Some(idx as u64 * 40.mseconds()));
         assert_eq!(b.duration(), Some(40.mseconds()));
     }
@@ -133,37 +135,39 @@ fn test_combine_multi() {
     assert_eq!(streams.len(), 2);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 2);
-    for (idx, buffer) in buffers.iter().enumerate() {
-        assert_eq!(
-            buffer.stream_id(),
-            Some(sink_0.stream_id().unwrap().as_gstr())
-        );
-        assert_eq!(
-            buffer.segment(),
-            Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
-        );
-        assert_eq!(buffer.caps().as_ref(), Some(&h0_caps));
-        let b = buffer.buffer().unwrap();
+    assert_eq!(
+        stream.stream_id(),
+        Some(sink_0.stream_id().unwrap().as_gstr())
+    );
+    assert_eq!(
+        stream.segment(),
+        Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
+    );
+    assert_eq!(stream.caps().as_ref(), Some(&h0_caps));
+
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 2);
+    for (idx, object) in objects.iter().enumerate() {
+        let b = object.downcast_ref::<gst::Buffer>().unwrap();
         assert_eq!(b.pts(), Some(200.mseconds() + idx as u64 * 20.mseconds()));
         assert_eq!(b.duration(), Some(20.mseconds()));
     }
     let stream = &streams[1];
     assert_eq!(stream.index(), 1);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 1);
-    for (idx, buffer) in buffers.iter().enumerate() {
-        assert_eq!(
-            buffer.stream_id(),
-            Some(sink_1.stream_id().unwrap().as_gstr())
-        );
-        assert_eq!(
-            buffer.segment(),
-            Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
-        );
-        assert_eq!(buffer.caps().as_ref(), Some(&h1_caps));
-        let b = buffer.buffer().unwrap();
+    assert_eq!(
+        stream.stream_id(),
+        Some(sink_1.stream_id().unwrap().as_gstr())
+    );
+    assert_eq!(
+        stream.segment(),
+        Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
+    );
+    assert_eq!(stream.caps().as_ref(), Some(&h1_caps));
+
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 1);
+    for (idx, object) in objects.iter().enumerate() {
+        let b = object.downcast_ref::<gst::Buffer>().unwrap();
         assert_eq!(b.pts(), Some(200.mseconds() + idx as u64 * 40.mseconds()));
         assert_eq!(b.duration(), Some(40.mseconds()));
     }
@@ -240,19 +244,19 @@ fn test_strategy_all() {
     assert_eq!(streams.len(), 1);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 3);
-    for (idx, buffer) in buffers.iter().enumerate() {
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 3);
+    for (idx, object) in objects.iter().enumerate() {
         assert_eq!(
-            buffer.stream_id(),
+            stream.stream_id(),
             Some(sink_0.stream_id().unwrap().as_gstr())
         );
         assert_eq!(
-            buffer.segment(),
+            stream.segment(),
             Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
         );
-        assert_eq!(buffer.caps().as_ref(), Some(&h_caps));
-        let b = buffer.buffer().unwrap();
+        assert_eq!(stream.caps().as_ref(), Some(&h_caps));
+        let b = object.downcast_ref::<gst::Buffer>().unwrap();
         assert_eq!(b.pts(), Some(gst::ClockTime::from_mseconds(ptss[idx])));
         assert_eq!(b.duration(), Some(33_333_333.nseconds()));
     }
@@ -277,19 +281,19 @@ fn test_strategy_all() {
     assert_eq!(streams.len(), 1);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 2);
-    for (idx, buffer) in buffers.iter().enumerate() {
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 2);
+    for (idx, object) in objects.iter().enumerate() {
         assert_eq!(
-            buffer.stream_id(),
+            stream.stream_id(),
             Some(sink_0.stream_id().unwrap().as_gstr())
         );
         assert_eq!(
-            buffer.segment(),
+            stream.segment(),
             Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
         );
-        assert_eq!(buffer.caps().as_ref(), Some(&h_caps));
-        let b = buffer.buffer().unwrap();
+        assert_eq!(stream.caps().as_ref(), Some(&h_caps));
+        let b = object.downcast_ref::<gst::Buffer>().unwrap();
         assert_eq!(b.pts(), Some(gst::ClockTime::from_mseconds(ptss[idx])));
         assert_eq!(b.duration(), Some(33_333_333.nseconds()));
     }
@@ -314,19 +318,19 @@ fn test_strategy_all() {
     assert_eq!(streams.len(), 1);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 4);
-    for (idx, buffer) in buffers.iter().enumerate() {
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 4);
+    for (idx, object) in objects.iter().enumerate() {
         assert_eq!(
-            buffer.stream_id(),
+            stream.stream_id(),
             Some(sink_0.stream_id().unwrap().as_gstr())
         );
         assert_eq!(
-            buffer.segment(),
+            stream.segment(),
             Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
         );
-        assert_eq!(buffer.caps().as_ref(), Some(&h_caps));
-        let b = buffer.buffer().unwrap();
+        assert_eq!(stream.caps().as_ref(), Some(&h_caps));
+        let b = object.downcast_ref::<gst::Buffer>().unwrap();
         assert_eq!(b.pts(), Some(gst::ClockTime::from_mseconds(ptss[idx])));
         assert_eq!(b.duration(), Some(33_333_333.nseconds()));
     }
@@ -341,19 +345,20 @@ fn test_strategy_all() {
     assert_eq!(streams.len(), 1);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 1);
-    let buffer = &buffers[0];
     assert_eq!(
-        buffer.stream_id(),
+        stream.stream_id(),
         Some(sink_0.stream_id().unwrap().as_gstr())
     );
     assert_eq!(
-        buffer.segment(),
+        stream.segment(),
         Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
     );
-    assert_eq!(buffer.caps().as_ref(), Some(&h_caps));
-    let b = buffer.buffer().unwrap();
+    assert_eq!(stream.caps().as_ref(), Some(&h_caps));
+
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 1);
+    let object = &objects[0];
+    let b = object.downcast_ref::<gst::Buffer>().unwrap();
     assert_eq!(b.pts(), Some(gst::ClockTime::from_mseconds(300)));
     assert_eq!(b.duration(), Some(33_333_333.nseconds()));
 
@@ -428,19 +433,19 @@ fn test_strategy_first() {
     assert_eq!(streams.len(), 1);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 1);
-    let buffer = &buffers[0];
     assert_eq!(
-        buffer.stream_id(),
+        stream.stream_id(),
         Some(sink_0.stream_id().unwrap().as_gstr())
     );
     assert_eq!(
-        buffer.segment(),
+        stream.segment(),
         Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
     );
-    assert_eq!(buffer.caps().as_ref(), Some(&h_caps));
-    let b = buffer.buffer().unwrap();
+    assert_eq!(stream.caps().as_ref(), Some(&h_caps));
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 1);
+    let object = &objects[0];
+    let b = object.downcast_ref::<gst::Buffer>().unwrap();
     assert_eq!(b.pts(), Some(gst::ClockTime::from_mseconds(0)));
     assert_eq!(b.duration(), Some(33_333_333.nseconds()));
 
@@ -463,19 +468,19 @@ fn test_strategy_first() {
     assert_eq!(streams.len(), 1);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 1);
-    let buffer = &buffers[0];
     assert_eq!(
-        buffer.stream_id(),
+        stream.stream_id(),
         Some(sink_0.stream_id().unwrap().as_gstr())
     );
     assert_eq!(
-        buffer.segment(),
+        stream.segment(),
         Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
     );
-    assert_eq!(buffer.caps().as_ref(), Some(&h_caps));
-    let b = buffer.buffer().unwrap();
+    assert_eq!(stream.caps().as_ref(), Some(&h_caps));
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 1);
+    let object = &objects[0];
+    let b = object.downcast_ref::<gst::Buffer>().unwrap();
     assert_eq!(b.pts(), Some(gst::ClockTime::from_mseconds(100)));
     assert_eq!(b.duration(), Some(33_333_333.nseconds()));
 
@@ -498,19 +503,19 @@ fn test_strategy_first() {
     assert_eq!(streams.len(), 1);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 1);
-    let buffer = &buffers[0];
     assert_eq!(
-        buffer.stream_id(),
+        stream.stream_id(),
         Some(sink_0.stream_id().unwrap().as_gstr())
     );
     assert_eq!(
-        buffer.segment(),
+        stream.segment(),
         Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
     );
-    assert_eq!(buffer.caps().as_ref(), Some(&h_caps));
-    let b = buffer.buffer().unwrap();
+    assert_eq!(stream.caps().as_ref(), Some(&h_caps));
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 1);
+    let object = &objects[0];
+    let b = object.downcast_ref::<gst::Buffer>().unwrap();
     assert_eq!(b.pts(), Some(gst::ClockTime::from_mseconds(200)));
     assert_eq!(b.duration(), Some(33_333_333.nseconds()));
 
@@ -524,19 +529,19 @@ fn test_strategy_first() {
     assert_eq!(streams.len(), 1);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 1);
-    let buffer = &buffers[0];
     assert_eq!(
-        buffer.stream_id(),
+        stream.stream_id(),
         Some(sink_0.stream_id().unwrap().as_gstr())
     );
     assert_eq!(
-        buffer.segment(),
+        stream.segment(),
         Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
     );
-    assert_eq!(buffer.caps().as_ref(), Some(&h_caps));
-    let b = buffer.buffer().unwrap();
+    assert_eq!(stream.caps().as_ref(), Some(&h_caps));
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 1);
+    let object = &objects[0];
+    let b = object.downcast_ref::<gst::Buffer>().unwrap();
     assert_eq!(b.pts(), Some(gst::ClockTime::from_mseconds(300)));
     assert_eq!(b.duration(), Some(33_333_333.nseconds()));
 
@@ -611,19 +616,19 @@ fn test_strategy_first_with_overlap() {
     assert_eq!(streams.len(), 1);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 1);
-    let buffer = &buffers[0];
     assert_eq!(
-        buffer.stream_id(),
+        stream.stream_id(),
         Some(sink_0.stream_id().unwrap().as_gstr())
     );
     assert_eq!(
-        buffer.segment(),
+        stream.segment(),
         Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
     );
-    assert_eq!(buffer.caps().as_ref(), Some(&h_caps));
-    let b = buffer.buffer().unwrap();
+    assert_eq!(stream.caps().as_ref(), Some(&h_caps));
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 1);
+    let object = &objects[0];
+    let b = object.downcast_ref::<gst::Buffer>().unwrap();
     assert_eq!(b.pts(), Some(gst::ClockTime::from_mseconds(0)));
     assert_eq!(b.duration(), Some(33_333_333.nseconds()));
 
@@ -646,19 +651,19 @@ fn test_strategy_first_with_overlap() {
     assert_eq!(streams.len(), 1);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 1);
-    let buffer = &buffers[0];
     assert_eq!(
-        buffer.stream_id(),
+        stream.stream_id(),
         Some(sink_0.stream_id().unwrap().as_gstr())
     );
     assert_eq!(
-        buffer.segment(),
+        stream.segment(),
         Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
     );
-    assert_eq!(buffer.caps().as_ref(), Some(&h_caps));
-    let b = buffer.buffer().unwrap();
+    assert_eq!(stream.caps().as_ref(), Some(&h_caps));
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 1);
+    let object = &objects[0];
+    let b = object.downcast_ref::<gst::Buffer>().unwrap();
     assert_eq!(b.pts(), Some(gst::ClockTime::from_mseconds(100)));
     assert_eq!(b.duration(), Some(33_333_333.nseconds()));
 
@@ -681,19 +686,19 @@ fn test_strategy_first_with_overlap() {
     assert_eq!(streams.len(), 1);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 1);
-    let buffer = &buffers[0];
     assert_eq!(
-        buffer.stream_id(),
+        stream.stream_id(),
         Some(sink_0.stream_id().unwrap().as_gstr())
     );
     assert_eq!(
-        buffer.segment(),
+        stream.segment(),
         Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
     );
-    assert_eq!(buffer.caps().as_ref(), Some(&h_caps));
-    let b = buffer.buffer().unwrap();
+    assert_eq!(stream.caps().as_ref(), Some(&h_caps));
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 1);
+    let object = &objects[0];
+    let b = object.downcast_ref::<gst::Buffer>().unwrap();
     assert_eq!(b.pts(), Some(gst::ClockTime::from_mseconds(199)));
     assert_eq!(b.duration(), Some(33_333_333.nseconds()));
 
@@ -707,19 +712,19 @@ fn test_strategy_first_with_overlap() {
     assert_eq!(streams.len(), 1);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 1);
-    let buffer = &buffers[0];
     assert_eq!(
-        buffer.stream_id(),
+        stream.stream_id(),
         Some(sink_0.stream_id().unwrap().as_gstr())
     );
     assert_eq!(
-        buffer.segment(),
+        stream.segment(),
         Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
     );
-    assert_eq!(buffer.caps().as_ref(), Some(&h_caps));
-    let b = buffer.buffer().unwrap();
+    assert_eq!(stream.caps().as_ref(), Some(&h_caps));
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 1);
+    let object = &objects[0];
+    let b = object.downcast_ref::<gst::Buffer>().unwrap();
     assert_eq!(b.pts(), Some(gst::ClockTime::from_mseconds(301)));
     assert_eq!(b.duration(), Some(33_333_333.nseconds()));
 
@@ -794,19 +799,19 @@ fn test_strategy_last() {
     assert_eq!(streams.len(), 1);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 1);
-    let buffer = &buffers[0];
     assert_eq!(
-        buffer.stream_id(),
+        stream.stream_id(),
         Some(sink_0.stream_id().unwrap().as_gstr())
     );
     assert_eq!(
-        buffer.segment(),
+        stream.segment(),
         Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
     );
-    assert_eq!(buffer.caps().as_ref(), Some(&h_caps));
-    let b = buffer.buffer().unwrap();
+    assert_eq!(stream.caps().as_ref(), Some(&h_caps));
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 1);
+    let object = &objects[0];
+    let b = object.downcast_ref::<gst::Buffer>().unwrap();
     assert_eq!(b.pts(), Some(gst::ClockTime::from_mseconds(66)));
     assert_eq!(b.duration(), Some(33_333_333.nseconds()));
 
@@ -829,19 +834,19 @@ fn test_strategy_last() {
     assert_eq!(streams.len(), 1);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 1);
-    let buffer = &buffers[0];
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 1);
+    let object = &objects[0];
     assert_eq!(
-        buffer.stream_id(),
+        stream.stream_id(),
         Some(sink_0.stream_id().unwrap().as_gstr())
     );
     assert_eq!(
-        buffer.segment(),
+        stream.segment(),
         Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
     );
-    assert_eq!(buffer.caps().as_ref(), Some(&h_caps));
-    let b = buffer.buffer().unwrap();
+    assert_eq!(stream.caps().as_ref(), Some(&h_caps));
+    let b = object.downcast_ref::<gst::Buffer>().unwrap();
     assert_eq!(b.pts(), Some(gst::ClockTime::from_mseconds(133)));
     assert_eq!(b.duration(), Some(33_333_333.nseconds()));
 
@@ -864,19 +869,19 @@ fn test_strategy_last() {
     assert_eq!(streams.len(), 1);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 1);
-    let buffer = &buffers[0];
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 1);
+    let object = &objects[0];
     assert_eq!(
-        buffer.stream_id(),
+        stream.stream_id(),
         Some(sink_0.stream_id().unwrap().as_gstr())
     );
     assert_eq!(
-        buffer.segment(),
+        stream.segment(),
         Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
     );
-    assert_eq!(buffer.caps().as_ref(), Some(&h_caps));
-    let b = buffer.buffer().unwrap();
+    assert_eq!(stream.caps().as_ref(), Some(&h_caps));
+    let b = object.downcast_ref::<gst::Buffer>().unwrap();
     assert_eq!(b.pts(), Some(gst::ClockTime::from_mseconds(266)));
     assert_eq!(b.duration(), Some(33_333_333.nseconds()));
 
@@ -890,19 +895,19 @@ fn test_strategy_last() {
     assert_eq!(streams.len(), 1);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 1);
-    let buffer = &buffers[0];
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 1);
+    let object = &objects[0];
     assert_eq!(
-        buffer.stream_id(),
+        stream.stream_id(),
         Some(sink_0.stream_id().unwrap().as_gstr())
     );
     assert_eq!(
-        buffer.segment(),
+        stream.segment(),
         Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
     );
-    assert_eq!(buffer.caps().as_ref(), Some(&h_caps));
-    let b = buffer.buffer().unwrap();
+    assert_eq!(stream.caps().as_ref(), Some(&h_caps));
+    let b = object.downcast_ref::<gst::Buffer>().unwrap();
     assert_eq!(b.pts(), Some(gst::ClockTime::from_mseconds(300)));
     assert_eq!(b.duration(), Some(33_333_333.nseconds()));
 
@@ -991,32 +996,30 @@ fn test_combine_multi_initial_gap() {
     assert_eq!(streams.len(), 2);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 10);
-    for (idx, buffer) in buffers.iter().enumerate() {
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 10);
+    for (idx, object) in objects.iter().enumerate() {
         assert_eq!(
-            buffer.stream_id(),
+            stream.stream_id(),
             Some(sink_0.stream_id().unwrap().as_gstr())
         );
         assert_eq!(
-            buffer.segment(),
+            stream.segment(),
             Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
         );
-        assert_eq!(buffer.caps().as_ref(), Some(&h0_caps));
-        let b = buffer.buffer().unwrap();
+        assert_eq!(stream.caps().as_ref(), Some(&h0_caps));
+        let b = object.downcast_ref::<gst::Buffer>().unwrap();
         assert_eq!(b.pts(), Some(idx as u64 * 20.mseconds()));
         assert_eq!(b.duration(), Some(20.mseconds()));
     }
     let stream = &streams[1];
     assert_eq!(stream.index(), 1);
-    let buffers = stream.buffers();
+    let objects = stream.objects();
     // Only an empty buffer with no events or anything for the second stream
-    assert_eq!(buffers.len(), 1);
-    let buffer = &buffers[0];
-    assert_eq!(buffer.stream_id(), None);
-    assert_eq!(buffer.segment(), None);
-    assert_eq!(buffer.caps().as_ref(), None);
-    assert_eq!(buffer.buffer(), None);
+    assert_eq!(objects.len(), 0);
+    assert_eq!(stream.stream_id(), None);
+    assert_eq!(stream.segment(), None);
+    assert_eq!(stream.caps().as_ref(), None);
 
     // Now start the second stream
     h1.set_src_caps(h1_caps.clone());
@@ -1054,37 +1057,37 @@ fn test_combine_multi_initial_gap() {
     assert_eq!(streams.len(), 2);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 10);
-    for (idx, buffer) in buffers.iter().enumerate() {
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 10);
+    for (idx, object) in objects.iter().enumerate() {
         assert_eq!(
-            buffer.stream_id(),
+            stream.stream_id(),
             Some(sink_0.stream_id().unwrap().as_gstr())
         );
         assert_eq!(
-            buffer.segment(),
+            stream.segment(),
             Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
         );
-        assert_eq!(buffer.caps().as_ref(), Some(&h0_caps));
-        let b = buffer.buffer().unwrap();
+        assert_eq!(stream.caps().as_ref(), Some(&h0_caps));
+        let b = object.downcast_ref::<gst::Buffer>().unwrap();
         assert_eq!(b.pts(), Some(200.mseconds() + idx as u64 * 20.mseconds()));
         assert_eq!(b.duration(), Some(20.mseconds()));
     }
     let stream = &streams[1];
     assert_eq!(stream.index(), 1);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 5);
-    for (idx, buffer) in buffers.iter().enumerate() {
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 5);
+    for (idx, object) in objects.iter().enumerate() {
         assert_eq!(
-            buffer.stream_id(),
+            stream.stream_id(),
             Some(sink_1.stream_id().unwrap().as_gstr())
         );
         assert_eq!(
-            buffer.segment(),
+            stream.segment(),
             Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
         );
-        assert_eq!(buffer.caps().as_ref(), Some(&h1_caps));
-        let b = buffer.buffer().unwrap();
+        assert_eq!(stream.caps().as_ref(), Some(&h1_caps));
+        let b = object.downcast_ref::<gst::Buffer>().unwrap();
         assert_eq!(b.pts(), Some(200.mseconds() + idx as u64 * 40.mseconds()));
         assert_eq!(b.duration(), Some(40.mseconds()));
     }
@@ -1101,37 +1104,37 @@ fn test_combine_multi_initial_gap() {
     assert_eq!(streams.len(), 2);
     let stream = &streams[0];
     assert_eq!(stream.index(), 0);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 1);
-    for (idx, buffer) in buffers.iter().enumerate() {
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 1);
+    for (idx, object) in objects.iter().enumerate() {
         assert_eq!(
-            buffer.stream_id(),
+            stream.stream_id(),
             Some(sink_0.stream_id().unwrap().as_gstr())
         );
         assert_eq!(
-            buffer.segment(),
+            stream.segment(),
             Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
         );
-        assert_eq!(buffer.caps().as_ref(), Some(&h0_caps));
-        let b = buffer.buffer().unwrap();
+        assert_eq!(stream.caps().as_ref(), Some(&h0_caps));
+        let b = object.downcast_ref::<gst::Buffer>().unwrap();
         assert_eq!(b.pts(), Some(400.mseconds() + idx as u64 * 20.mseconds()));
         assert_eq!(b.duration(), Some(20.mseconds()));
     }
     let stream = &streams[1];
     assert_eq!(stream.index(), 1);
-    let buffers = stream.buffers();
-    assert_eq!(buffers.len(), 1);
-    for (idx, buffer) in buffers.iter().enumerate() {
+    let objects = stream.objects();
+    assert_eq!(objects.len(), 1);
+    for (idx, object) in objects.iter().enumerate() {
         assert_eq!(
-            buffer.stream_id(),
+            stream.stream_id(),
             Some(sink_1.stream_id().unwrap().as_gstr())
         );
         assert_eq!(
-            buffer.segment(),
+            stream.segment(),
             Some(gst::FormattedSegment::<gst::ClockTime>::new().upcast())
         );
-        assert_eq!(buffer.caps().as_ref(), Some(&h1_caps));
-        let b = buffer.buffer().unwrap();
+        assert_eq!(stream.caps().as_ref(), Some(&h1_caps));
+        let b = object.downcast_ref::<gst::Buffer>().unwrap();
         assert_eq!(b.pts(), Some(400.mseconds() + idx as u64 * 40.mseconds()));
         assert_eq!(b.duration(), Some(40.mseconds()));
     }
@@ -1157,7 +1160,10 @@ fn test_combine_multi_initial_gap() {
         .collect::<Vec<_>>();
     assert_eq!(streams.len(), 2);
     assert_eq!(streams[0].as_ref(), Some(&h0_caps));
-    assert_eq!(streams[1].as_ref(), None);
+    assert_eq!(
+        streams[1].as_ref(),
+        Some(&gst::Caps::new_empty_simple("application/unknown"))
+    );
 
     let ev = h0.pull_event().unwrap();
     assert_eq!(ev.type_(), gst::EventType::Segment);
