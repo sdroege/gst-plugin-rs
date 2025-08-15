@@ -189,25 +189,22 @@ impl AnalyticsSplitter {
 
         let mut res = Ok(gst::FlowSuccess::Ok);
         'next_stream: for (pad, stream) in Iterator::zip(pads.into_iter(), meta.streams().iter()) {
-            for buffer in stream.buffers() {
-                for event in buffer.sticky_events() {
-                    gst::trace!(CAT, obj = pad, "Storing sticky event {event:?}");
-                    let _ = pad.store_sticky_event(event);
-                }
+            for event in stream.sticky_events() {
+                gst::trace!(CAT, obj = pad, "Storing sticky event {event:?}");
+                let _ = pad.store_sticky_event(event);
+            }
 
-                for event in buffer.serialized_events() {
+            for object in stream.objects() {
+                if let Some(event) = object.downcast_ref::<gst::Event>() {
                     gst::trace!(CAT, obj = pad, "Pushing serialized event {event:?}");
-                    let _ = pad.push_event(event.clone());
-                }
-
-                if let Some(buffer) = buffer.buffer_owned() {
+                    pad.push_event(event.clone());
+                } else if let Some(buffer) = object.downcast_ref::<gst::Buffer>() {
                     gst::trace!(CAT, obj = pad, "Pushing buffer {buffer:?}");
-                    let pad_res = pad.push(buffer);
+                    let pad_res = pad.push(buffer.clone());
                     res = combiner.update_pad_flow(&pad, pad_res);
-                }
-                if let Some(buffer_list) = buffer.buffer_list_owned() {
+                } else if let Some(buffer_list) = object.downcast_ref::<gst::BufferList>() {
                     gst::trace!(CAT, obj = pad, "Pushing buffer list {buffer_list:?}");
-                    let pad_res = pad.push_list(buffer_list);
+                    let pad_res = pad.push_list(buffer_list.clone());
                     res = combiner.update_pad_flow(&pad, pad_res);
                 }
 
