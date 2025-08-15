@@ -24,7 +24,7 @@ PARSER.add_argument('--packages', nargs='+', default=[])
 PARSER.add_argument('--examples', nargs='+', default=[])
 PARSER.add_argument('--lib-suffixes', nargs='+', default=[])
 PARSER.add_argument('--exe-suffix')
-PARSER.add_argument('--depfile')
+PARSER.add_argument('--depfile', type=P)
 PARSER.add_argument('--disable-doc', action='store_true', default=False)
 
 
@@ -73,7 +73,7 @@ def generate_depfile_for(fpath):
 if __name__ == '__main__':
     opts = PARSER.parse_args()
     logdir = opts.root_dir / 'meson-logs'
-    logfile_path = logdir / f'{opts.src_dir.name}-cargo-wrapper.log'
+    logfile_path = logdir / f'{opts.depfile.name.replace('.dep', '')}-cargo-wrapper.log'
     logfile = open(logfile_path, mode='w', buffering=1, encoding='utf-8')
 
     print(opts, file=logfile)
@@ -130,9 +130,12 @@ if __name__ == '__main__':
         cargo_cmd.extend(['--bin', opts.bin.name])
     else:
         if not opts.examples:
-            cargo_cmd.extend(
-                ['--prefix', opts.prefix, '--libdir', opts.prefix / opts.libdir]
-            )
+            cargo_cmd.extend([
+                '--prefix',
+                opts.prefix,
+                '--libdir',
+                opts.prefix / opts.libdir,
+            ])
         for p in opts.packages:
             cargo_cmd.extend(['-p', p])
         for e in opts.examples:
