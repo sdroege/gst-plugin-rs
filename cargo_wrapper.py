@@ -69,14 +69,19 @@ def generate_depfile_for(fpath, build_start_time, logfile=None):
 
                 all_deps = []
                 for src in srcs.split(' '):
+                    src = src.strip()
                     all_deps.append(src)
                     src = P(src)
-                    if src.name == 'lib.rs':
+                    if src.name in ['lib.rs', 'main.rs']:
                         # `rustc` doesn't take `Cargo.toml` into account
                         # but we need to
                         cargo_toml = src.parent.parent / 'Cargo.toml'
+                        print(f'  Looking for {cargo_toml}: ', file=logfile, end='')
                         if cargo_toml.exists():
+                            print(f'Found', file=logfile)
                             all_deps.append(str(cargo_toml))
+                        else:
+                            print(f'Not found', file=logfile)
 
                 depfile_content += f'{output}: {' '.join(all_deps)}\n'
 
