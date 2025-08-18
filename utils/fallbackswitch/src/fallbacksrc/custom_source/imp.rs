@@ -504,10 +504,13 @@ impl CustomSource {
                     .filter(|p| p.is_selected)
                     .map(|p| p.stream.stream_id().unwrap())
                     .collect::<Vec<_>>();
+                drop(state);
                 if let Some(message) = self.handle_stream_selection(selected_ids) {
                     let _ = self.obj().post_message(message);
                 }
             }
+        } else {
+            drop(state);
         }
 
         if is_exposed {
