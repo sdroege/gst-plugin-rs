@@ -608,22 +608,34 @@ impl CustomSource {
             .src(&*self.obj())
             .build();
 
-        self.expose_only_selected_streams(state);
+        self.expose_only_selected_streams(state_guard);
         Some(message)
     }
 
-    fn expose_only_selected_streams(&self, state: &mut State) {
+    fn expose_only_selected_streams(&self, state: MutexGuard<State>) {
+        let mut to_add = vec![];
+        let mut to_remove = vec![];
+
         for stream in state.pads.iter() {
             if stream.is_selected && !stream.is_exposed() {
                 let event = gst::event::StreamStart::builder(&stream.stream.stream_id().unwrap())
                     .stream(stream.stream.clone())
                     .build();
                 stream.ghost_pad.store_sticky_event(&event).unwrap();
-                self.obj().add_pad(&stream.ghost_pad).unwrap();
+                to_add.push(stream.ghost_pad.clone());
             } else if !stream.is_selected && stream.is_exposed() {
                 let _ = stream.ghost_pad.set_target(None::<&gst::Pad>);
-                let _ = self.obj().remove_pad(&stream.ghost_pad);
+                to_remove.push(stream.ghost_pad.clone());
             }
+        }
+        drop(state);
+
+        for pad in to_add {
+            self.obj().add_pad(&pad).unwrap();
+        }
+
+        for pad in to_remove {
+            let _ = self.obj().remove_pad(&pad);
         }
     }
 
