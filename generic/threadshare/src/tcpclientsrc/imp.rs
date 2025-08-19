@@ -272,6 +272,10 @@ impl TcpClientSrcTask {
 impl TaskImpl for TcpClientSrcTask {
     type Item = gst::Buffer;
 
+    fn obj(&self) -> &impl IsA<glib::Object> {
+        &self.element
+    }
+
     async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
         gst::log!(
             CAT,

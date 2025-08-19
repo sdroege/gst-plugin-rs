@@ -296,6 +296,10 @@ impl AudioTestSrcTask {
 impl TaskImpl for AudioTestSrcTask {
     type Item = gst::Buffer;
 
+    fn obj(&self) -> &impl IsA<glib::Object> {
+        &self.elem
+    }
+
     async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
         gst::log!(CAT, obj = self.elem, "Preparing Task");
 

@@ -221,6 +221,10 @@ impl UdpSrcTask {
 impl TaskImpl for UdpSrcTask {
     type Item = gst::Buffer;
 
+    fn obj(&self) -> &impl IsA<glib::Object> {
+        &self.element
+    }
+
     async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
         let udpsrc = self.element.imp();
         let mut settings = udpsrc.settings.lock().unwrap();

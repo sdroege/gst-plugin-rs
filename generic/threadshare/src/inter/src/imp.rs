@@ -436,6 +436,10 @@ impl InterSrcTask {
 impl TaskImpl for InterSrcTask {
     type Item = DataQueueItem;
 
+    fn obj(&self) -> &impl IsA<glib::Object> {
+        &self.elem
+    }
+
     async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
         gst::log!(CAT, obj = self.elem, "Starting task");
         self.dataqueue.start();

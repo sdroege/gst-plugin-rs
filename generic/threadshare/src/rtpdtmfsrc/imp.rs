@@ -410,6 +410,10 @@ enum TaskItem {
 impl TaskImpl for RTPDTMFSrcTask {
     type Item = TaskItem;
 
+    fn obj(&self) -> &impl IsA<glib::Object> {
+        &self.elem
+    }
+
     async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
         gst::log!(CAT, obj = self.elem, "Starting Task");
 

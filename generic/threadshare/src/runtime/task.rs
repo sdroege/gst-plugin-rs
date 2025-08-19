@@ -30,6 +30,9 @@ use std::pin::{pin, Pin};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::task::Poll;
 
+use gst::glib;
+use gst::glib::prelude::*;
+
 use super::{Context, JoinHandle, RUNTIME_CAT};
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
@@ -318,6 +321,8 @@ impl fmt::Debug for TransitionStatus {
 pub trait TaskImpl: Send + 'static {
     type Item: Send + 'static;
 
+    fn obj(&self) -> &impl IsA<glib::Object>;
+
     fn prepare(&mut self) -> impl Future<Output = Result<(), gst::ErrorMessage>> + Send {
         future::ok(())
     }
@@ -395,16 +400,25 @@ pub trait TaskImpl: Send + 'static {
                 gst::FlowError::Flushing => {
                     gst::debug!(
                         RUNTIME_CAT,
+                        obj = self.obj(),
                         "Task loop returned Flushing. Posting FlushStart"
                     );
                     Trigger::FlushStart
                 }
                 gst::FlowError::Eos => {
-                    gst::debug!(RUNTIME_CAT, "Task loop returned Eos. Posting Stop");
+                    gst::debug!(
+                        RUNTIME_CAT,
+                        obj = self.obj(),
+                        "Task loop returned Eos. Posting Stop"
+                    );
                     Trigger::Stop
                 }
                 other => {
-                    gst::error!(RUNTIME_CAT, "Task loop returned {:?}. Posting Error", other);
+                    gst::error!(
+                        RUNTIME_CAT,
+                        obj = self.obj(),
+                        "Task loop returned {other:?}. Posting Error",
+                    );
                     Trigger::Error
                 }
             }
@@ -430,10 +444,8 @@ pub trait TaskImpl: Send + 'static {
         async move {
             gst::error!(
                 RUNTIME_CAT,
-                "TaskImpl transition action error during {:?} from {:?}: {:?}. Posting Trigger::Error",
-                trigger,
-                state,
-                err,
+                obj = self.obj(),
+                "TaskImpl transition action error during {trigger:?} from {state:?}: {err:?}. Posting Trigger::Error",
             );
 
             Trigger::Error
@@ -497,7 +509,7 @@ impl StateMachineHandle {
     fn trigger(&mut self, trigger: Trigger) -> AckReceiver {
         let (triggering_evt, ack_rx) = TriggeringEvent::new(trigger);
 
-        gst::log!(RUNTIME_CAT, "Pushing {:?}", triggering_evt);
+        gst::log!(RUNTIME_CAT, "Pushing {triggering_evt:?}");
         self.triggering_evt_tx.try_send(triggering_evt).unwrap();
 
         self.context.unpark();
@@ -545,8 +557,7 @@ impl TaskInner {
             err_msg: gst::error_msg!(
                 gst::CoreError::StateChange,
                 [
-                    "Unrecoverable error for {:?} from state {:?}",
-                    triggering_evt,
+                    "Unrecoverable error for {triggering_evt:?} from state {:?}",
                     self.state,
                 ]
             ),
@@ -570,17 +581,13 @@ impl TaskInner {
             .as_mut()
             .map(|state_machine| state_machine.trigger(trigger))
             .ok_or_else(|| {
-                gst::warning!(
-                    RUNTIME_CAT,
-                    "Unable to send {:?}: no state machine",
-                    trigger
-                );
+                gst::warning!(RUNTIME_CAT, "Unable to send {trigger:?}: no state machine",);
                 TransitionError {
                     trigger,
                     state: TaskState::Unprepared,
                     err_msg: gst::error_msg!(
                         gst::ResourceError::NotFound,
-                        ["Unable to send {:?}: no state machine", trigger]
+                        ["Unable to send {trigger:?}: no state machine"]
                     ),
                 }
             })
@@ -637,7 +644,11 @@ impl Task {
         match origin {
             TaskState::Unprepared => (),
             TaskState::Prepared | TaskState::Preparing => {
-                gst::debug!(RUNTIME_CAT, "Task already {:?}", origin);
+                gst::debug!(
+                    RUNTIME_CAT,
+                    obj = task_impl.obj(),
+                    "Task already {origin:?}",
+                );
                 return TransitionOk::Skipped {
                     trigger: Trigger::Prepare,
                     state: origin,
@@ -645,13 +656,17 @@ impl Task {
                 .into();
             }
             state => {
-                gst::warning!(RUNTIME_CAT, "Attempt to prepare Task in state {:?}", state);
+                gst::warning!(
+                    RUNTIME_CAT,
+                    obj = task_impl.obj(),
+                    "Attempt to prepare Task in state {state:?}"
+                );
                 return TransitionError {
                     trigger: Trigger::Prepare,
                     state: inner.state,
                     err_msg: gst::error_msg!(
                         gst::CoreError::StateChange,
-                        ["Attempt to prepare Task in state {:?}", state]
+                        ["Attempt to prepare Task in state {state:?}"]
                     ),
                 }
                 .into();
@@ -662,7 +677,11 @@ impl Task {
 
         inner.state = TaskState::Preparing;
 
-        gst::log!(RUNTIME_CAT, "Spawning task state machine");
+        gst::log!(
+            RUNTIME_CAT,
+            obj = task_impl.obj(),
+            "Spawning task state machine"
+        );
         inner.state_machine_handle = Some(StateMachine::spawn(self.0.clone(), task_impl, context));
 
         let ack_rx = match inner.trigger(Trigger::Prepare) {
@@ -703,17 +722,13 @@ impl Task {
                 }
             },
             state => {
-                gst::warning!(
-                    RUNTIME_CAT,
-                    "Attempt to unprepare Task in state {:?}",
-                    state
-                );
+                gst::warning!(RUNTIME_CAT, "Attempt to unprepare Task in state {state:?}");
                 return TransitionError {
                     trigger: Trigger::Unprepare,
                     state: inner.state,
                     err_msg: gst::error_msg!(
                         gst::CoreError::StateChange,
-                        ["Attempt to unprepare Task in state {:?}", state]
+                        ["Attempt to unprepare Task in state {state:?}"]
                     ),
                 }
                 .into();
@@ -827,9 +842,9 @@ macro_rules! exec_action {
                 // Convert triggering event according to the error handler's decision
                 gst::trace!(
                     RUNTIME_CAT,
-                    "TaskImpl transition action error: converting {:?} to {:?}",
+                    obj = $self.task_impl.obj(),
+                    "TaskImpl transition action error: converting {:?} to {next_trigger:?}",
                     $triggering_evt.trigger,
-                    next_trigger,
                 );
 
                 $triggering_evt.trigger = next_trigger;
@@ -870,7 +885,7 @@ impl<Task: TaskImpl> StateMachine<Task> {
             .expect("triggering_evt_rx dropped");
 
         if let Trigger::Prepare = triggering_evt.trigger {
-            gst::trace!(RUNTIME_CAT, "Preparing task");
+            gst::trace!(RUNTIME_CAT, obj = self.task_impl.obj(), "Preparing task");
 
             let res = exec_action!(
                 self,
@@ -889,7 +904,7 @@ impl<Task: TaskImpl> StateMachine<Task> {
                 task_inner.state = TaskState::Prepared;
                 triggering_evt.send_ack(res);
 
-                gst::trace!(RUNTIME_CAT, "Task Prepared");
+                gst::trace!(RUNTIME_CAT, obj = self.task_impl.obj(), "Task Prepared");
             }
         } else {
             panic!("Unexpected initial trigger {:?}", triggering_evt.trigger);
@@ -904,13 +919,17 @@ impl<Task: TaskImpl> StateMachine<Task> {
                     .await
                     .expect("triggering_evt_rx dropped"),
             };
-            gst::trace!(RUNTIME_CAT, "State machine popped {:?}", triggering_evt);
+            gst::trace!(
+                RUNTIME_CAT,
+                obj = self.task_impl.obj(),
+                "State machine popped {triggering_evt:?}"
+            );
 
             match triggering_evt.trigger {
                 Trigger::Error => {
                     let mut task_inner = task_inner.lock().unwrap();
                     task_inner.switch_to_err(triggering_evt);
-                    gst::trace!(RUNTIME_CAT, "Switched to Error");
+                    gst::trace!(RUNTIME_CAT, obj = self.task_impl.obj(), "Switched to Error");
                 }
                 Trigger::Start => {
                     let origin = {
@@ -922,6 +941,7 @@ impl<Task: TaskImpl> StateMachine<Task> {
                                 task_inner.switch_to_state(TaskState::Flushing, triggering_evt);
                                 gst::trace!(
                                     RUNTIME_CAT,
+                                    obj = self.task_impl.obj(),
                                     "Switched from PausedFlushing to Flushing"
                                 );
                                 continue;
@@ -932,7 +952,11 @@ impl<Task: TaskImpl> StateMachine<Task> {
                             }
                             state => {
                                 task_inner.skip_triggering_evt(triggering_evt);
-                                gst::trace!(RUNTIME_CAT, "Skipped Start in state {:?}", state);
+                                gst::trace!(
+                                    RUNTIME_CAT,
+                                    obj = self.task_impl.obj(),
+                                    "Skipped Start in state {state:?}"
+                                );
                                 continue;
                             }
                         }
@@ -958,7 +982,11 @@ impl<Task: TaskImpl> StateMachine<Task> {
                             }
                             state => {
                                 task_inner.skip_triggering_evt(triggering_evt);
-                                gst::trace!(RUNTIME_CAT, "Skipped Pause in state {:?}", state);
+                                gst::trace!(
+                                    RUNTIME_CAT,
+                                    obj = self.task_impl.obj(),
+                                    "Skipped Pause in state {state:?}"
+                                );
                                 continue;
                             }
                         }
@@ -970,7 +998,11 @@ impl<Task: TaskImpl> StateMachine<Task> {
                             .lock()
                             .unwrap()
                             .switch_to_state(target, triggering_evt);
-                        gst::trace!(RUNTIME_CAT, "Task loop {:?}", target);
+                        gst::trace!(
+                            RUNTIME_CAT,
+                            obj = self.task_impl.obj(),
+                            "Task loop {target:?}"
+                        );
                     }
                 }
                 Trigger::Stop => {
@@ -988,7 +1020,11 @@ impl<Task: TaskImpl> StateMachine<Task> {
                             }
                             state => {
                                 task_inner.skip_triggering_evt(triggering_evt);
-                                gst::trace!(RUNTIME_CAT, "Skipped Stop in state {:?}", state);
+                                gst::trace!(
+                                    RUNTIME_CAT,
+                                    obj = self.task_impl.obj(),
+                                    "Skipped Stop in state {state:?}"
+                                );
                                 continue;
                             }
                         }
@@ -1000,7 +1036,7 @@ impl<Task: TaskImpl> StateMachine<Task> {
                             .lock()
                             .unwrap()
                             .switch_to_state(TaskState::Stopped, triggering_evt);
-                        gst::trace!(RUNTIME_CAT, "Task loop Stopped");
+                        gst::trace!(RUNTIME_CAT, obj = self.task_impl.obj(), "Task loop Stopped");
                     }
                 }
                 Trigger::FlushStart => {
@@ -1016,7 +1052,11 @@ impl<Task: TaskImpl> StateMachine<Task> {
                             }
                             state => {
                                 task_inner.skip_triggering_evt(triggering_evt);
-                                gst::trace!(RUNTIME_CAT, "Skipped FlushStart in state {:?}", state);
+                                gst::trace!(
+                                    RUNTIME_CAT,
+                                    obj = self.task_impl.obj(),
+                                    "Skipped FlushStart in state {state:?}"
+                                );
                                 continue;
                             }
                         }
@@ -1028,7 +1068,7 @@ impl<Task: TaskImpl> StateMachine<Task> {
                             .lock()
                             .unwrap()
                             .switch_to_state(target, triggering_evt);
-                        gst::trace!(RUNTIME_CAT, "Task {:?}", target);
+                        gst::trace!(RUNTIME_CAT, obj = self.task_impl.obj(), "Task {target:?}");
                     }
                 }
                 Trigger::FlushStop => {
@@ -1045,7 +1085,11 @@ impl<Task: TaskImpl> StateMachine<Task> {
                                 .lock()
                                 .unwrap()
                                 .skip_triggering_evt(triggering_evt);
-                            gst::trace!(RUNTIME_CAT, "Skipped FlushStop in state {:?}", state);
+                            gst::trace!(
+                                RUNTIME_CAT,
+                                obj = self.task_impl.obj(),
+                                "Skipped FlushStop in state {state:?}"
+                            );
                             continue;
                         }
                     };
@@ -1057,7 +1101,11 @@ impl<Task: TaskImpl> StateMachine<Task> {
                                 .lock()
                                 .unwrap()
                                 .switch_to_state(TaskState::Paused, triggering_evt);
-                            gst::trace!(RUNTIME_CAT, "Switched from PausedFlushing to Paused");
+                            gst::trace!(
+                                RUNTIME_CAT,
+                                obj = self.task_impl.obj(),
+                                "Switched from PausedFlushing to Paused"
+                            );
                         } else {
                             self.start(triggering_evt, origin, &task_inner).await;
                             // next/pending triggering event handled in next iteration
@@ -1079,7 +1127,11 @@ impl<Task: TaskImpl> StateMachine<Task> {
             }
         }
 
-        gst::trace!(RUNTIME_CAT, "Task state machine terminated");
+        gst::trace!(
+            RUNTIME_CAT,
+            obj = self.task_impl.obj(),
+            "Task state machine terminated"
+        );
     }
 
     async fn start(
@@ -1110,11 +1162,11 @@ impl<Task: TaskImpl> StateMachine<Task> {
     }
 
     async fn run_loop(&mut self) -> Result<(), gst::FlowError> {
-        gst::trace!(RUNTIME_CAT, "Task loop started");
+        gst::trace!(RUNTIME_CAT, obj = self.task_impl.obj(), "Task loop started");
 
-        let mut item;
+        let mut try_next_res;
         loop {
-            item = {
+            try_next_res = {
                 // select_biased requires the selected futures to implement
                 // `FusedFuture`. Because async trait functions are not stable,
                 // we use `BoxFuture` for the `TaskImpl` function, including
@@ -1133,14 +1185,24 @@ impl<Task: TaskImpl> StateMachine<Task> {
                         self.pending_triggering_evt = Some(triggering_evt);
                         return Ok(());
                     }
-                    try_next_res = try_next_fut => try_next_res.inspect_err(|&err| {
-                        gst::debug!(RUNTIME_CAT, "TaskImpl::try_next returned {:?}", err);
-                    })?,
+                    try_next_res = try_next_fut => try_next_res,
                 }
             };
 
+            let item = try_next_res.inspect_err(|err| {
+                gst::debug!(
+                    RUNTIME_CAT,
+                    obj = self.task_impl.obj(),
+                    "TaskImpl::try_next returned {err:?}"
+                );
+            })?;
+
             self.task_impl.handle_item(item).await.inspect_err(|&err| {
-                gst::debug!(RUNTIME_CAT, "TaskImpl::handle_item returned {:?}", err);
+                gst::debug!(
+                    RUNTIME_CAT,
+                    obj = self.task_impl.obj(),
+                    "TaskImpl::handle_item returned {err:?}"
+                );
             })?;
         }
     }
@@ -1151,6 +1213,8 @@ mod tests {
     use futures::channel::{mpsc, oneshot};
     use futures::executor::block_on;
     use futures::prelude::*;
+    use gst::glib;
+    use gst::glib::prelude::*;
     use std::future::pending;
     use std::time::Duration;
 
@@ -1175,6 +1239,7 @@ mod tests {
         gst::init().unwrap();
 
         struct TaskTest {
+            obj: gst::Object,
             prepared_sender: mpsc::Sender<()>,
             started_sender: mpsc::Sender<()>,
             try_next_ready_sender: mpsc::Sender<()>,
@@ -1188,6 +1253,10 @@ mod tests {
 
         impl TaskImpl for TaskTest {
             type Item = ();
+
+            fn obj(&self) -> &impl IsA<glib::Object> {
+                &self.obj
+            }
 
             async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
                 gst::debug!(RUNTIME_CAT, "nominal: prepared");
@@ -1257,6 +1326,10 @@ mod tests {
         let (unprepared_sender, mut unprepared_receiver) = mpsc::channel(1);
         let prepare_status = task.prepare(
             TaskTest {
+                obj: gst::Pad::builder(gst::PadDirection::Unknown)
+                    .name("runtime::Task::nominal")
+                    .build()
+                    .into(),
                 prepared_sender,
                 started_sender,
                 try_next_ready_sender,
@@ -1455,11 +1528,16 @@ mod tests {
         gst::init().unwrap();
 
         struct TaskPrepareTest {
+            obj: gst::Object,
             prepare_error_sender: mpsc::Sender<()>,
         }
 
         impl TaskImpl for TaskPrepareTest {
             type Item = ();
+
+            fn obj(&self) -> &impl IsA<glib::Object> {
+                &self.obj
+            }
 
             async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
                 gst::debug!(RUNTIME_CAT, "prepare_error: prepare returning an error");
@@ -1507,6 +1585,10 @@ mod tests {
         let (prepare_error_sender, mut prepare_error_receiver) = mpsc::channel(1);
         let prepare_status = task.prepare(
             TaskPrepareTest {
+                obj: gst::Pad::builder(gst::PadDirection::Unknown)
+                    .name("runtime::Task::prepare_error")
+                    .build()
+                    .into(),
                 prepare_error_sender,
             },
             context,
@@ -1551,11 +1633,16 @@ mod tests {
         gst::init().unwrap();
 
         struct TaskPrepareTest {
+            obj: gst::Object,
             prepare_receiver: mpsc::Receiver<()>,
         }
 
         impl TaskImpl for TaskPrepareTest {
             type Item = ();
+
+            fn obj(&self) -> &impl IsA<glib::Object> {
+                &self.obj
+            }
 
             async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
                 gst::debug!(
@@ -1595,7 +1682,16 @@ mod tests {
         let task = Task::default();
 
         let (mut prepare_sender, prepare_receiver) = mpsc::channel(1);
-        let fut = task.prepare(TaskPrepareTest { prepare_receiver }, context);
+        let fut = task.prepare(
+            TaskPrepareTest {
+                obj: gst::Pad::builder(gst::PadDirection::Unknown)
+                    .name("runtime::Task::prepare_start_ok")
+                    .build()
+                    .into(),
+                prepare_receiver,
+            },
+            context,
+        );
         drop(fut);
 
         let start_ctx = Context::acquire("prepare_start_ok_requester", Duration::ZERO).unwrap();
@@ -1675,12 +1771,17 @@ mod tests {
         gst::init().unwrap();
 
         struct TaskPrepareTest {
+            obj: gst::Object,
             prepare_receiver: mpsc::Receiver<()>,
             prepare_error_sender: mpsc::Sender<()>,
         }
 
         impl TaskImpl for TaskPrepareTest {
             type Item = ();
+
+            fn obj(&self) -> &impl IsA<glib::Object> {
+                &self.obj
+            }
 
             async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
                 gst::debug!(
@@ -1737,6 +1838,10 @@ mod tests {
         let (prepare_error_sender, mut prepare_error_receiver) = mpsc::channel(1);
         let prepare_status = task.prepare(
             TaskPrepareTest {
+                obj: gst::Pad::builder(gst::PadDirection::Unknown)
+                    .name("runtime::Task::prepare_start_error")
+                    .build()
+                    .into(),
                 prepare_receiver,
                 prepare_error_sender,
             },
@@ -1811,11 +1916,16 @@ mod tests {
         gst::init().unwrap();
 
         struct TaskTest {
+            obj: gst::Object,
             try_next_receiver: mpsc::Receiver<gst::FlowError>,
         }
 
         impl TaskImpl for TaskTest {
             type Item = gst::FlowError;
+
+            fn obj(&self) -> &impl IsA<glib::Object> {
+                &self.obj
+            }
 
             async fn try_next(&mut self) -> Result<gst::FlowError, gst::FlowError> {
                 gst::debug!(RUNTIME_CAT, "item_error: awaiting try_next");
@@ -1832,9 +1942,18 @@ mod tests {
         let task = Task::default();
         gst::debug!(RUNTIME_CAT, "item_error: prepare and start");
         let (mut try_next_sender, try_next_receiver) = mpsc::channel(1);
-        task.prepare(TaskTest { try_next_receiver }, context)
-            .block_on()
-            .unwrap();
+        task.prepare(
+            TaskTest {
+                obj: gst::Pad::builder(gst::PadDirection::Unknown)
+                    .name("runtime::Task::item_error")
+                    .build()
+                    .into(),
+                try_next_receiver,
+            },
+            context,
+        )
+        .block_on()
+        .unwrap();
         task.start().block_on().unwrap();
 
         gst::debug!(RUNTIME_CAT, "item_error: req. handle_item to return Eos");
@@ -1884,12 +2003,17 @@ mod tests {
         gst::init().unwrap();
 
         struct TaskFlushTest {
+            obj: gst::Object,
             flush_start_sender: mpsc::Sender<()>,
             flush_stop_sender: mpsc::Sender<()>,
         }
 
         impl TaskImpl for TaskFlushTest {
             type Item = ();
+
+            fn obj(&self) -> &impl IsA<glib::Object> {
+                &self.obj
+            }
 
             async fn try_next(&mut self) -> Result<(), gst::FlowError> {
                 pending().await
@@ -1920,6 +2044,10 @@ mod tests {
         let (flush_stop_sender, mut flush_stop_receiver) = mpsc::channel(1);
         let fut = task.prepare(
             TaskFlushTest {
+                obj: gst::Pad::builder(gst::PadDirection::Unknown)
+                    .name("runtime::Task::flush_regular_sync")
+                    .build()
+                    .into(),
                 flush_start_sender,
                 flush_stop_sender,
             },
@@ -1965,12 +2093,17 @@ mod tests {
         gst::init().unwrap();
 
         struct TaskFlushTest {
+            obj: gst::Object,
             flush_start_sender: mpsc::Sender<()>,
             flush_stop_sender: mpsc::Sender<()>,
         }
 
         impl TaskImpl for TaskFlushTest {
             type Item = ();
+
+            fn obj(&self) -> &impl IsA<glib::Object> {
+                &self.obj
+            }
 
             async fn try_next(&mut self) -> Result<(), gst::FlowError> {
                 pending().await
@@ -2008,6 +2141,10 @@ mod tests {
         let (flush_stop_sender, mut flush_stop_receiver) = mpsc::channel(1);
         let fut = task.prepare(
             TaskFlushTest {
+                obj: gst::Pad::builder(gst::PadDirection::Unknown)
+                    .name("runtime::Task::flush_regular_different_context")
+                    .build()
+                    .into(),
                 flush_start_sender,
                 flush_stop_sender,
             },
@@ -2078,12 +2215,17 @@ mod tests {
         gst::init().unwrap();
 
         struct TaskFlushTest {
+            obj: gst::Object,
             flush_start_sender: mpsc::Sender<()>,
             flush_stop_sender: mpsc::Sender<()>,
         }
 
         impl TaskImpl for TaskFlushTest {
             type Item = ();
+
+            fn obj(&self) -> &impl IsA<glib::Object> {
+                &self.obj
+            }
 
             async fn try_next(&mut self) -> Result<(), gst::FlowError> {
                 pending().await
@@ -2115,6 +2257,10 @@ mod tests {
         let (flush_stop_sender, mut flush_stop_receiver) = mpsc::channel(1);
         let fut = task.prepare(
             TaskFlushTest {
+                obj: gst::Pad::builder(gst::PadDirection::Unknown)
+                    .name("runtime::Task::flush_regular_same_context")
+                    .build()
+                    .into(),
                 flush_start_sender,
                 flush_stop_sender,
             },
@@ -2176,12 +2322,17 @@ mod tests {
         gst::init().unwrap();
 
         struct TaskFlushTest {
+            obj: gst::Object,
             task: Task,
             flush_start_sender: mpsc::Sender<()>,
         }
 
         impl TaskImpl for TaskFlushTest {
             type Item = ();
+
+            fn obj(&self) -> &impl IsA<glib::Object> {
+                &self.obj
+            }
 
             async fn try_next(&mut self) -> Result<(), gst::FlowError> {
                 Ok(())
@@ -2214,6 +2365,10 @@ mod tests {
         let (flush_start_sender, mut flush_start_receiver) = mpsc::channel(1);
         let fut = task.prepare(
             TaskFlushTest {
+                obj: gst::Pad::builder(gst::PadDirection::Unknown)
+                    .name("runtime::Task::flush_from_loop")
+                    .build()
+                    .into(),
                 task: task.clone(),
                 flush_start_sender,
             },
@@ -2247,12 +2402,17 @@ mod tests {
         gst::init().unwrap();
 
         struct TaskStartTest {
+            obj: gst::Object,
             task: Task,
             pause_sender: mpsc::Sender<()>,
         }
 
         impl TaskImpl for TaskStartTest {
             type Item = ();
+
+            fn obj(&self) -> &impl IsA<glib::Object> {
+                &self.obj
+            }
 
             async fn try_next(&mut self) -> Result<(), gst::FlowError> {
                 Ok(())
@@ -2290,6 +2450,10 @@ mod tests {
         let (pause_sender, mut pause_receiver) = mpsc::channel(1);
         let fut = task.prepare(
             TaskStartTest {
+                obj: gst::Pad::builder(gst::PadDirection::Unknown)
+                    .name("runtime::Task::pause_from_loop")
+                    .build()
+                    .into(),
                 task: task.clone(),
                 pause_sender,
             },
@@ -2312,12 +2476,17 @@ mod tests {
         gst::init().unwrap();
 
         struct TaskFlushTest {
+            obj: gst::Object,
             task: Task,
             flush_stop_sender: mpsc::Sender<()>,
         }
 
         impl TaskImpl for TaskFlushTest {
             type Item = ();
+
+            fn obj(&self) -> &impl IsA<glib::Object> {
+                &self.obj
+            }
 
             async fn try_next(&mut self) -> Result<(), gst::FlowError> {
                 pending().await
@@ -2358,6 +2527,10 @@ mod tests {
         let (flush_stop_sender, mut flush_stop_receiver) = mpsc::channel(1);
         let fut = task.prepare(
             TaskFlushTest {
+                obj: gst::Pad::builder(gst::PadDirection::Unknown)
+                    .name("runtime::Task::trigger_from_action")
+                    .build()
+                    .into(),
                 task: task.clone(),
                 flush_stop_sender,
             },
@@ -2383,6 +2556,7 @@ mod tests {
         gst::init().unwrap();
 
         struct TaskFlushTest {
+            obj: gst::Object,
             started_sender: mpsc::Sender<()>,
             flush_start_sender: mpsc::Sender<()>,
             flush_stop_sender: mpsc::Sender<()>,
@@ -2390,6 +2564,10 @@ mod tests {
 
         impl TaskImpl for TaskFlushTest {
             type Item = ();
+
+            fn obj(&self) -> &impl IsA<glib::Object> {
+                &self.obj
+            }
 
             async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
                 gst::debug!(RUNTIME_CAT, "pause_flush_start: started");
@@ -2427,6 +2605,10 @@ mod tests {
         let (flush_stop_sender, mut flush_stop_receiver) = mpsc::channel(1);
         let fut = task.prepare(
             TaskFlushTest {
+                obj: gst::Pad::builder(gst::PadDirection::Unknown)
+                    .name("runtime::Task::pause_flush_start")
+                    .build()
+                    .into(),
                 started_sender,
                 flush_start_sender,
                 flush_stop_sender,
@@ -2490,6 +2672,7 @@ mod tests {
         gst::init().unwrap();
 
         struct TaskFlushTest {
+            obj: gst::Object,
             started_sender: mpsc::Sender<()>,
             flush_start_sender: mpsc::Sender<()>,
             flush_stop_sender: mpsc::Sender<()>,
@@ -2497,6 +2680,10 @@ mod tests {
 
         impl TaskImpl for TaskFlushTest {
             type Item = ();
+
+            fn obj(&self) -> &impl IsA<glib::Object> {
+                &self.obj
+            }
 
             async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
                 gst::debug!(RUNTIME_CAT, "pause_flushing_start: started");
@@ -2534,6 +2721,10 @@ mod tests {
         let (flush_stop_sender, mut flush_stop_receiver) = mpsc::channel(1);
         let fut = task.prepare(
             TaskFlushTest {
+                obj: gst::Pad::builder(gst::PadDirection::Unknown)
+                    .name("runtime::Task::pause_flushing_start")
+                    .build()
+                    .into(),
                 started_sender,
                 flush_start_sender,
                 flush_stop_sender,
@@ -2588,12 +2779,17 @@ mod tests {
         gst::init().unwrap();
 
         struct TaskStartTest {
+            obj: gst::Object,
             flush_start_sender: mpsc::Sender<()>,
             flush_stop_sender: mpsc::Sender<()>,
         }
 
         impl TaskImpl for TaskStartTest {
             type Item = ();
+
+            fn obj(&self) -> &impl IsA<glib::Object> {
+                &self.obj
+            }
 
             async fn try_next(&mut self) -> Result<(), gst::FlowError> {
                 pending().await
@@ -2624,6 +2820,10 @@ mod tests {
         let (flush_stop_sender, mut flush_stop_receiver) = mpsc::channel(1);
         let fut = task.prepare(
             TaskStartTest {
+                obj: gst::Pad::builder(gst::PadDirection::Unknown)
+                    .name("runtime::Task::flush_concurrent_start")
+                    .build()
+                    .into(),
                 flush_start_sender,
                 flush_stop_sender,
             },
@@ -2705,12 +2905,17 @@ mod tests {
         gst::init().unwrap();
 
         struct TaskTimerTest {
+            obj: gst::Object,
             timer: Option<timer::Oneshot>,
             timer_elapsed_sender: Option<oneshot::Sender<()>>,
         }
 
         impl TaskImpl for TaskTimerTest {
             type Item = ();
+
+            fn obj(&self) -> &impl IsA<glib::Object> {
+                &self.obj
+            }
 
             async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
                 self.timer = Some(crate::runtime::timer::delay_for(Duration::from_millis(50)));
@@ -2741,6 +2946,10 @@ mod tests {
         let (timer_elapsed_sender, timer_elapsed_receiver) = oneshot::channel();
         let fut = task.prepare(
             TaskTimerTest {
+                obj: gst::Pad::builder(gst::PadDirection::Unknown)
+                    .name("runtime::Task::start_timer")
+                    .build()
+                    .into(),
                 timer: None,
                 timer_elapsed_sender: Some(timer_elapsed_sender),
             },

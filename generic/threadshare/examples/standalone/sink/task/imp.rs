@@ -127,6 +127,10 @@ impl TaskSinkTask {
 impl TaskImpl for TaskSinkTask {
     type Item = StreamItem;
 
+    fn obj(&self) -> &impl IsA<glib::Object> {
+        &self.elem
+    }
+
     async fn prepare(&mut self) -> Result<(), gst::ErrorMessage> {
         log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Preparing Task");
         Ok(())
