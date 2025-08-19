@@ -34,7 +34,7 @@
  * // An upstream pipeline producing a 1 second Opus encoded audio stream
  * let pipe_up = gst::parse::launch(
  *     "
- *         audiotestsrc is-live=true num-buffers=50 volume=0.02
+ *         ts-audiotestsrc is-live=true num-buffers=50 volume=0.02 context=ts-group-1 context-wait=20
  *         ! opusenc
  *         ! ts-intersink inter-context=my-inter-ctx
  *     ",
@@ -47,11 +47,12 @@
  * // and render it locally.
  * let pipe_down = gst::parse::launch(
  *     "
- *         ts-intersrc inter-context=my-inter-ctx context=ts-group-01 context-wait=20
+ *         ts-intersrc inter-context=my-inter-ctx context=ts-group-1 context-wait=20
  *         ! opusdec
  *         ! audioconvert
  *         ! audioresample
- *         ! ts-queue context=ts-group-01 context-wait=20 max-size-buffers=1 max-size-bytes=0 max-size-time=0
+ *         ! ts-queue context=ts-group-1 context-wait=20 max-size-buffers=1 max-size-bytes=0 max-size-time=0
+ *         ! ts-blocking-adapter
  *         ! autoaudiosink
  *     ",
  * )
