@@ -19,7 +19,7 @@
  * having the 'sink' Pad forward serialized items (buffers, ...) to the 'src' Pad
  * Task (thread) via a rendezvous channel.
  *
- * Since: plugins-rs-0.15.0
+ * Since: plugins-rs-0.14.2
  */
 use std::sync::{
     atomic::{AtomicBool, Ordering},
