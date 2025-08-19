@@ -144,6 +144,10 @@ mod imp_src {
     impl TaskImpl for ElementSrcTestTask {
         type Item = Item;
 
+        fn obj(&self) -> &impl IsA<glib::Object> {
+            &self.element
+        }
+
         async fn try_next(&mut self) -> Result<Item, gst::FlowError> {
             self.receiver.next().await.ok_or_else(|| {
                 gst::log!(SRC_CAT, obj = self.element, "SrcPad channel aborted");

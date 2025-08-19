@@ -793,6 +793,10 @@ impl ProxySrcTask {
 impl TaskImpl for ProxySrcTask {
     type Item = DataQueueItem;
 
+    fn obj(&self) -> &impl IsA<glib::Object> {
+        &self.element
+    }
+
     async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
         gst::log!(SRC_CAT, obj = self.element, "Starting task");
 

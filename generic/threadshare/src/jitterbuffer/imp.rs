@@ -1098,6 +1098,10 @@ impl JitterBufferTask {
 impl TaskImpl for JitterBufferTask {
     type Item = ();
 
+    fn obj(&self) -> &impl IsA<glib::Object> {
+        &self.element
+    }
+
     async fn start(&mut self) -> Result<(), gst::ErrorMessage> {
         gst::log!(CAT, obj = self.element, "Starting task");
 

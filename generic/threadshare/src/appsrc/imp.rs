@@ -225,6 +225,10 @@ impl AppSrcTask {
 impl TaskImpl for AppSrcTask {
     type Item = StreamItem;
 
+    fn obj(&self) -> &impl IsA<glib::Object> {
+        &self.element
+    }
+
     async fn try_next(&mut self) -> Result<StreamItem, gst::FlowError> {
         self.receiver
             .next()
