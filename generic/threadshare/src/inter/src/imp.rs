@@ -74,10 +74,11 @@
  * // started at the same time. However, an application that dynamically
  * // generates pipelines must ensure that all the pipelines that will be
  * // connected together share the same base time.
- * pipe_up.set_base_time(gst::ClockTime::ZERO);
+ * let base_time = clock.time();
  * pipe_up.set_start_time(gst::ClockTime::NONE);
- * pipe_down.set_base_time(gst::ClockTime::ZERO);
+ * pipe_up.set_base_time(base_time);
  * pipe_down.set_start_time(gst::ClockTime::NONE);
+ * pipe_down.set_base_time(base_time);
  *
  * pipe_up.set_state(gst::State::Playing).unwrap();
  * pipe_down.set_state(gst::State::Playing).unwrap();

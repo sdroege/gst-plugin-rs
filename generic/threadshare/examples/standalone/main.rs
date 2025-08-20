@@ -50,6 +50,9 @@ fn main() {
     gstthreadshare::plugin_register_static().unwrap();
     self::plugin_register_static().unwrap();
 
+    let main_context = glib::MainContext::default();
+    let _guard = main_context.acquire().unwrap();
+
     #[cfg(debug_assertions)]
     gst::warning!(CAT, "RUNNING DEBUG BUILD");
 
@@ -115,67 +118,72 @@ fn main() {
 
     let l = glib::MainLoop::new(None, false);
 
-    let _bus_watch = pipeline
-        .bus()
-        .unwrap()
-        .add_watch({
-            let terminated_count = Arc::new(AtomicU32::new(0));
-            let l = l.clone();
-            let pipeline = pipeline.clone();
-            move |_, msg| {
-                use gst::MessageView::*;
-                match msg.view() {
-                    Eos(_) => {
-                        // Actually, we don't post EOS (see sinks impl).
-                        gst::info!(CAT, "Received eos");
-                        l.quit();
+    let bus = pipeline.bus().unwrap();
+    let mut bus_stream = bus.stream();
+    let pipeline_weak = pipeline.downgrade();
+    let l_clone = l.clone();
+    main_context.spawn_local(async move {
+        use futures::prelude::*;
 
-                        return glib::ControlFlow::Break;
-                    }
-                    Error(msg) => {
-                        if let gst::MessageView::Error(msg) = msg.message().view() {
-                            if msg.error().matches(gst::LibraryError::Shutdown)
-                                && terminated_count.fetch_add(1, Ordering::SeqCst)
-                                    == args.streams - 1
-                            {
+        let terminated_count = Arc::new(AtomicU32::new(0));
+
+        while let Some(msg) = bus_stream.next().await {
+            use gst::MessageView::*;
+
+            let Some(pipeline) = pipeline_weak.upgrade() else {
+                break;
+            };
+
+            match msg.view() {
+                Eos(_) => {
+                    // Actually, we don't post EOS (see sinks impl).
+                    gst::info!(CAT, "Received eos");
+                    l_clone.quit();
+
+                    break;
+                }
+                Error(msg) => {
+                    if let gst::MessageView::Error(msg) = msg.message().view() {
+                        if msg.error().matches(gst::LibraryError::Shutdown) {
+                            if terminated_count.fetch_add(1, Ordering::SeqCst) == args.streams - 1 {
                                 gst::info!(CAT, "Received all shutdown requests");
-                                l.quit();
+                                l_clone.quit();
 
-                                return glib::ControlFlow::Break;
+                                break;
+                            } else {
+                                continue;
                             }
                         }
-
-                        gst::error!(
-                            CAT,
-                            "Error from {:?}: {} ({:?})",
-                            msg.src().map(|s| s.path_string()),
-                            msg.error(),
-                            msg.debug()
-                        );
-                        l.quit();
-
-                        return glib::ControlFlow::Break;
                     }
-                    Latency(msg) => {
-                        gst::info!(
-                            CAT,
-                            "Latency requirements have changed for element {}",
-                            msg.src()
-                                .map(|src| src.name())
-                                .as_deref()
-                                .unwrap_or("UNKNOWN"),
-                        );
-                        if let Err(err) = pipeline.recalculate_latency() {
-                            gst::error!(CAT, "Error recalculating latency: {err}");
-                        }
-                    }
-                    _ => (),
+
+                    gst::error!(
+                        CAT,
+                        "Error from {:?}: {} ({:?})",
+                        msg.src().map(|s| s.name()),
+                        msg.error(),
+                        msg.debug()
+                    );
+                    l_clone.quit();
+
+                    break;
                 }
-
-                glib::ControlFlow::Continue
+                Latency(msg) => {
+                    gst::info!(
+                        CAT,
+                        "Latency requirements have changed for element {}",
+                        msg.src()
+                            .map(|src| src.name())
+                            .as_deref()
+                            .unwrap_or("UNKNOWN"),
+                    );
+                    if let Err(err) = pipeline.recalculate_latency() {
+                        gst::error!(CAT, "Error recalculating latency: {err}");
+                    }
+                }
+                _ => (),
             }
-        })
-        .expect("Failed to add bus watch");
+        }
+    });
 
     gst::info!(CAT, "Switching to Ready");
     let start = Instant::now();

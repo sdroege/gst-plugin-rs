@@ -16,14 +16,14 @@ pub struct Stats {
     max_buffers: Option<f32>,
     buffer_count: f32,
     buffer_count_delta: f32,
-    latency_sum: f32,
-    latency_square_sum: f32,
-    latency_sum_delta: f32,
-    latency_square_sum_delta: f32,
-    latency_min: Duration,
-    latency_min_delta: Duration,
-    latency_max: Duration,
-    latency_max_delta: Duration,
+    lateness_sum: f32,
+    lateness_square_sum: f32,
+    lateness_sum_delta: f32,
+    lateness_square_sum_delta: f32,
+    lateness_min: Duration,
+    lateness_min_delta: Duration,
+    lateness_max: Duration,
+    lateness_max_delta: Duration,
     interval_sum: f32,
     interval_square_sum: f32,
     interval_sum_delta: f32,
@@ -51,14 +51,14 @@ impl Stats {
     pub fn start(&mut self) {
         self.buffer_count = 0.0;
         self.buffer_count_delta = 0.0;
-        self.latency_sum = 0.0;
-        self.latency_square_sum = 0.0;
-        self.latency_sum_delta = 0.0;
-        self.latency_square_sum_delta = 0.0;
-        self.latency_min = Duration::MAX;
-        self.latency_min_delta = Duration::MAX;
-        self.latency_max = Duration::ZERO;
-        self.latency_max_delta = Duration::ZERO;
+        self.lateness_sum = 0.0;
+        self.lateness_square_sum = 0.0;
+        self.lateness_sum_delta = 0.0;
+        self.lateness_square_sum_delta = 0.0;
+        self.lateness_min = Duration::MAX;
+        self.lateness_min_delta = Duration::MAX;
+        self.lateness_max = Duration::ZERO;
+        self.lateness_max_delta = Duration::ZERO;
         self.interval_sum = 0.0;
         self.interval_square_sum = 0.0;
         self.interval_sum_delta = 0.0;
@@ -105,7 +105,7 @@ impl Stats {
         }
     }
 
-    pub fn add_buffer(&mut self, latency: Duration, interval: Duration) {
+    pub fn add_buffer(&mut self, lateness: Duration, interval: Duration) {
         if !self.is_active() {
             return;
         }
@@ -113,19 +113,19 @@ impl Stats {
         self.buffer_count += 1.0;
         self.buffer_count_delta += 1.0;
 
-        // Latency
-        let latency_f32 = latency.as_nanos() as f32;
-        let latency_square = latency_f32.powi(2);
+        // Lateness
+        let lateness_f32 = lateness.as_nanos() as f32;
+        let lateness_square = lateness_f32.powi(2);
 
-        self.latency_sum += latency_f32;
-        self.latency_square_sum += latency_square;
-        self.latency_min = self.latency_min.min(latency);
-        self.latency_max = self.latency_max.max(latency);
+        self.lateness_sum += lateness_f32;
+        self.lateness_square_sum += lateness_square;
+        self.lateness_min = self.lateness_min.min(lateness);
+        self.lateness_max = self.lateness_max.max(lateness);
 
-        self.latency_sum_delta += latency_f32;
-        self.latency_square_sum_delta += latency_square;
-        self.latency_min_delta = self.latency_min_delta.min(latency);
-        self.latency_max_delta = self.latency_max_delta.max(latency);
+        self.lateness_sum_delta += lateness_f32;
+        self.lateness_square_sum_delta += lateness_square;
+        self.lateness_min_delta = self.lateness_min_delta.min(lateness);
+        self.lateness_max_delta = self.lateness_max_delta.max(lateness);
 
         // Interval
         let interval_f32 = interval.as_nanos() as f32;
@@ -186,24 +186,24 @@ impl Stats {
         self.interval_max_delta = Duration::ZERO;
         self.interval_late_count_delta = 0.0;
 
-        let latency_mean = self.latency_sum_delta / self.buffer_count_delta;
-        let latency_std_dev = f32::sqrt(
-            self.latency_square_sum_delta / self.buffer_count_delta - latency_mean.powi(2),
+        let lateness_mean = self.lateness_sum_delta / self.buffer_count_delta;
+        let lateness_std_dev = f32::sqrt(
+            self.lateness_square_sum_delta / self.buffer_count_delta - lateness_mean.powi(2),
         );
 
         gst::info!(
             CAT,
-            "o latency: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
-            Duration::from_nanos(latency_mean as u64),
-            Duration::from_nanos(latency_std_dev as u64),
-            self.latency_min_delta,
-            self.latency_max_delta,
+            "o lateness: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
+            Duration::from_nanos(lateness_mean as u64),
+            Duration::from_nanos(lateness_std_dev as u64),
+            self.lateness_min_delta,
+            self.lateness_max_delta,
         );
 
-        self.latency_sum_delta = 0.0;
-        self.latency_square_sum_delta = 0.0;
-        self.latency_min_delta = Duration::MAX;
-        self.latency_max_delta = Duration::ZERO;
+        self.lateness_sum_delta = 0.0;
+        self.lateness_square_sum_delta = 0.0;
+        self.lateness_min_delta = Duration::MAX;
+        self.lateness_max_delta = Duration::ZERO;
 
         self.buffer_count_delta = 0.0;
     }
@@ -254,17 +254,17 @@ impl Stats {
             );
         }
 
-        let latency_mean = self.latency_sum / self.buffer_count;
-        let latency_std_dev =
-            f32::sqrt(self.latency_square_sum / self.buffer_count - latency_mean.powi(2));
+        let lateness_mean = self.lateness_sum / self.buffer_count;
+        let lateness_std_dev =
+            f32::sqrt(self.lateness_square_sum / self.buffer_count - lateness_mean.powi(2));
 
         gst::info!(
             CAT,
-            "o latency: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
-            Duration::from_nanos(latency_mean as u64),
-            Duration::from_nanos(latency_std_dev as u64),
-            self.latency_min,
-            self.latency_max,
+            "o lateness: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
+            Duration::from_nanos(lateness_mean as u64),
+            Duration::from_nanos(lateness_std_dev as u64),
+            self.lateness_min,
+            self.lateness_max,
         );
     }
 }
