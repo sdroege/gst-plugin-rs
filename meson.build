@@ -157,6 +157,7 @@ plugins = {
     'library': 'libgstaws',
     'extra-deps': {'openssl': ['>=1.1']},
   },
+  'deepgram': {'library': 'libgstdeepgram'},
   'mpegtslive': {'library': 'libgstmpegtslive'},
   'hlsmultivariantsink': {'library': 'libgsthlsmultivariantsink'},
   'hlssink3': {'library': 'libgsthlssink3'},

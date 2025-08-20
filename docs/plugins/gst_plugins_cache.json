@@ -2759,6 +2759,156 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "deepgram": {
+        "description": "GStreamer Deepgram plugin",
+        "elements": {
+            "deepgramtranscriber": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "Speech to Text filter, using Deepgram streaming transcription API",
+                "hierarchy": [
+                    "GstDeepgramTranscriber",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Audio/Text/Filter",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-raw:\n           rate: { (int)24000, (int)8000, (int)16000, (int)32000, (int)48000 }\n       channels: [ 1, 2147483647 ]\n         layout: { (string)interleaved, (string)non-interleaved }\n         format: S16LE\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "api-key": {
+                        "blurb": "ElevenLabs API Key",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "diarization": {
+                        "blurb": "Whether diarization should be enabled",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "interim-strategy": {
+                        "blurb": "Defines how interim results should be used, if at all",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "index (1)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstDeepgramInterimStrategy",
+                        "writable": true
+                    },
+                    "interim-timing-threshold": {
+                        "blurb": "Amount of milliseconds to consider a word in an interim result new. Only used with interim-strategy=timing",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "40",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "language-code": {
+                        "blurb": "The Language of the Stream, see <https://developers.deepgram.com/docs/language>",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "en",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "latency": {
+                        "blurb": "Amount of milliseconds to allow AWS transcribe",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "lateness": {
+                        "blurb": "Amount of milliseconds to introduce as lateness",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstdeepgram",
+        "license": "MPL",
+        "other-types": {
+            "GstDeepgramInterimStrategy": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Disabled: don't use interim results",
+                        "name": "disabled",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Index: track current word in interim results by index",
+                        "name": "index",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Timing: track current word in interim results by timing",
+                        "name": "timing",
+                        "value": "2"
+                    }
+                ]
+            }
+        },
+        "package": "gst-plugin-deepgram",
+        "source": "gst-plugin-deepgram",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "elevenlabs": {
         "description": "GStreamer ElevenLabs plugin",
         "elements": {

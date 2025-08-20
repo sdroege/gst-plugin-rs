@@ -45,6 +45,9 @@ You will find the following plugins in this repository:
       - `awstranscriber`: an element wrapping the AWS Transcriber service.
       - `awstranscribeparse`: an element parsing the packets of the AWS Transcriber service.
 
+    - `deepgram`: Wrapper elements to talk to the [Deepgram API](https://developers.deepgram.com/home)
+      - `deepgramtranscriber`: an element wrapping the Deepgram Speech-to-Text service
+
     - `hlsmultivariantsink`: Create multi-variant HLS playlists with alternate renditions and variant streams.
 
     - `hlssink3`: An element for generating MPEG-TS HLS streams.

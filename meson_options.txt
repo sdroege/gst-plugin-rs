@@ -32,6 +32,7 @@ option('mp4', type: 'feature', value: 'auto', description: 'Build mp4 plugin')
 
 # net
 option('aws', type: 'feature', value: 'auto', description: 'Build aws plugin')
+option('deepgram', type: 'feature', value: 'auto', description: 'Build deepgram plugin')
 option('hlsmultivariantsink', type: 'feature', value: 'auto', description: 'Build hlsmultivariantsink plugin')
 option('hlssink3', type: 'feature', value: 'auto', description: 'Build hlssink3 plugin')
 option('mpegtslive', type: 'feature', value: 'auto', description: 'Build mpegtslive plugin')

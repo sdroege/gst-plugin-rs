@@ -29,6 +29,7 @@ members = [
     "mux/mp4",
 
     "net/aws",
+    "net/deepgram",
     "net/hlsmultivariantsink",
     "net/hlssink3",
     "net/mpegtslive",
