@@ -56,19 +56,19 @@ impl PadSinkHandlerInner {
             .expect("ts before Segment start");
 
         if let Some(last_ts) = self.last_ts {
-            let cur_ts = elem.current_running_time().unwrap();
-            let latency: Duration = (cur_ts - ts).into();
+            let rt = elem.current_running_time().unwrap();
+            let lateness: Duration = (rt - ts).into();
             let interval: Duration = (ts - last_ts).into();
 
             if let Some(stats) = self.stats.as_mut() {
-                stats.add_buffer(latency, interval);
+                stats.add_buffer(lateness, interval);
             }
 
             debug_or_trace!(
                 CAT,
                 self.is_main_elem,
                 obj = elem,
-                "o latency {latency:.2?}"
+                "o lateness {lateness:.2?}"
             );
             debug_or_trace!(
                 CAT,

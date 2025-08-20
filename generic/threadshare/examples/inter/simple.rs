@@ -6,11 +6,11 @@ fn main() {
     gst::init().unwrap();
 
     let pipe_up = gst::parse::launch(
-        "
-         audiotestsrc is-live=true num-buffers=2000 volume=0.02
+        "pipeline. (name=upstream
+         ts-audiotestsrc is-live=true num-buffers=2000 volume=0.02 context=ts-group-1 context-wait=20
          ! opusenc
          ! ts-intersink inter-context=my-inter-ctx
-     ",
+         )",
     )
     .unwrap()
     .downcast::<gst::Pipeline>()
@@ -19,14 +19,15 @@ fn main() {
     // A downstream pipeline which will receive the Opus encoded audio stream
     // and render it locally.
     let pipe_down = gst::parse::launch(
-        "
-         ts-intersrc inter-context=my-inter-ctx context=ts-group-01 context-wait=20
+        "pipeline. (name=downstream
+         ts-intersrc inter-context=my-inter-ctx context=ts-group-1 context-wait=20
          ! opusdec
          ! audioconvert
          ! audioresample
-         ! ts-queue context=ts-group-01 context-wait=20 max-size-buffers=1 max-size-bytes=0 max-size-time=0
+         ! ts-queue context=ts-group-1 context-wait=20 max-size-buffers=1 max-size-bytes=0 max-size-time=0
+         ! ts-blocking-adapter
          ! autoaudiosink
-     ",
+         )",
     )
     .unwrap()
     .downcast::<gst::Pipeline>()
@@ -46,10 +47,11 @@ fn main() {
     // started at the same time. However, an application that dynamically
     // generates pipelines must ensure that all the pipelines that will be
     // connected together share the same base time.
-    pipe_up.set_base_time(gst::ClockTime::ZERO);
+    let base_time = clock.time();
     pipe_up.set_start_time(gst::ClockTime::NONE);
-    pipe_down.set_base_time(gst::ClockTime::ZERO);
+    pipe_up.set_base_time(base_time);
     pipe_down.set_start_time(gst::ClockTime::NONE);
+    pipe_down.set_base_time(base_time);
 
     pipe_up.set_state(gst::State::Playing).unwrap();
     pipe_down.set_state(gst::State::Playing).unwrap();
