@@ -1415,7 +1415,7 @@ impl RtpBasePay2 {
 
         gst::trace!(CAT, imp = self, "Copying meta {}", meta.api());
 
-        if let Err(err) = meta.transform(out_buf, &gst::meta::MetaTransformCopy::new(false, ..)) {
+        if let Err(err) = meta.transform(out_buf, &gst::meta::MetaTransformCopy::new(..)) {
             gst::trace!(CAT, imp = self, "Could not copy meta {}: {err}", meta.api());
         }
     }

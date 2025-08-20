@@ -298,10 +298,7 @@ impl OriginalBufferRestore {
                 }
             }
 
-            let _ = meta.transform(
-                outbuf.make_mut(),
-                &gst::meta::MetaTransformCopy::new(false, ..),
-            );
+            let _ = meta.transform(outbuf.make_mut(), &gst::meta::MetaTransformCopy::new(..));
         }
 
         if let Some(event) = state.sinkpad_segment.take() {

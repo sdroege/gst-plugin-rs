@@ -366,7 +366,7 @@ impl Polly {
             buffer.foreach_meta(|meta| {
                 if meta.tags().is_empty() {
                     if let Err(err) =
-                        meta.transform(outbuf_mut, &gst::meta::MetaTransformCopy::new(false, ..))
+                        meta.transform(outbuf_mut, &gst::meta::MetaTransformCopy::new(..))
                     {
                         gst::trace!(CAT, imp = self, "Could not copy meta {}: {err}", meta.api());
                     }
@@ -421,10 +421,9 @@ impl Polly {
                 for buffer in list.iter() {
                     buffer.foreach_meta(|meta| {
                         if meta.tags().is_empty() {
-                            if let Err(err) = meta.transform(
-                                outbuf_mut,
-                                &gst::meta::MetaTransformCopy::new(false, ..),
-                            ) {
+                            if let Err(err) =
+                                meta.transform(outbuf_mut, &gst::meta::MetaTransformCopy::new(..))
+                            {
                                 gst::trace!(
                                     CAT,
                                     imp = self,
