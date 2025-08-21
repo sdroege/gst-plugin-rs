@@ -95,6 +95,16 @@ prefer that a crash from the host webrtcsink doesn't take down signalling / webs
 
 Head over to the following section if you want to learn how to run services individually.
 
+To use the embedded web server, from the root of `net/webrtc` crate, first execute,
+
+``` shell
+cd gstwebrtc-api
+npm install
+npm run build
+```
+
+This generates the necessary artifacts in the `gstwebrtc-api/dist` directory.
+
 In the terminal, from the root of the `net/webrtc` crate:
 
 ```
