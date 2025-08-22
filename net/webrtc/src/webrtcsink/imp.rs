@@ -14,20 +14,18 @@ use gst_utils::StreamProducer;
 use gst_video::subclass::prelude::*;
 use gst_video::{VideoInfo, VideoMultiviewMode};
 use gst_webrtc::{WebRTCDataChannel, WebRTCICETransportPolicy};
-use tokio::io::AsyncReadExt;
+
 use tokio::net::TcpListener;
-use tokio_native_tls::native_tls::TlsAcceptor;
 
 use futures::prelude::*;
 
 use anyhow::{anyhow, Error};
 use itertools::Itertools;
 use std::collections::HashMap;
-use std::sync::LazyLock;
 
 use std::ops::DerefMut;
 use std::ops::Mul;
-use std::sync::{mpsc, Arc, Condvar, Mutex};
+use std::sync::{mpsc, Arc, Condvar, LazyLock, Mutex};
 
 use super::homegrown_cc::CongestionController;
 use super::{
@@ -35,6 +33,7 @@ use super::{
 };
 use crate::signaller::{prelude::*, Signallable, Signaller, WebRTCSignallerRole};
 use crate::{utils, RUNTIME};
+use gst_plugin_webrtc_tls_utils::create_tls_acceptor;
 use std::collections::{BTreeMap, HashSet};
 use tracing_subscriber::prelude::*;
 
@@ -2113,7 +2112,9 @@ impl BaseWebRTCSink {
         ),
         Error,
     > {
-        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        use hyper_util::{rt::TokioExecutor, rt::TokioIo, server::conn::auto};
+
+        let (tx, mut rx) = tokio::sync::oneshot::channel::<()>();
 
         let addr = settings.web_server_host_addr.socket_addrs(|| None).unwrap()[0];
 
@@ -2128,27 +2129,62 @@ impl BaseWebRTCSink {
                     .and(warp::fs::dir(settings.web_server_directory))
                     .boxed(),
             };
+
             if let (Some(cert), Some(key)) = (settings.web_server_cert, settings.web_server_key) {
-                let (_, server) = warp::serve(route)
-                    .tls()
-                    .cert_path(cert)
-                    .key_path(key)
-                    .bind_with_graceful_shutdown(addr, async move {
-                        match rx.await {
-                            Ok(_) => gst::debug!(CAT, "Server shut down signal received"),
-                            Err(e) => gst::error!(CAT, "{e:?}: Sender dropped"),
+                let listener = TcpListener::bind(&addr).await.unwrap();
+                let acceptor = create_tls_acceptor(&cert, &key).await.unwrap();
+                let warp_service = warp::service(route);
+
+                while let Ok((stream, address)) = listener.accept().await {
+                    gst::debug!(CAT, "Connection accepted from address: {address:?}");
+
+                    match tokio::time::timeout(TLS_HANDSHAKE_TIMEOUT, acceptor.accept(stream)).await
+                    {
+                        Ok(Ok(stream)) => {
+                            let warp_service = warp_service.clone();
+                            let stream_io = TokioIo::new(stream);
+                            let builder = auto::Builder::new(TokioExecutor::new());
+                            let service =
+                                hyper_util::service::TowerToHyperService::new(warp_service);
+                            let connection = builder.serve_connection(stream_io, service);
+
+                            tokio::select! {
+                                biased;
+                                res = &mut rx => match res {
+                                    Ok(_) => gst::debug!(CAT, "Server shut down signal received"),
+                                    Err(e) => gst::error!(CAT, "{e:?}: Sender dropped"),
+                                },
+                                conn_res = connection => match conn_res {
+                                    Ok(_) => (),
+                                    Err(err) => {
+                                        gst::error!(CAT, "Connection error: {err:?}");
+                                        continue;
+                                    }
+                                }
+                            }
                         }
-                    });
-                server.await;
+                        Ok(Err(err)) => {
+                            gst::error!(CAT, "TLS error: {err:?}");
+                            break;
+                        }
+                        Err(elapsed) => {
+                            gst::error!(CAT, "TLS timeout: {elapsed:?}");
+                            break;
+                        }
+                    }
+                }
             } else {
-                let (_, server) =
-                    warp::serve(route).bind_with_graceful_shutdown(addr, async move {
+                warp::serve(route)
+                    .bind(addr)
+                    .await
+                    .graceful(async move {
                         match rx.await {
                             Ok(_) => gst::debug!(CAT, "Server shut down signal received"),
                             Err(e) => gst::error!(CAT, "{e:?}: Sender dropped"),
                         }
-                    });
-                server.await;
+                    })
+                    .run()
+                    .await;
             }
         });
 
@@ -5518,7 +5554,7 @@ const DEFAULT_RUN_SIGNALLING_SERVER: bool = false;
 const DEFAULT_SIGNALLING_SERVER_HOST: &str = "0.0.0.0";
 const DEFAULT_SIGNALLING_SERVER_PORT: u16 = 8443;
 const DEFAULT_SIGNALLING_SERVER_CERT: Option<&str> = None;
-const DEFAULT_SIGNALLING_SERVER_CERT_PASSWORD: Option<&str> = None;
+const DEFAULT_SIGNALLING_SERVER_KEY: Option<&str> = None;
 
 #[derive(Default)]
 pub struct WebRTCSinkState {
@@ -5531,7 +5567,7 @@ pub struct WebRTCSinkSettings {
     signalling_server_host: String,
     signalling_server_port: u16,
     signalling_server_cert: Option<String>,
-    signalling_server_cert_password: Option<String>,
+    signalling_server_key: Option<String>,
 }
 
 impl Default for WebRTCSinkSettings {
@@ -5541,8 +5577,7 @@ impl Default for WebRTCSinkSettings {
             signalling_server_host: DEFAULT_SIGNALLING_SERVER_HOST.to_string(),
             signalling_server_port: DEFAULT_SIGNALLING_SERVER_PORT,
             signalling_server_cert: DEFAULT_SIGNALLING_SERVER_CERT.map(String::from),
-            signalling_server_cert_password: DEFAULT_SIGNALLING_SERVER_CERT_PASSWORD
-                .map(String::from),
+            signalling_server_key: DEFAULT_SIGNALLING_SERVER_KEY.map(String::from),
         }
     }
 }
@@ -5589,24 +5624,13 @@ impl WebRTCSink {
         // Create the event loop and TCP listener we'll accept connections on.
         let listener = TcpListener::bind(&addr).await?;
 
-        let acceptor = match &settings.signalling_server_cert {
-            Some(cert) => {
-                let mut file = tokio::fs::File::open(cert).await?;
-                let mut identity = vec![];
-                file.read_to_end(&mut identity).await?;
-                let identity = tokio_native_tls::native_tls::Identity::from_pkcs12(
-                    &identity,
-                    settings
-                        .signalling_server_cert_password
-                        .as_deref()
-                        .unwrap_or(""),
-                )
-                .unwrap();
-                Some(tokio_native_tls::TlsAcceptor::from(
-                    TlsAcceptor::new(identity).unwrap(),
-                ))
-            }
-            None => None,
+        let acceptor = if let (Some(cert), Some(key)) = (
+            &settings.signalling_server_cert,
+            &settings.signalling_server_key,
+        ) {
+            create_tls_acceptor(cert, key).await.ok()
+        } else {
+            None
         };
 
         while let Ok((stream, address)) = listener.accept().await {
@@ -5675,6 +5699,7 @@ impl WebRTCSink {
                 };
 
                 let scheme = if settings.signalling_server_cert.is_some()
+                    && settings.signalling_server_key.is_some()
                 {
                     let cafile = settings.signalling_server_cert.as_ref().unwrap();
                     signaller.set_property("cafile", cafile);
@@ -5778,7 +5803,7 @@ impl ObjectImpl for WebRTCSink {
                  * Path to TLS certificate to use when #GstWebRTCSink:run-signalling-server
                  * is TRUE.
                  *
-                 * The certificate should be formatted as PKCS 12.
+                 * The certificate should be formatted as PEM.
                  *
                  * Since: plugins-rs-0.14.0
                  */
@@ -5786,22 +5811,23 @@ impl ObjectImpl for WebRTCSink {
                     .nick("Signalling server certificate")
                     .blurb(
                         "Path to TLS certificate the signalling server should use.
-                        The certificate should be formatted as PKCS 12",
+                        The certificate should be formatted as PEM",
                     )
                     .default_value(DEFAULT_SIGNALLING_SERVER_CERT)
                     .build(),
                 /**
-                 * GstWebRTCSink:signalling-server-cert-password:
+                 * GstBaseWebRTCSink:signalling-server-key:
                  *
-                 * The password for the certificate provided through
-                 * #GstWebRTCSink:signalling-server-cert.
+                 * The private key to use when #GstBaseWebRTCSink:run-signalling-server
+                 * is TRUE.
                  *
                  * Since: plugins-rs-0.14.0
                  */
-                glib::ParamSpecString::builder("signalling-server-cert-password")
-                    .nick("Signalling server certificate password")
-                    .blurb("The password for the certificate the signalling server will use")
-                    .default_value(DEFAULT_SIGNALLING_SERVER_CERT_PASSWORD)
+                glib::ParamSpecString::builder("signalling-server-key")
+                    .nick("Signalling server private key")
+                    .blurb("Path to private encryption key the signalling server should use.
+                        The key should be formatted as PEM")
+                    .default_value(DEFAULT_SIGNALLING_SERVER_KEY)
                     .build(),
             ]
         });
@@ -5832,9 +5858,9 @@ impl ObjectImpl for WebRTCSink {
                     .get::<Option<String>>()
                     .expect("type checked upstream")
             }
-            "signalling-server-cert-password" => {
+            "signalling-server-key" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.signalling_server_cert_password = value
+                settings.signalling_server_key = value
                     .get::<Option<String>>()
                     .expect("type checked upstream")
             }
@@ -5860,9 +5886,9 @@ impl ObjectImpl for WebRTCSink {
                 let settings = self.settings.lock().unwrap();
                 settings.signalling_server_cert.to_value()
             }
-            "signalling-server-cert-password" => {
+            "signalling-server-key" => {
                 let settings = self.settings.lock().unwrap();
-                settings.signalling_server_cert_password.to_value()
+                settings.signalling_server_key.to_value()
             }
             _ => unimplemented!(),
         }

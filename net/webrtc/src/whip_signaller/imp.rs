@@ -19,7 +19,7 @@ use std::sync::Mutex;
 use std::net::SocketAddr;
 use tokio::sync::mpsc;
 use url::Url;
-use warp::{http, hyper::Body, Filter, Reply};
+use warp::{http, Filter, Reply};
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -733,7 +733,7 @@ impl WhipServer {
     }
 
     #[allow(clippy::single_match)]
-    async fn options_handler(&self) -> Result<impl warp::Reply, warp::Rejection> {
+    async fn options_handler(&self) -> Result<impl warp::reply::Reply, warp::Rejection> {
         let settings = self.settings.lock().unwrap();
         drop(settings);
 
@@ -781,7 +781,7 @@ impl WhipServer {
 
         let mut res = http::Response::builder()
             .header("Access-Post", CONTENT_SDP)
-            .body(Body::empty())
+            .body(bytes::Bytes::new())
             .unwrap();
 
         let headers = res.headers_mut();
@@ -794,7 +794,7 @@ impl WhipServer {
         &self,
         body: warp::hyper::body::Bytes,
         id: Option<String>,
-    ) -> Result<http::Response<warp::hyper::Body>, warp::Rejection> {
+    ) -> Result<impl warp::reply::Reply, warp::Rejection> {
         let session_id = match id {
             Some(id) => {
                 gst::debug!(CAT, imp = self, "got session id {id} from the URL");
@@ -847,7 +847,7 @@ impl WhipServer {
                     let err = "Channel closed, can't receive SDP".to_owned();
                     let res = http::Response::builder()
                         .status(http::StatusCode::INTERNAL_SERVER_ERROR)
-                        .body(Body::from(err))
+                        .body(err.into())
                         .unwrap();
 
                     return Ok(res);
@@ -860,7 +860,7 @@ impl WhipServer {
                 };
                 let res = http::Response::builder()
                     .status(http::StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(Body::from(err))
+                    .body(err.into())
                     .unwrap();
 
                 return Ok(res);
@@ -940,7 +940,7 @@ impl WhipServer {
         if let Err(e) = ans_text {
             let res = http::Response::builder()
                 .status(http::StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Body::from(e))
+                .body(e.into())
                 .unwrap();
             return Ok(res);
         }
@@ -953,7 +953,7 @@ impl WhipServer {
             .status(http::StatusCode::CREATED)
             .header(http::header::CONTENT_TYPE, CONTENT_SDP)
             .header("location", resource_url)
-            .body(Body::from(ans_text.unwrap()))
+            .body(ans_text.unwrap().into())
             .unwrap();
 
         let headers = res.headers_mut();
@@ -983,6 +983,35 @@ impl WhipServer {
         settings.shutdown_signal = Some(tx);
         drop(settings);
 
+        let api = self.filter();
+
+        let jh = RUNTIME.spawn(async move {
+            warp::serve(api)
+                .bind(addr)
+                .await
+                .graceful(async move {
+                    match rx.await {
+                        Ok(_) => gst::debug!(CAT, "Server shut down signal received"),
+                        Err(e) => gst::error!(CAT, "{e:?}: Sender dropped"),
+                    }
+                })
+                .run()
+                .await;
+
+            gst::debug!(CAT, "Stopped the server task...");
+        });
+
+        gst::debug!(CAT, imp = self, "Started the server...");
+        Some(jh)
+    }
+
+    fn set_host_addr(&self, host_addr: &str) -> Result<(), url::ParseError> {
+        let mut settings = self.settings.lock().unwrap();
+        settings.host_addr = Url::parse(host_addr)?;
+        Ok(())
+    }
+
+    fn filter(&self) -> impl Filter<Extract = impl warp::Reply> + Clone + Send + Sync + 'static {
         let prefix = warp::path(ROOT);
 
         // POST /endpoint
@@ -1057,33 +1086,11 @@ impl WhipServer {
                 move |id| async move { self_.delete_handler(id).await }
             ));
 
-        let api = prefix
+        prefix
             .and(post_filter.or(post_filter_with_id))
             .or(prefix.and(options_filter))
             .or(prefix.and(patch_filter))
-            .or(prefix.and(delete_filter));
-
-        let s = warp::serve(api);
-        let jh = RUNTIME.spawn(async move {
-            let (_, server) = s.bind_with_graceful_shutdown(addr, async move {
-                match rx.await {
-                    Ok(_) => gst::debug!(CAT, "Server shut down signal received"),
-                    Err(e) => gst::error!(CAT, "{e:?}: Sender dropped"),
-                }
-            });
-
-            server.await;
-            gst::debug!(CAT, "Stopped the server task...");
-        });
-
-        gst::debug!(CAT, imp = self, "Started the server...");
-        Some(jh)
-    }
-
-    fn set_host_addr(&self, host_addr: &str) -> Result<(), url::ParseError> {
-        let mut settings = self.settings.lock().unwrap();
-        settings.host_addr = Url::parse(host_addr)?;
-        Ok(())
+            .or(prefix.and(delete_filter))
     }
 }
 

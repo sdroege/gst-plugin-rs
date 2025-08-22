@@ -11,8 +11,7 @@ rust-version.workspace = true
 [dependencies]
 anyhow = "1"
 tokio = { version = "1", features = ["fs", "io-util", "macros", "rt-multi-thread", "time"] }
-tokio-native-tls = "0.3.0"
-async-tungstenite = { version = "0.31", features = ["tokio-runtime", "tokio-native-tls"] }
+async-tungstenite = { version = "0.31", features = ["tokio-runtime", "tokio-rustls-native-certs"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 clap = { version = "4", features = ["derive"] }
@@ -25,6 +24,7 @@ thiserror = "2"
 test-log = { version = "0.2", features = ["trace"], default-features = false }
 pin-project-lite = "0.2"
 gst_plugin_webrtc_protocol = { path="../protocol", package = "gst-plugin-webrtc-signalling-protocol" }
+gst_plugin_webrtc_tls_utils = { path="../tls-utils", package = "gst-plugin-webrtc-tls-utils" }
 
 [[bin]]
 name = "gst-webrtc-signalling-server"

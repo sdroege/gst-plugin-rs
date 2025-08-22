@@ -1,18 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
+use anyhow::Error;
 use clap::Parser;
 use gst_plugin_webrtc_signalling::handlers::Handler;
 use gst_plugin_webrtc_signalling::server::{Server, ServerError};
-use tokio::io::AsyncReadExt;
-use tokio::task;
-use tracing_subscriber::prelude::*;
-
-use anyhow::Error;
+use gst_plugin_webrtc_tls_utils::create_tls_acceptor;
 use std::time::Duration;
-use tokio::fs;
-use tokio::net::TcpListener;
-use tokio_native_tls::native_tls::TlsAcceptor;
+use tokio::{net::TcpListener, task};
 use tracing::{info, warn};
+use tracing_subscriber::prelude::*;
 
 const TLS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -29,9 +25,9 @@ struct Args {
     /// TLS certificate to use
     #[clap(short, long)]
     cert: Option<String>,
-    /// password to TLS certificate
-    #[clap(long)]
-    cert_password: Option<String>,
+    /// Private key to use
+    #[clap(short, long)]
+    key: Option<String>,
 }
 
 fn initialize_logging(envvar_name: &str) -> Result<(), Error> {
@@ -60,26 +56,21 @@ async fn main() -> Result<(), Error> {
 
     initialize_logging("WEBRTCSINK_SIGNALLING_SERVER_LOG")?;
 
-    let addr = format!("{}:{}", args.host, args.port);
+    // We do the same when `run-signalling-server=true`
+    let host = match args.host.as_str() {
+        "0.0.0.0" => "127.0.0.1".to_string(),
+        "::" | "[::]" => "[::1]".to_string(),
+        host => host.to_string(),
+    };
+    let addr = format!("{}:{}", host, args.port);
 
     // Create the event loop and TCP listener we'll accept connections on.
     let listener = TcpListener::bind(&addr).await?;
 
-    let acceptor = match args.cert {
-        Some(cert) => {
-            let mut file = fs::File::open(cert).await?;
-            let mut identity = vec![];
-            file.read_to_end(&mut identity).await?;
-            let identity = tokio_native_tls::native_tls::Identity::from_pkcs12(
-                &identity,
-                args.cert_password.as_deref().unwrap_or(""),
-            )
-            .unwrap();
-            Some(tokio_native_tls::TlsAcceptor::from(
-                TlsAcceptor::new(identity).unwrap(),
-            ))
-        }
-        None => None,
+    let acceptor = if let (Some(cert), Some(key)) = (&args.cert, &args.key) {
+        create_tls_acceptor(cert, key).await.ok()
+    } else {
+        None
     };
 
     info!("Listening on: {}", addr);

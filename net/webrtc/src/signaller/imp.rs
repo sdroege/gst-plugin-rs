@@ -13,11 +13,11 @@ use gst::glib;
 use gst::glib::prelude::*;
 use gst::subclass::prelude::*;
 use gst_plugin_webrtc_protocol as p;
+use gst_plugin_webrtc_tls_utils::create_tls_connector;
 use std::collections::{HashMap, HashSet};
 use std::ops::ControlFlow;
 use std::str::FromStr;
-use std::sync::LazyLock;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 use tokio::{task, time::timeout};
 use url::Url;
@@ -164,23 +164,13 @@ impl Signaller {
             }
         }
 
-        let mut connector_builder = tokio_native_tls::native_tls::TlsConnector::builder();
-
-        if let Some(path) = cafile {
-            let cert = tokio::fs::read_to_string(&path).await?;
-            let cert = tokio_native_tls::native_tls::Certificate::from_pem(cert.as_bytes())?;
-            connector_builder.add_root_certificate(cert);
-        }
-
         if insecure_tls {
-            connector_builder.danger_accept_invalid_certs(true);
             gst::warning!(CAT, imp = self, "insecure tls connections are allowed");
         }
 
-        let connector = Some(tokio_native_tls::TlsConnector::from(
-            connector_builder.build()?,
-        ));
-
+        let connector = create_tls_connector(cafile, insecure_tls)
+            .map_ok(Some)
+            .await?;
         let mut uri = self.uri();
         uri.set_query(None);
 

@@ -10,6 +10,7 @@ use futures::prelude::*;
 use gst::glib;
 use gst::glib::prelude::*;
 use gst::subclass::prelude::*;
+use gst_plugin_webrtc_tls_utils::create_tls_connector;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::sync::Mutex;
@@ -181,15 +182,9 @@ impl Signaller {
     async fn connect(&self) -> Result<(), Error> {
         let settings = self.settings.lock().unwrap().clone();
 
-        let connector = if let Some(path) = settings.cafile {
-            let cert = tokio::fs::read_to_string(&path).await?;
-            let cert = tokio_native_tls::native_tls::Certificate::from_pem(cert.as_bytes())?;
-            let mut connector_builder = tokio_native_tls::native_tls::TlsConnector::builder();
-            let connector = connector_builder.add_root_certificate(cert).build()?;
-            Some(tokio_native_tls::TlsConnector::from(connector))
-        } else {
-            None
-        };
+        let connector = create_tls_connector(settings.cafile.as_ref(), false)
+            .map_ok(Some)
+            .await?;
 
         let region = aws_config::meta::region::RegionProviderChain::default_provider()
             .or_else(DEFAULT_AWS_REGION)

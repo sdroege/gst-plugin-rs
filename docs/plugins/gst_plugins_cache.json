@@ -13867,7 +13867,7 @@
                         "writable": true
                     },
                     "signalling-server-cert": {
-                        "blurb": "Path to TLS certificate the signalling server should use.\n                        The certificate should be formatted as PKCS 12",
+                        "blurb": "Path to TLS certificate the signalling server should use.\n                        The certificate should be formatted as PEM",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -13897,6 +13897,18 @@
                         "construct-only": false,
                         "controllable": false,
                         "default": "0.0.0.0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "signalling-server-key": {
+                        "blurb": "Path to private encryption key the signalling server should use.\n                        The key should be formatted as PEM",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
                         "mutable": "null",
                         "readable": true,
                         "type": "gchararray",
