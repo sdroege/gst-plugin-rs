@@ -5674,10 +5674,17 @@ impl WebRTCSink {
                     host => host.to_string(),
                 };
 
-                signaller.set_property(
-                    "uri",
-                    format!("ws://{}:{}", host, settings.signalling_server_port),
-                );
+                let scheme = if settings.signalling_server_cert.is_some()
+                {
+                    let cafile = settings.signalling_server_cert.as_ref().unwrap();
+                    signaller.set_property("cafile", cafile);
+                    "wss"
+                } else {
+                    "ws"
+                };
+                let uri = format!("{}://{}:{}", scheme, host, settings.signalling_server_port);
+
+                signaller.set_property("uri", uri);
             }
 
             if let Err(err) = LazyLock::force(&SIGNALLING_LOGGING) {
