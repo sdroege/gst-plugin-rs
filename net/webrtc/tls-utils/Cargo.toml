@@ -1,0 +1,16 @@
+[package]
+name = "gst-plugin-webrtc-tls-utils"
+version.workspace = true
+edition.workspace = true
+authors = ["Sanchayan Maity <sanchayan@centricular.com>"]
+license = "MPL-2.0"
+description = "GStreamer WebRTC sink TLS utilities"
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+tokio = { version = "1", features = ["fs"] }
+tokio-rustls = "0.26"
+rustls-pemfile = "2"
+rustls-pki-types = "1"

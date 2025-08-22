@@ -27,9 +27,8 @@ thiserror = "2"
 futures = "0.3"
 itertools = "0.14"
 tokio = { version = "1", features = ["fs", "macros", "rt-multi-thread", "time"] }
-tokio-native-tls = "0.3.0"
 tokio-stream = "0.1.11"
-async-tungstenite = { version = "0.31", features = ["tokio-runtime", "tokio-native-tls", "url"] }
+async-tungstenite = { version = "0.31", features = ["tokio-runtime", "tokio-rustls-native-certs", "url"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 fastrand = "2.0"
@@ -38,6 +37,7 @@ gst_plugin_webrtc_signalling = { path="signalling", package = "gst-plugin-webrtc
 human_bytes = "0.4"
 rand = "0.9"
 url = "2"
+gst_plugin_webrtc_tls_utils = { path="tls-utils", package = "gst-plugin-webrtc-tls-utils" }
 
 aws-config = { version = "~1.5.18", optional = true }
 # needs this constraint to prevent adding aws-smithy-http 0.62 too
@@ -60,8 +60,9 @@ async-recursion = { version = "1.0.0", optional = true }
 livekit-protocol = { version = "0.3, < 0.3.4", optional = true }
 livekit-api = { version = "0.3", default-features = false, features = ["signal-client", "access-token", "native-tls"], optional = true }
 
-warp = {version = "0.3", optional = true, features = ["tls"] }
+warp = {version = "0.4", optional = true, features = ["server"] }
 ctrlc = {version = "3.4.0", optional = true }
+hyper-util = { version = "0.1", features = ["server", "http2"]}
 
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }

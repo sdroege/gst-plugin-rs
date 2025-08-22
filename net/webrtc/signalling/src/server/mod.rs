@@ -33,7 +33,7 @@ pub enum ServerError {
     #[error("error during handshake {0}")]
     Handshake(#[from] async_tungstenite::tungstenite::Error),
     #[error("error during TLS handshake {0}")]
-    TLSHandshake(#[from] tokio_native_tls::native_tls::Error),
+    TLSHandshake(#[from] std::io::Error),
     #[error("timeout during TLS handshake {0}")]
     TLSHandshakeTimeout(#[from] tokio::time::error::Elapsed),
 }

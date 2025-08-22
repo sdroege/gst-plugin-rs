@@ -295,14 +295,6 @@ version = "0.101"
 name = "rustls-webpki"
 version = "0.102"
 
-# warp depends on an older version of tokio-tungstenite
-[[bans.skip]]
-name = "tokio-tungstenite"
-version = "0.21"
-[[bans.skip]]
-name = "tungstenite"
-version = "0.21"
-
 # various crates depend on an older version of windows-sys
 [[bans.skip]]
 name = "windows-sys"
@@ -312,11 +304,6 @@ version = "0.52"
 [[bans.skip]]
 name = "syn"
 version = "1.0"
-
-# tokio-rustls via warp depends on old rustls
-[[bans.skip]]
-name = "rustls"
-version = "0.22"
 
 # aws-smithy-runtime depends on old tokio-rustls
 [[bans.skip]]

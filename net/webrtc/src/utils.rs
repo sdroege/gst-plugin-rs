@@ -1,12 +1,14 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     ops::Deref,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        LazyLock,
+    },
 };
 
 use anyhow::{anyhow, Context, Error};
 use gst::{glib, prelude::*};
-use std::sync::LazyLock;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
