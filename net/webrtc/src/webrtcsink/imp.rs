@@ -4728,7 +4728,7 @@ impl ObjectImpl for BaseWebRTCSink {
                     .default_value(DEFAULT_WEB_SERVER_KEY)
                     .build(),
                 /**
-                 * GstBaseWebRTCSink:web-server-key:
+                 * GstBaseWebRTCSink:web-server-path:
                  *
                  * The root path for the web server when #GstBaseWebRTCSink:run-web-server
                  * is TRUE.
