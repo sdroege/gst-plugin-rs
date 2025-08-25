@@ -5,6 +5,7 @@ use gst::prelude::*;
 use crate::signaller::{prelude::*, Signallable, Signaller};
 use crate::utils::{self, Codec, Codecs, NavigationEvent, AUDIO_CAPS, RTP_CAPS, VIDEO_CAPS};
 use crate::webrtcsrc::WebRTCSrcPad;
+use crate::RUNTIME;
 use anyhow::{Context, Error};
 use gst::glib;
 use gst::subclass::prelude::*;
@@ -12,12 +13,10 @@ use gst_webrtc::WebRTCDataChannel;
 use itertools::Itertools;
 use std::borrow::BorrowMut;
 use std::collections::{HashMap, HashSet};
-use std::mem;
 use std::str::FromStr;
 use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
-use std::sync::LazyLock;
-use std::sync::Mutex;
+use std::sync::{Arc, Condvar, LazyLock, Mutex};
 use url::Url;
 
 const DEFAULT_STUN_SERVER: Option<&str> = Some("stun://stun.l.google.com:19302");
@@ -335,7 +334,7 @@ struct SignallerSignals {
     handle_ice: glib::SignalHandlerId,
 }
 
-impl Session {
+impl SessionInner {
     fn webrtcbin(&self) -> gst::Bin {
         self.webrtcbin.clone().downcast::<gst::Bin>().unwrap()
     }
@@ -564,12 +563,13 @@ impl Session {
                 move |pad, parent, buffer| {
                     let padret = gst::ProxyPad::chain_default(pad, parent, buffer);
                     let state = element.imp().state.lock().unwrap();
-                    let Some(session) = state.sessions.get(&sess_id) else {
-                        gst::error!(CAT, obj = element, "session {sess_id:?} does not exist");
-                        return padret;
-                    };
-                    let f = session.flow_combiner.lock().unwrap().update_flow(padret);
-                    f
+                    if let Some(session) = state.sessions.get(&sess_id) {
+                        let session = session.0.lock().unwrap();
+                        let f = session.flow_combiner.lock().unwrap().update_flow(padret);
+                        f
+                    } else {
+                        padret
+                    }
                 }
             ))
             .proxy_pad_event_function(glib::clone!(
@@ -585,6 +585,9 @@ impl Session {
                         let state = element.imp().state.lock().unwrap();
                         if let Some(session) = state.sessions.get(&sess_id) {
                             session
+                                .0
+                                .lock()
+                                .unwrap()
                                 .get_src_pad_from_webrtcbin_pad(&webrtcpad, &element)
                                 .map(|srcpad| {
                                     gst::event::StreamStart::builder(&srcpad.imp().stream_id())
@@ -637,6 +640,7 @@ impl Session {
                             gst::EventView::Navigation(nav) => {
                                 let mut state = element.imp().state.lock().unwrap();
                                 if let Some(session) = state.sessions.get_mut(&sess_id) {
+                                    let mut session = session.0.lock().unwrap();
                                     if enable_data_channel_navigation {
                                         session.send_navigation_event(
                                             gst_video::NavigationEvent::parse(nav).unwrap(),
@@ -664,6 +668,7 @@ impl Session {
                                     pad.property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
                                 let mut state = element.imp().state.lock().unwrap();
                                 if let Some(session) = state.sessions.get_mut(&sess_id) {
+                                    let mut session = session.0.lock().unwrap();
                                     if enable_control_data_channel {
                                         if let Some(s) = cup.structure() {
                                             if let Some(structure) =
@@ -946,7 +951,7 @@ impl Session {
                     gst::error!(CAT, obj = element, "no session {session_id:?}");
                     return;
                 };
-                session.on_answer_created(reply, &element);
+                session.0.lock().unwrap().on_answer_created(reply, &element);
             }
         ));
 
@@ -975,7 +980,11 @@ impl Session {
                     return;
                 };
 
-                let (promise, webrtcbin) = session.remote_description_set(&element, &offer);
+                let (promise, webrtcbin) = session
+                    .0
+                    .lock()
+                    .unwrap()
+                    .remote_description_set(&element, &offer);
 
                 drop(state);
 
@@ -1109,29 +1118,30 @@ impl BaseWebRTCSrc {
         gst::info!(CAT, imp = self, "unpreparing");
 
         let mut state = self.state.lock().unwrap();
-        let sessions = mem::take(&mut state.sessions);
+        let session_ids: Vec<_> = state.sessions.keys().map(|k| k.to_owned()).collect();
+        let sessions: Vec<_> = session_ids
+            .iter()
+            .filter_map(|id| state.end_session(&self.obj(), id))
+            .collect();
         drop(state);
 
-        // FIXME: Needs a safer way to perform end_session.
-        // We had to release the lock during the session tear down
-        // to avoid blocking the session bin pad's chain function which could potentially
-        // block the end_session while removing the bin from webrtcsrc, causing a deadlock
-        // This looks unsafe to end a session without holding the state lock
-
-        for (_, s) in sessions.iter() {
-            let id = s.id.as_str();
-            let bin = s.webrtcbin().parent().and_downcast::<gst::Bin>().unwrap();
-            if let Err(e) = self.end_session(id, &bin) {
-                gst::error!(CAT, imp = self, "Error ending session : {e}");
-            }
+        gst::debug!(CAT, imp = self, "Ending sessions");
+        for session in sessions {
+            self.signaller().end_session(&session.0.lock().unwrap().id);
         }
-
-        // Drop all sessions after releasing the state lock. Dropping the sessions
-        // can release their bin, and during release of the bin its pads are removed
-        // but the pad-removed handler is also taking the state lock.
-        drop(sessions);
+        gst::debug!(CAT, imp = self, "All sessions have started finalizing");
 
         self.maybe_stop_signaller();
+
+        let finalizing_sessions = self.state.lock().unwrap().finalizing_sessions.clone();
+
+        let (sessions, cvar) = &*finalizing_sessions;
+        let mut sessions = sessions.lock().unwrap();
+        while !sessions.is_empty() {
+            sessions = cvar.wait(sessions).unwrap();
+        }
+
+        gst::debug!(CAT, imp = self, "All sessions are done finalizing");
 
         Ok(())
     }
@@ -1183,30 +1193,8 @@ impl BaseWebRTCSrc {
                         instance,
                         move |_signaller: glib::Object, session_id: &str| {
                             let this = instance.imp();
-                            let mut state = this.state.lock().unwrap();
-                            let Some(session) = state.sessions.remove(session_id) else {
-                                gst::error!(
-                                    CAT,
-                                    imp = this,
-                                    " Failed to find session {session_id}"
-                                );
-                                return false;
-                            };
 
-                            let bin = session
-                                .webrtcbin()
-                                .parent()
-                                .and_downcast::<gst::Bin>()
-                                .unwrap();
-                            drop(state);
-
-                            // FIXME: Needs a safer way to perform end_session.
-                            // We had to release the lock during the session tear down
-                            // to avoid blocking the session bin pad's chain function which could potentially
-                            // block the end_session while removing the bin from webrtcsrc, causing a deadlock
-                            // This looks unsafe to end a session without holding the state lock
-
-                            if let Err(e) = this.end_session(session_id, &bin) {
+                            if let Err(e) = this.remove_session(session_id) {
                                 gst::error!(
                                     CAT,
                                     imp = this,
@@ -1215,10 +1203,7 @@ impl BaseWebRTCSrc {
                                 return false;
                             }
 
-                            // Drop session after releasing the state lock. Dropping the session can release its bin,
-                            // and during release of the bin its pads are removed but the pad-removed handler is also
-                            // taking the state lock.
-                            drop(session);
+                            gst::log!(CAT, imp = this, "Session {session_id} cleaned up");
 
                             true
                         }
@@ -1255,7 +1240,8 @@ impl BaseWebRTCSrc {
                                 return;
                             };
 
-                            let (promise, webrtcbin) = session.handle_offer(desc, &this.obj());
+                            let (promise, webrtcbin) =
+                                session.0.lock().unwrap().handle_offer(desc, &this.obj());
                             drop(state);
                             webrtcbin
                                 .emit_by_name::<()>("set-remote-description", &[&desc, &promise]);
@@ -1283,7 +1269,7 @@ impl BaseWebRTCSrc {
                                 gst::error!(CAT, imp = this, "session {session_id:?} not found");
                                 return;
                             };
-                            session.handle_ice(
+                            session.0.lock().unwrap().handle_ice(
                                 Some(sdp_m_line_index),
                                 None,
                                 candidate,
@@ -1303,7 +1289,7 @@ impl BaseWebRTCSrc {
         &self,
         caps: &gst::Caps,
         stream_id: &str,
-        session: &mut Session,
+        session: &mut SessionInner,
     ) -> bool {
         gst::log!(CAT, "Creating pad for {caps:?}, stream: {stream_id}");
 
@@ -1397,7 +1383,7 @@ impl BaseWebRTCSrc {
         };
         drop(state);
 
-        let session = Session::new(session_id)?;
+        let session = SessionInner::new(session_id)?;
 
         let webrtcbin = session.webrtcbin();
 
@@ -1413,7 +1399,7 @@ impl BaseWebRTCSrc {
             }
         }
 
-        let bin = gst::Bin::new();
+        let bin = gst::Bin::with_name(session_id);
 
         bin.connect_pad_removed(glib::clone!(
             #[weak(rename_to = this)]
@@ -1422,11 +1408,10 @@ impl BaseWebRTCSrc {
             session_id,
             move |_, pad| {
                 let mut state = this.state.lock().unwrap();
-                let Some(session) = state.sessions.get_mut(&session_id) else {
-                    gst::warning!(CAT, imp = this, "session {session_id:?} not found");
-                    return;
+                if let Some(session) = state.sessions.get_mut(&session_id) {
+                    let session = session.0.lock().unwrap();
+                    session.flow_combiner.lock().unwrap().remove_pad(pad);
                 };
-                session.flow_combiner.lock().unwrap().remove_pad(pad);
             }
         ));
         bin.connect_pad_added(glib::clone!(
@@ -1436,11 +1421,10 @@ impl BaseWebRTCSrc {
             session_id,
             move |_, pad| {
                 let mut state = this.state.lock().unwrap();
-                let Some(session) = state.sessions.get_mut(&session_id) else {
-                    gst::warning!(CAT, imp = this, "session {session_id:?} not found");
-                    return;
+                if let Some(session) = state.sessions.get_mut(&session_id) {
+                    let session = session.0.lock().unwrap();
+                    session.flow_combiner.lock().unwrap().add_pad(pad);
                 };
-                session.flow_combiner.lock().unwrap().add_pad(pad);
             }
         ));
 
@@ -1460,7 +1444,12 @@ impl BaseWebRTCSrc {
                     gst::error!(CAT, imp = this, "session {session_id:?} not found");
                     return;
                 };
-                let bin_ghostpad = session.handle_webrtc_src_pad(&bin, pad, &this.obj());
+                let bin_ghostpad =
+                    session
+                        .0
+                        .lock()
+                        .unwrap()
+                        .handle_webrtc_src_pad(&bin, pad, &this.obj());
                 drop(state);
                 bin.add_pad(&bin_ghostpad)
                     .expect("Adding ghostpad to the bin should always work");
@@ -1474,11 +1463,10 @@ impl BaseWebRTCSrc {
             session_id,
             move |_webrtcbin, pad| {
                 let mut state = this.state.lock().unwrap();
-                let Some(session) = state.sessions.get_mut(&session_id) else {
-                    gst::error!(CAT, imp = this, "session {session_id:?} not found");
-                    return;
+                if let Some(session) = state.sessions.get_mut(&session_id) {
+                    let session = session.0.lock().unwrap();
+                    session.flow_combiner.lock().unwrap().remove_pad(pad);
                 };
-                session.flow_combiner.lock().unwrap().remove_pad(pad);
             }
         ));
 
@@ -1496,6 +1484,7 @@ impl BaseWebRTCSrc {
                         gst::error!(CAT, imp = this, "session {session_id:?} not found");
                         return;
                     };
+                    let session = session.0.lock().unwrap();
                     session.on_ice_candidate(sdp_m_line_index, candidate, &this.obj());
                 }
             ),
@@ -1516,6 +1505,7 @@ impl BaseWebRTCSrc {
                         gst::error!(CAT, imp = this, "session {session_id:?} not found");
                         return;
                     };
+                    let mut session = session.0.lock().unwrap();
                     session.on_data_channel(data_channel, &this.obj());
                 }
             ),
@@ -1529,28 +1519,69 @@ impl BaseWebRTCSrc {
             .emit_by_name::<()>("webrtcbin-ready", &[&session_id, &webrtcbin]);
 
         let mut state = self.state.lock().unwrap();
-        state.sessions.insert(session_id.to_string(), session);
+        state.sessions.insert(
+            session_id.to_string(),
+            Session(Arc::new(Mutex::new(session))),
+        );
 
         Ok(())
     }
 
-    fn end_session(&self, id: &str, bin: &gst::Bin) -> Result<(), Error> {
+    fn remove_session(&self, session_id: &str) -> Result<(), Error> {
+        let mut state = self.state.lock().unwrap();
+        if !state.sessions.contains_key(session_id) {
+            return Err(anyhow::anyhow!("No session with id: {session_id}"));
+        }
+
+        // We need to do a flush start, without which the pad chain
+        // function trying to take the state lock causes a deadlock
+        // with the state lock already acquired here.
+        self.flush_src_pad(session_id)?;
+
+        if let Some(session) = state.end_session(&self.obj(), session_id) {
+            drop(state);
+            let session = session.0.lock().unwrap();
+            self.signaller().end_session(&session.id);
+        }
+
+        self.remove_src_pad(session_id)?;
+
+        Ok(())
+    }
+
+    fn flush_src_pad(&self, session_id: &str) -> Result<(), Error> {
         let obj = self.obj();
 
-        // set the session's bin to Null and remove it
-        bin.set_state(gst::State::Null)?;
-        obj.remove(bin)?;
-
-        for pad in obj.src_pads() {
-            if pad.name().contains(id) {
-                if !pad.push_event(gst::event::Eos::new()) {
-                    gst::warning!(CAT, imp = self, "failed to send EOS on {}", pad.name());
-                }
-                obj.remove_pad(&pad)
-                    .map_err(|err| anyhow::anyhow!("Couldn't remove pad? {err:?}"))?;
+        for pad in obj
+            .src_pads()
+            .iter()
+            .filter(|pad| pad.name().contains(session_id))
+        {
+            if !pad.push_event(gst::event::FlushStart::new()) {
+                return Err(anyhow::anyhow!(
+                    "Failed to send flush-start for pad: {}",
+                    pad.name()
+                ));
             }
         }
-        // self.signaller().end_session(id);
+
+        Ok(())
+    }
+
+    fn remove_src_pad(&self, session_id: &str) -> Result<(), Error> {
+        let obj = self.obj();
+
+        for pad in obj
+            .src_pads()
+            .iter()
+            .filter(|pad| pad.name().contains(session_id))
+        {
+            obj.remove_pad(pad)
+                .map_err(|err| anyhow::anyhow!("Couldn't remove pad? {err:?}"))?;
+
+            gst::log!(CAT, imp = self, "Removed pad {}", pad.name());
+        }
+
         Ok(())
     }
 }
@@ -1663,6 +1694,9 @@ impl ElementImpl for BaseWebRTCSrc {
                             .values_mut()
                             .next()
                             .unwrap()
+                            .0
+                            .lock()
+                            .unwrap()
                             .send_navigation_event(
                                 gst_video::NavigationEvent::parse(ev).unwrap(),
                                 &self.obj(),
@@ -1677,6 +1711,9 @@ impl ElementImpl for BaseWebRTCSrc {
                             .sessions
                             .values_mut()
                             .next()
+                            .unwrap()
+                            .0
+                            .lock()
                             .unwrap()
                             .send_control_request(request, &self.obj(), None);
                     }
@@ -1722,7 +1759,7 @@ enum SignallerState {
     Stopped,
 }
 
-struct Session {
+struct SessionInner {
     id: String,
     webrtcbin: gst::Element,
     data_channel: Option<WebRTCDataChannel>,
@@ -1732,10 +1769,15 @@ struct Session {
     request_counter: u64,
     pending_srcpads: HashMap<String, (WebRTCSrcPad, gst::Caps)>,
 }
+
+#[derive(Clone)]
+struct Session(Arc<Mutex<SessionInner>>);
+
 struct State {
     sessions: HashMap<String, Session>,
     signaller_state: SignallerState,
     signaller_signals: Option<SignallerSignals>,
+    finalizing_sessions: Arc<(Mutex<HashMap<String, Session>>, Condvar)>,
 }
 
 impl Default for State {
@@ -1744,7 +1786,62 @@ impl Default for State {
             signaller_state: SignallerState::Stopped,
             sessions: HashMap::new(),
             signaller_signals: Default::default(),
+            finalizing_sessions: Arc::new((Mutex::new(HashMap::new()), Condvar::new())),
         }
+    }
+}
+
+impl State {
+    fn finalize_session(&mut self, element: &super::BaseWebRTCSrc, session: Session) {
+        let inner = session.0.lock().unwrap();
+        let session_id = inner.id.clone();
+        drop(inner);
+
+        gst::info!(CAT, "Ending session {}", session_id);
+
+        let finalizing_sessions = self.finalizing_sessions.clone();
+        let (sessions, _cvar) = &*finalizing_sessions;
+        sessions.lock().unwrap().insert(session_id.clone(), session);
+
+        let element = element.clone();
+        RUNTIME.spawn_blocking(move || {
+            let (sessions, cvar) = &*finalizing_sessions;
+            let mut sessions = sessions.lock().unwrap();
+            let session = sessions.remove(&session_id).unwrap();
+            let session = session.0.lock().unwrap();
+
+            let bin = session
+                .webrtcbin()
+                .parent()
+                .and_downcast::<gst::Bin>()
+                .unwrap();
+
+            let _ = bin.set_state(gst::State::Null);
+
+            if let Some(webrtcsrc) = bin.parent() {
+                if let Err(e) = webrtcsrc.downcast_ref::<gst::Bin>().unwrap().remove(&bin) {
+                    gst::error!(
+                        CAT,
+                        obj = bin,
+                        "Failed to remove bin for session {} :{e}",
+                        session.id
+                    );
+                }
+            }
+
+            cvar.notify_one();
+
+            gst::debug!(CAT, obj = element, "Session {session_id} ended");
+        });
+    }
+
+    fn end_session(&mut self, element: &super::BaseWebRTCSrc, session_id: &str) -> Option<Session> {
+        if let Some(session) = self.sessions.remove(session_id) {
+            self.finalize_session(element, session.clone());
+            return Some(session);
+        }
+
+        None
     }
 }
 
