@@ -16,7 +16,6 @@ use std::sync::LazyLock;
 use gstthreadshare::runtime::{prelude::*, PadSink};
 
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use super::super::{Settings, Stats, CAT};
 
@@ -25,7 +24,7 @@ struct PadSinkHandlerInner {
     is_flushing: bool,
     is_main_elem: bool,
     last_ts: Option<gst::ClockTime>,
-    segment_start: Option<gst::ClockTime>,
+    segment: Option<gst::FormattedSegment<gst::format::Time>>,
     stats: Option<Box<Stats>>,
 }
 
@@ -48,17 +47,17 @@ impl PadSinkHandlerInner {
 
         debug_or_trace!(CAT, self.is_main_elem, obj = elem, "Received {buffer:?}");
 
-        let ts = buffer
-            .dts_or_pts()
-            .expect("Buffer without ts")
-            // FIXME do proper segment to running time
-            .checked_sub(self.segment_start.expect("Buffer without Time Segment"))
-            .expect("ts before Segment start");
+        let ts = self
+            .segment
+            .as_ref()
+            .expect("Buffer without Time Segment")
+            .to_running_time(buffer.dts_or_pts().expect("Buffer without ts"))
+            .unwrap();
 
         if let Some(last_ts) = self.last_ts {
             let rt = elem.current_running_time().unwrap();
-            let lateness: Duration = (rt - ts).into();
-            let interval: Duration = (ts - last_ts).into();
+            let lateness = rt.nseconds() as i64 - ts.nseconds() as i64;
+            let interval = ts.nseconds() as i64 - last_ts.nseconds() as i64;
 
             if let Some(stats) = self.stats.as_mut() {
                 stats.add_buffer(lateness, interval);
@@ -130,9 +129,8 @@ impl PadSinkHandler for SyncPadSinkHandler {
                 self.0.lock().unwrap().is_flushing = false;
             }
             EventView::Segment(evt) => {
-                if let Some(time_seg) = evt.segment().downcast_ref::<gst::ClockTime>() {
-                    self.0.lock().unwrap().segment_start = time_seg.start();
-                }
+                self.0.lock().unwrap().segment =
+                    evt.segment().downcast_ref::<gst::ClockTime>().cloned();
             }
             EventView::SinkMessage(evt) => {
                 let _ = elem.post_message(evt.message());

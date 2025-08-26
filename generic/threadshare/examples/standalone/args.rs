@@ -50,7 +50,7 @@ pub struct Args {
     pub num_buffers: i32,
 
     /// The Sink variant to use.
-    #[clap(long, value_enum, default_value_t = Sink::SyncMutex)]
+    #[clap(long, value_enum, default_value_t = Sink::Task)]
     pub sink: Sink,
 
     /// Disables statistics logging.

@@ -18,7 +18,6 @@ use gstthreadshare::runtime::prelude::*;
 use gstthreadshare::runtime::{Context, PadSink, Task};
 
 use std::sync::Mutex;
-use std::time::Duration;
 
 use super::super::{Settings, Stats, CAT};
 
@@ -97,7 +96,7 @@ struct TaskSinkTask {
     item_receiver: flume::Receiver<StreamItem>,
     is_main_elem: bool,
     last_ts: Option<gst::ClockTime>,
-    segment_start: Option<gst::ClockTime>,
+    segment: Option<gst::FormattedSegment<gst::format::Time>>,
     stats: Option<Box<Stats>>,
 }
 
@@ -114,7 +113,7 @@ impl TaskSinkTask {
             is_main_elem,
             last_ts: None,
             stats,
-            segment_start: None,
+            segment: None,
         }
     }
 
@@ -161,17 +160,17 @@ impl TaskImpl for TaskSinkTask {
 
         match item {
             StreamItem::Buffer(buffer) => {
-                let ts = buffer
-                    .dts_or_pts()
-                    .expect("Buffer without ts")
-                    // FIXME do proper segment to running time
-                    .checked_sub(self.segment_start.expect("Buffer without Time Segment"))
-                    .expect("dts before Segment start");
+                let ts = self
+                    .segment
+                    .as_ref()
+                    .expect("Buffer without Time Segment")
+                    .to_running_time(buffer.dts_or_pts().expect("Buffer without ts"))
+                    .unwrap();
 
                 if let Some(last_ts) = self.last_ts {
                     let rt = self.elem.current_running_time().unwrap();
-                    let lateness: Duration = (rt - ts).into();
-                    let interval: Duration = (ts - last_ts).into();
+                    let lateness = rt.nseconds() as i64 - ts.nseconds() as i64;
+                    let interval = ts.nseconds() as i64 - last_ts.nseconds() as i64;
 
                     if let Some(stats) = self.stats.as_mut() {
                         stats.add_buffer(lateness, interval);
@@ -197,9 +196,7 @@ impl TaskImpl for TaskSinkTask {
             }
             StreamItem::Event(evt) => {
                 if let EventView::Segment(evt) = evt.view() {
-                    if let Some(time_seg) = evt.segment().downcast_ref::<gst::ClockTime>() {
-                        self.segment_start = time_seg.start();
-                    }
+                    self.segment = evt.segment().downcast_ref::<gst::ClockTime>().cloned();
                 }
             }
         }

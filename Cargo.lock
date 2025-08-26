@@ -3427,6 +3427,7 @@ dependencies = [
  "futures",
  "getifaddrs",
  "gio",
+ "gst-plugin-rtp",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-app",
