@@ -103,22 +103,30 @@ impl PadSinkHandler for QueuePadSinkHandler {
     }
 
     fn sink_event(self, pad: &gst::Pad, imp: &Queue, event: gst::Event) -> bool {
-        gst::debug!(CAT, obj = pad, "Handling non-serialized {:?}", event);
+        gst::debug!(CAT, obj = pad, "Handling non-serialized {event:?}");
 
         if let gst::EventView::FlushStart(..) = event.view() {
-            if let Err(err) = imp.task.flush_start().await_maybe_on_context() {
-                gst::error!(CAT, obj = pad, "FlushStart failed {:?}", err);
-                gst::element_imp_error!(
-                    imp,
-                    gst::StreamError::Failed,
-                    ("Internal data stream error"),
-                    ["FlushStart failed {:?}", err]
-                );
+            if imp
+                .task
+                .flush_start()
+                .block_on_or_add_subtask_then(imp.obj(), |elem, res| {
+                    if let Err(err) = res {
+                        gst::error!(CAT, obj = elem, "FlushStart failed {err:?}");
+                        gst::element_error!(
+                            elem,
+                            gst::StreamError::Failed,
+                            ("Internal data stream error"),
+                            ["FlushStart failed {err:?}"]
+                        );
+                    }
+                })
+                .is_err()
+            {
                 return false;
             }
         }
 
-        gst::log!(CAT, obj = pad, "Forwarding non-serialized {:?}", event);
+        gst::log!(CAT, obj = pad, "Forwarding non-serialized {event:?}");
         imp.src_pad.gst_pad().push_event(event)
     }
 
@@ -169,30 +177,40 @@ impl PadSrcHandler for QueuePadSrcHandler {
     type ElementImpl = Queue;
 
     fn src_event(self, pad: &gst::Pad, imp: &Queue, event: gst::Event) -> bool {
-        gst::log!(CAT, obj = pad, "Handling {:?}", event);
+        gst::log!(CAT, obj = pad, "Handling {event:?}");
 
         use gst::EventView;
         match event.view() {
             EventView::FlushStart(..) => {
-                if let Err(err) = imp.task.flush_start().await_maybe_on_context() {
-                    gst::error!(CAT, obj = pad, "FlushStart failed {:?}", err);
-                }
+                let _ =
+                    imp.task
+                        .flush_start()
+                        .block_on_or_add_subtask_then(imp.obj(), |elem, res| {
+                            if let Err(err) = res {
+                                gst::error!(CAT, obj = elem, "FlushStart failed {err:?}");
+                            }
+                        });
             }
             EventView::FlushStop(..) => {
-                if let Err(err) = imp.task.flush_stop().await_maybe_on_context() {
-                    gst::error!(CAT, obj = pad, "FlushStop failed {:?}", err);
-                    gst::element_imp_error!(
-                        imp,
-                        gst::StreamError::Failed,
-                        ("Internal data stream error"),
-                        ["FlushStop failed {:?}", err]
-                    );
-                }
+                let _ =
+                    imp.task
+                        .flush_stop()
+                        .block_on_or_add_subtask_then(imp.obj(), |elem, res| {
+                            if let Err(err) = res {
+                                gst::error!(CAT, obj = elem, "FlushStop failed {err:?}");
+                                gst::element_error!(
+                                    elem,
+                                    gst::StreamError::Failed,
+                                    ("Internal data stream error"),
+                                    ["FlushStop failed {err:?}"]
+                                );
+                            }
+                        });
             }
             _ => (),
         }
 
-        gst::log!(CAT, obj = pad, "Forwarding {:?}", event);
+        gst::log!(CAT, obj = pad, "Forwarding {event:?}");
         imp.sink_pad.gst_pad().push_event(event)
     }
 
@@ -554,8 +572,6 @@ impl Queue {
             },
         );
 
-        *self.dataqueue.lock().unwrap() = Some(dataqueue.clone());
-
         let context =
             Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
                 gst::error_msg!(
@@ -565,39 +581,54 @@ impl Queue {
             })?;
 
         self.task
-            .prepare(QueueTask::new(self.obj().clone(), dataqueue), context)
-            .block_on()?;
-
-        gst::debug!(CAT, imp = self, "Prepared");
-
-        Ok(())
+            .prepare(
+                QueueTask::new(self.obj().clone(), dataqueue.clone()),
+                context,
+            )
+            .block_on_or_add_subtask_then(self.obj(), move |elem, res| {
+                if res.is_ok() {
+                    *elem.imp().dataqueue.lock().unwrap() = Some(dataqueue);
+                    gst::debug!(CAT, obj = elem, "Prepared");
+                }
+            })
     }
 
     fn unprepare(&self) {
         gst::debug!(CAT, imp = self, "Unpreparing");
+        let _ = self
+            .task
+            .unprepare()
+            .block_on_or_add_subtask_then(self.obj(), |elem, _| {
+                let imp = elem.imp();
+                *imp.dataqueue.lock().unwrap() = None;
+                *imp.pending_queue.lock().unwrap() = None;
 
-        self.task.unprepare().block_on().unwrap();
+                *imp.last_res.lock().unwrap() = Ok(gst::FlowSuccess::Ok);
 
-        *self.dataqueue.lock().unwrap() = None;
-        *self.pending_queue.lock().unwrap() = None;
-
-        *self.last_res.lock().unwrap() = Ok(gst::FlowSuccess::Ok);
-
-        gst::debug!(CAT, imp = self, "Unprepared");
+                gst::debug!(CAT, obj = elem, "Unprepared");
+            });
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, imp = self, "Stopping");
-        self.task.stop().await_maybe_on_context()?;
-        gst::debug!(CAT, imp = self, "Stopped");
-        Ok(())
+        self.task
+            .stop()
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                if res.is_ok() {
+                    gst::debug!(CAT, obj = elem, "Stopped");
+                }
+            })
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, imp = self, "Starting");
-        self.task.start().await_maybe_on_context()?;
-        gst::debug!(CAT, imp = self, "Started");
-        Ok(())
+        self.task
+            .start()
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                if res.is_ok() {
+                    gst::debug!(CAT, obj = elem, "Started");
+                }
+            })
     }
 }
 

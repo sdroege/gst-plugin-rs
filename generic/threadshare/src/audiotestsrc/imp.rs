@@ -544,33 +544,43 @@ impl AudioTestSrc {
 
         self.task
             .prepare(AudioTestSrcTask::new(self.obj().clone()), context)
-            .block_on()?;
-
-        gst::debug!(CAT, imp = self, "Prepared");
-
-        Ok(())
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                if res.is_ok() {
+                    gst::debug!(CAT, obj = elem, "Prepared");
+                }
+            })
     }
 
     fn unprepare(&self) {
         gst::debug!(CAT, imp = self, "Unpreparing");
-        self.task.unprepare().block_on().unwrap();
-        gst::debug!(CAT, imp = self, "Unprepared");
+        let _ = self
+            .task
+            .unprepare()
+            .block_on_or_add_subtask_then(self.obj(), |elem, _| {
+                gst::debug!(CAT, obj = elem, "Unprepared");
+            });
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, imp = self, "Stopping");
-        self.task.stop().block_on()?;
-        gst::debug!(CAT, imp = self, "Stopped");
-
-        Ok(())
+        self.task
+            .stop()
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                if res.is_ok() {
+                    gst::debug!(CAT, obj = elem, "Stopped");
+                }
+            })
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, imp = self, "Starting");
-        self.task.start().block_on()?;
-        gst::debug!(CAT, imp = self, "Started");
-
-        Ok(())
+        self.task
+            .start()
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                if res.is_ok() {
+                    gst::debug!(CAT, obj = elem, "Started");
+                }
+            })
     }
 }
 

@@ -50,7 +50,7 @@ impl PadSinkHandler for TaskPadSinkHandler {
 
     async fn sink_event_serialized(
         self,
-        _pad: gst::Pad,
+        pad: gst::Pad,
         elem: super::TaskSink,
         event: gst::Event,
     ) -> bool {
@@ -72,7 +72,7 @@ impl PadSinkHandler for TaskPadSinkHandler {
             }
             EventView::FlushStop(_) => {
                 let imp = elem.imp();
-                return imp.task.flush_stop().await_maybe_on_context().is_ok();
+                return imp.task.flush_stop().block_on_or_add_subtask(&pad).is_ok();
             }
             EventView::SinkMessage(evt) => {
                 let _ = elem.post_message(evt.message());
@@ -83,9 +83,9 @@ impl PadSinkHandler for TaskPadSinkHandler {
         true
     }
 
-    fn sink_event(self, _pad: &gst::Pad, imp: &TaskSink, event: gst::Event) -> bool {
+    fn sink_event(self, pad: &gst::Pad, imp: &TaskSink, event: gst::Event) -> bool {
         if let EventView::FlushStart(..) = event.view() {
-            return imp.task.flush_start().await_maybe_on_context().is_ok();
+            return imp.task.flush_start().block_on_or_add_subtask(pad).is_ok();
         }
 
         true
@@ -244,39 +244,51 @@ impl TaskSink {
 
         // Enable backpressure for items
         let (item_sender, item_receiver) = flume::bounded(0);
+        let is_main_elem = settings.is_main_elem;
         let task_impl = TaskSinkTask::new(&self.obj(), item_receiver, settings.is_main_elem, stats);
-        self.task.prepare(task_impl, ts_ctx).block_on()?;
-
-        *self.item_sender.lock().unwrap() = Some(item_sender);
-
-        debug_or_trace!(CAT, settings.is_main_elem, imp = self, "Prepared");
-
-        Ok(())
+        self.task
+            .prepare(task_impl, ts_ctx)
+            .block_on_or_add_subtask_then(self.obj(), move |elem, res| {
+                if res.is_ok() {
+                    *elem.imp().item_sender.lock().unwrap() = Some(item_sender);
+                    debug_or_trace!(CAT, is_main_elem, obj = elem, "Prepared");
+                }
+            })
     }
 
     fn unprepare(&self) {
         let is_main_elem = self.settings.lock().unwrap().is_main_elem;
         debug_or_trace!(CAT, is_main_elem, imp = self, "Unpreparing");
-        self.task.unprepare().block_on().unwrap();
-        debug_or_trace!(CAT, is_main_elem, imp = self, "Unprepared");
+        let _ = self
+            .task
+            .unprepare()
+            .block_on_or_add_subtask_then(self.obj(), move |elem, _| {
+                debug_or_trace!(CAT, is_main_elem, obj = elem, "Unprepared");
+            });
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         let is_main_elem = self.settings.lock().unwrap().is_main_elem;
         debug_or_trace!(CAT, is_main_elem, imp = self, "Stopping");
-        self.task.stop().block_on()?;
-        debug_or_trace!(CAT, is_main_elem, imp = self, "Stopped");
-
-        Ok(())
+        self.task
+            .stop()
+            .block_on_or_add_subtask_then(self.obj(), move |elem, res| {
+                if res.is_ok() {
+                    debug_or_trace!(CAT, is_main_elem, obj = elem, "Stopped");
+                }
+            })
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
         let is_main_elem = self.settings.lock().unwrap().is_main_elem;
         debug_or_trace!(CAT, is_main_elem, imp = self, "Starting");
-        self.task.start().block_on()?;
-        debug_or_trace!(CAT, is_main_elem, imp = self, "Started");
-
-        Ok(())
+        self.task
+            .start()
+            .block_on_or_add_subtask_then(self.obj(), move |elem, res| {
+                if res.is_ok() {
+                    debug_or_trace!(CAT, is_main_elem, obj = elem, "Started");
+                }
+            })
     }
 }
 

@@ -26,7 +26,7 @@ use gst::{element_error, error_msg};
 use std::sync::LazyLock;
 
 use crate::net;
-use crate::runtime::executor::block_on_or_add_sub_task;
+use crate::runtime::executor::block_on_or_add_subtask;
 use crate::runtime::prelude::*;
 use crate::runtime::{self, Async, Context, PadSink};
 use crate::socket::{wrap_socket, GioSocketWrapper};
@@ -393,7 +393,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
         gst::debug!(CAT, imp = imp, "Handling {event:?}");
 
         if let EventView::FlushStart(..) = event.view() {
-            block_on_or_add_sub_task(async move {
+            block_on_or_add_subtask(async move {
                 self.0.lock().await.is_flushing = true;
             });
         }
