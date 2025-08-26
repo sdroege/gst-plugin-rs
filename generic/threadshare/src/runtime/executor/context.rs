@@ -43,7 +43,7 @@ static CONTEXTS: LazyLock<Mutex<HashMap<Arc<str>, ContextWeak>>> =
 /// Note that you must not pass any futures here that wait for the currently active task in one way
 /// or another as this would deadlock!
 #[track_caller]
-pub fn block_on_or_add_sub_task<Fut>(future: Fut) -> Option<Fut::Output>
+pub fn block_on_or_add_subtask<Fut>(future: Fut) -> Option<Fut::Output>
 where
     Fut: Future + Send + 'static,
     Fut::Output: Send + 'static,

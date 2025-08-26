@@ -105,8 +105,10 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
 
         use gst::EventView;
         let ret = match event.view() {
-            EventView::FlushStart(..) => imp.task.flush_start().await_maybe_on_context().is_ok(),
-            EventView::FlushStop(..) => imp.task.flush_stop().await_maybe_on_context().is_ok(),
+            EventView::FlushStart(..) => {
+                imp.task.flush_start().block_on_or_add_subtask(pad).is_ok()
+            }
+            EventView::FlushStop(..) => imp.task.flush_stop().block_on_or_add_subtask(pad).is_ok(),
             EventView::Reconfigure(..) => true,
             EventView::Latency(..) => true,
             _ => false,
@@ -521,22 +523,34 @@ impl TcpClientSrc {
 
     fn unprepare(&self) {
         gst::debug!(CAT, imp = self, "Unpreparing");
-        self.task.unprepare().block_on().unwrap();
-        gst::debug!(CAT, imp = self, "Unprepared");
+        let _ = self
+            .task
+            .unprepare()
+            .block_on_or_add_subtask_then(self.obj(), |elem, _| {
+                gst::debug!(CAT, obj = elem, "Unprepared");
+            });
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, imp = self, "Stopping");
-        self.task.stop().block_on()?;
-        gst::debug!(CAT, imp = self, "Stopped");
-        Ok(())
+        self.task
+            .stop()
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                if res.is_ok() {
+                    gst::debug!(CAT, obj = elem, "Stopped");
+                }
+            })
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, imp = self, "Starting");
-        self.task.start().block_on()?;
-        gst::debug!(CAT, imp = self, "Started");
-        Ok(())
+        self.task
+            .start()
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                if res.is_ok() {
+                    gst::debug!(CAT, obj = elem, "Started");
+                }
+            })
     }
 
     fn state(&self) -> TaskState {

@@ -145,10 +145,12 @@ impl TransitionStatus {
         }
     }
 
-    /// Awaits for this transition to complete, possibly while running on a [`Context`].
+    /// Blocks on this state transition to complete, or adds a subtask if running on a [`Context`].
     ///
     /// Notes:
     ///
+    /// - If you need to execute code after the transition succeeds or fails,
+    ///   see [`block_on_or_add_subtask_then`].
     /// - When running in an `async` block within a running transition or
     ///   task iteration, don't await for the transition as it would deadlock.
     ///   Use [`Self::check`] to make sure the state transition is valid.
@@ -178,7 +180,7 @@ impl TransitionStatus {
     /// # let task = gstthreadshare::runtime::Task::default();
     ///   return task
     ///       .flush_start()
-    ///       .await_maybe_on_context()
+    ///       .block_on_or_add_subtask()
     ///       .is_ok();
     /// # }
     /// ```
@@ -196,7 +198,10 @@ impl TransitionStatus {
     ///
     /// [`PadSrc`]: ../pad/struct.PadSrc.html
     /// [`PadSink`]: ../pad/struct.PadSink.html
-    pub fn await_maybe_on_context(self) -> Result<TransitionOk, TransitionError> {
+    pub fn block_on_or_add_subtask<O>(self, obj: &O) -> Result<TransitionOk, TransitionError>
+    where
+        O: IsA<glib::Object> + Send,
+    {
         use TransitionStatus::*;
         match self {
             Pending {
@@ -207,16 +212,29 @@ impl TransitionStatus {
                 if let Some((ctx, task_id)) = Context::current_task() {
                     gst::debug!(
                         RUNTIME_CAT,
-                        "Awaiting for {:?} ack in a subtask on context {}",
-                        trigger,
+                        obj = obj,
+                        "Awaiting for {trigger:?} ack in a subtask on context {}",
                         ctx.name()
                     );
+
+                    let obj = obj.clone();
                     let _ = ctx.add_sub_task(task_id, async move {
                         let res = res_fut.await;
-                        if res.is_ok() {
-                            gst::log!(RUNTIME_CAT, "Received ack {:?} for {:?}", res, trigger);
-                        } else {
-                            gst::error!(RUNTIME_CAT, "Received ack {:?} for {:?}", res, trigger);
+                        match res {
+                            Ok(status) => {
+                                gst::log!(
+                                    RUNTIME_CAT,
+                                    obj = obj,
+                                    "Task {trigger:?} success: {status:?}",
+                                );
+                            }
+                            Err(err) => {
+                                gst::error!(
+                                    RUNTIME_CAT,
+                                    obj = obj,
+                                    "Task {trigger:?} failure: {err}"
+                                );
+                            }
                         }
 
                         Ok(())
@@ -226,42 +244,178 @@ impl TransitionStatus {
                 } else {
                     gst::debug!(
                         RUNTIME_CAT,
-                        "Awaiting for {:?} ack on current thread",
-                        trigger,
+                        obj = obj,
+                        "Awaiting for {trigger:?} ack on current thread",
                     );
-                    futures::executor::block_on(res_fut)
+                    let res = futures::executor::block_on(res_fut);
+                    match res {
+                        Ok(ref status) => {
+                            gst::log!(
+                                RUNTIME_CAT,
+                                obj = obj,
+                                "Task {trigger:?} success: {status:?}",
+                            );
+                        }
+                        Err(ref err) => {
+                            gst::error!(RUNTIME_CAT, obj = obj, "Task {trigger:?} failure: {err}");
+                        }
+                    }
+
+                    res
                 }
             }
-            Ready(res) => res,
+            Ready(res) => {
+                match res {
+                    Ok(ref status) => {
+                        gst::log!(
+                            RUNTIME_CAT,
+                            obj = obj,
+                            "Task transition immediate success: {status:?}",
+                        );
+                    }
+                    Err(ref err) => {
+                        gst::error!(
+                            RUNTIME_CAT,
+                            obj = obj,
+                            "Task transition immediate failure: {err}",
+                        );
+                    }
+                }
+
+                res
+            }
         }
     }
 
-    /// Awaits for this transition to complete by blocking current thread.
+    /// Blocks on this state transition to complete, or adds a subtask if running on a [`Context`]
+    /// executing the provided function after the transition succeeds or fails.
     ///
-    /// This function blocks until the transition completes successfully or
-    /// produces an error.
+    /// Compared to [`block_on_or_addsubtask`], this function also executes the provieded
+    /// `func` after the transition succeeded or failed. Code following [`block_on_or_addsubtask`]
+    /// can actually be executed before the transition if a subtask was added and the returned
+    /// `Result` might not reflect the actual transition result.
     ///
-    /// In situations where we don't know whether we are running on a [`Context`]
-    /// or not, use [`Self::await_maybe_on_context`] instead.
+    /// If the transition is already complete, `func` is executed immediately.
     ///
-    /// # Panics
+    /// If we are NOT running on a [`Context`], the transition result is awaited
+    /// by blocking on current thread and `func` is executed.
     ///
-    /// Panics if current thread is a [`Context`] thread.
-    pub fn block_on(self) -> Result<TransitionOk, TransitionError> {
-        assert!(!Context::is_context_thread());
+    /// If we are running on a [`Context`], the transition result is awaited
+    /// in a sub task for current [`Context`]'s Scheduler task and `func` is executed with
+    /// the transition result. In this case, `block_on_or_add_subtask_then` always
+    /// returns `Ok(())` since the actual processing is handled asynchronously.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # use gstthreadshare::runtime::task::{Task, TransitionOk, TransitionError};
+    /// # async fn async_fn() -> Result<TransitionOk, TransitionError> {
+    /// # let task = Task::default();
+    ///   task
+    ///       .stop()
+    ///       .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+    ///           // Add specific stop code here,
+    ///           // it will be executed after the transition succeeds or fails
+    ///
+    ///           if res.is_ok() {
+    ///               gst::debug!(CAT, obj = elem, "Stopped");
+    ///           }
+    ///       })
+    /// # Ok(flush_ok)
+    /// # }
+    /// ```
+    pub fn block_on_or_add_subtask_then<T, F>(
+        self,
+        obj: glib::BorrowedObject<'_, T>,
+        func: F,
+    ) -> Result<(), gst::ErrorMessage>
+    where
+        T: IsA<glib::Object> + Send,
+        F: FnOnce(&T, &Result<TransitionOk, TransitionError>) + Send + 'static,
+    {
         use TransitionStatus::*;
         match self {
             Pending {
                 trigger, res_fut, ..
             } => {
-                gst::debug!(
-                    RUNTIME_CAT,
-                    "Awaiting for {:?} ack on current thread",
-                    trigger,
-                );
-                futures::executor::block_on(res_fut)
+                if let Some((ctx, task_id)) = Context::current_task() {
+                    gst::debug!(
+                        RUNTIME_CAT,
+                        obj = obj,
+                        "Awaiting for {trigger:?} ack in a subtask on context {}",
+                        ctx.name()
+                    );
+                    let obj = obj.clone();
+                    let _ = ctx.add_sub_task(task_id, async move {
+                        let res = res_fut.await;
+                        match res {
+                            Ok(ref status) => {
+                                gst::log!(
+                                    RUNTIME_CAT,
+                                    obj = obj,
+                                    "Task {trigger:?} success: {status:?}",
+                                );
+                                func(&obj, &res);
+                                Ok(())
+                            }
+                            Err(ref err) => {
+                                gst::error!(
+                                    RUNTIME_CAT,
+                                    obj = obj,
+                                    "Task {trigger:?} failure: {err}",
+                                );
+                                func(&obj, &res);
+                                Err(gst::FlowError::Error)
+                            }
+                        }
+                    });
+
+                    Ok(())
+                } else {
+                    gst::debug!(
+                        RUNTIME_CAT,
+                        obj = obj,
+                        "Awaiting for {trigger:?} ack on current thread",
+                    );
+                    let res = futures::executor::block_on(res_fut);
+                    match res {
+                        Ok(ref status) => {
+                            gst::log!(
+                                RUNTIME_CAT,
+                                obj = obj,
+                                "Task {trigger:?} success: {status:?}",
+                            );
+                            func(&obj, &res);
+                            Ok(())
+                        }
+                        Err(ref err) => {
+                            gst::error!(RUNTIME_CAT, obj = obj, "Task {trigger:?} failure: {err}",);
+                            func(&obj, &res);
+                            res.map(|_| ()).map_err(|err| err.into())
+                        }
+                    }
+                }
             }
-            Ready(res) => res,
+            Ready(res) => match res {
+                Ok(ref status) => {
+                    gst::log!(
+                        RUNTIME_CAT,
+                        obj = obj,
+                        "Task transition immediate success: {status:?}",
+                    );
+                    func(&obj, &res);
+                    Ok(())
+                }
+                Err(ref err) => {
+                    gst::error!(
+                        RUNTIME_CAT,
+                        obj = obj,
+                        "Task transition immediate failure: {err}",
+                    );
+                    func(&obj, &res);
+                    res.map(|_| ()).map_err(|err| err.into())
+                }
+            },
         }
     }
 }
@@ -1221,12 +1375,34 @@ mod tests {
     use super::{
         Task, TaskImpl,
         TaskState::{self, *},
-        TransitionError,
+        TransitionError, TransitionOk,
         TransitionOk::*,
+        TransitionStatus,
         TransitionStatus::*,
         Trigger::{self, *},
     };
     use crate::runtime::{Context, RUNTIME_CAT};
+
+    impl TransitionStatus {
+        // Only useful for unit tests, use `block_on_or_add_sub_task_and_then`
+        // or `block_on_or_add_sub_task` in user code.
+        fn block_on(self) -> Result<TransitionOk, TransitionError> {
+            assert!(!Context::is_context_thread());
+            match self {
+                Pending {
+                    trigger, res_fut, ..
+                } => {
+                    gst::debug!(
+                        RUNTIME_CAT,
+                        "Awaiting for {:?} ack on current thread",
+                        trigger,
+                    );
+                    futures::executor::block_on(res_fut)
+                }
+                Ready(res) => res,
+            }
+        }
+    }
 
     #[track_caller]
     fn stop_then_unprepare(task: Task) {
@@ -1324,12 +1500,12 @@ mod tests {
         let (paused_sender, mut paused_receiver) = mpsc::channel(1);
         let (stopped_sender, mut stopped_receiver) = mpsc::channel(1);
         let (unprepared_sender, mut unprepared_receiver) = mpsc::channel(1);
+        let obj = gst::Pad::builder(gst::PadDirection::Unknown)
+            .name("runtime::Task::nominal")
+            .build();
         let prepare_status = task.prepare(
             TaskTest {
-                obj: gst::Pad::builder(gst::PadDirection::Unknown)
-                    .name("runtime::Task::nominal")
-                    .build()
-                    .into(),
+                obj: obj.clone().into(),
                 prepared_sender,
                 started_sender,
                 try_next_ready_sender,
@@ -1359,7 +1535,7 @@ mod tests {
         block_on(prepared_receiver.next()).unwrap();
         // also tests await_maybe_on_context
         assert_eq!(
-            prepare_status.await_maybe_on_context().unwrap(),
+            prepare_status.block_on_or_add_subtask(&obj).unwrap(),
             Complete {
                 origin: Unprepared,
                 target: Prepared,
@@ -2042,12 +2218,12 @@ mod tests {
 
         let (flush_start_sender, mut flush_start_receiver) = mpsc::channel(1);
         let (flush_stop_sender, mut flush_stop_receiver) = mpsc::channel(1);
+        let obj = gst::Pad::builder(gst::PadDirection::Unknown)
+            .name("runtime::Task::flush_regular_sync")
+            .build();
         let fut = task.prepare(
             TaskFlushTest {
-                obj: gst::Pad::builder(gst::PadDirection::Unknown)
-                    .name("runtime::Task::flush_regular_sync")
-                    .build()
-                    .into(),
+                obj: obj.clone().into(),
                 flush_start_sender,
                 flush_stop_sender,
             },
@@ -2072,7 +2248,7 @@ mod tests {
 
         gst::debug!(RUNTIME_CAT, "flush_regular_sync: stopping flush");
         assert_eq!(
-            task.flush_stop().await_maybe_on_context().unwrap(),
+            task.flush_stop().block_on_or_add_subtask(&obj).unwrap(),
             Complete {
                 origin: Flushing,
                 target: Started,
@@ -2139,12 +2315,12 @@ mod tests {
 
         let (flush_start_sender, mut flush_start_receiver) = mpsc::channel(1);
         let (flush_stop_sender, mut flush_stop_receiver) = mpsc::channel(1);
+        let obj = gst::Pad::builder(gst::PadDirection::Unknown)
+            .name("runtime::Task::flush_regular_different_context")
+            .build();
         let fut = task.prepare(
             TaskFlushTest {
-                obj: gst::Pad::builder(gst::PadDirection::Unknown)
-                    .name("runtime::Task::flush_regular_different_context")
-                    .build()
-                    .into(),
+                obj: obj.clone().into(),
                 flush_start_sender,
                 flush_stop_sender,
             },
@@ -2192,7 +2368,7 @@ mod tests {
                 other => panic!("{other:?}"),
             };
             assert_eq!(
-                flush_stop_status.await_maybe_on_context().unwrap(),
+                flush_stop_status.block_on_or_add_subtask(&obj).unwrap(),
                 NotWaiting {
                     trigger: FlushStop,
                     origin: Flushing,

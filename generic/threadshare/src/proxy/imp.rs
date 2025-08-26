@@ -675,26 +675,36 @@ impl PadSrcHandler for ProxySrcPadHandler {
         use gst::EventView;
         match event.view() {
             EventView::FlushStart(..) => {
-                if let Err(err) = imp.task.flush_start().await_maybe_on_context() {
-                    gst::error!(SRC_CAT, obj = pad, "FlushStart failed {:?}", err);
-                    gst::element_imp_error!(
-                        imp,
-                        gst::StreamError::Failed,
-                        ("Internal data stream error"),
-                        ["FlushStart failed {:?}", err]
-                    );
-                }
+                let _ =
+                    imp.task
+                        .flush_start()
+                        .block_on_or_add_subtask_then(imp.obj(), |elem, res| {
+                            if let Err(err) = res {
+                                gst::error!(SRC_CAT, obj = elem, "FlushStart failed {err:?}");
+                                gst::element_error!(
+                                    elem,
+                                    gst::StreamError::Failed,
+                                    ("Internal data stream error"),
+                                    ["FlushStart failed {err:?}"]
+                                );
+                            }
+                        });
             }
             EventView::FlushStop(..) => {
-                if let Err(err) = imp.task.flush_stop().await_maybe_on_context() {
-                    gst::error!(SRC_CAT, obj = pad, "FlushStop failed {:?}", err);
-                    gst::element_imp_error!(
-                        imp,
-                        gst::StreamError::Failed,
-                        ("Internal data stream error"),
-                        ["FlushStop failed {:?}", err]
-                    );
-                }
+                let _ =
+                    imp.task
+                        .flush_stop()
+                        .block_on_or_add_subtask_then(imp.obj(), |elem, res| {
+                            if let Err(err) = res {
+                                gst::error!(SRC_CAT, obj = elem, "FlushStop failed {err:?}");
+                                gst::element_error!(
+                                    elem,
+                                    gst::StreamError::Failed,
+                                    ("Internal data stream error"),
+                                    ["FlushStop failed {err:?}"]
+                                );
+                            }
+                        });
             }
             _ => (),
         }
@@ -954,25 +964,30 @@ impl ProxySrc {
             },
         );
 
-        {
-            let mut shared_ctx = proxy_ctx.lock_shared();
-            shared_ctx.dataqueue = Some(dataqueue.clone());
-
-            let mut proxy_src_pads = PROXY_SRC_PADS.lock().unwrap();
-            assert!(!proxy_src_pads.contains_key(&settings.proxy_context));
-            proxy_src_pads.insert(settings.proxy_context, self.src_pad.downgrade());
-        }
-
-        *self.proxy_ctx.lock().unwrap() = Some(proxy_ctx);
-        *self.dataqueue.lock().unwrap() = Some(dataqueue.clone());
-
         self.task
-            .prepare(ProxySrcTask::new(self.obj().clone(), dataqueue), ts_ctx)
-            .block_on()?;
+            .prepare(
+                ProxySrcTask::new(self.obj().clone(), dataqueue.clone()),
+                ts_ctx,
+            )
+            .block_on_or_add_subtask_then(self.obj(), move |elem, res| {
+                if res.is_ok() {
+                    let imp = elem.imp();
 
-        gst::debug!(SRC_CAT, imp = self, "Prepared");
+                    {
+                        let mut shared_ctx = proxy_ctx.lock_shared();
+                        shared_ctx.dataqueue = Some(dataqueue.clone());
 
-        Ok(())
+                        let mut proxy_src_pads = PROXY_SRC_PADS.lock().unwrap();
+                        assert!(!proxy_src_pads.contains_key(&settings.proxy_context));
+                        proxy_src_pads.insert(settings.proxy_context, imp.src_pad.downgrade());
+                    }
+
+                    *imp.proxy_ctx.lock().unwrap() = Some(proxy_ctx);
+                    *imp.dataqueue.lock().unwrap() = Some(dataqueue);
+
+                    gst::debug!(SRC_CAT, obj = elem, "Prepared");
+                }
+            })
     }
 
     fn unprepare(&self) {
@@ -984,26 +999,38 @@ impl ProxySrc {
             proxy_src_pads.remove(&settings.proxy_context);
         }
 
-        self.task.unprepare().block_on().unwrap();
+        let _ = self
+            .task
+            .unprepare()
+            .block_on_or_add_subtask_then(self.obj(), |elem, _| {
+                let imp = elem.imp();
+                *imp.dataqueue.lock().unwrap() = None;
+                *imp.proxy_ctx.lock().unwrap() = None;
 
-        *self.dataqueue.lock().unwrap() = None;
-        *self.proxy_ctx.lock().unwrap() = None;
-
-        gst::debug!(SRC_CAT, imp = self, "Unprepared");
+                gst::debug!(SRC_CAT, obj = elem, "Unprepared");
+            });
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(SRC_CAT, imp = self, "Stopping");
-        self.task.stop().await_maybe_on_context()?;
-        gst::debug!(SRC_CAT, imp = self, "Stopped");
-        Ok(())
+        self.task
+            .stop()
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                if res.is_ok() {
+                    gst::debug!(SRC_CAT, obj = elem, "Stopped");
+                }
+            })
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(SRC_CAT, imp = self, "Starting");
-        self.task.start().await_maybe_on_context()?;
-        gst::debug!(SRC_CAT, imp = self, "Started");
-        Ok(())
+        self.task
+            .start()
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                if res.is_ok() {
+                    gst::debug!(SRC_CAT, obj = elem, "Started");
+                }
+            })
     }
 }
 

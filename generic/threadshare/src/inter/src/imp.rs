@@ -139,7 +139,7 @@ use std::ops::ControlFlow;
 use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 
-use crate::runtime::executor::{block_on, block_on_or_add_sub_task};
+use crate::runtime::executor::block_on_or_add_subtask;
 use crate::runtime::prelude::*;
 use crate::runtime::{Context, PadSrc, Task};
 
@@ -245,7 +245,7 @@ impl Drop for InterContextSrc {
         let dataqueue_key = self.dataqueue_key;
         let src_key = self.src_key;
 
-        block_on_or_add_sub_task(async move {
+        block_on_or_add_subtask(async move {
             let mut shared = shared.write().await;
             let _ = shared.dataqueues.remove(dataqueue_key);
             let _ = shared.sources.remove(src_key);
@@ -521,7 +521,7 @@ impl InterSrc {
         local_ctx.as_ref().expect("set in prepare").shared.clone()
     }
 
-    fn join_inter_ctx_blocking(
+    async fn join_inter_ctx(
         &self,
         inter_ctx_name: &str,
         ts_ctx: Context,
@@ -531,12 +531,13 @@ impl InterSrc {
 
         let inter_src_capacity = self.settings.lock().unwrap().inter_src_capacity;
 
-        let src_ctx = block_on(InterContextSrc::add(
+        let src_ctx = InterContextSrc::add(
             inter_ctx_name.to_string(),
             inter_src_capacity,
             dataqueue.clone(),
             elem.clone(),
-        ));
+        )
+        .await;
 
         if self
             .task
@@ -544,7 +545,7 @@ impl InterSrc {
                 InterSrcTask::new(elem.clone(), dataqueue.clone()),
                 ts_ctx.clone(),
             )
-            .block_on()
+            .await
             .is_err()
         {
             return Err(gst::error_msg!(
@@ -558,7 +559,7 @@ impl InterSrc {
         Ok(())
     }
 
-    fn change_inter_ctx_blocking(&self, target_inter_ctx: &str) -> Result<(), gst::ErrorMessage> {
+    async fn change_inter_ctx(&self, target_inter_ctx: &str) -> Result<(), gst::ErrorMessage> {
         if self.obj().current_state() <= gst::State::Null {
             // Element not prepared yet => nothing to change
             return Ok(());
@@ -567,7 +568,7 @@ impl InterSrc {
         let seqnum = gst::Seqnum::next();
 
         if self.obj().current_state() != gst::State::Ready {
-            if let Err(err) = self.task.stop().block_on() {
+            if let Err(err) = self.task.stop().await {
                 return Err(gst::error_msg!(
                     gst::ResourceError::Failed,
                     ["Failed to stop current Task: {err}"]
@@ -579,7 +580,7 @@ impl InterSrc {
                 .push_event(gst::event::FlushStart::builder().seqnum(seqnum).build());
         }
 
-        if let Err(err) = self.task.unprepare().block_on() {
+        if let Err(err) = self.task.unprepare().await {
             return Err(gst::error_msg!(
                 gst::ResourceError::Failed,
                 ["Failed to unprepare current Task: {err}"]
@@ -605,14 +606,15 @@ impl InterSrc {
             "Joining new inter-context {target_inter_ctx}"
         );
 
-        self.join_inter_ctx_blocking(target_inter_ctx, ts_ctx, dataqueue)?;
+        self.join_inter_ctx(target_inter_ctx, ts_ctx, dataqueue)
+            .await?;
 
         if self.obj().current_state() == gst::State::Playing {
             self.srcpad
-                .gst_pad()
-                .push_event(gst::event::FlushStop::builder(true).seqnum(seqnum).build());
+                .push_event(gst::event::FlushStop::builder(true).seqnum(seqnum).build())
+                .await;
 
-            if let Err(err) = self.task.start().block_on() {
+            if let Err(err) = self.task.start().await {
                 return Err(gst::error_msg!(
                     gst::ResourceError::Failed,
                     ["Failed to start new Task: {err}"]
@@ -695,80 +697,102 @@ impl InterSrc {
                 Some(settings.max_size_time)
             },
         );
-        *self.dataqueue.lock().unwrap() = Some(dataqueue.clone());
 
         let inter_ctx_name = self.settings.lock().unwrap().inter_context.to_string();
-        self.join_inter_ctx_blocking(&inter_ctx_name, ts_ctx, dataqueue)?;
+        let elem = self.obj().clone();
+        block_on_or_add_subtask(async move {
+            let imp = elem.imp();
+            let res = imp
+                .join_inter_ctx(&inter_ctx_name, ts_ctx, dataqueue.clone())
+                .await;
+            if res.is_ok() {
+                *imp.dataqueue.lock().unwrap() = Some(dataqueue);
+                gst::debug!(CAT, obj = elem, "Prepared");
+            }
 
-        gst::debug!(CAT, imp = self, "Prepared");
-        Ok(())
+            res
+        })
+        .unwrap_or(Ok(()))
     }
 
     fn unprepare(&self) {
         gst::debug!(CAT, imp = self, "Unpreparing");
 
-        self.task.unprepare().block_on().unwrap();
+        let _ = self
+            .task
+            .unprepare()
+            .block_on_or_add_subtask_then(self.obj(), |elem, _| {
+                let imp = elem.imp();
+                *imp.dataqueue.lock().unwrap() = None;
+                *imp.src_ctx.lock().unwrap() = None;
+                *imp.ts_ctx.lock().unwrap() = None;
 
-        *self.dataqueue.lock().unwrap() = None;
-        *self.src_ctx.lock().unwrap() = None;
-        *self.ts_ctx.lock().unwrap() = None;
-
-        gst::debug!(CAT, imp = self, "Unprepared");
+                gst::debug!(CAT, imp = imp, "Unprepared");
+            });
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, imp = self, "Stopping");
 
-        self.task.stop().await_maybe_on_context()?;
-        *self.upstream_latency.lock().unwrap() = gst::ClockTime::NONE;
+        self.task
+            .stop()
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                *elem.imp().upstream_latency.lock().unwrap() = gst::ClockTime::NONE;
 
-        gst::debug!(CAT, imp = self, "Stopped");
-        Ok(())
+                if res.is_ok() {
+                    gst::debug!(CAT, obj = elem, "Stopped");
+                }
+            })
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, imp = self, "Starting");
-        self.task.start().await_maybe_on_context()?;
-        gst::debug!(CAT, imp = self, "Started");
-        Ok(())
+
+        self.task
+            .start()
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                if res.is_ok() {
+                    gst::debug!(CAT, obj = elem, "Started");
+                }
+            })
     }
 
     fn flush_start(&self) -> Result<(), gst::FlowError> {
         gst::debug!(CAT, imp = self, "Flushing");
 
-        let res = self.task.flush_start().await_maybe_on_context();
-        if let Err(err) = res {
-            gst::error!(CAT, imp = self, "FlushStart failed {err:?}");
-            gst::element_imp_error!(
-                self,
-                gst::StreamError::Failed,
-                ("Internal data stream error"),
-                ["FlushStart failed {err:?}"]
-            );
-
-            return Err(gst::FlowError::Error);
-        }
-
-        Ok(())
+        self.task
+            .flush_start()
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                if let Err(err) = res {
+                    gst::error!(CAT, obj = elem, "FlushStart failed {err:?}");
+                    gst::element_error!(
+                        elem,
+                        gst::StreamError::Failed,
+                        ("Internal data stream error"),
+                        ["FlushStart failed {err:?}"]
+                    );
+                }
+            })
+            .map_err(|_| gst::FlowError::Error)
     }
 
     fn flush_stop(&self) -> Result<(), gst::FlowError> {
         gst::debug!(CAT, imp = self, "Stopping flush");
 
-        let res = self.task.flush_stop().await_maybe_on_context();
-        if let Err(err) = res {
-            gst::error!(CAT, imp = self, "FlushStop failed {err:?}");
-            gst::element_imp_error!(
-                self,
-                gst::StreamError::Failed,
-                ("Internal data stream error"),
-                ["FlushStop failed {err:?}"]
-            );
-
-            return Err(gst::FlowError::Error);
-        }
-
-        Ok(())
+        self.task
+            .flush_stop()
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                if let Err(err) = res {
+                    gst::error!(CAT, obj = elem, "FlushStop failed {err:?}");
+                    gst::element_error!(
+                        elem,
+                        gst::StreamError::Failed,
+                        ("Internal data stream error"),
+                        ["FlushStop failed {err:?}"]
+                    );
+                }
+            })
+            .map_err(|_| gst::FlowError::Error)
     }
 }
 
@@ -897,11 +921,15 @@ impl ObjectImpl for InterSrc {
                     return;
                 }
 
-                if let Err(err) = self.change_inter_ctx_blocking(&target_inter_ctx) {
-                    gst::error!(CAT, imp = self, "Failed to change inter-context: {err}");
-                } else {
-                    self.settings.lock().unwrap().inter_context = target_inter_ctx;
-                }
+                let elem = self.obj().clone();
+                block_on_or_add_subtask(async move {
+                    let imp = elem.imp();
+                    if let Err(err) = imp.change_inter_ctx(&target_inter_ctx).await {
+                        gst::error!(CAT, imp = imp, "Failed to change inter-context: {err}");
+                    } else {
+                        imp.settings.lock().unwrap().inter_context = target_inter_ctx;
+                    }
+                });
             }
             _ => unimplemented!(),
         }

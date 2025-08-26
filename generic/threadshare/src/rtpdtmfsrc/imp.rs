@@ -1073,44 +1073,55 @@ impl RTPDTMFSrc {
                 RTPDTMFSrcTask::new(self.obj().clone(), dtmf_evt_rx),
                 context,
             )
-            .block_on()?;
-        *self.dtmf_evt_tx.lock().unwrap() = Some(dtmf_evt_tx);
-
-        gst::debug!(CAT, imp = self, "Prepared");
-
-        Ok(())
+            .block_on_or_add_subtask_then(self.obj(), move |elem, res| {
+                if res.is_ok() {
+                    *elem.imp().dtmf_evt_tx.lock().unwrap() = Some(dtmf_evt_tx);
+                    gst::debug!(CAT, obj = elem, "Prepared");
+                }
+            })
     }
 
     fn unprepare(&self) {
         gst::debug!(CAT, imp = self, "Unpreparing");
 
-        self.task.unprepare().block_on().unwrap();
-        *self.dtmf_evt_tx.lock().unwrap() = None;
+        let _ = self
+            .task
+            .unprepare()
+            .block_on_or_add_subtask_then(self.obj(), |elem, _| {
+                *elem.imp().dtmf_evt_tx.lock().unwrap() = None;
 
-        gst::debug!(CAT, imp = self, "Unprepared");
+                gst::debug!(CAT, obj = elem, "Unprepared");
+            });
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, imp = self, "Stopping");
 
-        self.task.stop().block_on()?;
-        {
-            let mut settings = self.settings.lock().unwrap();
-            settings.timestamp = 0;
-            settings.seqnum = 0;
-        }
+        self.task
+            .stop()
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                {
+                    let imp = elem.imp();
+                    let mut settings = imp.settings.lock().unwrap();
+                    settings.timestamp = 0;
+                    settings.seqnum = 0;
+                }
 
-        gst::debug!(CAT, imp = self, "Stopped");
-
-        Ok(())
+                if res.is_ok() {
+                    gst::debug!(CAT, obj = elem, "Stopped");
+                }
+            })
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, imp = self, "Starting");
-        self.task.start().block_on()?;
-        gst::debug!(CAT, imp = self, "Started");
-
-        Ok(())
+        self.task
+            .start()
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                if res.is_ok() {
+                    gst::debug!(CAT, obj = elem, "Started");
+                }
+            })
     }
 }
 
@@ -1370,8 +1381,8 @@ impl PadSrcHandler for RTPDTMFSrcPadHandler {
 
         use gst::EventView::*;
         match event.view() {
-            FlushStart(..) => imp.task.flush_start().await_maybe_on_context().is_ok(),
-            FlushStop(..) => imp.task.flush_stop().await_maybe_on_context().is_ok(),
+            FlushStart(..) => imp.task.flush_start().block_on_or_add_subtask(pad).is_ok(),
+            FlushStop(..) => imp.task.flush_stop().block_on_or_add_subtask(pad).is_ok(),
             Reconfigure(..) => true,
             Latency(..) => true,
             _ => imp.handle_maybe_dtmf_event(&event),

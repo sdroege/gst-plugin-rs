@@ -91,10 +91,12 @@ mod imp_src {
 
             let ret = match event.view() {
                 EventView::FlushStart(..) => {
-                    imp.task.flush_start().await_maybe_on_context().is_ok()
+                    imp.task.flush_start().block_on_or_add_subtask(pad).is_ok()
                 }
                 EventView::Qos(..) | EventView::Reconfigure(..) | EventView::Latency(..) => true,
-                EventView::FlushStop(..) => imp.task.flush_stop().await_maybe_on_context().is_ok(),
+                EventView::FlushStop(..) => {
+                    imp.task.flush_stop().block_on_or_add_subtask(pad).is_ok()
+                }
                 _ => false,
             };
 
@@ -222,39 +224,53 @@ mod imp_src {
                 })?;
 
             let (sender, receiver) = mpsc::channel(1);
-            *self.sender.lock().unwrap() = Some(sender);
-
             self.task
                 .prepare(
                     ElementSrcTestTask::new(self.obj().clone(), receiver),
                     context,
                 )
-                .block_on()?;
-
-            gst::debug!(SRC_CAT, imp = self, "Prepared");
-
-            Ok(())
+                .block_on_or_add_subtask_then(self.obj(), move |elem, res| {
+                    if res.is_ok() {
+                        *elem.imp().sender.lock().unwrap() = Some(sender);
+                        gst::debug!(SRC_CAT, obj = elem, "Prepared");
+                    }
+                })
         }
 
         fn unprepare(&self) {
             gst::debug!(SRC_CAT, imp = self, "Unpreparing");
+            let _ = self
+                .task
+                .unprepare()
+                .block_on_or_add_subtask_then(self.obj(), |elem, _| {
+                    *elem.imp().sender.lock().unwrap() = None;
 
-            *self.sender.lock().unwrap() = None;
-            self.task.unprepare().block_on().unwrap();
-
-            gst::debug!(SRC_CAT, imp = self, "Unprepared");
+                    gst::debug!(SRC_CAT, obj = elem, "Unprepared");
+                });
         }
 
         fn stop(&self) {
             gst::debug!(SRC_CAT, imp = self, "Stopping");
-            self.task.stop().await_maybe_on_context().unwrap();
-            gst::debug!(SRC_CAT, imp = self, "Stopped");
+            self.task
+                .stop()
+                .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                    if res.is_ok() {
+                        gst::debug!(SRC_CAT, obj = elem, "Stopped");
+                    }
+                })
+                .unwrap();
         }
 
         fn start(&self) {
             gst::debug!(SRC_CAT, imp = self, "Starting");
-            self.task.start().await_maybe_on_context().unwrap();
-            gst::debug!(SRC_CAT, imp = self, "Started");
+            self.task
+                .start()
+                .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                    if res.is_ok() {
+                        gst::debug!(SRC_CAT, obj = elem, "Started");
+                    }
+                })
+                .unwrap();
         }
     }
 
@@ -388,10 +404,16 @@ mod imp_src {
         fn send_event(&self, event: gst::Event) -> bool {
             match event.view() {
                 EventView::FlushStart(..) => {
-                    self.task.flush_start().await_maybe_on_context().unwrap();
+                    self.task
+                        .flush_start()
+                        .block_on_or_add_subtask(&*self.obj())
+                        .unwrap();
                 }
                 EventView::FlushStop(..) => {
-                    self.task.flush_stop().await_maybe_on_context().unwrap();
+                    self.task
+                        .flush_stop()
+                        .block_on_or_add_subtask(&*self.obj())
+                        .unwrap();
                 }
                 _ => (),
             }

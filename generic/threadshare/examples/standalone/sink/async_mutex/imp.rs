@@ -13,7 +13,7 @@ use gst::EventView;
 
 use std::sync::LazyLock;
 
-use gstthreadshare::runtime::executor::block_on_or_add_sub_task;
+use gstthreadshare::runtime::executor::block_on_or_add_subtask;
 use gstthreadshare::runtime::{prelude::*, PadSink};
 
 use std::sync::{Arc, Mutex};
@@ -146,7 +146,7 @@ impl PadSinkHandler for AsyncPadSinkHandler {
 
     fn sink_event(self, _pad: &gst::Pad, _imp: &AsyncMutexSink, event: gst::Event) -> bool {
         if let EventView::FlushStart(..) = event.view() {
-            block_on_or_add_sub_task(async move { self.0.lock().await.is_flushing = true });
+            block_on_or_add_subtask(async move { self.0.lock().await.is_flushing = true });
         }
 
         true

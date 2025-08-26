@@ -31,7 +31,7 @@ use std::sync::{Arc, LazyLock, Weak};
 use std::time::Duration;
 
 use crate::dataqueue::DataQueue;
-use crate::runtime::executor::block_on_or_add_sub_task;
+use crate::runtime::executor::block_on_or_add_subtask;
 
 mod sink;
 mod src;
@@ -67,7 +67,7 @@ impl InterContextInner {
 impl Drop for InterContextInner {
     fn drop(&mut self) {
         let name = self.name.clone();
-        block_on_or_add_sub_task(async move {
+        block_on_or_add_subtask(async move {
             let mut inter_ctxs = INTER_CONTEXTS.lock().await;
             inter_ctxs.remove(&name);
         });

@@ -41,7 +41,7 @@ use std::sync::{
     LazyLock, Mutex,
 };
 
-use crate::runtime::executor::{block_on, block_on_or_add_sub_task};
+use crate::runtime::executor::block_on_or_add_subtask;
 use crate::runtime::prelude::*;
 use crate::runtime::PadSink;
 
@@ -110,7 +110,7 @@ impl InterContextSink {
 impl Drop for InterContextSink {
     fn drop(&mut self) {
         let shared = self.shared.clone();
-        block_on_or_add_sub_task(async move {
+        block_on_or_add_subtask(async move {
             let _ = shared.write().await.sinkpad.take();
         });
     }
@@ -148,7 +148,7 @@ impl PadSinkHandler for InterSinkPadHandler {
         let elem = imp.obj().clone();
 
         if event.is_downstream() {
-            block_on_or_add_sub_task(async move {
+            block_on_or_add_subtask(async move {
                 let imp = elem.imp();
                 gst::debug!(
                     CAT,
@@ -159,7 +159,7 @@ impl PadSinkHandler for InterSinkPadHandler {
                 let shared_ctx = imp.shared_ctx();
                 let shared_ctx = shared_ctx.read().await;
                 if shared_ctx.sources.is_empty() {
-                    gst::info!(CAT, imp = imp, "No sources to forward {event:?} to",);
+                    gst::info!(CAT, imp = imp, "No sources to forward {event:?} to");
                 } else {
                     gst::log!(
                         CAT,
@@ -185,7 +185,7 @@ impl PadSinkHandler for InterSinkPadHandler {
 
                 true
             })
-            .unwrap_or(false)
+            .unwrap_or(true)
         } else {
             gst::debug!(
                 CAT,
@@ -281,7 +281,7 @@ impl InterSink {
 
         let ctx_name = self.settings.lock().unwrap().inter_context.clone();
 
-        block_on(async move {
+        block_on_or_add_subtask(async move {
             let sink_ctx = InterContextSink::add(ctx_name, sinkpad).await;
             if sink_ctx.is_some() {
                 let imp = obj.imp();
@@ -296,6 +296,7 @@ impl InterSink {
                 ))
             }
         })
+        .unwrap_or(Ok(()))
     }
 
     fn unprepare(&self) {
@@ -319,11 +320,11 @@ impl InterSink {
         local_ctx.got_first_buffer = false;
 
         let shared_ctx = local_ctx.shared.clone();
-        block_on(async move {
+        let elem = self.obj().clone();
+        block_on_or_add_subtask(async move {
             shared_ctx.write().await.upstream_latency = None;
+            gst::debug!(CAT, obj = elem, "Stopped");
         });
-
-        gst::debug!(CAT, imp = self, "Stopped");
     }
 }
 
@@ -416,7 +417,7 @@ impl ElementImpl for InterSink {
             let obj = self.obj().clone();
             let shared_ctx = self.shared_ctx();
 
-            let res = block_on_or_add_sub_task(async move {
+            let res = block_on_or_add_subtask(async move {
                 let mut shared_ctx = shared_ctx.write().await;
                 shared_ctx.upstream_latency = Some(latency);
 
@@ -435,7 +436,7 @@ impl ElementImpl for InterSink {
                 }
                 ControlFlow::Continue
             })
-            .unwrap_or(ControlFlow::Break);
+            .unwrap_or(ControlFlow::Continue);
 
             if res.is_break() {
                 // We are stopping, don't propagate upstream

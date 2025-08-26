@@ -561,14 +561,22 @@ impl PadSinkHandler for SinkHandler {
         gst::log!(CAT, obj = pad, "Handling {:?}", event);
 
         if let EventView::FlushStart(..) = event.view() {
-            if let Err(err) = jb.task.flush_start().await_maybe_on_context() {
-                gst::error!(CAT, obj = pad, "FlushStart failed {:?}", err);
-                gst::element_imp_error!(
-                    jb,
-                    gst::StreamError::Failed,
-                    ("Internal data stream error"),
-                    ["FlushStart failed {:?}", err]
-                );
+            if jb
+                .task
+                .flush_start()
+                .block_on_or_add_subtask_then(jb.obj(), |elem, res| {
+                    if let Err(err) = res {
+                        gst::error!(CAT, obj = elem, "FlushStart failed {err:?}");
+                        gst::element_error!(
+                            elem,
+                            gst::StreamError::Failed,
+                            ("Internal data stream error"),
+                            ["FlushStart failed {err:?}"]
+                        );
+                    }
+                })
+                .is_err()
+            {
                 return false;
             }
         }
@@ -595,14 +603,22 @@ impl PadSinkHandler for SinkHandler {
                 state.segment = e.segment().clone().downcast::<gst::format::Time>().unwrap();
             }
             EventView::FlushStop(..) => {
-                if let Err(err) = jb.task.flush_stop().await_maybe_on_context() {
-                    gst::error!(CAT, obj = pad, "FlushStop failed {:?}", err);
-                    gst::element_error!(
-                        elem,
-                        gst::StreamError::Failed,
-                        ("Internal data stream error"),
-                        ["FlushStop failed {:?}", err]
-                    );
+                if jb
+                    .task
+                    .flush_stop()
+                    .block_on_or_add_subtask_then(jb.obj(), |elem, res| {
+                        if let Err(err) = res {
+                            gst::error!(CAT, obj = elem, "FlushStop failed {err:?}");
+                            gst::element_error!(
+                                elem,
+                                gst::StreamError::Failed,
+                                ("Internal data stream error"),
+                                ["FlushStop failed {err:?}"]
+                            );
+                        }
+                    })
+                    .is_err()
+                {
                     return false;
                 }
             }
@@ -941,26 +957,42 @@ impl PadSrcHandler for SrcHandler {
 
         match event.view() {
             EventView::FlushStart(..) => {
-                if let Err(err) = jb.task.flush_start().await_maybe_on_context() {
-                    gst::error!(CAT, obj = pad, "FlushStart failed {:?}", err);
-                    gst::element_imp_error!(
-                        jb,
-                        gst::StreamError::Failed,
-                        ("Internal data stream error"),
-                        ["FlushStart failed {:?}", err]
-                    );
+                if jb
+                    .task
+                    .flush_start()
+                    .block_on_or_add_subtask_then(jb.obj(), |elem, res| {
+                        if let Err(err) = res {
+                            gst::error!(CAT, obj = elem, "FlushStart failed {err:?}");
+                            gst::element_error!(
+                                elem,
+                                gst::StreamError::Failed,
+                                ("Internal data stream error"),
+                                ["FlushStart failed {err:?}"]
+                            );
+                        }
+                    })
+                    .is_err()
+                {
                     return false;
                 }
             }
             EventView::FlushStop(..) => {
-                if let Err(err) = jb.task.flush_stop().await_maybe_on_context() {
-                    gst::error!(CAT, obj = pad, "FlushStop failed {:?}", err);
-                    gst::element_imp_error!(
-                        jb,
-                        gst::StreamError::Failed,
-                        ("Internal data stream error"),
-                        ["FlushStop failed {:?}", err]
-                    );
+                if jb
+                    .task
+                    .flush_stop()
+                    .block_on_or_add_subtask_then(jb.obj(), |elem, res| {
+                        if let Err(err) = res {
+                            gst::error!(CAT, obj = elem, "FlushStop failed {err:?}");
+                            gst::element_error!(
+                                elem,
+                                gst::StreamError::Failed,
+                                ("Internal data stream error"),
+                                ["FlushStop failed {err:?}"]
+                            );
+                        }
+                    })
+                    .is_err()
+                {
                     return false;
                 }
             }
@@ -1458,31 +1490,43 @@ impl JitterBuffer {
                 JitterBufferTask::new(&self.obj(), &self.src_pad_handler, &self.sink_pad_handler),
                 context,
             )
-            .block_on()?;
-
-        gst::debug!(CAT, imp = self, "Prepared");
-
-        Ok(())
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                if res.is_ok() {
+                    gst::debug!(CAT, obj = elem, "Prepared");
+                }
+            })
     }
 
     fn unprepare(&self) {
         gst::debug!(CAT, imp = self, "Unpreparing");
-        self.task.unprepare().block_on().unwrap();
-        gst::debug!(CAT, imp = self, "Unprepared");
+        let _ = self
+            .task
+            .unprepare()
+            .block_on_or_add_subtask_then(self.obj(), |elem, _| {
+                gst::debug!(CAT, obj = elem, "Unprepared");
+            });
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, imp = self, "Starting");
-        self.task.start().block_on()?;
-        gst::debug!(CAT, imp = self, "Started");
-        Ok(())
+        self.task
+            .start()
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                if res.is_ok() {
+                    gst::debug!(CAT, obj = elem, "Started");
+                }
+            })
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, imp = self, "Stopping");
-        self.task.stop().block_on()?;
-        gst::debug!(CAT, imp = self, "Stopped");
-        Ok(())
+        self.task
+            .stop()
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
+                if res.is_ok() {
+                    gst::debug!(CAT, obj = elem, "Stopped");
+                }
+            })
     }
 }
 
