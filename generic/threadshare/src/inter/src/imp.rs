@@ -278,7 +278,7 @@ impl PadSrcHandler for InterSrcPadHandler {
             QueryViewMut::Latency(q) => {
                 let (_, q_min, q_max) = q.result();
 
-                let Some(upstream_latency) = *imp.upstream_latency.lock().unwrap() else {
+                let Some(upstream_latency) = *imp.our_latency.lock().unwrap() else {
                     gst::debug!(
                         CAT,
                         obj = pad,
@@ -355,7 +355,7 @@ impl InterSrcTask {
     async fn maybe_get_upstream_latency(&self) -> Result<(), gst::FlowError> {
         let imp = self.elem.imp();
 
-        if imp.upstream_latency.lock().unwrap().is_some() {
+        if imp.our_latency.lock().unwrap().is_some() {
             return Ok(());
         }
 
@@ -511,7 +511,7 @@ pub struct InterSrc {
     src_ctx: Mutex<Option<InterContextSrc>>,
     ts_ctx: Mutex<Option<Context>>,
     dataqueue: Mutex<Option<DataQueue>>,
-    upstream_latency: Mutex<Option<gst::ClockTime>>,
+    our_latency: Mutex<Option<gst::ClockTime>>,
     settings: Mutex<Settings>,
 }
 
@@ -590,7 +590,7 @@ impl InterSrc {
         // Remove the InterContextSrc from the InterContext
         drop(self.src_ctx.lock().unwrap().take());
 
-        *self.upstream_latency.lock().unwrap() = None;
+        *self.our_latency.lock().unwrap() = None;
 
         let dataqueue = self
             .dataqueue
@@ -647,13 +647,13 @@ impl InterSrc {
             );
 
         {
-            let mut upstream_latency = self.upstream_latency.lock().unwrap();
-            if let Some(upstream_latency) = *upstream_latency {
-                if upstream_latency == new_latency {
+            let mut our_latency = self.our_latency.lock().unwrap();
+            if let Some(our_latency) = *our_latency {
+                if our_latency == new_latency {
                     return;
                 }
             }
-            *upstream_latency = Some(new_latency);
+            *our_latency = Some(new_latency);
         }
 
         gst::debug!(
@@ -735,7 +735,7 @@ impl InterSrc {
         self.task
             .stop()
             .block_on_or_add_subtask_then(self.obj(), |elem, res| {
-                *elem.imp().upstream_latency.lock().unwrap() = gst::ClockTime::NONE;
+                *elem.imp().our_latency.lock().unwrap() = gst::ClockTime::NONE;
 
                 if res.is_ok() {
                     gst::debug!(CAT, obj = elem, "Stopped");
@@ -810,7 +810,7 @@ impl ObjectSubclass for InterSrc {
             src_ctx: Mutex::new(None),
             ts_ctx: Mutex::new(None),
             dataqueue: Mutex::new(None),
-            upstream_latency: Mutex::new(gst::ClockTime::NONE),
+            our_latency: Mutex::new(gst::ClockTime::NONE),
             settings: Mutex::new(Settings::default()),
         }
     }

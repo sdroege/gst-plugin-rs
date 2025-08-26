@@ -204,23 +204,43 @@ fn one_to_one_up_first() {
     pipe_down.set_base_time(gst::ClockTime::ZERO);
     pipe_down.set_start_time(gst::ClockTime::NONE);
 
+    let got_latency_evt = Arc::new(AtomicBool::new(false));
     let (n_buf_tx, mut n_buf_rx) = oneshot::channel::<()>();
     appsink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             .new_sample({
+                let got_latency_evt = got_latency_evt.clone();
                 let mut samples = 0;
-                let mut eos_tx = Some(n_buf_tx);
+                let mut n_buf_tx = Some(n_buf_tx);
                 move |appsink| {
                     let _ = appsink.pull_sample().unwrap();
-                    samples += 1;
-                    if samples == 10 {
-                        eos_tx.take().unwrap().send(()).unwrap();
+                    if got_latency_evt.load(Ordering::SeqCst) {
+                        samples += 1;
+                        if samples == 10 {
+                            n_buf_tx.take().unwrap().send(()).unwrap();
+                        }
                     }
 
                     Ok(gst::FlowSuccess::Ok)
                 }
             })
             .build(),
+    );
+
+    appsink.static_pad("sink").unwrap().add_probe(
+        gst::PadProbeType::EVENT_UPSTREAM,
+        move |_, info| {
+            let Some(gst::PadProbeData::Event(ref evt)) = info.data else {
+                unreachable!();
+            };
+
+            if let gst::EventView::Latency(evt) = evt.view() {
+                if evt.latency() > gst::ClockTime::ZERO {
+                    got_latency_evt.store(true, Ordering::SeqCst);
+                }
+            }
+            gst::PadProbeReturn::Ok
+        },
     );
 
     // Starting upstream first
