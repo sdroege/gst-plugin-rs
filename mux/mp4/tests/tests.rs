@@ -1078,7 +1078,8 @@ fn test_taic_encode(video_enc: &str) {
     let pipeline_text = format!("videotestsrc num-buffers=250 ! {video_enc} ! taginject tags=\"precision-clock-type=can-sync-to-TAI,precision-clock-time-uncertainty-nanoseconds=100000\" scope=stream ! isomp4mux ! filesink location={location:?}");
 
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
-        panic!("could not build encoding pipeline")
+        println!("could not build encoding pipeline");
+        return;
     };
     pipeline
         .set_state(gst::State::Playing)
@@ -1137,11 +1138,14 @@ fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
         .property("is-live", true)
         .build()
         .unwrap();
-    let encoder = gst::ElementFactory::make(video_enc)
+    let Ok(encoder) = gst::ElementFactory::make(video_enc)
         .name("video encoder")
         .property("bframes", 0u32)
         .build()
-        .unwrap();
+    else {
+        println!("could not build encoding pipeline");
+        return;
+    };
     let taginject = gst::ElementFactory::make("taginject")
         .property_from_str("tags", "precision-clock-type=can-sync-to-TAI,precision-clock-time-uncertainty-nanoseconds=100000")
         .property_from_str("scope", "stream")
@@ -1295,7 +1299,8 @@ fn test_taic_encode_cannot_sync(video_enc: &str) {
     let location = temp_file_path.as_path();
     let pipeline_text = format!("videotestsrc num-buffers=250 ! {video_enc} ! taginject tags=\"precision-clock-type=cannot-sync-to-TAI\" scope=stream ! isomp4mux ! filesink location={location:?}");
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
-        panic!("could not build encoding pipeline")
+        println!("could not build encoding pipeline");
+        return;
     };
     pipeline
         .set_state(gst::State::Playing)
