@@ -650,7 +650,7 @@ impl Polly {
     }
 
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
-        gst::log!(CAT, obj = pad, "Handling query {:?}", query);
+        gst::trace!(CAT, obj = pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             gst::QueryViewMut::Latency(ref mut q) => {
