@@ -827,16 +827,12 @@ impl UdpSrc {
         drop(settings);
 
         let (sender, receiver) = channel(1);
+        self.state.lock().unwrap().event_sender = Some(sender);
 
         *self.configured_caps.lock().unwrap() = None;
         self.task
             .prepare(UdpSrcTask::new(self.obj().clone(), receiver), context)
-            .block_on_or_add_subtask_then(self.obj(), move |elem, res| {
-                let imp = elem.imp();
-                let mut state = imp.state.lock().unwrap();
-                state.event_sender = Some(sender);
-                drop(state);
-
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
                 if res.is_ok() {
                     gst::debug!(CAT, obj = elem, "Prepared");
                 }

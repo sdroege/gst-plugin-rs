@@ -697,16 +697,14 @@ impl InterSrc {
                 Some(settings.max_size_time)
             },
         );
+        *self.dataqueue.lock().unwrap() = Some(dataqueue.clone());
 
         let inter_ctx_name = self.settings.lock().unwrap().inter_context.to_string();
         let elem = self.obj().clone();
         block_on_or_add_subtask(async move {
             let imp = elem.imp();
-            let res = imp
-                .join_inter_ctx(&inter_ctx_name, ts_ctx, dataqueue.clone())
-                .await;
+            let res = imp.join_inter_ctx(&inter_ctx_name, ts_ctx, dataqueue).await;
             if res.is_ok() {
-                *imp.dataqueue.lock().unwrap() = Some(dataqueue);
                 gst::debug!(CAT, obj = elem, "Prepared");
             }
 

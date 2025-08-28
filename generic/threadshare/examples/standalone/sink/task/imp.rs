@@ -244,13 +244,14 @@ impl TaskSink {
 
         // Enable backpressure for items
         let (item_sender, item_receiver) = flume::bounded(0);
+        *self.item_sender.lock().unwrap() = Some(item_sender);
+
         let is_main_elem = settings.is_main_elem;
         let task_impl = TaskSinkTask::new(&self.obj(), item_receiver, settings.is_main_elem, stats);
         self.task
             .prepare(task_impl, ts_ctx)
             .block_on_or_add_subtask_then(self.obj(), move |elem, res| {
                 if res.is_ok() {
-                    *elem.imp().item_sender.lock().unwrap() = Some(item_sender);
                     debug_or_trace!(CAT, is_main_elem, obj = elem, "Prepared");
                 }
             })

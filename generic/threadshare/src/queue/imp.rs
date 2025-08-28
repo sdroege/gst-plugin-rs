@@ -580,14 +580,12 @@ impl Queue {
                 )
             })?;
 
+        *self.dataqueue.lock().unwrap() = Some(dataqueue.clone());
+
         self.task
-            .prepare(
-                QueueTask::new(self.obj().clone(), dataqueue.clone()),
-                context,
-            )
-            .block_on_or_add_subtask_then(self.obj(), move |elem, res| {
+            .prepare(QueueTask::new(self.obj().clone(), dataqueue), context)
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
                 if res.is_ok() {
-                    *elem.imp().dataqueue.lock().unwrap() = Some(dataqueue);
                     gst::debug!(CAT, obj = elem, "Prepared");
                 }
             })

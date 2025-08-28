@@ -1068,14 +1068,14 @@ impl RTPDTMFSrc {
         drop(settings);
 
         let (dtmf_evt_tx, dtmf_evt_rx) = mpsc::channel(DEFAULT_DTMF_EVT_CHAN_CAPACITY);
+        *self.dtmf_evt_tx.lock().unwrap() = Some(dtmf_evt_tx);
         self.task
             .prepare(
                 RTPDTMFSrcTask::new(self.obj().clone(), dtmf_evt_rx),
                 context,
             )
-            .block_on_or_add_subtask_then(self.obj(), move |elem, res| {
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
                 if res.is_ok() {
-                    *elem.imp().dtmf_evt_tx.lock().unwrap() = Some(dtmf_evt_tx);
                     gst::debug!(CAT, obj = elem, "Prepared");
                 }
             })

@@ -224,14 +224,14 @@ mod imp_src {
                 })?;
 
             let (sender, receiver) = mpsc::channel(1);
+            *self.sender.lock().unwrap() = Some(sender);
             self.task
                 .prepare(
                     ElementSrcTestTask::new(self.obj().clone(), receiver),
                     context,
                 )
-                .block_on_or_add_subtask_then(self.obj(), move |elem, res| {
+                .block_on_or_add_subtask_then(self.obj(), |elem, res| {
                     if res.is_ok() {
-                        *elem.imp().sender.lock().unwrap() = Some(sender);
                         gst::debug!(SRC_CAT, obj = elem, "Prepared");
                     }
                 })

@@ -964,27 +964,22 @@ impl ProxySrc {
             },
         );
 
+        {
+            let mut shared_ctx = proxy_ctx.lock_shared();
+            shared_ctx.dataqueue = Some(dataqueue.clone());
+
+            let mut proxy_src_pads = PROXY_SRC_PADS.lock().unwrap();
+            assert!(!proxy_src_pads.contains_key(&settings.proxy_context));
+            proxy_src_pads.insert(settings.proxy_context, self.src_pad.downgrade());
+        }
+
+        *self.proxy_ctx.lock().unwrap() = Some(proxy_ctx);
+        *self.dataqueue.lock().unwrap() = Some(dataqueue.clone());
+
         self.task
-            .prepare(
-                ProxySrcTask::new(self.obj().clone(), dataqueue.clone()),
-                ts_ctx,
-            )
-            .block_on_or_add_subtask_then(self.obj(), move |elem, res| {
+            .prepare(ProxySrcTask::new(self.obj().clone(), dataqueue), ts_ctx)
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
                 if res.is_ok() {
-                    let imp = elem.imp();
-
-                    {
-                        let mut shared_ctx = proxy_ctx.lock_shared();
-                        shared_ctx.dataqueue = Some(dataqueue.clone());
-
-                        let mut proxy_src_pads = PROXY_SRC_PADS.lock().unwrap();
-                        assert!(!proxy_src_pads.contains_key(&settings.proxy_context));
-                        proxy_src_pads.insert(settings.proxy_context, imp.src_pad.downgrade());
-                    }
-
-                    *imp.proxy_ctx.lock().unwrap() = Some(proxy_ctx);
-                    *imp.dataqueue.lock().unwrap() = Some(dataqueue);
-
                     gst::debug!(SRC_CAT, obj = elem, "Prepared");
                 }
             })
