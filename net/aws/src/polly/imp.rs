@@ -177,13 +177,74 @@ impl Polly {
             Gap(g) => {
                 let (pts, duration) = g.get();
 
+                let overflow = self.settings.lock().unwrap().overflow;
+
                 let mut state = self.state.lock().unwrap();
-                state.out_segment.set_position(match duration {
-                    Some(duration) => duration + pts,
-                    _ => pts,
-                });
+
+                let new_gap_event = match overflow {
+                    AwsOverflow::Clip => {
+                        state.out_segment.set_position(match duration {
+                            Some(duration) => duration + pts,
+                            _ => pts,
+                        });
+                        Some(event.clone())
+                    }
+                    AwsOverflow::Shift | AwsOverflow::Overlap => {
+                        if let Some(position) = state.out_segment.position() {
+                            if let Some(duration) = duration {
+                                let end_pts = pts + duration;
+
+                                if end_pts > position {
+                                    // Output our own gap event that starts at our current position
+                                    Some(
+                                        gst::event::Gap::builder(position)
+                                            .duration(end_pts - position)
+                                            .seqnum(event.seqnum())
+                                            .build(),
+                                    )
+                                } else {
+                                    // We have already advanced past this gap's end
+                                    None
+                                }
+                            } else if pts > position {
+                                Some(gst::event::Gap::builder(pts).seqnum(event.seqnum()).build())
+                            } else {
+                                // This duration-less gap was older that our current position, do
+                                // nothing
+                                None
+                            }
+                        } else {
+                            // Position wasn't set yet, the gap can be forwarded unchanged
+                            Some(event.clone())
+                        }
+                    }
+                };
+
+                if let Some(ref event) = new_gap_event {
+                    let Gap(gap) = event.view() else {
+                        unreachable!()
+                    };
+                    let (new_pts, new_duration) = gap.get();
+
+                    gst::log!(
+                        CAT,
+                        imp = self,
+                        "pushing gap with pts {new_pts} and duration {new_duration:?}"
+                    );
+
+                    state.out_segment.set_position(match new_duration {
+                        Some(new_duration) => new_duration + new_pts,
+                        _ => new_pts,
+                    });
+                }
+
                 drop(state);
-                gst::Pad::event_default(pad, Some(&*self.obj()), event)
+
+                if let Some(event) = new_gap_event {
+                    gst::Pad::event_default(pad, Some(&*self.obj()), event)
+                } else {
+                    true
+                }
             }
             _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
