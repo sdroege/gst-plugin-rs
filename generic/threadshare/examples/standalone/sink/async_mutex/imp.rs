@@ -113,18 +113,17 @@ impl PadSinkHandler for AsyncPadSinkHandler {
     ) -> bool {
         match event.view() {
             EventView::Eos(_) => {
-                {
-                    let mut inner = self.0.lock().await;
-                    debug_or_trace!(CAT, inner.is_main_elem, obj = elem, "EOS");
-                    inner.is_flushing = true;
+                let is_main_elem = elem.imp().settings.lock().unwrap().is_main_elem;
+                if is_main_elem {
+                    gst::info!(CAT, obj = elem, "EOS");
+                    let _ = elem.post_message(
+                        gst::message::Application::builder(gst::Structure::new_empty(
+                            "ts-standalone-sink/eos",
+                        ))
+                        .src(&elem)
+                        .build(),
+                    );
                 }
-
-                // When each element sends its own EOS message,
-                // it takes ages for the pipeline to process all of them.
-                // Let's just post an error message and let main shuts down
-                // after all streams have posted this message.
-                let _ =
-                    elem.post_message(gst::message::Error::new(gst::LibraryError::Shutdown, "EOS"));
             }
             EventView::FlushStop(_) => {
                 self.0.lock().await.is_flushing = false;
@@ -132,6 +131,13 @@ impl PadSinkHandler for AsyncPadSinkHandler {
             EventView::Segment(evt) => {
                 self.0.lock().await.segment =
                     evt.segment().downcast_ref::<gst::ClockTime>().cloned();
+                let _ = elem.post_message(
+                    gst::message::Application::builder(gst::Structure::new_empty(
+                        "ts-standalone-sink/streaming",
+                    ))
+                    .src(&elem)
+                    .build(),
+                );
             }
             EventView::SinkMessage(evt) => {
                 let _ = elem.post_message(evt.message());
@@ -176,6 +182,9 @@ impl AsyncPadSinkHandler {
     fn stop(&self) {
         futures::executor::block_on(async move {
             let mut inner = self.0.lock().await;
+            if let Some(ref mut stats) = inner.stats {
+                stats.log_global();
+            }
             inner.is_flushing = true;
         });
     }
@@ -193,10 +202,7 @@ impl AsyncMutexSink {
         let settings = self.settings.lock().unwrap();
         debug_or_trace!(CAT, settings.is_main_elem, imp = self, "Preparing");
         let stats = if settings.logs_stats {
-            Some(Stats::new(
-                settings.max_buffers,
-                settings.push_period + settings.context_wait / 2,
-            ))
+            Some(Stats::new(settings.push_period + settings.context_wait / 2))
         } else {
             None
         };

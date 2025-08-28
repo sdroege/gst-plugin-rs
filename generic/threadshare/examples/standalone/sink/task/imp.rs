@@ -55,23 +55,33 @@ impl PadSinkHandler for TaskPadSinkHandler {
     ) -> bool {
         let sender = elem.imp().clone_item_sender();
         match event.view() {
-            EventView::Segment(_) => {
-                let _ = sender.send_async(StreamItem::Event(event)).await;
-            }
             EventView::Eos(_) => {
                 let is_main_elem = elem.imp().settings.lock().unwrap().is_main_elem;
-                debug_or_trace!(CAT, is_main_elem, obj = elem, "EOS");
+                if is_main_elem {
+                    gst::info!(CAT, obj = elem, "EOS");
 
-                // When each element sends its own EOS message,
-                // it takes ages for the pipeline to process all of them.
-                // Let's just post an error message and let main shuts down
-                // after all streams have posted this message.
-                let _ =
-                    elem.post_message(gst::message::Error::new(gst::LibraryError::Shutdown, "EOS"));
+                    let _ = elem.post_message(
+                        gst::message::Application::builder(gst::Structure::new_empty(
+                            "ts-standalone-sink/eos",
+                        ))
+                        .src(&elem)
+                        .build(),
+                    );
+                }
             }
             EventView::FlushStop(_) => {
                 let imp = elem.imp();
                 return imp.task.flush_stop().block_on_or_add_subtask(&pad).is_ok();
+            }
+            EventView::Segment(_) => {
+                let _ = sender.send_async(StreamItem::Event(event)).await;
+                let _ = elem.post_message(
+                    gst::message::Application::builder(gst::Structure::new_empty(
+                        "ts-standalone-sink/streaming",
+                    ))
+                    .src(&elem)
+                    .build(),
+                );
             }
             EventView::SinkMessage(evt) => {
                 let _ = elem.post_message(evt.message());
@@ -119,7 +129,7 @@ impl TaskSinkTask {
 
     fn flush(&mut self) {
         // Purge the channel
-        while !self.item_receiver.is_empty() {}
+        while self.item_receiver.try_recv().is_ok() {}
     }
 }
 
@@ -147,6 +157,9 @@ impl TaskImpl for TaskSinkTask {
 
     async fn stop(&mut self) -> Result<(), gst::ErrorMessage> {
         log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Stopping Task");
+        if let Some(ref mut stats) = self.stats {
+            stats.log_global();
+        }
         self.flush();
         Ok(())
     }
@@ -223,7 +236,6 @@ impl TaskSink {
         let settings = self.settings.lock().unwrap();
         let stats = if settings.logs_stats {
             Some(Box::new(Stats::new(
-                settings.max_buffers,
                 settings.push_period + settings.context_wait / 2,
             )))
         } else {

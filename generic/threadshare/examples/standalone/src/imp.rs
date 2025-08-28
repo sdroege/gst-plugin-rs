@@ -204,7 +204,14 @@ impl TaskImpl for SrcTask {
 
         self.buffer_count += 1;
 
-        if self.num_buffers.opt_eq(self.buffer_count) == Some(true) {
+        if self.num_buffers.opt_eq(self.buffer_count).unwrap_or(false) {
+            gst::debug!(CAT, obj = self.elem, "Pushing EOS");
+
+            let imp = self.elem.imp();
+            if !imp.src_pad.push_event(gst::event::Eos::new()).await {
+                gst::error!(CAT, imp = imp, "Error pushing EOS");
+            }
+
             return Err(gst::FlowError::Eos);
         }
 
@@ -213,16 +220,7 @@ impl TaskImpl for SrcTask {
 
     async fn handle_loop_error(&mut self, err: gst::FlowError) -> task::Trigger {
         match err {
-            gst::FlowError::Eos => {
-                debug_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Pushing EOS");
-
-                let imp = self.elem.imp();
-                if !imp.src_pad.push_event(gst::event::Eos::new()).await {
-                    gst::error!(CAT, imp = imp, "Error pushing EOS");
-                }
-
-                task::Trigger::Stop
-            }
+            gst::FlowError::Eos => task::Trigger::Stop,
             gst::FlowError::Flushing => {
                 debug_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Flushing");
 

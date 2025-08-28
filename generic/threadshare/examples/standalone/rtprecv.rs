@@ -71,7 +71,7 @@ fn main() {
             .property("is-live", true)
             .property("context", &ctx_name)
             .property("context-wait", args.wait)
-            .property("num-buffers", args.num_buffers)
+            .property_if("num-buffers", args.num_buffers, i == 0)
             .build()
             .unwrap();
 
@@ -141,19 +141,14 @@ fn main() {
                 sink.set_property("main-elem", true);
 
                 if !args.disable_stats_log {
-                    // Don't use the last 5 secs in stats
-                    // otherwise we get outliers when reaching EOS.
-                    // Note that stats don't start before the 20 first seconds
+                    // Stats don't start before the 20 first seconds
                     // and we get 50 buffers per sec.
                     const BUFFERS_BEFORE_LOGS: i32 = 20 * 50;
-                    const BUFFERS_TO_SKIP: i32 = BUFFERS_BEFORE_LOGS + 5 * 50;
                     let expected_buffers =
                         (args.num_buffers as f32 * (1.0f32 - DROP_PROBABILITY)) as i32;
-                    if expected_buffers > BUFFERS_TO_SKIP {
+                    if expected_buffers > BUFFERS_BEFORE_LOGS {
                         sink.set_property("push-period", args.push_period);
                         sink.set_property("logs-stats", true);
-                        let max_buffers = expected_buffers - BUFFERS_TO_SKIP;
-                        sink.set_property("max-buffers", max_buffers);
                     } else {
                         gst::warning!(CAT, "Not enough buffers to log, disabling stats");
                     }
@@ -200,27 +195,33 @@ fn main() {
             };
 
             match msg.view() {
-                Eos(_) => {
-                    // Actually, we don't post EOS (see sinks impl).
-                    gst::info!(CAT, "Received eos");
-                    l_clone.quit();
-
-                    break;
-                }
-                Error(msg) => {
-                    if let gst::MessageView::Error(msg) = msg.message().view() {
-                        if msg.error().matches(gst::LibraryError::Shutdown) {
+                Application(app_msg) => {
+                    let s = app_msg.structure().unwrap();
+                    match s.name().as_str() {
+                        "ts-standalone-sink/streaming" => {
                             if terminated_count.fetch_add(1, Ordering::SeqCst) == args.streams - 1 {
-                                gst::info!(CAT, "Received all shutdown requests");
-                                l_clone.quit();
-
-                                break;
-                            } else {
-                                continue;
+                                gst::info!(CAT, "Received streaming notification from all sinks");
                             }
                         }
-                    }
+                        "ts-standalone-sink/eos" => {
+                            gst::info!(CAT, "Received eos");
+                            let notifs = terminated_count.load(Ordering::SeqCst);
+                            if notifs != args.streams {
+                                gst::warning!(
+                                    CAT,
+                                    "Got {notifs} streaming notifications, expected {}",
+                                    args.streams
+                                );
+                            }
 
+                            l_clone.quit();
+
+                            break;
+                        }
+                        _ => gst::warning!(CAT, "Unknown {msg:?}"),
+                    }
+                }
+                Error(msg) => {
                     gst::error!(
                         CAT,
                         "Error from {:?}: {} ({:?})",
@@ -250,25 +251,15 @@ fn main() {
         }
     });
 
-    gst::info!(CAT, "Switching to Ready");
     let start = Instant::now();
-    pipeline.set_state(gst::State::Ready).unwrap();
-    gst::info!(CAT, "Switching to Ready took {:.2?}", start.elapsed());
-
     gst::info!(CAT, "Switching to Playing");
-    let start = Instant::now();
     pipeline.set_state(gst::State::Playing).unwrap();
     gst::info!(CAT, "Switching to Playing took {:.2?}", start.elapsed());
 
     l.run();
 
-    gst::info!(CAT, "Switching to Ready");
     let stop = Instant::now();
-    pipeline.set_state(gst::State::Ready).unwrap();
-    gst::info!(CAT, "Switching to Ready took {:.2?}", stop.elapsed());
-
     gst::info!(CAT, "Shutting down");
-    let stop = Instant::now();
     pipeline.set_state(gst::State::Null).unwrap();
     gst::info!(CAT, "Shutting down took {:.2?}", stop.elapsed());
 }

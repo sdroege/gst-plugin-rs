@@ -1,4 +1,3 @@
-use gst::prelude::*;
 use std::fmt::{self, Write};
 use std::time::{Duration, Instant};
 
@@ -14,7 +13,6 @@ pub struct Stats {
     ramp_up_instant: Option<Instant>,
     log_start_instant: Option<Instant>,
     last_delta_instant: Option<Instant>,
-    max_buffers: Option<f32>,
     buffer_count: f32,
     buffer_count_delta: f32,
     lateness_sum: f32,
@@ -41,9 +39,8 @@ pub struct Stats {
 }
 
 impl Stats {
-    pub fn new(max_buffers: Option<u32>, interval_late_warn: Duration) -> Self {
+    pub fn new(interval_late_warn: Duration) -> Self {
         Stats {
-            max_buffers: max_buffers.map(|max_buffers| max_buffers as f32),
             interval_late_warn: interval_late_warn.as_nanos() as i64,
             ..Default::default()
         }
@@ -94,16 +91,7 @@ impl Stats {
             }
         }
 
-        use std::cmp::Ordering::*;
-        match self.max_buffers.opt_cmp(self.buffer_count) {
-            Some(Equal) => {
-                self.log_global();
-                self.buffer_count += 1.0;
-                false
-            }
-            Some(Less) => false,
-            _ => true,
-        }
+        true
     }
 
     pub fn add_buffer(&mut self, lateness: i64, interval: i64) {
@@ -166,7 +154,7 @@ impl Stats {
 
         gst::info!(
             CAT,
-            "o interval: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
+            "* interval: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
             SignedDuration(interval_mean as i64),
             Duration::from_nanos(interval_std_dev as u64),
             SignedDuration(self.interval_min_delta),
@@ -176,7 +164,7 @@ impl Stats {
         if self.interval_late_count_delta > f32::EPSILON {
             gst::warning!(
                 CAT,
-                "o {:5.2}% late buffers",
+                "* {:5.2}% late buffers",
                 100f32 * self.interval_late_count_delta / self.buffer_count_delta
             );
         }
@@ -194,7 +182,7 @@ impl Stats {
 
         gst::info!(
             CAT,
-            "o lateness: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
+            "* lateness: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
             SignedDuration(lateness_mean as i64),
             Duration::from_nanos(lateness_std_dev as u64),
             SignedDuration(self.lateness_min_delta),
@@ -229,7 +217,7 @@ impl Stats {
                 Context::current().unwrap().parked_duration() - self.parked_duration_init;
             gst::info!(
                 CAT,
-                "o parked: {parked_duration:4.2?} ({:5.2?}%)",
+                "* parked: {parked_duration:4.2?} ({:5.2?}%)",
                 (parked_duration.as_nanos() as f32 * 100.0 / duration.as_nanos() as f32)
             );
         }
@@ -240,7 +228,7 @@ impl Stats {
 
         gst::info!(
             CAT,
-            "o interval: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
+            "* interval: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
             SignedDuration(interval_mean as i64),
             Duration::from_nanos(interval_std_dev as u64),
             SignedDuration(self.interval_min),
@@ -250,7 +238,7 @@ impl Stats {
         if self.interval_late_count > f32::EPSILON {
             gst::warning!(
                 CAT,
-                "o {:5.2}% late buffers",
+                "* {:5.2}% late buffers",
                 100f32 * self.interval_late_count / self.buffer_count
             );
         }
@@ -261,7 +249,7 @@ impl Stats {
 
         gst::info!(
             CAT,
-            "o lateness: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
+            "* lateness: mean {:4.2?} σ {:4.1?} [{:4.1?}, {:4.1?}]",
             SignedDuration(lateness_mean as i64),
             Duration::from_nanos(lateness_std_dev as u64),
             SignedDuration(self.lateness_min),

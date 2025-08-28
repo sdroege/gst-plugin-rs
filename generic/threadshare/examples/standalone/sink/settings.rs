@@ -6,7 +6,6 @@ use std::time::Duration;
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: Duration = Duration::from_millis(20);
 const DEFAULT_PUSH_PERIOD: Duration = Duration::from_millis(20);
-const DEFAULT_MAX_BUFFERS: i32 = 50 * (100 - 25);
 
 #[derive(Debug, Clone)]
 pub struct Settings {
@@ -15,7 +14,6 @@ pub struct Settings {
     pub is_main_elem: bool,
     pub logs_stats: bool,
     pub push_period: Duration,
-    pub max_buffers: Option<u32>,
 }
 
 impl Default for Settings {
@@ -26,7 +24,6 @@ impl Default for Settings {
             is_main_elem: false,
             logs_stats: false,
             push_period: DEFAULT_PUSH_PERIOD,
-            max_buffers: Some(DEFAULT_MAX_BUFFERS as u32),
         }
     }
 }
@@ -60,12 +57,6 @@ impl Settings {
                 .blurb("Push period used by `src` element (used for stats warnings)")
                 .default_value(DEFAULT_PUSH_PERIOD.as_millis() as u32)
                 .build(),
-            glib::ParamSpecInt::builder("max-buffers")
-                .nick("Max Buffers")
-                .blurb("Number of buffers to count before stopping stats (-1 = unlimited)")
-                .minimum(-1i32)
-                .default_value(DEFAULT_MAX_BUFFERS)
-                .build(),
         ]
     }
 
@@ -90,10 +81,6 @@ impl Settings {
             "push-period" => {
                 self.push_period = Duration::from_millis(value.get::<u32>().unwrap().into());
             }
-            "max-buffers" => {
-                let value = value.get::<i32>().unwrap();
-                self.max_buffers = if value > 0 { Some(value as u32) } else { None };
-            }
             _ => unimplemented!(),
         }
     }
@@ -104,11 +91,6 @@ impl Settings {
             "context-wait" => (self.context_wait.as_millis() as u32).to_value(),
             "main-elem" => self.is_main_elem.to_value(),
             "push-period" => (self.push_period.as_millis() as u32).to_value(),
-            "max-buffers" => self
-                .max_buffers
-                .and_then(|val| val.try_into().ok())
-                .unwrap_or(-1i32)
-                .to_value(),
             _ => unimplemented!(),
         }
     }
