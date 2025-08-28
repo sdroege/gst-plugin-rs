@@ -26,6 +26,9 @@ pub enum Overflow {
     Overlap = 1,
     #[enum_value(name = "Shift", nick = "shift")]
     Shift = 2,
+    #[cfg(feature = "signalsmith_stretch")]
+    #[enum_value(name = "Compress", nick = "compress")]
+    Compress = 3,
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

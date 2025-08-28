@@ -87,6 +87,20 @@
                         "type": "GstValueArray",
                         "writable": true
                     },
+                    "max-overflow": {
+                        "blurb": "Amount of milliseconds any given text cue is allowed to overflow its intended duration. Only used with mode=compress",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "2000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
                     "overflow": {
                         "blurb": "Defines how output audio with a longer duration than input text should be handled",
                         "conditionally-available": false,
@@ -1715,6 +1729,11 @@
                         "desc": "Shift",
                         "name": "shift",
                         "value": "2"
+                    },
+                    {
+                        "desc": "Compress",
+                        "name": "compress",
+                        "value": "3"
                     }
                 ]
             },
@@ -2810,6 +2829,20 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "max-overflow": {
+                        "blurb": "Amount of milliseconds any given text cue is allowed to overflow its intended duration. Only used with mode=compress",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "2000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
                     "model-id": {
                         "blurb": "ElevenLabs Model ID, see https://help.elevenlabs.io/hc/en-us/articles/21811236079505-How-do-I-find-the-model-ID",
                         "conditionally-available": false,
@@ -2882,6 +2915,11 @@
                         "desc": "Shift",
                         "name": "shift",
                         "value": "2"
+                    },
+                    {
+                        "desc": "Compress",
+                        "name": "compress",
+                        "value": "3"
                     }
                 ]
             }

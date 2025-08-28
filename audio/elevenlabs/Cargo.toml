@@ -19,6 +19,8 @@ serde_json = "1"
 anyhow = "1"
 reqwest = { version = "0.12", default-features = false, features = ["charset", "http2", "system-proxy", "rustls-tls"] }
 rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+signalsmith-stretch = { version = "0.1.2", optional = true }
+bytes = "1"
 
 [lib]
 name = "gstelevenlabs"
@@ -29,9 +31,11 @@ path = "src/lib.rs"
 gst-plugin-version-helper.workspace = true
 
 [features]
+default = ["signalsmith_stretch"]
 static = []
 capi = []
 doc = ["gst/v1_18"]
+signalsmith_stretch = ["dep:signalsmith-stretch"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

@@ -409,6 +409,9 @@ pub enum AwsOverflow {
     Overlap = 1,
     #[enum_value(name = "Shift", nick = "shift")]
     Shift = 2,
+    #[cfg(feature = "signalsmith_stretch")]
+    #[enum_value(name = "Compress", nick = "compress")]
+    Compress = 3,
 }
 
 glib::wrapper! {

@@ -24,6 +24,8 @@ use std::sync::LazyLock;
 use super::{AwsOverflow, AwsPollyEngine, AwsPollyLanguageCode, AwsPollyVoiceId, CAT};
 use crate::s3utils::RUNTIME;
 use anyhow::{anyhow, Error};
+#[cfg(feature = "signalsmith_stretch")]
+use signalsmith_stretch::Stretch;
 
 #[allow(deprecated)]
 static AWS_BEHAVIOR_VERSION: LazyLock<aws_config::BehaviorVersion> =
@@ -36,6 +38,7 @@ const DEFAULT_LANGUAGE_CODE: AwsPollyLanguageCode = AwsPollyLanguageCode::None;
 const DEFAULT_VOICE_ID: AwsPollyVoiceId = AwsPollyVoiceId::Aria;
 const DEFAULT_SSML_SET_MAX_DURATION: bool = false;
 const DEFAULT_OVERFLOW: AwsOverflow = AwsOverflow::Clip;
+const DEFAULT_MAX_OVERFLOW: gst::ClockTime = gst::ClockTime::from_seconds(0);
 
 #[derive(Debug, Clone)]
 pub(super) struct Settings {
@@ -49,6 +52,7 @@ pub(super) struct Settings {
     lexicon_names: gst::Array,
     ssml_set_max_duration: bool,
     overflow: AwsOverflow,
+    max_overflow: gst::ClockTime,
 }
 
 impl Default for Settings {
@@ -64,6 +68,7 @@ impl Default for Settings {
             lexicon_names: gst::Array::default(),
             ssml_set_max_duration: DEFAULT_SSML_SET_MAX_DURATION,
             overflow: DEFAULT_OVERFLOW,
+            max_overflow: DEFAULT_MAX_OVERFLOW,
         }
     }
 }
@@ -75,6 +80,8 @@ struct State {
     in_format: Option<aws_sdk_polly::types::TextType>,
     // (live, min, max)
     upstream_latency: Option<(bool, gst::ClockTime, Option<gst::ClockTime>)>,
+    #[cfg(feature = "signalsmith_stretch")]
+    stretch: Option<Stretch>,
 }
 
 impl Default for State {
@@ -85,6 +92,8 @@ impl Default for State {
             send_abort_handle: None,
             in_format: None,
             upstream_latency: None,
+            #[cfg(feature = "signalsmith_stretch")]
+            stretch: None,
         }
     }
 }
@@ -177,47 +186,34 @@ impl Polly {
             Gap(g) => {
                 let (pts, duration) = g.get();
 
-                let overflow = self.settings.lock().unwrap().overflow;
-
                 let mut state = self.state.lock().unwrap();
 
-                let new_gap_event = match overflow {
-                    AwsOverflow::Clip => {
-                        state.out_segment.set_position(match duration {
-                            Some(duration) => duration + pts,
-                            _ => pts,
-                        });
-                        Some(event.clone())
-                    }
-                    AwsOverflow::Shift | AwsOverflow::Overlap => {
-                        if let Some(position) = state.out_segment.position() {
-                            if let Some(duration) = duration {
-                                let end_pts = pts + duration;
+                let new_gap_event = if let Some(position) = state.out_segment.position() {
+                    if let Some(duration) = duration {
+                        let end_pts = pts + duration;
 
-                                if end_pts > position {
-                                    // Output our own gap event that starts at our current position
-                                    Some(
-                                        gst::event::Gap::builder(position)
-                                            .duration(end_pts - position)
-                                            .seqnum(event.seqnum())
-                                            .build(),
-                                    )
-                                } else {
-                                    // We have already advanced past this gap's end
-                                    None
-                                }
-                            } else if pts > position {
-                                Some(gst::event::Gap::builder(pts).seqnum(event.seqnum()).build())
-                            } else {
-                                // This duration-less gap was older that our current position, do
-                                // nothing
-                                None
-                            }
+                        if end_pts > position {
+                            // Output our own gap event that starts at our current position
+                            Some(
+                                gst::event::Gap::builder(position)
+                                    .duration(end_pts - position)
+                                    .seqnum(event.seqnum())
+                                    .build(),
+                            )
                         } else {
-                            // Position wasn't set yet, the gap can be forwarded unchanged
-                            Some(event.clone())
+                            // We have already advanced past this gap's end
+                            None
                         }
+                    } else if pts > position {
+                        Some(gst::event::Gap::builder(pts).seqnum(event.seqnum()).build())
+                    } else {
+                        // This duration-less gap was older that our current position, do
+                        // nothing
+                        None
                     }
+                } else {
+                    // Position wasn't set yet, the gap can be forwarded unchanged
+                    Some(event.clone())
                 };
 
                 if let Some(ref event) = new_gap_event {
@@ -298,7 +294,7 @@ impl Polly {
                         input_duration.mseconds()
                     )
                 } else {
-                    content
+                    content.clone()
                 })
                 .voice_id(settings.voice_id.into())
                 .set_lexicon_names(Some(
@@ -346,6 +342,70 @@ impl Polly {
             );
 
             bytes.truncate(max_expected_bytes as usize);
+        }
+
+        #[cfg(feature = "signalsmith_stretch")]
+        if matches!(overflow, AwsOverflow::Compress) {
+            let max_overflow = self.settings.lock().unwrap().max_overflow;
+            let overflow_budget = match self.state.lock().unwrap().out_segment.position() {
+                Some(position) => {
+                    if pts > position {
+                        max_overflow
+                    } else {
+                        let budget = pts + max_overflow - position;
+                        pts = position;
+                        budget
+                    }
+                }
+                None => 2 * gst::ClockTime::SECOND,
+            };
+
+            gst::debug!(CAT, "Overflow budget: {}", overflow_budget);
+
+            let max_expected_bytes = (input_duration + overflow_budget)
+                .nseconds()
+                .mul_div_floor(32_000, 1_000_000_000)
+                .unwrap()
+                / 2
+                * 2;
+
+            gst::log!(
+                CAT,
+                "max expected bytes for duration {input_duration} is {max_expected_bytes}"
+            );
+
+            if bytes.len() > max_expected_bytes as usize {
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "compressing {content} by a factor of {}",
+                    bytes.len() as f64 / max_expected_bytes as f64
+                );
+
+                let samples: Vec<_> = bytes
+                    .chunks_exact(2)
+                    .map(|chunk| {
+                        let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
+                        (sample as f32) / 32768.
+                    })
+                    .collect();
+                let mut output = vec![0.0f32; (max_expected_bytes / 2) as usize];
+                let mut state = self.state.lock().unwrap();
+                state.stretch.as_mut().unwrap().exact(samples, &mut output);
+
+                bytes.truncate(max_expected_bytes as usize);
+                let mut bytes_mut: bytes::BytesMut = bytes.into();
+
+                for (out_bytes, sample) in
+                    Iterator::zip(bytes_mut.chunks_exact_mut(2), output.iter())
+                {
+                    let scaled_sample = f32::clamp(sample * 32_768., -32_768., 32_767.) as i16;
+                    let chunk = scaled_sample.to_le_bytes();
+                    out_bytes.copy_from_slice(&chunk);
+                }
+
+                bytes = bytes_mut.into();
+            }
         }
 
         let duration = gst::ClockTime::from_nseconds(
@@ -632,6 +692,15 @@ impl Polly {
 
         *self.aws_config.lock().unwrap() = Some(config);
 
+        #[cfg(feature = "signalsmith_stretch")]
+        if matches!(
+            self.settings.lock().unwrap().overflow,
+            AwsOverflow::Compress
+        ) {
+            self.state.lock().unwrap().stretch =
+                Some(signalsmith_stretch::Stretch::preset_default(1, 16_000));
+        }
+
         gst::debug!(CAT, imp = self, "Prepared");
 
         Ok(())
@@ -805,6 +874,13 @@ impl ObjectImpl for Polly {
                     .blurb("Defines how output audio with a longer duration than input text should be handled")
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecUInt::builder("max-overflow")
+                    .nick("Max Overflow")
+                    .blurb("Amount of milliseconds any given text cue is allowed to overflow \
+                        its intended duration. Only used with mode=compress")
+                    .default_value(DEFAULT_MAX_OVERFLOW.mseconds() as u32)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -869,6 +945,12 @@ impl ObjectImpl for Polly {
                 let mut settings = self.settings.lock().unwrap();
                 settings.overflow = value.get::<AwsOverflow>().expect("type checked upstream");
             }
+            "max-overflow" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.max_overflow = gst::ClockTime::from_mseconds(
+                    value.get::<u32>().expect("type checked upstream").into(),
+                );
+            }
             _ => unimplemented!(),
         }
     }
@@ -914,6 +996,10 @@ impl ObjectImpl for Polly {
             "overflow" => {
                 let settings = self.settings.lock().unwrap();
                 settings.overflow.to_value()
+            }
+            "max-overflow" => {
+                let settings = self.settings.lock().unwrap();
+                (settings.latency.mseconds() as u32).to_value()
             }
             _ => unimplemented!(),
         }

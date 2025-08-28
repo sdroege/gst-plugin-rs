@@ -39,6 +39,7 @@ url = "2"
 gst-video = { workspace = true, features = ["v1_22"] }
 sprintf = "0.4"
 anyhow = "1"
+signalsmith-stretch = { version = "0.1.2", optional = true }
 
 [dev-dependencies]
 chrono = { version = "0.4", features = [ "alloc" ] }
@@ -56,9 +57,11 @@ path = "src/lib.rs"
 gst-plugin-version-helper.workspace = true
 
 [features]
+default = ["signalsmith_stretch"]
 static = []
 capi = []
 doc = ["gst/v1_18"]
+signalsmith_stretch = ["dep:signalsmith-stretch"]
 
 [package.metadata.capi]
 min_version = "0.9.21"
