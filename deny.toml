@@ -260,12 +260,6 @@ version = "0.5"
 name = "http-body"
 version = "0.4"
 [[bans.skip]]
-name = "headers-core"
-version = "0.2"
-[[bans.skip]]
-name = "headers"
-version = "0.3"
-[[bans.skip]]
 name = "h2"
 version = "0.3"
 [[bans.skip]]
@@ -294,6 +288,11 @@ version = "0.101"
 [[bans.skip]]
 name = "rustls-webpki"
 version = "0.102"
+
+# hyper-rustls via librespot uses an old version
+[[bans.skip]]
+name = "rustls"
+version = "0.22"
 
 # various crates depend on an older version of windows-sys
 [[bans.skip]]
@@ -385,11 +384,6 @@ version = "0.38"
 [[bans.skip]]
 name = "linux-raw-sys"
 version = "0.4"
-
-# quinn-proto / rustls-platform-verifier depends on an old version
-[[bans.skip]]
-name = "webpki-root-certs"
-version = "0.26"
 
 # hyper depends on an old version of socket2
 [[bans.skip]]
