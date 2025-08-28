@@ -373,11 +373,11 @@ impl AppSrc {
         *self.configured_caps.lock().unwrap() = None;
 
         let (sender, receiver) = mpsc::channel(max_buffers);
+        *self.sender.lock().unwrap() = Some(sender);
         self.task
             .prepare(AppSrcTask::new(self.obj().clone(), receiver), context)
-            .block_on_or_add_subtask_then(self.obj(), move |elem, res| {
+            .block_on_or_add_subtask_then(self.obj(), |elem, res| {
                 if res.is_ok() {
-                    *elem.imp().sender.lock().unwrap() = Some(sender);
                     gst::debug!(CAT, obj = elem, "Prepared");
                 }
             })
