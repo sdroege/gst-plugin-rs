@@ -75,10 +75,15 @@ pub mod imp {
         IP_MULTICAST_IF,
     };
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     use libc::ip_mreq;
 
-    #[cfg(any(target_os = "solaris", target_os = "illumos", target_os = "macos"))]
+    #[cfg(any(
+        target_os = "solaris",
+        target_os = "illumos",
+        target_os = "macos",
+        target_os = "ios"
+    ))]
     use std::net::Ipv4Addr;
 
     /// Join multicast address for a given interface.
@@ -107,7 +112,12 @@ pub mod imp {
     ) -> Result<(), io::Error> {
         let index = iface.index.unwrap_or(0);
 
-        #[cfg(not(any(target_os = "solaris", target_os = "illumos", target_os = "macos")))]
+        #[cfg(not(any(
+            target_os = "solaris",
+            target_os = "illumos",
+            target_os = "macos",
+            target_os = "ios"
+        )))]
         {
             let group_op: i32 = if join {
                 IP_ADD_MEMBERSHIP
@@ -255,7 +265,7 @@ pub mod imp {
             Ok(())
         }
 
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
         {
             use getifaddrs::Address;
 
