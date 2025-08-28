@@ -112,6 +112,8 @@ fn main() {
                 return;
             }
 
+            let sub_ctx_name = format!("standalone {}.sub", i % args.groups);
+
             let depay = gst::ElementFactory::make("rtpL16depay")
                 .name(format!("depay-{i}").as_str())
                 .build()
@@ -119,7 +121,7 @@ fn main() {
 
             let queue = gst::ElementFactory::make("ts-queue")
                 .name(format!("queue-sink-{i}").as_str())
-                .property("context", &ctx_name)
+                .property("context", &sub_ctx_name)
                 .property("context-wait", args.wait)
                 .property("max-size-buffers", 0u32)
                 .property("max-size-bytes", 0u32)
@@ -132,7 +134,7 @@ fn main() {
 
             let sink = gst::ElementFactory::make(args.sink.element_name())
                 .name(format!("sink-{i}").as_str())
-                .property("context", &ctx_name)
+                .property("context", &sub_ctx_name)
                 .property("context-wait", args.wait)
                 .build()
                 .unwrap();
