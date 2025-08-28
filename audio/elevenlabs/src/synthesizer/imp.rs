@@ -520,7 +520,7 @@ impl Synthesizer {
                     let delta = current_rtime - deadline;
                     gst::warning!(
                         CAT,
-                        "received running time {buffer_rtime} < current rtime {current_rtime}, shifting forward by {delta}, consider increasing latency"
+                        "received running time {buffer_rtime} + {upstream_min} + {our_latency} < current rtime {current_rtime}, shifting forward by {delta}, consider increasing latency"
                     );
 
                     pts += delta;
