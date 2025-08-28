@@ -437,10 +437,11 @@ impl TaskImpl for UdpSrcTask {
                         name: "default".to_owned(),
                         #[cfg(windows)]
                         description: "default".to_owned(),
-                        address: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-                        #[cfg(not(windows))]
-                        associated_address: None,
-                        netmask: None,
+                        address: getifaddrs::Address::V4(getifaddrs::NetworkAddress {
+                            address: Ipv4Addr::UNSPECIFIED,
+                            netmask: None,
+                            associated_address: None,
+                        }),
                         flags: getifaddrs::InterfaceFlags::UP,
                         index: Some(0),
                     });
