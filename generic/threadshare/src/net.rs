@@ -25,7 +25,6 @@ pub mod imp {
     use libc::ip_mreq;
 
     #[cfg(any(target_os = "solaris", target_os = "illumos", target_os = "macos"))]
-    use std::net::IpAddr;
     use std::net::Ipv4Addr;
 
     /// Join multicast address for a given interface.
@@ -204,9 +203,12 @@ pub mod imp {
 
         #[cfg(target_os = "macos")]
         {
-            let ip_addr = match iface.address {
-                IpAddr::V4(ipv4_addr) => ipv4_addr,
-                IpAddr::V6(_) => return Err(io::Error::other("Interface address is IPv6")),
+            use getifaddrs::Address;
+
+            let ip_addr = match &iface.address {
+                Address::V4(ifaddr) => ifaddr.address,
+                Address::V6(_) => return Err(io::Error::other("Interface address is IPv6")),
+                Address::Mac(_) => return Err(io::Error::other("Interface address is Mac")),
             };
 
             let mreq = ip_mreq {
