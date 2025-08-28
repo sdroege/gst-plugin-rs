@@ -30,7 +30,7 @@ slab = "0.4.7"
 socket2 = {features = ["all"], version = "0.6"}
 thiserror = "2"
 waker-fn = "1.1"
-getifaddrs = "0.2"
+getifaddrs = "0.5"
 libc = "0.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
