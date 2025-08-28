@@ -203,15 +203,22 @@ impl PadSrcInner {
     }
 
     pub async fn push(&self, buffer: gst::Buffer) -> Result<FlowSuccess, FlowError> {
-        gst::log!(RUNTIME_CAT, obj = self.gst_pad, "Pushing {:?}", buffer);
+        gst::log!(RUNTIME_CAT, obj = self.gst_pad, "Pushing {buffer:?}");
 
         let success = self.gst_pad.push(buffer).inspect_err(|&err| {
-            gst::error!(
-                RUNTIME_CAT,
-                obj = self.gst_pad,
-                "Failed to push Buffer to PadSrc: {:?}",
-                err,
-            );
+            if err == gst::FlowError::Flushing {
+                gst::debug!(
+                    RUNTIME_CAT,
+                    obj = self.gst_pad,
+                    "Failed to push Buffer to PadSrc: Flushing"
+                );
+            } else {
+                gst::error!(
+                    RUNTIME_CAT,
+                    obj = self.gst_pad,
+                    "Failed to push Buffer to PadSrc: {err:?}"
+                );
+            }
         })?;
 
         gst::log!(
