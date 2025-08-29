@@ -14,7 +14,11 @@ use getifaddrs::Interface;
 pub mod imp {
     use super::*;
 
-    use std::{io, mem, net::UdpSocket, os::unix::io::AsRawFd};
+    use std::{
+        io, mem,
+        net::{Ipv4Addr, UdpSocket},
+        os::unix::io::AsRawFd,
+    };
 
     use libc::{
         in_addr, ip_mreqn, setsockopt, IPPROTO_IP, IP_ADD_MEMBERSHIP, IP_DROP_MEMBERSHIP,
@@ -23,14 +27,6 @@ pub mod imp {
 
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     use libc::ip_mreq;
-
-    #[cfg(any(
-        target_os = "solaris",
-        target_os = "illumos",
-        target_os = "macos",
-        target_os = "ios"
-    ))]
-    use std::net::Ipv4Addr;
 
     /// Join multicast address for a given interface.
     pub fn join_multicast_v4(
