@@ -26,6 +26,7 @@ PARSER.add_argument('--examples', nargs='+', default=[])
 PARSER.add_argument('--lib-suffixes', nargs='+', default=[])
 PARSER.add_argument('--exe-suffix')
 PARSER.add_argument('--depfile', type=P)
+PARSER.add_argument('--target-dir', type=P, default=None)
 PARSER.add_argument('--disable-doc', action='store_true', default=False)
 
 
@@ -95,7 +96,11 @@ if __name__ == '__main__':
     logfile = open(logfile_path, mode='w', buffering=1, encoding='utf-8')
 
     print(opts, file=logfile)
-    cargo_target_dir = opts.build_dir / 'target'
+    # Use explicitly passed target dir or default to build_dir/target
+    if opts.target_dir:
+        cargo_target_dir = opts.target_dir
+    else:
+        cargo_target_dir = opts.build_dir / 'target'
 
     env = os.environ.copy()
     if 'PKG_CONFIG_PATH' in env:
