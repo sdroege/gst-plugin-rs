@@ -556,7 +556,7 @@ impl Accumulate {
 
         let (latency, lateness) = {
             let settings = self.settings.lock().unwrap();
-            (settings.latency, settings.latency)
+            (settings.latency, settings.lateness)
         };
 
         loop {
@@ -669,7 +669,7 @@ impl Accumulate {
                     if let Some(now) = this.obj().current_running_time() {
                         let (latency, lateness) = {
                             let settings = this.settings.lock().unwrap();
-                            (settings.latency, settings.latency)
+                            (settings.latency, settings.lateness)
                         };
 
                         if let Some(next_rtime) = this
