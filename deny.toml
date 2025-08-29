@@ -47,7 +47,7 @@ version = "3.2"
 
 # Allow LGPL 2.1 for the threadshare plugin as it includes some LGPL code
 [[licenses.exceptions]]
-allow = ["LGPL-2.1"]
+allow = ["LGPL-2.1-or-later"]
 name = "gst-plugin-threadshare"
 
 [bans]
@@ -254,9 +254,6 @@ version = "0.4"
 name = "hyper"
 version = "0.14"
 [[bans.skip]]
-name = "hyper-tls"
-version = "0.5"
-[[bans.skip]]
 name = "http-body"
 version = "0.4"
 [[bans.skip]]
@@ -384,6 +381,11 @@ version = "0.38"
 [[bans.skip]]
 name = "linux-raw-sys"
 version = "0.4"
+
+# reqwest 0.11 via librespot/livekit depends on an old version
+[[bans.skip]]
+name = "webpki-roots"
+version = "0.25"
 
 # hyper depends on an old version of socket2
 [[bans.skip]]
