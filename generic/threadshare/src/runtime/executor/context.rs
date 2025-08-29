@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::task::{self, Poll};
 use std::time::Duration;
 
-use super::{Handle, HandleWeak, JoinHandle, Scheduler, SubTaskOutput, TaskId};
+use super::{scheduler, JoinHandle, SubTaskOutput, TaskId};
 use crate::runtime::RUNTIME_CAT;
 
 // We are bound to using `sync` for the `runtime` `Mutex`es. Attempts to use `async` `Mutex`es
@@ -82,15 +82,8 @@ where
     Fut: Future + Send + 'static,
     Fut::Output: Send + 'static,
 {
-    if let Some(context) = Context::current() {
-        let msg = format!("Attempt to block within Context {}", context.name());
-        gst::error!(RUNTIME_CAT, "{}", msg);
-        panic!("{}", msg);
-    }
-
-    // Not running in a Context thread so we can block
-    gst::debug!(RUNTIME_CAT, "Blocking on new dummy context");
-    Scheduler::block_on(future)
+    gst::log!(RUNTIME_CAT, "Blocking on local thread");
+    scheduler::Blocking::block_on(future)
 }
 
 /// Yields execution back to the runtime.
@@ -118,7 +111,7 @@ impl Future for YieldNow {
 }
 
 #[derive(Clone, Debug)]
-pub struct ContextWeak(HandleWeak);
+pub struct ContextWeak(scheduler::ThrottlingHandleWeak);
 
 impl ContextWeak {
     pub fn upgrade(&self) -> Option<Context> {
@@ -137,7 +130,7 @@ impl ContextWeak {
 /// [`PadSrc`]: ../pad/struct.PadSrc.html
 /// [`PadSink`]: ../pad/struct.PadSink.html
 #[derive(Clone, Debug)]
-pub struct Context(Handle);
+pub struct Context(scheduler::ThrottlingHandle);
 
 impl PartialEq for Context {
     fn eq(&self, other: &Self) -> bool {
@@ -149,8 +142,6 @@ impl Eq for Context {}
 
 impl Context {
     pub fn acquire(context_name: &str, wait: Duration) -> Result<Self, io::Error> {
-        assert_ne!(context_name, Scheduler::DUMMY_NAME);
-
         let mut contexts = CONTEXTS.lock().unwrap();
 
         if let Some(context_weak) = contexts.get(context_name) {
@@ -160,14 +151,13 @@ impl Context {
             }
         }
 
-        let context = Context(Scheduler::start(context_name, wait));
+        let context = Context(scheduler::Throttling::start(context_name, wait));
         contexts.insert(context_name.into(), context.downgrade());
 
         gst::debug!(
             RUNTIME_CAT,
-            "New Context '{}' throttling {:?}",
+            "New Context '{}' throttling {wait:?}",
             context.name(),
-            wait,
         );
         Ok(context)
     }
@@ -197,20 +187,20 @@ impl Context {
 
     /// Returns `true` if a `Context` is running on current thread.
     pub fn is_context_thread() -> bool {
-        Scheduler::is_scheduler_thread()
+        scheduler::Throttling::is_throttling_thread()
     }
 
     /// Returns the `Context` running on current thread, if any.
     pub fn current() -> Option<Context> {
-        Scheduler::current().map(Context)
+        scheduler::Throttling::current().map(Context)
     }
 
     /// Returns the `TaskId` running on current thread, if any.
     pub fn current_task() -> Option<(Context, TaskId)> {
-        Scheduler::current().map(|scheduler| {
-            // Context users always operate on a Task
-            (Context(scheduler), TaskId::current().unwrap())
-        })
+        Option::zip(
+            scheduler::Throttling::current().map(Context),
+            TaskId::current(),
+        )
     }
 
     /// Executes the provided function relatively to this [`Context`].
@@ -293,8 +283,8 @@ impl Context {
     }
 }
 
-impl From<Handle> for Context {
-    fn from(handle: Handle) -> Self {
+impl From<scheduler::ThrottlingHandle> for Context {
+    fn from(handle: scheduler::ThrottlingHandle) -> Self {
         Context(handle)
     }
 }
@@ -309,7 +299,6 @@ mod tests {
     use std::sync::Arc;
     use std::time::{Duration, Instant};
 
-    use super::super::Scheduler;
     use super::Context;
     use crate::runtime::Async;
 
@@ -318,29 +307,6 @@ mod tests {
     const SLEEP_DURATION_MS: u64 = 2;
     const SLEEP_DURATION: Duration = Duration::from_millis(SLEEP_DURATION_MS);
     const DELAY: Duration = Duration::from_millis(SLEEP_DURATION_MS * 10);
-
-    #[test]
-    fn block_on_task_id() {
-        gst::init().unwrap();
-
-        assert!(!Context::is_context_thread());
-
-        crate::runtime::executor::block_on(async {
-            let (ctx, task_id) = Context::current_task().unwrap();
-            assert_eq!(ctx.name(), Scheduler::DUMMY_NAME);
-            assert_eq!(task_id, super::TaskId(0));
-
-            let res = ctx.add_sub_task(task_id, async move {
-                let (_ctx, task_id) = Context::current_task().unwrap();
-                assert_eq!(task_id, super::TaskId(0));
-                Ok(())
-            });
-            assert!(res.is_ok());
-            assert!(Context::is_context_thread());
-        });
-
-        assert!(!Context::is_context_thread());
-    }
 
     #[test]
     fn block_on_timer() {

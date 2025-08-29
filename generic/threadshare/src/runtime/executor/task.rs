@@ -72,7 +72,7 @@ impl<F: Future> Future for TaskFuture<F> {
     }
 }
 
-struct Task {
+pub(super) struct Task {
     id: TaskId,
     sub_tasks: VecDeque<BoxFuture<'static, SubTaskOutput>>,
 }
@@ -102,63 +102,49 @@ impl fmt::Debug for Task {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct TaskQueue {
     runnables: Arc<ConcurrentQueue<Runnable>>,
-    // FIXME good point about using a slab is that it's probably faster than a HashMap
-    // However since we reuse the vacant entries, we get the same TaskId
-    // which can harm debugging. If this is not acceptable, I'll switch back to using
-    // a HashMap.
     tasks: Arc<Mutex<Slab<Task>>>,
-    context_name: Arc<str>,
 }
 
-impl TaskQueue {
-    pub fn new(context_name: Arc<str>) -> Self {
+impl Default for TaskQueue {
+    fn default() -> Self {
         TaskQueue {
             runnables: Arc::new(ConcurrentQueue::unbounded()),
             tasks: Arc::new(Mutex::new(Slab::new())),
-            context_name,
         }
     }
+}
 
+impl TaskQueue {
     pub fn add<F>(&self, future: F) -> (TaskId, async_task::Task<<F as Future>::Output>)
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        let tasks_clone = Arc::clone(&self.tasks);
+        let tasks_weak = Arc::downgrade(&self.tasks);
         let mut tasks = self.tasks.lock().unwrap();
         let task_id = TaskId(tasks.vacant_entry().key());
 
-        let context_name = Arc::clone(&self.context_name);
         let task_fut = async move {
-            gst::trace!(
-                RUNTIME_CAT,
-                "Running {:?} on context {}",
-                task_id,
-                context_name
-            );
+            gst::trace!(RUNTIME_CAT, "Running {task_id:?}");
 
             let _guard = CallOnDrop::new(move || {
-                if let Some(task) = tasks_clone.lock().unwrap().try_remove(task_id.0) {
+                if let Some(task) = tasks_weak
+                    .upgrade()
+                    .and_then(|tasks| tasks.lock().unwrap().try_remove(task_id.0))
+                {
                     if !task.sub_tasks.is_empty() {
                         gst::warning!(
                             RUNTIME_CAT,
-                            "Task {:?} on context {} has {} pending sub tasks",
-                            task_id,
-                            context_name,
+                            "Task {task_id:?} has {} pending sub tasks",
                             task.sub_tasks.len(),
                         );
                     }
                 }
 
-                gst::trace!(
-                    RUNTIME_CAT,
-                    "Done {:?} on context {}",
-                    task_id,
-                    context_name
-                );
+                gst::trace!(RUNTIME_CAT, "Done {task_id:?}",);
             });
 
             TaskFuture {
@@ -195,24 +181,13 @@ impl TaskQueue {
         let mut tasks = self.tasks.lock().unwrap();
         let task_id = TaskId(tasks.vacant_entry().key());
 
-        let context_name = Arc::clone(&self.context_name);
         let task_fut = async move {
-            gst::trace!(
-                RUNTIME_CAT,
-                "Executing sync function on context {} as {:?}",
-                context_name,
-                task_id,
-            );
+            gst::trace!(RUNTIME_CAT, "Executing sync function as {task_id:?}");
 
             let _guard = CallOnDrop::new(move || {
                 let _ = tasks_clone.lock().unwrap().try_remove(task_id.0);
 
-                gst::trace!(
-                    RUNTIME_CAT,
-                    "Done executing sync function on context {} as {:?}",
-                    context_name,
-                    task_id,
-                );
+                gst::trace!(RUNTIME_CAT, "Done executing sync function as {task_id:?}");
             });
 
             f()
@@ -243,12 +218,7 @@ impl TaskQueue {
         let mut state = self.tasks.lock().unwrap();
         match state.get_mut(task_id.0) {
             Some(task) => {
-                gst::trace!(
-                    RUNTIME_CAT,
-                    "Adding subtask to {:?} on context {}",
-                    task_id,
-                    self.context_name
-                );
+                gst::trace!(RUNTIME_CAT, "Adding subtask to {task_id:?}");
                 task.add_sub_task(sub_task);
                 Ok(())
             }
@@ -268,10 +238,8 @@ impl TaskQueue {
 
             gst::trace!(
                 RUNTIME_CAT,
-                "Scheduling draining {} sub tasks from {:?} on '{}'",
+                "Draining {} sub tasks from {task_id:?}",
                 sub_tasks.len(),
-                task_id,
-                self.context_name,
             );
 
             for sub_task in sub_tasks.drain(..) {

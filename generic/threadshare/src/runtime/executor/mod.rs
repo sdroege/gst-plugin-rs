@@ -35,7 +35,6 @@ use reactor::{Reactor, Readable, ReadableOwned, Registration, Source, Writable, 
 // We need the `Mutex<bool>` to work in pair with `Condvar`.
 #[allow(clippy::mutex_atomic)]
 mod scheduler;
-use scheduler::{Handle, HandleWeak, Scheduler};
 
 mod task;
 pub use task::{SubTaskOutput, TaskId};

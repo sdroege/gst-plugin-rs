@@ -508,7 +508,7 @@ impl FusedStream for IntervalAfter {
 mod tests {
     use std::time::{Duration, Instant};
 
-    use crate::runtime::executor::Scheduler;
+    use crate::runtime::executor::scheduler;
 
     const MAX_THROTTLING: Duration = Duration::from_millis(10);
     const DELAY: Duration = Duration::from_millis(12);
@@ -518,7 +518,7 @@ mod tests {
     fn delay_for_regular() {
         gst::init().unwrap();
 
-        let handle = Scheduler::start("delay_for_regular", MAX_THROTTLING);
+        let handle = scheduler::Throttling::start("delay_for_regular", MAX_THROTTLING);
 
         futures::executor::block_on(handle.spawn(async {
             let start = Instant::now();
@@ -533,7 +533,7 @@ mod tests {
     fn delay_for_at_least() {
         gst::init().unwrap();
 
-        let handle = Scheduler::start("delay_for_at_least", MAX_THROTTLING);
+        let handle = scheduler::Throttling::start("delay_for_at_least", MAX_THROTTLING);
 
         futures::executor::block_on(handle.spawn(async {
             let start = Instant::now();
@@ -550,7 +550,7 @@ mod tests {
 
         gst::init().unwrap();
 
-        let handle = Scheduler::start("interval_regular", MAX_THROTTLING);
+        let handle = scheduler::Throttling::start("interval_regular", MAX_THROTTLING);
 
         let join_handle = handle.spawn(async move {
             let mut acc = Duration::ZERO;
@@ -578,7 +578,7 @@ mod tests {
 
         gst::init().unwrap();
 
-        let handle = Scheduler::start("interval_after", MAX_THROTTLING);
+        let handle = scheduler::Throttling::start("interval_after", MAX_THROTTLING);
 
         let join_handle = handle.spawn(async move {
             let mut acc = DELAY;
