@@ -115,6 +115,9 @@ impl PadSinkHandler for SyncPadSinkHandler {
                 let is_main_elem = elem.imp().settings.lock().unwrap().is_main_elem;
                 if is_main_elem {
                     gst::info!(CAT, obj = elem, "EOS");
+                    if let Some(ref mut stats) = self.0.lock().unwrap().stats {
+                        stats.log_global();
+                    }
                     let _ = elem.post_message(
                         gst::message::Application::builder(gst::Structure::new_empty(
                             "ts-standalone-sink/eos",
@@ -175,11 +178,7 @@ impl SyncPadSinkHandler {
     }
 
     fn stop(&self) {
-        let mut inner = self.0.lock().unwrap();
-        if let Some(ref mut stats) = inner.stats {
-            stats.log_global();
-        }
-        inner.is_flushing = true;
+        self.0.lock().unwrap().is_flushing = true;
     }
 }
 

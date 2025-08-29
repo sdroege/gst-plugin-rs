@@ -60,6 +60,12 @@ impl PadSinkHandler for TaskPadSinkHandler {
                 if is_main_elem {
                     gst::info!(CAT, obj = elem, "EOS");
 
+                    let _ = elem
+                        .imp()
+                        .clone_item_sender()
+                        .send_async(StreamItem::Event(event))
+                        .await;
+
                     let _ = elem.post_message(
                         gst::message::Application::builder(gst::Structure::new_empty(
                             "ts-standalone-sink/eos",
@@ -157,9 +163,6 @@ impl TaskImpl for TaskSinkTask {
 
     async fn stop(&mut self) -> Result<(), gst::ErrorMessage> {
         log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Stopping Task");
-        if let Some(ref mut stats) = self.stats {
-            stats.log_global();
-        }
         self.flush();
         Ok(())
     }
@@ -207,11 +210,17 @@ impl TaskImpl for TaskSinkTask {
 
                 log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Buffer processed");
             }
-            StreamItem::Event(evt) => {
-                if let EventView::Segment(evt) = evt.view() {
+            StreamItem::Event(evt) => match evt.view() {
+                EventView::Eos(_) => {
+                    if let Some(ref mut stats) = self.stats {
+                        stats.log_global();
+                    }
+                }
+                EventView::Segment(evt) => {
                     self.segment = evt.segment().downcast_ref::<gst::ClockTime>().cloned();
                 }
-            }
+                _ => (),
+            },
         }
 
         Ok(())
