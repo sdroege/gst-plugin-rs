@@ -83,7 +83,7 @@ def generate_depfile_for(fpath, build_start_time, logfile=None):
                         else:
                             print(f'Not found', file=logfile)
 
-                depfile_content += f'{output}: {' '.join(all_deps)}\n'
+                depfile_content += f"{output}: {' '.join(all_deps)}\n"
 
     return depfile_content
 
