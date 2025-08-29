@@ -217,6 +217,7 @@ enum AccumulateInput {
     },
     Event(gst::Event),
     Query(std::ptr::NonNull<gst::QueryRef>),
+    RecalculateTimeout,
 }
 
 // SAFETY: Need to be able to pass *mut gst::QueryRef
@@ -740,6 +741,9 @@ impl Accumulate {
                             this.state.lock().unwrap().serialized_query_return = Some(res);
                             this.serialized_query_cond.notify_all();
                         }
+                        AccumulateInput::RecalculateTimeout => {
+                            continue;
+                        }
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {
@@ -844,6 +848,19 @@ impl Accumulate {
             gst::log!(CAT, imp = self, "drained next sentence: {:#?}", items);
             if let Some(tx) = state.accumulate_tx.as_ref() {
                 let _ = tx.send(AccumulateInput::Items(items));
+            }
+        }
+
+        // The queue was empty and has started filling up again, recalculate timeout
+        if state
+            .input
+            .as_ref()
+            .map(|input| input.items.len())
+            .unwrap_or(0)
+            == 1
+        {
+            if let Some(tx) = state.accumulate_tx.as_ref() {
+                let _ = tx.send(AccumulateInput::RecalculateTimeout);
             }
         }
 
