@@ -32,7 +32,7 @@ use rustix::net::addr::SocketAddrArg;
 
 use crate::runtime::RUNTIME_CAT;
 
-use super::scheduler::{self, Scheduler};
+use super::scheduler;
 use super::{Reactor, Readable, ReadableOwned, Registration, Source, Writable, WritableOwned};
 
 /// Async adapter for I/O types.
@@ -98,8 +98,8 @@ pub struct Async<T: Send + 'static> {
     /// The inner I/O handle.
     pub(super) io: Option<T>,
 
-    // The [`Handle`] on the [`Scheduler`] on which this Async wrapper is registered.
-    pub(super) sched: scheduler::HandleWeak,
+    // The [`ThrottlingHandle`] on the [`scheduler::Throttling`] on which this Async wrapper is registered.
+    pub(super) throttling_sched_hdl: Option<scheduler::ThrottlingHandleWeak>,
 }
 
 impl<T: Send + 'static> Unpin for Async<T> {}
@@ -151,9 +151,9 @@ impl<T: AsFd + Send + 'static> Async<T> {
         Ok(Async {
             source,
             io: Some(io),
-            sched: Scheduler::current()
-                .expect("Attempt to create an Async wrapper outside of a Context")
-                .downgrade(),
+            throttling_sched_hdl: scheduler::Throttling::current()
+                .as_ref()
+                .map(scheduler::ThrottlingHandle::downgrade),
         })
     }
 }
@@ -239,9 +239,9 @@ impl<T: AsSocket + Send + 'static> Async<T> {
         Ok(Async {
             source,
             io: Some(io),
-            sched: Scheduler::current()
-                .expect("Attempt to create an Async wrapper outside of a Context")
-                .downgrade(),
+            throttling_sched_hdl: scheduler::Throttling::current()
+                .as_ref()
+                .map(scheduler::ThrottlingHandle::downgrade),
         })
     }
 }
@@ -461,23 +461,32 @@ impl<T: Send + 'static> AsRef<T> for Async<T> {
 impl<T: Send + 'static> Drop for Async<T> {
     fn drop(&mut self) {
         if let Some(io) = self.io.take() {
-            if let Some(sched) = self.sched.upgrade() {
-                let source = Arc::clone(&self.source);
-                sched.spawn_and_unpark(async move {
-                    Reactor::with_mut(|reactor| {
-                        if let Err(err) = reactor.remove_io(&source) {
-                            gst::error!(
-                                RUNTIME_CAT,
-                                "Failed to remove fd {:?}: {}",
-                                source.registration,
-                                err
-                            );
-                        }
+            if let Some(throttling_sched_hdl) = self.throttling_sched_hdl.take() {
+                if let Some(sched) = throttling_sched_hdl.upgrade() {
+                    let source = Arc::clone(&self.source);
+                    sched.spawn_and_unpark(async move {
+                        Reactor::with_mut(|reactor| {
+                            if let Err(err) = reactor.remove_io(&source) {
+                                gst::error!(
+                                    RUNTIME_CAT,
+                                    "Failed to remove fd {:?}: {err}",
+                                    source.registration,
+                                );
+                            }
+                        });
+                        drop(io);
                     });
-                    drop(io);
-                });
+                }
             } else {
-                drop(io);
+                Reactor::with_mut(|reactor| {
+                    if let Err(err) = reactor.remove_io(&self.source) {
+                        gst::error!(
+                            RUNTIME_CAT,
+                            "Failed to remove fd {:?}: {err}",
+                            self.source.registration,
+                        );
+                    }
+                });
             }
         }
     }

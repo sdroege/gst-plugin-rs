@@ -10,9 +10,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::Poll;
 
-use super::context::Context;
 use super::TaskId;
-use super::{Handle, Scheduler};
+use super::{context::Context, scheduler};
 
 #[derive(Debug)]
 pub struct JoinError(TaskId);
@@ -28,14 +27,18 @@ impl std::error::Error for JoinError {}
 pub struct JoinHandle<T> {
     task: Option<async_task::Task<T>>,
     task_id: TaskId,
-    scheduler: Handle,
+    scheduler: scheduler::ThrottlingHandle,
 }
 
 unsafe impl<T: Send> Send for JoinHandle<T> {}
 unsafe impl<T: Send> Sync for JoinHandle<T> {}
 
 impl<T> JoinHandle<T> {
-    pub(super) fn new(task_id: TaskId, task: async_task::Task<T>, scheduler: &Handle) -> Self {
+    pub(super) fn new(
+        task_id: TaskId,
+        task: async_task::Task<T>,
+        scheduler: &scheduler::ThrottlingHandle,
+    ) -> Self {
         JoinHandle {
             task: Some(task),
             task_id,
@@ -44,7 +47,9 @@ impl<T> JoinHandle<T> {
     }
 
     pub fn is_current(&self) -> bool {
-        if let Some((cur_scheduler, task_id)) = Scheduler::current().zip(TaskId::current()) {
+        if let Some((cur_scheduler, task_id)) =
+            scheduler::Throttling::current().zip(TaskId::current())
+        {
             cur_scheduler == self.scheduler && task_id == self.task_id
         } else {
             false

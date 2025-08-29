@@ -182,7 +182,7 @@ impl Reactor {
             f(reactor
                 .borrow()
                 .as_ref()
-                .expect("Not running in a Context."))
+                .expect("Reactor initialized at this point"))
         })
     }
 
@@ -207,7 +207,7 @@ impl Reactor {
             f(reactor
                 .borrow_mut()
                 .as_mut()
-                .expect("Not running in a Context."))
+                .expect("Reactor initialized at this point"))
         })
     }
 

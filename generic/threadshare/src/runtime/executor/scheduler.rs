@@ -6,9 +6,7 @@
 use futures::future::poll_fn;
 use futures::pin_mut;
 
-use gio::glib::clone::Downgrade;
-
-use std::cell::RefCell;
+use std::cell::OnceCell;
 use std::future::Future;
 use std::panic;
 #[cfg(feature = "tuning")]
@@ -27,40 +25,144 @@ use super::{CallOnDrop, JoinHandle, Reactor};
 use crate::runtime::RUNTIME_CAT;
 
 thread_local! {
-    static CURRENT_SCHEDULER: RefCell<Option<HandleWeak>> = const { RefCell::new(None) };
+    static CURRENT_SCHEDULER: OnceCell<Scheduler> = const { OnceCell::new() };
 }
 
 #[derive(Debug)]
-pub(super) struct Scheduler {
+pub(super) enum Scheduler {
+    Blocking(Blocking),
+    Throttling(ThrottlingHandleWeak),
+}
+
+impl Scheduler {
+    pub fn is_blocking(&self) -> bool {
+        matches!(*self, Scheduler::Blocking(..))
+    }
+}
+
+#[derive(Debug, Default)]
+pub(super) struct Blocking {
+    tasks_queue: TaskQueue,
+}
+
+impl Blocking {
+    const MAX_SUCCESSIVE_TASKS: usize = 64;
+
+    pub fn block_on<F>(future: F) -> F::Output
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        CURRENT_SCHEDULER.with(|cur_sched| {
+            let cur_sched = cur_sched.get_or_init(|| {
+                Reactor::init(Duration::ZERO);
+                Scheduler::Blocking(Blocking::default())
+            });
+
+            match cur_sched {
+                Scheduler::Throttling(hdl_weak) => {
+                    let msg = if let Some(hdl) = hdl_weak.upgrade() {
+                        format!(
+                            "Attempt to block on existing Context {}",
+                            hdl.context_name()
+                        )
+                    } else {
+                        "Attempt to block on terminated Context".to_string()
+                    };
+                    gst::error!(RUNTIME_CAT, "{msg}");
+                    panic!("{msg}");
+                }
+                Scheduler::Blocking(sched) => {
+                    let (task_id, task) = sched.tasks_queue.add(future);
+
+                    gst::trace!(RUNTIME_CAT, "Blocking on current thread with {task_id:?}");
+
+                    let _guard = CallOnDrop::new(|| {
+                        gst::trace!(
+                            RUNTIME_CAT,
+                            "Done blocking on current thread with {task_id:?}",
+                        );
+                    });
+
+                    // Blocking on `task` which is cheap to `poll`.
+                    let waker = waker_fn(|| ());
+                    let cx = &mut std::task::Context::from_waker(&waker);
+                    pin_mut!(task);
+
+                    let mut now;
+                    let mut tasks_checked;
+                    'main: loop {
+                        now = Instant::now();
+                        Reactor::with_mut(|reactor| reactor.react(now).ok());
+
+                        if let Poll::Ready(t) = task.as_mut().poll(cx) {
+                            return t;
+                        }
+
+                        tasks_checked = 0;
+                        while tasks_checked < Self::MAX_SUCCESSIVE_TASKS {
+                            let Ok(runnable) = sched.tasks_queue.pop_runnable() else {
+                                continue 'main;
+                            };
+
+                            if let Err(err) = panic::catch_unwind(|| runnable.run()) {
+                                gst::error!(
+                                    RUNTIME_CAT,
+                                    "A task panicked blocking on current thread"
+                                );
+
+                                panic::resume_unwind(err);
+                            }
+
+                            tasks_checked += 1;
+                        }
+                    }
+                }
+            }
+        })
+    }
+}
+
+#[derive(Debug, Default)]
+pub(super) struct Throttling {
     context_name: Arc<str>,
     max_throttling: Duration,
-    tasks: TaskQueue,
+    task_queue: TaskQueue,
     must_unpark: Mutex<bool>,
     must_unpark_cvar: Condvar,
     #[cfg(feature = "tuning")]
     parked_duration: AtomicU64,
 }
 
-impl Scheduler {
-    pub const DUMMY_NAME: &'static str = "DUMMY";
+impl Throttling {
     const MAX_SUCCESSIVE_TASKS: usize = 64;
 
-    pub fn start(context_name: &str, max_throttling: Duration) -> Handle {
+    pub fn start(context_name: &str, max_throttling: Duration) -> ThrottlingHandle {
         // Name the thread so that it appears in panic messages.
         let thread = thread::Builder::new().name(context_name.to_string());
 
         let (handle_sender, handle_receiver) = sync_mpsc::channel();
-        let context_name = Arc::from(context_name);
-        let thread_ctx_name = Arc::clone(&context_name);
+        let context_name: Arc<str> = Arc::from(context_name);
         let join = thread
             .spawn(move || {
                 gst::debug!(
                     RUNTIME_CAT,
-                    "Started Scheduler thread for Context {}",
-                    thread_ctx_name
+                    "Started Scheduler thread for Context {context_name}",
                 );
 
-                let handle = Scheduler::init(Arc::clone(&thread_ctx_name), max_throttling);
+                let handle = CURRENT_SCHEDULER.with(|cur_sched| {
+                    Reactor::init(max_throttling);
+                    let handle = ThrottlingHandle::new(Arc::new(Throttling {
+                        context_name: context_name.clone(),
+                        max_throttling,
+                        ..Default::default()
+                    }));
+
+                    cur_sched.set(Scheduler::Throttling(handle.downgrade())).expect("new thread");
+
+                    handle
+                });
+
                 let this = Arc::clone(&handle.0.scheduler);
                 let must_shutdown = handle.0.must_shutdown.clone();
                 let handle_weak = handle.downgrade();
@@ -74,20 +176,24 @@ impl Scheduler {
                     }
                 });
 
+                let _guard = CallOnDrop::new(|| {
+                    gst::trace!(RUNTIME_CAT, "Closing Scheduler for Context {context_name}");
+
+                    Reactor::clear();
+                });
+
                 // Blocking on `shutdown_fut` which is cheap to `poll`.
                 match this.block_on_priv(shutdown_fut) {
                     Ok(_) => {
                         gst::debug!(
                             RUNTIME_CAT,
-                            "Scheduler thread shut down for Context {}",
-                            thread_ctx_name
+                            "Scheduler thread shut down for Context {context_name}",
                         );
                     }
                     Err(e) => {
                         gst::error!(
                             RUNTIME_CAT,
-                            "Scheduler thread shut down due to an error within Context {}",
-                            thread_ctx_name
+                            "Scheduler thread shut down due to an error within Context {context_name}",
                         );
 
                         if let Some(handle) = handle_weak.upgrade() {
@@ -106,81 +212,6 @@ impl Scheduler {
         handle
     }
 
-    fn init(context_name: Arc<str>, max_throttling: Duration) -> Handle {
-        let handle = CURRENT_SCHEDULER.with(|cur_scheduler| {
-            let mut cur_scheduler = cur_scheduler.borrow_mut();
-            if cur_scheduler.is_some() {
-                panic!("Attempt to initialize an Scheduler on thread where another Scheduler is running.");
-            }
-
-            let handle = Handle::new(Arc::new(Scheduler {
-                context_name: context_name.clone(),
-                max_throttling,
-                tasks: TaskQueue::new(context_name),
-                must_unpark: Mutex::new(false),
-                must_unpark_cvar: Condvar::new(),
-                #[cfg(feature = "tuning")]
-                parked_duration: AtomicU64::new(0),
-            }));
-
-            *cur_scheduler = Some(handle.downgrade());
-
-            handle
-        });
-
-        Reactor::init(handle.max_throttling());
-
-        handle
-    }
-
-    pub fn block_on<F>(future: F) -> F::Output
-    where
-        F: Future + Send + 'static,
-        F::Output: Send + 'static,
-    {
-        assert!(
-            !Scheduler::is_scheduler_thread(),
-            "Attempt to block within an existing Scheduler thread."
-        );
-
-        let handle = Scheduler::init(Scheduler::DUMMY_NAME.into(), Duration::ZERO);
-        let this = Arc::clone(&handle.0.scheduler);
-
-        // Move the (only) handle for this scheduler in the main task.
-        let (task_id, task) = this.tasks.add(async move {
-            let res = future.await;
-
-            let task_id = TaskId::current().unwrap();
-            let _ = handle.drain_sub_tasks(task_id).await;
-
-            res
-        });
-
-        gst::trace!(RUNTIME_CAT, "Blocking on current thread with {:?}", task_id);
-
-        let _guard = CallOnDrop::new(|| {
-            gst::trace!(
-                RUNTIME_CAT,
-                "Blocking on current thread with {:?} done",
-                task_id,
-            );
-        });
-
-        // Blocking on `task` which is cheap to `poll`.
-        match this.block_on_priv(task) {
-            Ok(res) => res,
-            Err(e) => {
-                gst::error!(
-                    RUNTIME_CAT,
-                    "Panic blocking on Context {}",
-                    &Scheduler::DUMMY_NAME
-                );
-
-                panic::resume_unwind(e);
-            }
-        }
-    }
-
     // Important: the `termination_future` MUST be cheap to poll.
     //
     // Examples of appropriate `termination_future` are:
@@ -196,8 +227,6 @@ impl Scheduler {
         let waker = waker_fn(|| ());
         let cx = &mut std::task::Context::from_waker(&waker);
         pin_mut!(termination_future);
-
-        let _guard = CallOnDrop::new(|| Scheduler::close(Arc::clone(&self.context_name)));
 
         let mut now;
         // This is to ensure reactor invocation on the first iteration.
@@ -217,13 +246,9 @@ impl Scheduler {
 
             tasks_checked = 0;
             while tasks_checked < Self::MAX_SUCCESSIVE_TASKS {
-                if let Ok(runnable) = self.tasks.pop_runnable() {
+                if let Ok(runnable) = self.task_queue.pop_runnable() {
                     panic::catch_unwind(|| runnable.run()).inspect_err(|_err| {
-                        gst::error!(
-                            RUNTIME_CAT,
-                            "A task has panicked within Context {}",
-                            self.context_name
-                        );
+                        gst::error!(RUNTIME_CAT, "A task panicked {}", self.context_name);
                     })?;
 
                     tasks_checked += 1;
@@ -266,62 +291,59 @@ impl Scheduler {
         self.must_unpark_cvar.notify_one();
     }
 
-    fn close(context_name: Arc<str>) {
-        gst::trace!(
-            RUNTIME_CAT,
-            "Closing Scheduler for Context {}",
-            context_name,
-        );
-
-        Reactor::clear();
-
-        let _ = CURRENT_SCHEDULER.try_with(|cur_scheduler| {
-            *cur_scheduler.borrow_mut() = None;
-        });
-    }
-
-    pub fn is_scheduler_thread() -> bool {
-        CURRENT_SCHEDULER.with(|cur_scheduler| cur_scheduler.borrow().is_some())
-    }
-
-    pub fn current() -> Option<Handle> {
+    pub fn is_throttling_thread() -> bool {
         CURRENT_SCHEDULER.with(|cur_scheduler| {
-            cur_scheduler
-                .borrow()
-                .as_ref()
-                .and_then(HandleWeak::upgrade)
+            let Some(sched) = cur_scheduler.get() else {
+                return false;
+            };
+            !sched.is_blocking()
         })
     }
 
-    pub fn is_current(&self) -> bool {
-        CURRENT_SCHEDULER.with(|cur_scheduler| {
-            cur_scheduler
-                .borrow()
-                .as_ref()
-                .and_then(HandleWeak::upgrade)
-                .is_some_and(|cur| std::ptr::eq(self, Arc::as_ptr(&cur.0.scheduler)))
+    pub fn current() -> Option<ThrottlingHandle> {
+        CURRENT_SCHEDULER.with(|cur_scheduler| match cur_scheduler.get()? {
+            Scheduler::Blocking(_) => None,
+            Scheduler::Throttling(hdl_weak) => hdl_weak.upgrade(),
+        })
+    }
+
+    fn is_current(&self) -> bool {
+        CURRENT_SCHEDULER.with(|cur_sched| match cur_sched.get() {
+            None | Some(Scheduler::Blocking(_)) => false,
+            Some(Scheduler::Throttling(hdl_weak)) => {
+                if let Some(hdl) = hdl_weak.upgrade() {
+                    std::ptr::eq(self, Arc::as_ptr(&hdl.0.scheduler))
+                } else {
+                    false
+                }
+            }
         })
     }
 }
 
 #[derive(Debug)]
-struct HandleInner {
-    scheduler: Arc<Scheduler>,
+struct ThrottlingHandleInner {
+    scheduler: Arc<Throttling>,
     must_shutdown: Arc<AtomicBool>,
     join: Mutex<Option<thread::JoinHandle<()>>>,
 }
 
-impl HandleInner {
-    fn new(scheduler: Arc<Scheduler>) -> Self {
-        HandleInner {
+impl ThrottlingHandleInner {
+    fn new(scheduler: Arc<Throttling>) -> Self {
+        ThrottlingHandleInner {
             scheduler,
             must_shutdown: Default::default(),
             join: Default::default(),
         }
     }
+
+    #[track_caller]
+    fn context_name(&self) -> &str {
+        self.scheduler.context_name.as_ref()
+    }
 }
 
-impl Drop for HandleInner {
+impl Drop for ThrottlingHandleInner {
     fn drop(&mut self) {
         if !self.must_shutdown.fetch_or(true, Ordering::SeqCst) {
             // Was not already shutting down.
@@ -330,7 +352,7 @@ impl Drop for HandleInner {
             gst::trace!(
                 RUNTIME_CAT,
                 "Shutting down Scheduler thread for Context {}",
-                self.scheduler.context_name
+                self.context_name(),
             );
 
             // Don't block shutting down itself
@@ -350,20 +372,20 @@ impl Drop for HandleInner {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct HandleWeak(Weak<HandleInner>);
+pub(super) struct ThrottlingHandleWeak(Weak<ThrottlingHandleInner>);
 
-impl HandleWeak {
-    pub(super) fn upgrade(&self) -> Option<Handle> {
-        self.0.upgrade().map(Handle)
+impl ThrottlingHandleWeak {
+    pub(super) fn upgrade(&self) -> Option<ThrottlingHandle> {
+        self.0.upgrade().map(ThrottlingHandle)
     }
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct Handle(Arc<HandleInner>);
+pub(super) struct ThrottlingHandle(Arc<ThrottlingHandleInner>);
 
-impl Handle {
-    fn new(scheduler: Arc<Scheduler>) -> Self {
-        Handle(Arc::new(HandleInner::new(scheduler)))
+impl ThrottlingHandle {
+    fn new(scheduler: Arc<Throttling>) -> Self {
+        ThrottlingHandle(Arc::new(ThrottlingHandleInner::new(scheduler)))
     }
 
     fn set_join_handle(&self, join: thread::JoinHandle<()>) {
@@ -376,7 +398,7 @@ impl Handle {
     }
 
     pub fn context_name(&self) -> &str {
-        &self.0.scheduler.context_name
+        self.0.context_name()
     }
 
     pub fn max_throttling(&self) -> Duration {
@@ -402,12 +424,15 @@ impl Handle {
         F: FnOnce() -> O + Send + 'a,
         O: Send + 'a,
     {
-        assert!(!self.0.scheduler.is_current());
+        assert!(
+            !self.0.scheduler.is_current(),
+            "Attempting to `enter()` current `Context` from itself"
+        );
 
         // Safety: bounding `self` to `'a` and blocking on the task
         // ensures that the lifetime bounds satisfy the safety
         // requirements for `TaskQueue::add_sync`.
-        let task = unsafe { self.0.scheduler.tasks.add_sync(f) };
+        let task = unsafe { self.0.scheduler.task_queue.add_sync(f) };
         self.0.scheduler.unpark();
         futures::executor::block_on(task)
     }
@@ -417,7 +442,7 @@ impl Handle {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        let (task_id, task) = self.0.scheduler.tasks.add(future);
+        let (task_id, task) = self.0.scheduler.task_queue.add(future);
         JoinHandle::new(task_id, task, self)
     }
 
@@ -426,7 +451,7 @@ impl Handle {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        let (task_id, task) = self.0.scheduler.tasks.add(future);
+        let (task_id, task) = self.0.scheduler.task_queue.add(future);
         self.0.scheduler.unpark();
         JoinHandle::new(task_id, task, self)
     }
@@ -439,20 +464,20 @@ impl Handle {
     where
         T: Future<Output = SubTaskOutput> + Send + 'static,
     {
-        self.0.scheduler.tasks.add_sub_task(task_id, sub_task)
+        self.0.scheduler.task_queue.add_sub_task(task_id, sub_task)
     }
 
-    pub fn downgrade(&self) -> HandleWeak {
-        HandleWeak(self.0.downgrade())
+    pub fn downgrade(&self) -> ThrottlingHandleWeak {
+        ThrottlingHandleWeak(Arc::downgrade(&self.0))
     }
 
     pub async fn drain_sub_tasks(&self, task_id: TaskId) -> SubTaskOutput {
-        let sub_tasks_fut = self.0.scheduler.tasks.drain_sub_tasks(task_id);
+        let sub_tasks_fut = self.0.scheduler.task_queue.drain_sub_tasks(task_id);
         sub_tasks_fut.await
     }
 }
 
-impl PartialEq for Handle {
+impl PartialEq for ThrottlingHandle {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
     }
@@ -460,8 +485,11 @@ impl PartialEq for Handle {
 
 #[cfg(test)]
 mod tests {
-    use super::super::*;
+    use std::sync::Arc;
     use std::time::Duration;
+
+    use super::{Blocking, Reactor, Throttling, ThrottlingHandle};
+    use crate::runtime::timer;
 
     #[test]
     fn block_on_task_join_handle() {
@@ -472,8 +500,14 @@ mod tests {
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
 
         std::thread::spawn(move || {
-            let handle =
-                Scheduler::init("block_on_task_join_handle".into(), Duration::from_millis(2));
+            let handle = ThrottlingHandle::new(Arc::new(Throttling {
+                context_name: "block_on_task_join_handle".into(),
+                max_throttling: Duration::from_millis(2),
+                ..Default::default()
+            }));
+
+            Reactor::init(Duration::from_millis(2));
+
             let join_handle = handle.spawn(async {
                 timer::delay_for(Duration::from_millis(5)).await;
                 42
@@ -484,7 +518,7 @@ mod tests {
         });
 
         let task_join_handle = join_receiver.recv().unwrap();
-        let res = Scheduler::block_on(task_join_handle).unwrap();
+        let res = Blocking::block_on(task_join_handle).unwrap();
 
         let _ = shutdown_sender.send(());
 
@@ -493,7 +527,7 @@ mod tests {
 
     #[test]
     fn block_on_timer() {
-        let res = Scheduler::block_on(async {
+        let res = Blocking::block_on(async {
             timer::delay_for(Duration::from_millis(5)).await;
             42
         });
@@ -503,7 +537,7 @@ mod tests {
 
     #[test]
     fn enter_non_static() {
-        let handle = Scheduler::start("enter_non_static", Duration::from_millis(2));
+        let handle = Throttling::start("enter_non_static", Duration::from_millis(2));
 
         let mut flag = false;
         handle.enter(|| flag = true);
