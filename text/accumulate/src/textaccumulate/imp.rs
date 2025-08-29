@@ -162,7 +162,7 @@ impl Input {
     fn drain_to_next_terminator(&mut self, timeout_terminators_regex: &Regex) -> Option<Vec<Item>> {
         let content = self.items.iter().map(|item| item.content.clone()).join(" ");
 
-        if let Some(idx) = timeout_terminators_regex.find(&content) {
+        if let Some(idx) = timeout_terminators_regex.find_iter(&content).last() {
             self.drain_to_idx(idx.end())
         } else {
             self.drain_all()
