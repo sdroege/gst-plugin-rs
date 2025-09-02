@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
+// SPDX-License-Identifier: MPL-2.0
 
 use gst::glib;
 use gst::prelude::*;

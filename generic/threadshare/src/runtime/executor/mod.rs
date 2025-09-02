@@ -1,7 +1,11 @@
 // Copyright (C) 2018-2020 Sebastian Dröge <sebastian@centricular.com>
 // Copyright (C) 2019-2021 François Laignel <fengalin@free.fr>
 //
-// Take a look at the license at the top of the repository in the LICENSE file.
+// This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
+// If a copy of the MPL was not distributed with this file, You can obtain one at
+// <https://mozilla.org/MPL/2.0/>.
+//
+// SPDX-License-Identifier: MPL-2.0
 
 //! The `Executor` for the `threadshare` GStreamer plugins framework.
 //!

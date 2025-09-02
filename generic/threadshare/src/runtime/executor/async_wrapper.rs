@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 // This is based on https://github.com/smol-rs/async-io
 // with adaptations by:
 //
 // Copyright (C) 2021 François Laignel <fengalin@free.fr>
-//
-// Take a look at the license at the top of the repository in the LICENSE file.
 
 use futures::io::{AsyncRead, AsyncWrite};
 use futures::stream::{self, Stream};

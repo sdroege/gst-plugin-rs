@@ -3,8 +3,6 @@
 // with adaptations by:
 //
 // Copyright (C) 2021-2022 François Laignel <fengalin@free.fr>
-//
-// Take a look at the license at the top of the repository in the LICENSE file.
 
 use concurrent_queue::ConcurrentQueue;
 use futures::ready;
