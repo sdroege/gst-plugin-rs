@@ -18231,7 +18231,7 @@
             }
         },
         "filename": "gstthreadshare",
-        "license": "LGPL",
+        "license": "MPL",
         "other-types": {},
         "package": "gst-plugin-threadshare",
         "source": "gst-plugin-threadshare",

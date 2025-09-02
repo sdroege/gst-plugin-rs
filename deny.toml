@@ -45,11 +45,6 @@ allow = ["AGPL-3.0"]
 name = "dssim-core"
 version = "3.2"
 
-# Allow LGPL 2.1 for the threadshare plugin as it includes some LGPL code
-[[licenses.exceptions]]
-allow = ["LGPL-2.1-or-later"]
-name = "gst-plugin-threadshare"
-
 [bans]
 multiple-versions = "deny"
 highlight = "all"

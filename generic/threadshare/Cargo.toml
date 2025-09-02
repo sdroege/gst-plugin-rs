@@ -2,7 +2,7 @@
 name = "gst-plugin-threadshare"
 version.workspace = true
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
-license = "LGPL-2.1-or-later"
+license = "MPL-2.0"
 description = "GStreamer Threadshare Plugin"
 repository.workspace = true
 edition.workspace = true
@@ -102,8 +102,6 @@ path = "tests/blocking_adapter.rs"
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true
-cc = "1.0.38"
-pkg-config = "0.3.15"
 
 [features]
 static = []
