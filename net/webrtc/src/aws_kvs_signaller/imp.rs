@@ -2,6 +2,7 @@
 
 use super::protocol as p;
 use crate::signaller::{Signallable, SignallableImpl};
+use crate::utils::create_tls_connector;
 use crate::RUNTIME;
 use anyhow::{anyhow, Error};
 use async_tungstenite::tungstenite::Message as WsMessage;
@@ -10,7 +11,6 @@ use futures::prelude::*;
 use gst::glib;
 use gst::glib::prelude::*;
 use gst::subclass::prelude::*;
-use gst_plugin_webrtc_tls_utils::create_tls_connector;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::sync::Mutex;

@@ -24,7 +24,10 @@ thiserror = "2"
 test-log = { version = "0.2", features = ["trace"], default-features = false }
 pin-project-lite = "0.2"
 gst_plugin_webrtc_protocol = { path="../protocol", package = "gst-plugin-webrtc-signalling-protocol", version = "0.14" }
-gst_plugin_webrtc_tls_utils = { path="../tls-utils", package = "gst-plugin-webrtc-tls-utils" }
+rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+tokio-rustls = "0.26"
+rustls-pemfile = "2"
+rustls-pki-types = "1"
 
 [[bin]]
 name = "gst-webrtc-signalling-server"

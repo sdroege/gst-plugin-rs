@@ -37,7 +37,9 @@ gst_plugin_webrtc_signalling = { path="signalling", package = "gst-plugin-webrtc
 human_bytes = "0.4"
 rand = "0.9"
 url = "2"
-gst_plugin_webrtc_tls_utils = { path="tls-utils", package = "gst-plugin-webrtc-tls-utils" }
+tokio-rustls = "0.26"
+rustls-pemfile = "2"
+rustls-pki-types = "1"
 
 aws-config = { version = "~1.5.18", optional = true }
 # needs this constraint to prevent adding aws-smithy-http 0.62 too

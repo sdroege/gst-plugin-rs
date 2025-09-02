@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::signaller::{prelude::*, Signallable};
-use crate::utils::{gvalue_to_json, serialize_json_object};
+use crate::utils::{create_tls_connector, gvalue_to_json, serialize_json_object};
 use crate::RUNTIME;
 use anyhow::{anyhow, Error};
 use async_tungstenite::tungstenite::client::IntoClientRequest;
@@ -13,7 +13,6 @@ use gst::glib;
 use gst::glib::prelude::*;
 use gst::subclass::prelude::*;
 use gst_plugin_webrtc_protocol as p;
-use gst_plugin_webrtc_tls_utils::create_tls_connector;
 use std::collections::{HashMap, HashSet};
 use std::ops::ControlFlow;
 use std::str::FromStr;
