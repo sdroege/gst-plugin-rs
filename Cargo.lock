@@ -3642,7 +3642,6 @@ dependencies = [
  "gst-plugin-version-helper",
  "gst-plugin-webrtc-signalling",
  "gst-plugin-webrtc-signalling-protocol",
- "gst-plugin-webrtc-tls-utils",
  "gstreamer",
  "gstreamer-app",
  "gstreamer-audio",
@@ -3664,10 +3663,13 @@ dependencies = [
  "regex",
  "reqwest 0.12.23",
  "rustls 0.23.31",
+ "rustls-pemfile 2.2.0",
+ "rustls-pki-types",
  "serde",
  "serde_json",
  "thiserror 2.0.16",
  "tokio",
+ "tokio-rustls 0.26.2",
  "tokio-stream",
  "tracing",
  "tracing-log",
@@ -3687,13 +3689,16 @@ dependencies = [
  "clap",
  "futures",
  "gst-plugin-webrtc-signalling-protocol",
- "gst-plugin-webrtc-tls-utils",
  "pin-project-lite",
+ "rustls 0.23.31",
+ "rustls-pemfile 2.2.0",
+ "rustls-pki-types",
  "serde",
  "serde_json",
  "test-log",
  "thiserror 2.0.16",
  "tokio",
+ "tokio-rustls 0.26.2",
  "tracing",
  "tracing-log",
  "tracing-subscriber",
@@ -3706,17 +3711,6 @@ version = "0.15.0-alpha.1"
 dependencies = [
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "gst-plugin-webrtc-tls-utils"
-version = "0.15.0-alpha.1"
-dependencies = [
- "rustls 0.23.31",
- "rustls-pemfile 2.2.0",
- "rustls-pki-types",
- "tokio",
- "tokio-rustls 0.26.2",
 ]
 
 [[package]]

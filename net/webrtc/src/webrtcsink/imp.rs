@@ -32,8 +32,8 @@ use super::{
     WebRTCSinkCongestionControl, WebRTCSinkError, WebRTCSinkMitigationMode, WebRTCSinkPad,
 };
 use crate::signaller::{prelude::*, Signallable, Signaller, WebRTCSignallerRole};
+use crate::utils::create_tls_acceptor;
 use crate::{utils, RUNTIME};
-use gst_plugin_webrtc_tls_utils::create_tls_acceptor;
 use std::collections::{BTreeMap, HashSet};
 use tracing_subscriber::prelude::*;
 
