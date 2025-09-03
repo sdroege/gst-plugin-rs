@@ -55,10 +55,9 @@ multiple-versions = "deny"
 highlight = "all"
 wildcards = "allow"
 
-# Ignore various duplicated dependencies because librespot depends on an old versions
-[[bans.skip]]
-name = "quick-xml"
-version = "0.36"
+# Increases binary size considerably, see https://github.com/aws/aws-lc-rs/issues/745
+[[bans.deny]]
+name = "aws-lc-rs"
 
 # Various crates depend on an older version of base64
 [[bans.skip]]
@@ -233,11 +232,6 @@ version = "0.20"
 [[bans.skip]]
 name = "tungstenite"
 version = "0.20"
-
-# librespot depends on older tokio-tungstenite
-[[bans.skip]]
-name = "tungstenite"
-version = "0.24"
 
 # Various crates depend on an older version of http
 [[bans.skip]]
