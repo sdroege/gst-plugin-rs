@@ -6,21 +6,44 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-// This creates a live HLS stream with one video playlist and two video playlists.
-// Basic trimming is implemented
+// This creates a 10 second VOD HLS stream with one video playlist and two audio
+// playlists. Each segment is 2.5 second long.
 
 use gst::prelude::*;
 
-use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use anyhow::Error;
-use chrono::{DateTime, Duration, Utc};
+
 use m3u8_rs::{
-    AlternativeMedia, AlternativeMediaType, MasterPlaylist, MediaPlaylist, MediaSegment,
-    VariantStream,
+    AlternativeMedia, AlternativeMediaType, MasterPlaylist, MediaPlaylist, MediaPlaylistType,
+    MediaSegment, VariantStream,
 };
+
+struct Segment {
+    duration: gst::ClockTime,
+    path: String,
+}
+
+struct StreamState {
+    path: PathBuf,
+    segments: Vec<Segment>,
+}
+
+struct VideoStream {
+    name: String,
+    bitrate: u64,
+    width: u64,
+    height: u64,
+}
+
+struct AudioStream {
+    name: String,
+    lang: String,
+    default: bool,
+    wave: String,
+}
 
 struct State {
     video_streams: Vec<VideoStream>,
@@ -104,136 +127,16 @@ impl State {
     }
 }
 
-struct Segment {
-    date_time: DateTime<Utc>,
-    duration: gst::ClockTime,
-    path: String,
-}
-
-struct UnreffedSegment {
-    removal_time: DateTime<Utc>,
-    path: String,
-}
-
-struct StreamState {
-    path: PathBuf,
-    segments: VecDeque<Segment>,
-    trimmed_segments: VecDeque<UnreffedSegment>,
-    start_date_time: Option<DateTime<Utc>>,
-    start_time: Option<gst::ClockTime>,
-    media_sequence: u64,
-    segment_index: u32,
-}
-
-struct VideoStream {
-    name: String,
-    bitrate: u64,
-    width: u64,
-    height: u64,
-}
-
-struct AudioStream {
-    name: String,
-    lang: String,
-    default: bool,
-    wave: String,
-}
-
-fn trim_segments(state: &mut StreamState) {
-    // Arbitrary 5 segments window
-    while state.segments.len() > 5 {
-        let segment = state.segments.pop_front().unwrap();
-
-        state.media_sequence += 1;
-
-        state.trimmed_segments.push_back(UnreffedSegment {
-            // HLS spec mandates that segments are removed from the filesystem no sooner
-            // than the duration of the longest playlist + duration of the segment.
-            // This is 18 seconds (15 + 3) in our case, we use 25 seconds to be on the
-            // safe side
-            removal_time: segment
-                .date_time
-                .checked_add_signed(Duration::try_seconds(25).unwrap())
-                .unwrap(),
-            path: segment.path.clone(),
-        });
-    }
-
-    while let Some(segment) = state.trimmed_segments.front() {
-        if segment.removal_time < state.segments.front().unwrap().date_time {
-            let segment = state.trimmed_segments.pop_front().unwrap();
-
-            let mut path = state.path.clone();
-            path.push(segment.path);
-            println!("Removing {}", path.display());
-            std::fs::remove_file(path).expect("Failed to remove old segment");
-        } else {
-            break;
-        }
-    }
-}
-
-fn update_manifest(state: &mut StreamState) {
-    // Now write the manifest
-    let mut path = state.path.clone();
-    path.push("manifest.m3u8");
-
-    println!("writing manifest to {}", path.display());
-
-    trim_segments(state);
-
-    let playlist = MediaPlaylist {
-        version: Some(7),
-        target_duration: 3,
-        media_sequence: state.media_sequence,
-        segments: state
-            .segments
-            .iter()
-            .enumerate()
-            .map(|(idx, segment)| MediaSegment {
-                uri: segment.path.to_string(),
-                duration: (segment.duration.nseconds() as f64
-                    / gst::ClockTime::SECOND.nseconds() as f64) as f32,
-                map: Some(m3u8_rs::Map {
-                    uri: "init.cmfi".into(),
-                    ..Default::default()
-                }),
-                program_date_time: if idx == 0 {
-                    Some(segment.date_time.into())
-                } else {
-                    None
-                },
-                ..Default::default()
-            })
-            .collect(),
-        end_list: false,
-        playlist_type: None,
-        i_frames_only: false,
-        start: None,
-        independent_segments: true,
-        ..Default::default()
-    };
-
-    let mut file = std::fs::File::create(path).unwrap();
-    playlist
-        .write_to(&mut file)
-        .expect("Failed to write media playlist");
-}
-
 fn setup_appsink(appsink: &gst_app::AppSink, name: &str, path: &Path, is_video: bool) {
     let mut path: PathBuf = path.into();
     path.push(name);
 
     let state = Arc::new(Mutex::new(StreamState {
-        segments: VecDeque::new(),
-        trimmed_segments: VecDeque::new(),
+        segments: Vec::new(),
         path,
-        start_date_time: None,
-        start_time: gst::ClockTime::NONE,
-        media_sequence: 0,
-        segment_index: 0,
     }));
 
+    let state_clone = state.clone();
     appsink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |sink| {
@@ -286,41 +189,15 @@ fn setup_appsink(appsink: &gst_app::AppSink, name: &str, path: &Path, is_video: 
                 let mut path = state.path.clone();
                 let basename = format!(
                     "segment_{}.{}",
-                    state.segment_index,
+                    state.segments.len() + 1,
                     if is_video { "cmfv" } else { "cmfa" }
                 );
-                state.segment_index += 1;
                 path.push(&basename);
-
-                let segment = sample
-                    .segment()
-                    .expect("no segment")
-                    .downcast_ref::<gst::ClockTime>()
-                    .expect("no time segment");
-                let pts = segment
-                    .to_running_time(first.pts().unwrap())
-                    .expect("can't get running time");
-
-                if state.start_time.is_none() {
-                    state.start_time = Some(pts);
-                }
-
-                if state.start_date_time.is_none() {
-                    let now_utc = Utc::now();
-                    let now_gst = sink.clock().unwrap().time();
-                    let pts_clock_time = pts + sink.base_time().unwrap();
-
-                    let diff = now_gst.checked_sub(pts_clock_time).unwrap();
-                    let pts_utc = now_utc
-                        .checked_sub_signed(Duration::nanoseconds(diff.nseconds() as i64))
-                        .unwrap();
-
-                    state.start_date_time = Some(pts_utc);
-                }
+                println!("writing segment to {}", path.display());
 
                 let duration = first.duration().unwrap();
 
-                let mut file = std::fs::File::create(&path).expect("failed to open fragment");
+                let mut file = std::fs::File::create(path).expect("failed to open fragment");
                 for buffer in &*buffer_list {
                     use std::io::prelude::*;
 
@@ -328,35 +205,53 @@ fn setup_appsink(appsink: &gst_app::AppSink, name: &str, path: &Path, is_video: 
                     file.write_all(&map).expect("failed to write fragment");
                 }
 
-                let date_time = state
-                    .start_date_time
-                    .unwrap()
-                    .checked_add_signed(Duration::nanoseconds(
-                        pts.opt_checked_sub(state.start_time)
-                            .unwrap()
-                            .unwrap()
-                            .nseconds() as i64,
-                    ))
-                    .unwrap();
-
-                println!(
-                    "wrote segment with date time {} to {}",
-                    date_time,
-                    path.display()
-                );
-
-                state.segments.push_back(Segment {
+                state.segments.push(Segment {
                     duration,
                     path: basename.to_string(),
-                    date_time,
                 });
-
-                update_manifest(&mut state);
 
                 Ok(gst::FlowSuccess::Ok)
             })
             .eos(move |_sink| {
-                unreachable!();
+                let state = state_clone.lock().unwrap();
+
+                // Now write the manifest
+                let mut path = state.path.clone();
+                path.push("manifest.m3u8");
+
+                println!("writing manifest to {}", path.display());
+
+                let playlist = MediaPlaylist {
+                    version: Some(7),
+                    target_duration: 3,
+                    media_sequence: 0,
+                    segments: state
+                        .segments
+                        .iter()
+                        .map(|segment| MediaSegment {
+                            uri: segment.path.to_string(),
+                            duration: (segment.duration.nseconds() as f64
+                                / gst::ClockTime::SECOND.nseconds() as f64)
+                                as f32,
+                            map: Some(m3u8_rs::Map {
+                                uri: "init.cmfi".into(),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        })
+                        .collect(),
+                    end_list: true,
+                    playlist_type: Some(MediaPlaylistType::Vod),
+                    i_frames_only: false,
+                    start: None,
+                    independent_segments: true,
+                    ..Default::default()
+                };
+
+                let mut file = std::fs::File::create(path).unwrap();
+                playlist
+                    .write_to(&mut file)
+                    .expect("Failed to write media playlist");
             })
             .build(),
     );
@@ -392,9 +287,8 @@ impl VideoStream {
         path: &Path,
     ) -> Result<(), Error> {
         let src = gst::ElementFactory::make("videotestsrc")
-            .property("is-live", true)
+            .property("num-buffers", 300)
             .build()?;
-
         let raw_capsfilter = gst::ElementFactory::make("capsfilter")
             .property(
                 "caps",
@@ -410,7 +304,6 @@ impl VideoStream {
         let enc = gst::ElementFactory::make("x264enc")
             .property("bframes", 0u32)
             .property("bitrate", self.bitrate as u32 / 1000u32)
-            .property_from_str("tune", "zerolatency")
             .build()?;
         let h264_capsfilter = gst::ElementFactory::make("capsfilter")
             .property(
@@ -422,6 +315,8 @@ impl VideoStream {
             .build()?;
         let mux = gst::ElementFactory::make("cmafmux")
             .property("fragment-duration", 3000.mseconds())
+            .property_from_str("header-update-mode", "update")
+            .property("write-mehd", true)
             .build()?;
         let appsink = gst_app::AppSink::builder().buffer_list(true).build();
 
@@ -461,20 +356,45 @@ impl AudioStream {
         path: &Path,
     ) -> Result<(), Error> {
         let src = gst::ElementFactory::make("audiotestsrc")
-            .property("is-live", true)
+            .property("num-buffers", 100)
+            .property("samplesperbuffer", 4410)
             .property_from_str("wave", &self.wave)
+            .build()?;
+        let taginject = gst::ElementFactory::make("taginject")
+            .property_from_str("tags", &format!("language-code={}", self.lang))
+            .property_from_str("scope", "stream")
+            .build()?;
+        let raw_capsfilter = gst::ElementFactory::make("capsfilter")
+            .property(
+                "caps",
+                gst_audio::AudioCapsBuilder::new().rate(44100).build(),
+            )
             .build()?;
         let enc = gst::ElementFactory::make("avenc_aac").build()?;
         let mux = gst::ElementFactory::make("cmafmux")
+            .property("fragment-duration", 3000.mseconds())
             .property_from_str("header-update-mode", "update")
             .property("write-mehd", true)
-            .property("fragment-duration", 3000.mseconds())
             .build()?;
         let appsink = gst_app::AppSink::builder().buffer_list(true).build();
 
-        pipeline.add_many([&src, &enc, &mux, appsink.upcast_ref()])?;
+        pipeline.add_many([
+            &src,
+            &taginject,
+            &raw_capsfilter,
+            &enc,
+            &mux,
+            appsink.upcast_ref(),
+        ])?;
 
-        gst::Element::link_many([&src, &enc, &mux, appsink.upcast_ref()])?;
+        gst::Element::link_many([
+            &src,
+            &taginject,
+            &raw_capsfilter,
+            &enc,
+            &mux,
+            appsink.upcast_ref(),
+        ])?;
 
         probe_encoder(state, enc);
 
@@ -487,9 +407,9 @@ impl AudioStream {
 fn main() -> Result<(), Error> {
     gst::init()?;
 
-    gstfmp4::plugin_register_static()?;
+    gstisobmff::plugin_register_static()?;
 
-    let path = PathBuf::from("hls_live_stream");
+    let path = PathBuf::from("hls_vod_stream");
 
     let pipeline = gst::Pipeline::default();
 
@@ -514,7 +434,7 @@ fn main() -> Result<(), Error> {
             },
             AudioStream {
                 name: "audio_1".to_string(),
-                lang: "fre".to_string(),
+                lang: "fra".to_string(),
                 default: false,
                 wave: "white-noise".to_string(),
             },

@@ -17,13 +17,16 @@ use gst_pbutils::prelude::*;
 use mp4_atom::{Atom, ReadAtom as _, ReadFrom as _};
 use tempfile::tempdir;
 
+pub mod support;
+use support::{check_ftyp_output, check_mvhd_sanity, check_trak_sanity, ExpectedConfiguration};
+
 fn init() {
     use std::sync::Once;
     static INIT: Once = Once::new();
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstmp4::plugin_register_static().unwrap();
+        gstisobmff::plugin_register_static().unwrap();
     });
 }
 
@@ -70,18 +73,6 @@ impl Pipeline {
         self.set_state(gst::State::Null)
             .expect("Unable to set the pipeline to the `Null` state");
     }
-}
-
-struct ExpectedConfiguration {
-    is_audio: bool,
-    width: u32,
-    height: u32,
-    has_ctts: bool,
-    has_stss: bool,
-    has_taic: bool,
-    taic_time_uncertainty: u64,
-    taic_clock_type: u8,
-    num_tai_timestamps: i32,
 }
 
 fn test_basic_with(video_enc: &str, audio_enc: &str, cb: impl FnOnce(&Path)) {
@@ -291,15 +282,9 @@ fn test_expected_uncompressed_output(location: &Path, width: u32, height: u32) {
         0,
         vec![b"isom".into(), b"mp41".into(), b"mp42".into()],
         ExpectedConfiguration {
-            is_audio: false,
             width,
             height,
-            has_ctts: false,
-            has_stss: false,
-            has_taic: false,
-            taic_clock_type: 0,       // only if has_taic
-            taic_time_uncertainty: 0, // only if has_taic
-            num_tai_timestamps: 0,
+            ..Default::default()
         },
     );
 }
@@ -628,15 +613,9 @@ fn test_expected_image_sequence_output(location: &Path, width: u32, height: u32)
         0,
         vec![b"iso8".into(), b"msf1".into(), b"unif".into()],
         ExpectedConfiguration {
-            is_audio: false,
             width,
             height,
-            has_ctts: false,
-            has_stss: false,
-            has_taic: false,
-            taic_time_uncertainty: 0, // only if has_taic
-            taic_clock_type: 0,       // only if has_taic
-            num_tai_timestamps: 0,
+            ..Default::default()
         },
     );
 }
@@ -699,384 +678,9 @@ fn test_audio_only_output(location: &Path) {
         vec![b"isom".into(), b"mp41".into(), b"mp42".into()],
         ExpectedConfiguration {
             is_audio: true,
-            width: 0,  // ignored for audio
-            height: 0, // ignored for audio
-            has_ctts: false,
-            has_stss: false,
-            has_taic: false,
-            taic_time_uncertainty: 0, // only if has_taic
-            taic_clock_type: 0,       // only if has_taic
-            num_tai_timestamps: 0,
+            ..Default::default()
         },
     );
-}
-
-fn check_ftyp_output(
-    expected_major_brand: mp4_atom::FourCC,
-    expected_minor_version: u32,
-    expected_compatible_brands: &Vec<mp4_atom::FourCC>,
-    ftyp: mp4_atom::Ftyp,
-) {
-    assert_eq!(ftyp.major_brand, expected_major_brand);
-    assert_eq!(ftyp.minor_version, expected_minor_version);
-    assert_eq!(
-        ftyp.compatible_brands.len(),
-        expected_compatible_brands.len()
-    );
-    for fourcc in expected_compatible_brands {
-        assert!(ftyp.compatible_brands.contains(fourcc));
-    }
-}
-
-fn check_mvhd_sanity(mvhd: &mp4_atom::Mvhd, expected_config: &ExpectedConfiguration) {
-    assert!(mvhd.creation_time > 0);
-    assert!(mvhd.modification_time > 0);
-    assert!(mvhd.next_track_id > 1);
-    assert!(mvhd.duration > 0);
-    if expected_config.is_audio {
-        assert!(mvhd.volume.integer() > 0);
-    } else {
-        assert_eq!(mvhd.volume.integer(), 1);
-        assert_eq!(mvhd.volume.decimal(), 0);
-    }
-    // TODO: assess remaining values for potential invariant
-}
-
-fn check_trak_sanity(trak: &[mp4_atom::Trak], expected_config: &ExpectedConfiguration) {
-    assert_eq!(trak.len(), 1);
-    assert!(trak[0].meta.is_none());
-    check_tkhd_sanity(&trak[0].tkhd, expected_config);
-    check_edts_sanity(&trak[0].edts);
-    check_mdia_sanity(&trak[0].mdia, expected_config);
-}
-
-fn check_edts_sanity(maybe_edts: &Option<mp4_atom::Edts>) {
-    assert!(maybe_edts.as_ref().is_some_and(|edts| {
-        assert!(edts.elst.is_some());
-        let elst = edts.elst.as_ref().unwrap();
-        assert!(!elst.entries.is_empty());
-        true
-    }));
-}
-
-fn check_tkhd_sanity(tkhd: &mp4_atom::Tkhd, expected_config: &ExpectedConfiguration) {
-    assert!(tkhd.creation_time > 0);
-    assert!(tkhd.modification_time > 0);
-    assert!(tkhd.enabled);
-    if expected_config.is_audio {
-        assert_eq!(tkhd.width, 0.into());
-        assert_eq!(tkhd.height, 0.into());
-        assert!(tkhd.volume.integer() > 0);
-    } else {
-        assert_eq!(tkhd.width.integer(), expected_config.width as u16);
-        assert_eq!(tkhd.height.integer(), expected_config.height as u16);
-        assert_eq!(tkhd.volume.integer(), 0);
-        assert_eq!(tkhd.volume.decimal(), 0);
-    }
-    // TODO: assess remaining values for potential invariant
-}
-
-fn check_mdia_sanity(mdia: &mp4_atom::Mdia, expected_config: &ExpectedConfiguration) {
-    check_hdlr_sanity(&mdia.hdlr);
-    check_mdhd_sanity(&mdia.mdhd);
-    check_minf_sanity(&mdia.minf, expected_config);
-}
-
-fn check_hdlr_sanity(hdlr: &mp4_atom::Hdlr) {
-    assert!(
-        (hdlr.handler == b"soun".into())
-            || (hdlr.handler == b"vide".into())
-            || (hdlr.handler == b"pict".into())
-    );
-    assert!(!hdlr.name.is_empty());
-}
-
-fn check_mdhd_sanity(mdhd: &mp4_atom::Mdhd) {
-    assert!(mdhd.creation_time > 0);
-    assert!(mdhd.modification_time > 0);
-    assert!(mdhd.timescale > 0);
-    assert!(mdhd.language.len() == 3);
-}
-
-fn check_minf_sanity(minf: &mp4_atom::Minf, expected_config: &ExpectedConfiguration) {
-    check_dinf_sanity(&minf.dinf);
-    assert!(
-        (minf.smhd.is_some() && (minf.vmhd.is_none())
-            || (minf.smhd.is_none() || minf.vmhd.is_some()))
-    );
-    check_stbl_sanity(&minf.stbl, expected_config);
-}
-
-fn check_dinf_sanity(dinf: &mp4_atom::Dinf) {
-    let dref = &dinf.dref;
-    assert_eq!(dref.urls.len(), 1);
-    let url = &dref.urls[0];
-    assert!(url.location.is_empty());
-}
-
-fn check_stbl_sanity(stbl: &mp4_atom::Stbl, expected_config: &ExpectedConfiguration) {
-    assert!(stbl.co64.is_none());
-    if expected_config.has_ctts {
-        assert!(stbl.ctts.is_some());
-        // TODO:
-        // check_ctts_sanity(&stbl.ctts);
-    } else {
-        assert!(stbl.ctts.is_none());
-    }
-    check_saio_sanity(&stbl.saio, expected_config);
-    check_saiz_sanity(&stbl.saiz, expected_config);
-    check_stco_sanity(&stbl.stco);
-    check_stsc_sanity(&stbl.stsc);
-    check_stsd_sanity(&stbl.stsd, expected_config);
-    if expected_config.has_stss {
-        assert!(stbl.stss.is_some());
-        // TODO:
-        // check_stss_sanity(&stbl.ctts);
-    } else {
-        assert!(stbl.stss.is_none());
-    }
-    check_stsz_sanity(&stbl.stsz);
-    check_stts_sanity(&stbl.stts);
-    // TODO: check consistency between sample sizes and chunk / sample offsets
-}
-
-fn check_saio_sanity(siaos: &[mp4_atom::Saio], expected_config: &ExpectedConfiguration) {
-    if expected_config.num_tai_timestamps == 0 {
-        assert!(siaos.is_empty());
-    } else {
-        assert_eq!(siaos.len(), 1);
-        let saio = &siaos[0];
-        assert!(saio.aux_info.is_some());
-        assert_eq!(
-            saio.aux_info.as_ref().unwrap().aux_info_type,
-            b"stai".into()
-        );
-        assert_eq!(saio.aux_info.as_ref().unwrap().aux_info_type_parameter, 0);
-        assert_eq!(
-            saio.offsets.len(),
-            expected_config.num_tai_timestamps as usize
-        );
-        let mut previous_offset = 0u64;
-        for offset in &saio.offsets {
-            // We check that the byte offsets are increasing
-            // This is different to checking that the timestamps are increasing
-            assert!(*offset > previous_offset);
-            previous_offset = *offset;
-        }
-    }
-}
-
-fn check_saiz_sanity(saizs: &[mp4_atom::Saiz], expected_config: &ExpectedConfiguration) {
-    if expected_config.num_tai_timestamps == 0 {
-        assert!(saizs.is_empty());
-    } else {
-        assert_eq!(saizs.len(), 1);
-        let saiz = &saizs[0];
-        assert!(saiz.aux_info.is_some());
-        assert_eq!(
-            saiz.aux_info.as_ref().unwrap().aux_info_type,
-            b"stai".into()
-        );
-        assert_eq!(saiz.aux_info.as_ref().unwrap().aux_info_type_parameter, 0);
-        assert_eq!(saiz.default_sample_info_size, 9);
-        assert_eq!(saiz.sample_count, expected_config.num_tai_timestamps as u32);
-    }
-}
-
-fn check_stco_sanity(maybe_stco: &Option<mp4_atom::Stco>) {
-    assert!(maybe_stco
-        .as_ref()
-        .is_some_and(|stco| { !stco.entries.is_empty() }));
-    // TODO: see if there is anything generic about the stco entries we could check
-}
-
-fn check_stsc_sanity(stsc: &mp4_atom::Stsc) {
-    assert!(!stsc.entries.is_empty());
-    // TODO: see if there is anything generic about the stsc entries we could check
-}
-
-fn check_stsd_sanity(stsd: &mp4_atom::Stsd, expected_config: &ExpectedConfiguration) {
-    assert_eq!(stsd.codecs.len(), 1);
-    let codec = &stsd.codecs[0];
-    match codec {
-        mp4_atom::Codec::Avc1(avc1) => {
-            assert_eq!(avc1.visual.width, expected_config.width as u16);
-            assert_eq!(avc1.visual.height, expected_config.height as u16);
-            assert_eq!(avc1.visual.depth, 24);
-            if expected_config.has_taic {
-                assert!(avc1.taic.as_ref().is_some_and(|taic| {
-                    assert_eq!(taic.clock_type, expected_config.taic_clock_type.into());
-                    assert_eq!(taic.time_uncertainty, expected_config.taic_time_uncertainty);
-                    assert_eq!(taic.clock_drift_rate, 2147483647);
-                    assert_eq!(taic.clock_resolution, 1000);
-                    true
-                }));
-            } else {
-                assert!(avc1.taic.is_none());
-            }
-
-            assert!(avc1
-                .pasp
-                .as_ref()
-                .is_some_and(|pasp| { pasp.h_spacing == 1 && pasp.v_spacing == 1 }));
-            assert!(avc1.colr.as_ref().is_some_and(|colr| {
-                match colr {
-                    mp4_atom::Colr::Nclx {
-                        colour_primaries,
-                        transfer_characteristics,
-                        matrix_coefficients: _,
-                        full_range_flag,
-                    } => {
-                        assert_eq!(*colour_primaries, 6);
-                        assert_eq!(*transfer_characteristics, 6);
-                        assert!(!(*full_range_flag));
-                        true
-                    }
-                    mp4_atom::Colr::Ricc { profile: _ } => {
-                        panic!("Incorrect colr type: ricc")
-                    }
-                    mp4_atom::Colr::Prof { profile: _ } => {
-                        panic!("Incorrect colr type: prof")
-                    }
-                }
-            }));
-        }
-        mp4_atom::Codec::Hev1(_hev1) => {
-            // TODO: check HEVC codec (maybe shared?)
-        }
-        mp4_atom::Codec::Hvc1(_hvc1) => {
-            // TODO: check HEVC codec (maybe shared?)
-        }
-        mp4_atom::Codec::Vp08(_vp08) => {
-            // TODO: check VP8 codec
-        }
-        mp4_atom::Codec::Vp09(_vp09) => {
-            // TODO: check VP9 codec
-        }
-        mp4_atom::Codec::Av01(_av01) => {
-            // TODO: check AV1 codec
-        }
-        mp4_atom::Codec::Mp4a(_mp4a) => {
-            // TODO: check MPEG Audio codec
-        }
-        mp4_atom::Codec::Tx3g(_tx3g) => {
-            // TODO: check subtitles / text codec
-        }
-        mp4_atom::Codec::Opus(_opus) => {
-            // TODO: check OPUS codec
-        }
-        mp4_atom::Codec::Uncv(uncv) => {
-            check_uncv_codec_sanity(uncv, expected_config);
-        }
-        mp4_atom::Codec::Unknown(four_cc) => {
-            todo!("Unsupported codec type: {:?}", four_cc);
-        }
-        mp4_atom::Codec::Flac(_flac) => {
-            // TODO: check FLAC codec
-        }
-        mp4_atom::Codec::Ac3(_ac3) => {
-            // TODO: check AC-3 codec
-        }
-        mp4_atom::Codec::Eac3(_eac3) => {
-            // TODO: check EAC-3 codec
-        }
-    }
-}
-
-fn check_uncv_codec_sanity(uncv: &mp4_atom::Uncv, expected_config: &ExpectedConfiguration) {
-    check_visual_sample_entry_sanity(&uncv.visual, expected_config);
-    // See ISO/IEC 23001-17 Table 5 for the profiles
-    let valid_v0_profiles: Vec<mp4_atom::FourCC> = vec![
-        b"2vuy".into(),
-        b"yuv2".into(),
-        b"yvyu".into(),
-        b"vyuy".into(),
-        b"yuv1".into(),
-        b"v308".into(),
-        b"v408".into(),
-        b"y210".into(),
-        b"v410".into(),
-        b"v210".into(),
-        b"rgb3".into(),
-        b"i420".into(),
-        b"nv12".into(),
-        b"nv21".into(),
-        b"rgba".into(),
-        b"abgr".into(),
-        b"yu22".into(),
-        b"yv22".into(),
-        b"yv20".into(),
-        b"\0\0\0\0".into(),
-    ];
-    let valid_v1_profiles: Vec<mp4_atom::FourCC> =
-        vec![b"rgb3".into(), b"rgba".into(), b"abgr".into()];
-    let uncc = &uncv.uncc;
-    match uncc {
-        mp4_atom::UncC::V1 { profile } => {
-            assert!(uncv.cmpd.is_none());
-            assert!(valid_v1_profiles.contains(profile));
-        }
-        mp4_atom::UncC::V0 {
-            profile,
-            components,
-            sampling_type,
-            interleave_type,
-            block_size: _,
-            components_little_endian: _,
-            block_pad_lsb: _,
-            block_little_endian: _,
-            block_reversed: _,
-            pad_unknown: _,
-            pixel_size: _,
-            row_align_size: _,
-            tile_align_size: _,
-            num_tile_cols_minus_one: _,
-            num_tile_rows_minus_one: _,
-        } => {
-            assert!(uncv.cmpd.is_some());
-            let cmpd = uncv.cmpd.as_ref().unwrap();
-            println!("profile: {profile:?}");
-            assert!(valid_v0_profiles.contains(profile));
-            assert!(!components.is_empty());
-            for component in components {
-                // Not clear if component.component_align_size could be tested
-                // Not clear if component.component_bit_depth_minus_one coudl be tested
-                assert!(component.component_index < (cmpd.components.len() as u16));
-                assert!(component.component_format < 4); // 3 for signed int is in Amd 2.
-            }
-            assert!(*sampling_type < 4);
-            assert!(*interleave_type < 6);
-            // TODO: there are some special cases we could cross check here.
-        }
-    }
-}
-
-fn check_visual_sample_entry_sanity(
-    visual: &mp4_atom::Visual,
-    expected_config: &ExpectedConfiguration,
-) {
-    assert!(visual.depth > 0);
-    assert_eq!(visual.height, expected_config.height as u16);
-    assert_eq!(visual.width, expected_config.width as u16);
-    // TODO: assess remaining values for potential invariant
-}
-
-fn check_stsz_sanity(stsz: &mp4_atom::Stsz) {
-    let samples = &stsz.samples;
-    match samples {
-        mp4_atom::StszSamples::Identical { count, size } => {
-            assert!(*count > 0);
-            assert!(*size > 0);
-        }
-        mp4_atom::StszSamples::Different { sizes } => {
-            assert!(!sizes.is_empty())
-        }
-    }
-}
-
-fn check_stts_sanity(stts: &mp4_atom::Stts) {
-    assert!(!stts.entries.is_empty());
-    // TODO: see if there is anything generic about the stts entries we could check
 }
 
 fn test_taic_encode(video_enc: &str) {
@@ -1119,15 +723,13 @@ fn test_taic_encode(video_enc: &str) {
         0,
         vec![b"isom".into(), b"mp41".into(), b"mp42".into()],
         ExpectedConfiguration {
-            is_audio: false,
-            width: 320,
-            height: 240,
             has_ctts: true,
             has_stss: true,
             has_taic: true,
             taic_time_uncertainty: 100_000,
             taic_clock_type: 2,
             num_tai_timestamps: 0,
+            ..Default::default()
         },
     );
 }
@@ -1143,7 +745,7 @@ fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
         .name(format!("stai-{video_enc}"))
         .build();
     let videotestsrc = gst::ElementFactory::make("videotestsrc")
-        .property("num-buffers", number_of_frames)
+        .property("num-buffers", number_of_frames as i32)
         .property("is-live", true)
         .build()
         .unwrap();
@@ -1246,6 +848,8 @@ fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
             taic_time_uncertainty: 100_000,
             taic_clock_type: 2,
             num_tai_timestamps: if enabled { number_of_frames } else { 0 },
+            is_fragmented: false,
+            ..Default::default()
         },
     );
     if enabled {
@@ -1257,7 +861,9 @@ fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
                 mp4_atom::Moov::KIND => {
                     let moov = mp4_atom::Moov::read_atom(&header, &mut input).unwrap();
                     let stbl = &moov.trak.first().unwrap().mdia.minf.stbl;
+                    assert_eq!(stbl.saio.len(), 1);
                     let saio = stbl.saio.first().unwrap();
+                    assert_eq!(stbl.saiz.len(), 1);
                     let saiz = stbl.saiz.first().unwrap();
                     if let Some(ref mdat_data) = mdat_data {
                         assert_eq!(
@@ -1340,15 +946,67 @@ fn test_taic_encode_cannot_sync(video_enc: &str) {
         0,
         vec![b"isom".into(), b"mp41".into(), b"mp42".into()],
         ExpectedConfiguration {
-            is_audio: false,
-            width: 320,
-            height: 240,
             has_ctts: true,
             has_stss: true,
             has_taic: true,
             taic_time_uncertainty: 0xFFFF_FFFF_FFFF_FFFF,
             taic_clock_type: 1,
-            num_tai_timestamps: 0,
+            ..Default::default()
+        },
+    );
+}
+
+#[test]
+fn test_flac_mux_boxes() {
+    init();
+
+    let filename = "flac_mp4.mp4".to_string();
+    let temp_dir = tempdir().unwrap();
+    let temp_file_path = temp_dir.path().join(filename);
+    let location = temp_file_path.as_path();
+    let pipeline_text = format!(
+        "audiotestsrc num-buffers=10 ! flacenc ! flacparse ! isomp4mux ! filesink location={location:?}"
+    );
+
+    let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
+        println!("could not build encoding pipeline");
+        return;
+    };
+    pipeline
+        .set_state(gst::State::Playing)
+        .expect("Unable to set the pipeline to the `Playing` state");
+    for msg in pipeline.bus().unwrap().iter_timed(gst::ClockTime::NONE) {
+        use gst::MessageView;
+
+        match msg.view() {
+            MessageView::Eos(..) => break,
+            MessageView::Error(err) => {
+                panic!(
+                    "Error from {:?}: {} ({:?})",
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
+                );
+            }
+            _ => (),
+        }
+    }
+    pipeline
+        .set_state(gst::State::Null)
+        .expect("Unable to set the pipeline to the `Null` state");
+    let s = location.to_str().unwrap();
+    println!("s = {s:?}");
+    check_generic_single_trak_file_structure(
+        location,
+        b"iso4".into(),
+        0,
+        vec![b"isom".into(), b"mp41".into(), b"mp42".into()],
+        ExpectedConfiguration {
+            is_audio: true,
+            audio_channel_count: 1,
+            audio_sample_rate: 44100.into(),
+            audio_sample_size: 8,
+            ..Default::default()
         },
     );
 }

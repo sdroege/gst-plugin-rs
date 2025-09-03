@@ -19,22 +19,31 @@ use std::collections::VecDeque;
 use std::mem;
 use std::sync::Mutex;
 
-use crate::fmp4mux::obu::read_seq_header_obu_bytes;
-use crate::fmp4mux::TransformMatrix;
+use crate::av1::obu::read_seq_header_obu_bytes;
+use crate::isobmff::boxes::create_dac3;
+use crate::isobmff::boxes::create_dec3;
+use crate::isobmff::fmp4mux::boxes::create_fmp4_fragment_header;
+use crate::isobmff::fmp4mux::boxes::create_fmp4_header;
+use crate::isobmff::fmp4mux::boxes::create_mfra;
+use crate::isobmff::transform_matrix::TransformMatrix;
+use crate::isobmff::ChunkMode;
+use crate::isobmff::DeltaFrames;
+use crate::isobmff::ElstInfo;
+use crate::isobmff::FragmentHeaderConfiguration;
+use crate::isobmff::FragmentHeaderStream;
+use crate::isobmff::FragmentOffset;
+use crate::isobmff::HeaderUpdateMode;
+use crate::isobmff::PresentationConfiguration;
+use crate::isobmff::SplitNowEvent;
+use crate::isobmff::TrackConfiguration;
+use crate::isobmff::Variant;
+use crate::isobmff::WriteEdtsMode;
 use std::sync::LazyLock;
 
-use super::boxes;
-use super::Buffer;
-use super::DeltaFrames;
-use super::SplitNowEvent;
-use super::WriteEdtsMode;
+use crate::isobmff::Buffer;
 
 /// Offset for the segment in non-single-stream variants.
 const SEGMENT_OFFSET: gst::ClockTime = gst::ClockTime::from_seconds(60 * 60 * 1000);
-
-/// Offset between UNIX epoch and Jan 1 1601 epoch in seconds.
-/// 1601 = UNIX + UNIX_1601_OFFSET.
-const UNIX_1601_OFFSET: u64 = 11_644_473_600;
 
 /// Offset between NTP and UNIX epoch in seconds.
 /// NTP = UNIX + NTP_UNIX_OFFSET.
@@ -114,10 +123,10 @@ impl ChunkStrategy {
 
 fn get_chunk_strategy(settings: &Settings) -> ChunkStrategy {
     match settings.chunk_mode {
-        super::ChunkMode::Duration if settings.chunk_duration.is_some() => {
+        ChunkMode::Duration if settings.chunk_duration.is_some() => {
             ChunkStrategy::Duration(settings.chunk_duration.unwrap())
         }
-        super::ChunkMode::Keyframe => ChunkStrategy::Keyframe,
+        ChunkMode::Keyframe => ChunkStrategy::Keyframe,
         _ => ChunkStrategy::None,
     }
 }
@@ -132,7 +141,7 @@ pub static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 
 const DEFAULT_FRAGMENT_DURATION: gst::ClockTime = gst::ClockTime::from_seconds(10);
 const DEFAULT_CHUNK_DURATION: Option<gst::ClockTime> = gst::ClockTime::NONE;
-const DEFAULT_HEADER_UPDATE_MODE: super::HeaderUpdateMode = super::HeaderUpdateMode::None;
+const DEFAULT_HEADER_UPDATE_MODE: HeaderUpdateMode = HeaderUpdateMode::None;
 const DEFAULT_WRITE_MFRA: bool = false;
 const DEFAULT_WRITE_MEHD: bool = false;
 const DEFAULT_INTERLEAVE_BYTES: Option<u64> = None;
@@ -144,13 +153,13 @@ const DEFAULT_OFFSET_TO_ZERO: bool = false;
 const DEFAULT_DECODE_TIME_OFFSET: gst::ClockTimeDiff = 0;
 const DEFAULT_START_FRAGMENT_SEQUENCE_NUMBER: u32 = 1;
 const DEFAULT_ENABLE_KEYFRAME_META: bool = false;
-const DEFAULT_CHUNK_MODE: super::ChunkMode = super::ChunkMode::None;
+const DEFAULT_CHUNK_MODE: ChunkMode = ChunkMode::None;
 
 #[derive(Debug, Clone)]
 struct Settings {
     fragment_duration: gst::ClockTime,
     chunk_duration: Option<gst::ClockTime>,
-    header_update_mode: super::HeaderUpdateMode,
+    header_update_mode: HeaderUpdateMode,
     write_mfra: bool,
     write_mehd: bool,
     interleave_bytes: Option<u64>,
@@ -163,7 +172,7 @@ struct Settings {
     decode_time_offset: gst::ClockTimeDiff,
     start_fragment_sequence_number: u32,
     enable_keyframe_meta: bool,
-    chunk_mode: super::ChunkMode,
+    chunk_mode: ChunkMode,
 }
 
 impl Default for Settings {
@@ -262,7 +271,7 @@ struct Gop {
 
 struct Stream {
     /// Sink pad for this stream.
-    sinkpad: super::FMP4MuxPad,
+    sinkpad: crate::isobmff::FMP4MuxPad,
 
     /// Pre-queue for ONVIF variant to timestamp all buffers with their UTC time.
     ///
@@ -325,7 +334,7 @@ struct Stream {
     max_bitrate: Option<u32>,
 
     /// Edit list entries for this stream.
-    elst_infos: Vec<super::ElstInfo>,
+    elst_infos: Vec<ElstInfo>,
 
     /// Pending split-now event for this stream, if any.
     ///
@@ -335,7 +344,7 @@ struct Stream {
 }
 
 impl Stream {
-    fn get_elst_infos(&self) -> Result<Vec<super::ElstInfo>, anyhow::Error> {
+    fn get_elst_infos(&self) -> Result<Vec<ElstInfo>, anyhow::Error> {
         let mut elst_infos = self.elst_infos.clone();
         let earliest_pts = self.earliest_pts.unwrap_or(gst::ClockTime::ZERO);
         let end_pts = self
@@ -454,7 +463,7 @@ struct State {
 
     /// Fragment tracking for mfra box
     current_offset: u64,
-    fragment_offsets: Vec<super::FragmentOffset>,
+    fragment_offsets: Vec<FragmentOffset>,
 
     /// Earliest PTS of the whole stream
     earliest_pts: Option<gst::ClockTime>,
@@ -562,7 +571,7 @@ impl FMP4Mux {
         };
         let duration = end.map(|end| buffer.end_pts - end);
 
-        stream.elst_infos.push(super::ElstInfo {
+        stream.elst_infos.push(ElstInfo {
             start: Some(start.into()),
             duration,
         });
@@ -621,7 +630,7 @@ impl FMP4Mux {
     ) -> Result<Option<PreQueuedBuffer>, gst::FlowError> {
         // If not in ONVIF mode or the mapping is already known and there is a pre-queued buffer
         // then we can directly return it from here.
-        if self.obj().class().as_ref().variant != super::Variant::ONVIF
+        if self.obj().class().as_ref().variant != Variant::FragmentedONVIF
             || stream.running_time_utc_time_mapping.is_some()
         {
             if let Some(pre_queued_buffer) = stream.pre_queue.front() {
@@ -743,7 +752,7 @@ impl FMP4Mux {
             buffer.set_dts(dts_position);
         }
 
-        if self.obj().class().as_ref().variant != super::Variant::ONVIF {
+        if self.obj().class().as_ref().variant != Variant::FragmentedONVIF {
             // Store in the queue so we don't have to recalculate this all the time
             stream.pre_queue.push_back(PreQueuedBuffer {
                 buffer,
@@ -955,7 +964,7 @@ impl FMP4Mux {
         // or in ONVIF mode we must also know the mapping now.
 
         assert!(!stream.pre_queue.is_empty());
-        if self.obj().class().as_ref().variant == super::Variant::ONVIF {
+        if self.obj().class().as_ref().variant == Variant::FragmentedONVIF {
             assert!(stream.running_time_utc_time_mapping.is_some());
         }
 
@@ -976,7 +985,7 @@ impl FMP4Mux {
     // would change otherwise (e. g. right-most operand in boolean
     // expressions).
     fn header_update_allowed(&self, reason: &str) -> bool {
-        if self.settings.lock().unwrap().header_update_mode == super::HeaderUpdateMode::Caps {
+        if self.settings.lock().unwrap().header_update_mode == HeaderUpdateMode::Caps {
             gst::debug!(
                 CAT,
                 imp = self,
@@ -1969,7 +1978,7 @@ impl FMP4Mux {
         &self,
         settings: &Settings,
         state: &mut State,
-        upstream_events: &mut Vec<(super::FMP4MuxPad, gst::Event)>,
+        upstream_events: &mut Vec<(crate::isobmff::FMP4MuxPad, gst::Event)>,
         all_eos: bool,
         timeout: bool,
     ) {
@@ -2516,7 +2525,7 @@ impl FMP4Mux {
     ) -> Result<
         Option<(
             // All buffers of the GOPs without gaps
-            VecDeque<super::Buffer>,
+            VecDeque<Buffer>,
             // Earliest PTS
             gst::ClockTime,
             // Earliest PTS position
@@ -2716,7 +2725,7 @@ impl FMP4Mux {
     ) -> Result<
         (
             // Drained streams
-            Vec<(super::FragmentHeaderStream, VecDeque<Buffer>)>,
+            Vec<(FragmentHeaderStream, VecDeque<Buffer>)>,
             // Minimum earliest PTS position of all streams
             Option<gst::ClockTime>,
             // Minimum earliest PTS of all streams
@@ -2860,7 +2869,7 @@ impl FMP4Mux {
                         gop.start_pts
                             >= if fragment_filled {
                                 fragment_end_pts
-                            } else if settings.chunk_mode == super::ChunkMode::Keyframe {
+                            } else if settings.chunk_mode == ChunkMode::Keyframe {
                                 // Stream after chunk can never be true here
                                 chunk_start_pts + (gop.end_pts - gop.start_pts)
                             } else {
@@ -2896,7 +2905,7 @@ impl FMP4Mux {
                 gst::info!(CAT, obj = stream.sinkpad, "Draining no buffers",);
 
                 drained_streams.push((
-                    super::FragmentHeaderStream {
+                    FragmentHeaderStream {
                         caps: stream.caps.clone(),
                         start_time: None,
                         start_ntp_time: None,
@@ -2949,7 +2958,7 @@ impl FMP4Mux {
                     gst::info!(CAT, obj = stream.sinkpad, "Drained only gap buffers",);
 
                     drained_streams.push((
-                        super::FragmentHeaderStream {
+                        FragmentHeaderStream {
                             caps: stream.caps.clone(),
                             start_time: None,
                             start_ntp_time: None,
@@ -2991,7 +3000,7 @@ impl FMP4Mux {
             }
 
             drained_streams.push((
-                super::FragmentHeaderStream {
+                FragmentHeaderStream {
                     caps: stream.caps.clone(),
                     // We're setting the tfdt to the earliest PTS of the fragment as it is supposed
                     // to be the sum of all sample durations of all previous fragments.
@@ -3024,8 +3033,8 @@ impl FMP4Mux {
     fn interleave_buffers(
         &self,
         settings: &Settings,
-        mut drained_streams: Vec<(super::FragmentHeaderStream, VecDeque<Buffer>)>,
-    ) -> Result<(Vec<Buffer>, Vec<super::FragmentHeaderStream>), gst::FlowError> {
+        mut drained_streams: Vec<(FragmentHeaderStream, VecDeque<Buffer>)>,
+    ) -> Result<(Vec<Buffer>, Vec<FragmentHeaderStream>), gst::FlowError> {
         let mut interleaved_buffers =
             Vec::with_capacity(drained_streams.iter().map(|(_, bufs)| bufs.len()).sum());
         while let Some((_idx, (_, bufs))) =
@@ -3093,7 +3102,7 @@ impl FMP4Mux {
         settings: &Settings,
         stream: &Stream,
         pts: Option<gst::ClockTime>,
-        upstream_events: &mut Vec<(super::FMP4MuxPad, gst::Event)>,
+        upstream_events: &mut Vec<(crate::isobmff::FMP4MuxPad, gst::Event)>,
     ) {
         if settings.manual_split || !settings.send_force_keyunit {
             return;
@@ -3109,7 +3118,7 @@ impl FMP4Mux {
         // In case of ONVIF this needs to be converted back from UTC time to
         // the stream's running time
         let (fku_time, current_position) = if self.obj().class().as_ref().variant
-            == super::Variant::ONVIF
+            == Variant::FragmentedONVIF
         {
             let Some(fku_time) =
                 utc_time_to_running_time(Some(pts), stream.running_time_utc_time_mapping.unwrap())
@@ -3165,7 +3174,7 @@ impl FMP4Mux {
         settings: &Settings,
         timeout: bool,
         at_eos: bool,
-        upstream_events: &mut Vec<(super::FMP4MuxPad, gst::Event)>,
+        upstream_events: &mut Vec<(crate::isobmff::FMP4MuxPad, gst::Event)>,
     ) -> Result<(Option<gst::Caps>, Option<gst::BufferList>), gst::FlowError> {
         if at_eos {
             gst::info!(CAT, imp = self, "Draining at EOS");
@@ -3218,7 +3227,9 @@ impl FMP4Mux {
 
         // Offset stream start time to start at 0 in ONVIF mode, or if 'offset-to-zero' is enabled,
         // instead of using the UTC time verbatim. This would be used for the tfdt box later.
-        if self.obj().class().as_ref().variant == super::Variant::ONVIF || settings.offset_to_zero {
+        if self.obj().class().as_ref().variant == Variant::FragmentedONVIF
+            || settings.offset_to_zero
+        {
             let offset = state.earliest_pts.unwrap();
             for stream in &mut streams {
                 if let Some(start_time) = stream.start_time {
@@ -3307,7 +3318,7 @@ impl FMP4Mux {
         }
 
         let (mut fmp4_fragment_header, moof_offset) =
-            boxes::create_fmp4_fragment_header(super::FragmentHeaderConfiguration {
+            create_fmp4_fragment_header(FragmentHeaderConfiguration {
                 variant: self.obj().class().as_ref().variant,
                 sequence_number,
                 chunk: !fragment_start,
@@ -3410,12 +3421,12 @@ impl FMP4Mux {
         if settings.write_mfra && fragment_start {
             // Write mfra only for the main stream on fragment starts, and if there are no
             // buffers for the main stream in this segment then don't write anything.
-            if let Some(super::FragmentHeaderStream {
+            if let Some(FragmentHeaderStream {
                 start_time: Some(start_time),
                 ..
             }) = streams.first()
             {
-                state.fragment_offsets.push(super::FragmentOffset {
+                state.fragment_offsets.push(FragmentOffset {
                     time: *start_time,
                     offset: moof_offset,
                 });
@@ -3474,7 +3485,7 @@ impl FMP4Mux {
         mut timeout: bool,
         caps: &mut Option<gst::Caps>,
         buffers: &mut Vec<gst::BufferList>,
-        upstream_events: &mut Vec<(super::FMP4MuxPad, gst::Event)>,
+        upstream_events: &mut Vec<(crate::isobmff::FMP4MuxPad, gst::Event)>,
     ) -> Result<(), gst::FlowError> {
         // Loop as long as new chunks can be drained.
         loop {
@@ -3506,7 +3517,7 @@ impl FMP4Mux {
             if buffer_list.is_none() {
                 if settings.write_mfra && all_eos {
                     gst::debug!(CAT, imp = self, "Writing mfra box");
-                    match boxes::create_mfra(&state.streams[0].caps, &state.fragment_offsets) {
+                    match create_mfra(&state.streams[0].caps, &state.fragment_offsets) {
                         Ok(mut mfra) => {
                             {
                                 let mfra = mfra.get_mut().unwrap();
@@ -3560,7 +3571,7 @@ impl FMP4Mux {
             .obj()
             .sink_pads()
             .into_iter()
-            .map(|pad| pad.downcast::<super::FMP4MuxPad>().unwrap())
+            .map(|pad| pad.downcast::<crate::isobmff::FMP4MuxPad>().unwrap())
         {
             let caps = match pad.current_caps() {
                 Some(caps) => caps,
@@ -3709,18 +3720,6 @@ impl FMP4Mux {
                 }
                 "audio/x-flac" => {
                     discard_header_buffers = true;
-
-                    codec_specific_boxes = match boxes::write_dfla(&caps) {
-                        Ok(boxes) => boxes,
-                        Err(err) => {
-                            gst::error!(
-                                CAT,
-                                obj = pad,
-                                "Failed to create FLAC codec specific box: {err}"
-                            );
-                            return Err(gst::FlowError::NotNegotiated);
-                        }
-                    };
                 }
                 "audio/x-ac3" | "audio/x-eac3" => {
                     let Some(first_buffer) = pad.peek_buffer() else {
@@ -3734,7 +3733,7 @@ impl FMP4Mux {
 
                     match s.name().as_str() {
                         "audio/x-ac3" => {
-                            codec_specific_boxes = match boxes::create_dac3(&first_buffer) {
+                            codec_specific_boxes = match create_dac3(&first_buffer) {
                                 Ok(boxes) => boxes,
                                 Err(err) => {
                                     gst::error!(
@@ -3747,7 +3746,7 @@ impl FMP4Mux {
                             };
                         }
                         "audio/x-eac3" => {
-                            codec_specific_boxes = match boxes::create_dec3(&first_buffer) {
+                            codec_specific_boxes = match create_dec3(&first_buffer) {
                                 Ok(boxes) => boxes,
                                 Err(err) => {
                                     gst::error!(
@@ -3862,8 +3861,7 @@ impl FMP4Mux {
         let class = aggregator.class();
         let variant = class.as_ref().variant;
 
-        if [super::HeaderUpdateMode::None, super::HeaderUpdateMode::Caps]
-            .contains(&settings.header_update_mode)
+        if [HeaderUpdateMode::None, HeaderUpdateMode::Caps].contains(&settings.header_update_mode)
             && at_eos
         {
             return Ok(None);
@@ -3872,11 +3870,8 @@ impl FMP4Mux {
         assert!(!at_eos || state.streams.iter().all(|s| s.queued_gops.is_empty()));
 
         let duration = if at_eos
-            && [
-                super::HeaderUpdateMode::Update,
-                super::HeaderUpdateMode::Rewrite,
-            ]
-            .contains(&settings.header_update_mode)
+            && [HeaderUpdateMode::Update, HeaderUpdateMode::Rewrite]
+                .contains(&settings.header_update_mode)
         {
             state
                 .end_pts
@@ -3892,7 +3887,7 @@ impl FMP4Mux {
             .iter()
             .map(|s| {
                 let trak_timescale = { s.sinkpad.imp().settings.lock().unwrap().trak_timescale };
-                super::HeaderStream {
+                TrackConfiguration {
                     trak_timescale,
                     delta_frames: s.delta_frames,
                     caps: s.caps.clone(),
@@ -3907,6 +3902,12 @@ impl FMP4Mux {
 
                         Vec::new()
                     }),
+                    earliest_pts: gst::ClockTime::from_seconds(0),
+                    end_pts: gst::ClockTime::from_seconds(0),
+                    chunks: vec![],
+                    image_sequence: false,
+                    tai_clock_info: None,
+                    auxiliary_info: vec![],
                 }
             })
             .collect::<Vec<_>>();
@@ -3917,21 +3918,14 @@ impl FMP4Mux {
             WriteEdtsMode::Never => false,
         };
 
-        let mut buffer = boxes::create_fmp4_header(super::HeaderConfiguration {
+        let mut buffer = create_fmp4_header(PresentationConfiguration {
             variant,
             update: at_eos,
             movie_timescale: settings.movie_timescale,
-            streams,
+            tracks: streams,
             write_mehd: settings.write_mehd,
             duration: if at_eos { duration } else { None },
             write_edts,
-            start_utc_time: if variant == super::Variant::ONVIF {
-                state
-                    .earliest_pts
-                    .map(|unix| unix.nseconds() / 100 + UNIX_1601_OFFSET * 10_000_000)
-            } else {
-                None
-            },
         })
         .map_err(|err| {
             gst::error!(CAT, imp = self, "Failed to create FMP4 header: {}", err);
@@ -3951,8 +3945,10 @@ impl FMP4Mux {
         state.stream_header = Some(buffer.clone());
 
         let variant = match variant {
-            super::Variant::ISO | super::Variant::DASH | super::Variant::ONVIF => "iso-fragmented",
-            super::Variant::CMAF => "cmaf",
+            Variant::FragmentedISO | Variant::DASH | Variant::FragmentedONVIF => "iso-fragmented",
+            Variant::CMAF => "cmaf",
+            Variant::ISO => todo!(),
+            Variant::ONVIF => todo!(),
         };
         let caps = gst::Caps::builder("video/quicktime")
             .field("variant", variant)
@@ -3973,7 +3969,7 @@ impl FMP4Mux {
         // Do remaining EOS handling after the end of the stream was pushed.
         gst::debug!(CAT, imp = self, "Doing EOS handling");
 
-        if settings.header_update_mode == super::HeaderUpdateMode::None {
+        if settings.header_update_mode == HeaderUpdateMode::None {
             // Need to output new headers if started again after EOS
             self.state.lock().unwrap().sent_headers = false;
             return;
@@ -3983,8 +3979,8 @@ impl FMP4Mux {
         match updated_header {
             Ok(Some((buffer_list, caps))) => {
                 match settings.header_update_mode {
-                    super::HeaderUpdateMode::None | super::HeaderUpdateMode::Caps => unreachable!(),
-                    super::HeaderUpdateMode::Rewrite => {
+                    HeaderUpdateMode::None | HeaderUpdateMode::Caps => unreachable!(),
+                    HeaderUpdateMode::Rewrite => {
                         let mut q = gst::query::Seeking::new(gst::Format::Bytes);
                         if self.obj().src_pad().peer_query(&mut q) && q.result().0 {
                             let aggregator = self.obj();
@@ -4012,7 +4008,7 @@ impl FMP4Mux {
                             );
                         }
                     }
-                    super::HeaderUpdateMode::Update => {
+                    HeaderUpdateMode::Update => {
                         let aggregator = self.obj();
 
                         aggregator.set_src_caps(&caps);
@@ -4046,7 +4042,7 @@ impl FMP4Mux {
 #[glib::object_subclass]
 impl ObjectSubclass for FMP4Mux {
     const NAME: &'static str = "GstFMP4Mux";
-    type Type = super::FMP4Mux;
+    type Type = crate::isobmff::FMP4Mux;
     type ParentType = gst_base::Aggregator;
     type Class = Class;
 }
@@ -4061,7 +4057,7 @@ impl ObjectImpl for FMP4Mux {
                 glib::subclass::Signal::builder(FMP4_SIGNAL_SEND_HEADERS)
                     .action()
                     .class_handler(|args| {
-                        let element = args[0].get::<super::FMP4Mux>().expect("signal arg");
+                        let element = args[0].get::<crate::isobmff::FMP4Mux>().expect("signal arg");
                         let imp = element.imp();
                         let mut state = imp.state.lock().unwrap();
 
@@ -4079,7 +4075,7 @@ impl ObjectImpl for FMP4Mux {
                     .param_types([gst::ClockTime::static_type()])
                     .action()
                     .class_handler(|args| {
-                        let element = args[0].get::<super::FMP4Mux>().expect("signal arg");
+                        let element = args[0].get::<crate::isobmff::FMP4Mux>().expect("signal arg");
                         let imp = element.imp();
 
                         let settings = imp.settings.lock().unwrap().clone();
@@ -4320,7 +4316,7 @@ impl ObjectImpl for FMP4Mux {
                 let mut settings = self.settings.lock().unwrap();
                 let chunk_duration = value.get().expect("type checked upstream");
                 if settings.chunk_duration != chunk_duration {
-                    settings.chunk_mode = super::ChunkMode::Duration;
+                    settings.chunk_mode = ChunkMode::Duration;
                     settings.chunk_duration = chunk_duration;
                     let latency = settings
                         .chunk_duration
@@ -4841,7 +4837,10 @@ impl AggregatorImpl for FMP4Mux {
         gst::trace!(CAT, imp = self, "Starting");
 
         for pad in self.obj().sink_pads() {
-            let pad = pad.downcast_ref::<super::FMP4MuxPad>().unwrap().imp();
+            let pad = pad
+                .downcast_ref::<crate::isobmff::FMP4MuxPad>()
+                .unwrap()
+                .imp();
 
             pad.state.lock().unwrap().trak_timescale = pad.settings.lock().unwrap().trak_timescale;
         }
@@ -5014,7 +5013,7 @@ impl AggregatorImpl for FMP4Mux {
 #[repr(C)]
 pub(crate) struct Class {
     parent: gst_base::ffi::GstAggregatorClass,
-    variant: super::Variant,
+    variant: Variant,
 }
 
 unsafe impl ClassStruct for Class {
@@ -5029,7 +5028,7 @@ impl std::ops::Deref for Class {
     }
 }
 
-unsafe impl<T: FMP4MuxImpl> IsSubclassable<T> for super::FMP4Mux {
+unsafe impl<T: FMP4MuxImpl> IsSubclassable<T> for crate::isobmff::FMP4Mux {
     fn class_init(class: &mut glib::Class<Self>) {
         Self::parent_class_init::<T>(class);
 
@@ -5039,9 +5038,9 @@ unsafe impl<T: FMP4MuxImpl> IsSubclassable<T> for super::FMP4Mux {
 }
 
 pub(crate) trait FMP4MuxImpl:
-    AggregatorImpl + ObjectSubclass<Type: IsA<super::FMP4Mux>>
+    AggregatorImpl + ObjectSubclass<Type: IsA<crate::isobmff::FMP4Mux>>
 {
-    const VARIANT: super::Variant;
+    const VARIANT: Variant;
 }
 
 #[derive(Default)]
@@ -5050,8 +5049,8 @@ pub(crate) struct ISOFMP4Mux;
 #[glib::object_subclass]
 impl ObjectSubclass for ISOFMP4Mux {
     const NAME: &'static str = "GstISOFMP4Mux";
-    type Type = super::ISOFMP4Mux;
-    type ParentType = super::FMP4Mux;
+    type Type = crate::isobmff::ISOFMP4Mux;
+    type ParentType = crate::isobmff::FMP4Mux;
 }
 
 impl ObjectImpl for ISOFMP4Mux {
@@ -5069,7 +5068,7 @@ impl ObjectImpl for ISOFMP4Mux {
 
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let obj = self.obj();
-        let fmp4mux = obj.upcast_ref::<super::FMP4Mux>().imp();
+        let fmp4mux = obj.upcast_ref::<crate::isobmff::FMP4Mux>().imp();
 
         match pspec.name() {
             "offset-to-zero" => {
@@ -5083,7 +5082,7 @@ impl ObjectImpl for ISOFMP4Mux {
 
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let obj = self.obj();
-        let fmp4mux = obj.upcast_ref::<super::FMP4Mux>().imp();
+        let fmp4mux = obj.upcast_ref::<crate::isobmff::FMP4Mux>().imp();
 
         match pspec.name() {
             "offset-to-zero" => {
@@ -5197,7 +5196,7 @@ impl ElementImpl for ISOFMP4Mux {
                 ]
                 .into_iter()
                 .collect::<gst::Caps>(),
-                super::FMP4MuxPad::static_type(),
+                crate::isobmff::FMP4MuxPad::static_type(),
             )
             .unwrap();
 
@@ -5211,7 +5210,7 @@ impl ElementImpl for ISOFMP4Mux {
 impl AggregatorImpl for ISOFMP4Mux {}
 
 impl FMP4MuxImpl for ISOFMP4Mux {
-    const VARIANT: super::Variant = super::Variant::ISO;
+    const VARIANT: Variant = Variant::FragmentedISO;
 }
 
 #[derive(Default)]
@@ -5220,8 +5219,8 @@ pub(crate) struct CMAFMux;
 #[glib::object_subclass]
 impl ObjectSubclass for CMAFMux {
     const NAME: &'static str = "GstCMAFMux";
-    type Type = super::CMAFMux;
-    type ParentType = super::FMP4Mux;
+    type Type = crate::isobmff::CMAFMux;
+    type ParentType = crate::isobmff::FMP4Mux;
 }
 
 impl ObjectImpl for CMAFMux {}
@@ -5304,7 +5303,7 @@ impl ElementImpl for CMAFMux {
                 ]
                 .into_iter()
                 .collect::<gst::Caps>(),
-                super::FMP4MuxPad::static_type(),
+                crate::isobmff::FMP4MuxPad::static_type(),
             )
             .unwrap();
 
@@ -5318,7 +5317,7 @@ impl ElementImpl for CMAFMux {
 impl AggregatorImpl for CMAFMux {}
 
 impl FMP4MuxImpl for CMAFMux {
-    const VARIANT: super::Variant = super::Variant::CMAF;
+    const VARIANT: Variant = Variant::CMAF;
 }
 
 #[derive(Default)]
@@ -5327,8 +5326,8 @@ pub(crate) struct DASHMP4Mux;
 #[glib::object_subclass]
 impl ObjectSubclass for DASHMP4Mux {
     const NAME: &'static str = "GstDASHMP4Mux";
-    type Type = super::DASHMP4Mux;
-    type ParentType = super::FMP4Mux;
+    type Type = crate::isobmff::DASHMP4Mux;
+    type ParentType = crate::isobmff::FMP4Mux;
 }
 
 impl ObjectImpl for DASHMP4Mux {}
@@ -5429,7 +5428,7 @@ impl ElementImpl for DASHMP4Mux {
                 ]
                 .into_iter()
                 .collect::<gst::Caps>(),
-                super::FMP4MuxPad::static_type(),
+                crate::isobmff::FMP4MuxPad::static_type(),
             )
             .unwrap();
 
@@ -5443,7 +5442,7 @@ impl ElementImpl for DASHMP4Mux {
 impl AggregatorImpl for DASHMP4Mux {}
 
 impl FMP4MuxImpl for DASHMP4Mux {
-    const VARIANT: super::Variant = super::Variant::DASH;
+    const VARIANT: Variant = Variant::DASH;
 }
 
 #[derive(Default)]
@@ -5452,8 +5451,8 @@ pub(crate) struct ONVIFFMP4Mux;
 #[glib::object_subclass]
 impl ObjectSubclass for ONVIFFMP4Mux {
     const NAME: &'static str = "GstONVIFFMP4Mux";
-    type Type = super::ONVIFFMP4Mux;
-    type ParentType = super::FMP4Mux;
+    type Type = crate::isobmff::ONVIFFMP4Mux;
+    type ParentType = crate::isobmff::FMP4Mux;
 }
 
 impl ObjectImpl for ONVIFFMP4Mux {}
@@ -5533,7 +5532,7 @@ impl ElementImpl for ONVIFFMP4Mux {
                 ]
                 .into_iter()
                 .collect::<gst::Caps>(),
-                super::FMP4MuxPad::static_type(),
+                crate::isobmff::FMP4MuxPad::static_type(),
             )
             .unwrap();
 
@@ -5547,7 +5546,7 @@ impl ElementImpl for ONVIFFMP4Mux {
 impl AggregatorImpl for ONVIFFMP4Mux {}
 
 impl FMP4MuxImpl for ONVIFFMP4Mux {
-    const VARIANT: super::Variant = super::Variant::ONVIF;
+    const VARIANT: Variant = Variant::FragmentedONVIF;
 }
 
 #[derive(Default, Clone)]
@@ -5570,7 +5569,7 @@ pub(crate) struct FMP4MuxPad {
 #[glib::object_subclass]
 impl ObjectSubclass for FMP4MuxPad {
     const NAME: &'static str = "GstFMP4MuxPad";
-    type Type = super::FMP4MuxPad;
+    type Type = crate::isobmff::FMP4MuxPad;
     type ParentType = gst_base::AggregatorPad;
 }
 
@@ -5616,7 +5615,9 @@ impl PadImpl for FMP4MuxPad {}
 
 impl AggregatorPadImpl for FMP4MuxPad {
     fn flush(&self, aggregator: &gst_base::Aggregator) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let mux = aggregator.downcast_ref::<super::FMP4Mux>().unwrap();
+        let mux = aggregator
+            .downcast_ref::<crate::isobmff::FMP4Mux>()
+            .unwrap();
         let mut mux_state = mux.imp().state.lock().unwrap();
 
         if let Some(stream) =

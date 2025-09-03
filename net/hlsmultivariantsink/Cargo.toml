@@ -29,7 +29,7 @@ gst-check.workspace = true
 m3u8-rs = "6.0"
 anyhow = "1"
 gst-plugin-hlssink3 = { path = "../hlssink3" }
-gst-plugin-fmp4 = { path = "../../mux/fmp4" }
+gst-plugin-isobmff = { path = "../../mux/isobmff" }
 serial_test = "3"
 
 [build-dependencies]

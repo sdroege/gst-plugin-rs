@@ -25,8 +25,7 @@ members = [
     "generic/gopbuffer",
 
     "mux/flavors",
-    "mux/fmp4",
-    "mux/mp4",
+    "mux/isobmff",
 
     "net/aws",
     "net/deepgram",
@@ -89,8 +88,7 @@ default-members = [
     "generic/gopbuffer",
     "generic/streamgrouper",
 
-    "mux/fmp4",
-    "mux/mp4",
+    "mux/isobmff",
 
     "net/aws",
     "net/mpegtslive",

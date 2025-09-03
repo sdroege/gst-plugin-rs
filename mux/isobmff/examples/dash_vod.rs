@@ -34,7 +34,7 @@ struct State {
 fn main() -> Result<(), Error> {
     gst::init()?;
 
-    gstfmp4::plugin_register_static()?;
+    gstisobmff::plugin_register_static()?;
 
     let state = Arc::new(Mutex::new(State {
         start_time: None,

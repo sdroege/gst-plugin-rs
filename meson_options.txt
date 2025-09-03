@@ -27,8 +27,7 @@ option('streamgrouper', type: 'feature', value: 'auto', description: 'Build stre
 
 # mux
 option('flavors', type: 'feature', value: 'auto', description: 'Build flavors plugin')
-option('fmp4', type: 'feature', value: 'auto', description: 'Build fmp4 plugin')
-option('mp4', type: 'feature', value: 'auto', description: 'Build mp4 plugin')
+option('isobmff', type: 'feature', value: 'auto', description: 'Build ISO BMFF plugin')
 
 # net
 option('aws', type: 'feature', value: 'auto', description: 'Build aws plugin')

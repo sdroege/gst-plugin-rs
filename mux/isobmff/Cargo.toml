@@ -1,9 +1,9 @@
 [package]
-name = "gst-plugin-fmp4"
+name = "gst-plugin-isobmff"
 version.workspace = true
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 license = "MPL-2.0"
-description = "GStreamer Fragmented MP4 Plugin"
+description = "GStreamer ISO Base Media File Format (MP4) Plugin"
 repository.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -17,9 +17,10 @@ gst-video = { workspace = true, features = ["v1_18"] }
 gst-pbutils = { workspace = true, features = ["v1_20"] }
 gst-tag = { workspace = true, features = ["v1_20"] }
 bitstream-io = "4"
+num-integer = { version = "0.1", default-features = false, features = [] }
 
 [lib]
-name = "gstfmp4"
+name = "gstisobmff"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
@@ -27,11 +28,14 @@ path = "src/lib.rs"
 gst-app = { workspace = true, features = ["v1_18"] }
 gst-check = { workspace = true, features = ["v1_18"] }
 gst-pbutils = { workspace = true, features = ["v1_20"] }
-m3u8-rs = "6.0"
 chrono = "0.4.35"
 dash-mpd = { version = "0.18", default-features = false }
+m3u8-rs = "6.0"
+mp4-atom = "0.9"
 quick-xml = { version = "0.38", features = ["serialize"] }
 serde = "1"
+tempfile = "3"
+url = "2"
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true
@@ -41,6 +45,7 @@ default = []
 static = []
 capi = []
 doc = []
+v1_28 = ["gst/v1_28"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

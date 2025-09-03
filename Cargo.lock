@@ -3059,28 +3059,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gst-plugin-fmp4"
-version = "0.15.0-alpha.1"
-dependencies = [
- "anyhow",
- "bitstream-io",
- "chrono",
- "dash-mpd",
- "gst-plugin-version-helper",
- "gstreamer",
- "gstreamer-app",
- "gstreamer-audio",
- "gstreamer-base",
- "gstreamer-check",
- "gstreamer-pbutils",
- "gstreamer-tag",
- "gstreamer-video",
- "m3u8-rs",
- "quick-xml 0.38.3",
- "serde",
-]
-
-[[package]]
 name = "gst-plugin-gif"
 version = "0.15.0-alpha.1"
 dependencies = [
@@ -3136,8 +3114,8 @@ dependencies = [
  "chrono",
  "enumn",
  "gio",
- "gst-plugin-fmp4",
  "gst-plugin-hlssink3",
+ "gst-plugin-isobmff",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-app",
@@ -3158,7 +3136,7 @@ dependencies = [
  "chrono",
  "gio",
  "glib",
- "gst-plugin-fmp4",
+ "gst-plugin-isobmff",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-app",
@@ -3203,6 +3181,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-isobmff"
+version = "0.15.0-alpha.1"
+dependencies = [
+ "anyhow",
+ "bitstream-io",
+ "chrono",
+ "dash-mpd",
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-app",
+ "gstreamer-audio",
+ "gstreamer-base",
+ "gstreamer-check",
+ "gstreamer-pbutils",
+ "gstreamer-tag",
+ "gstreamer-video",
+ "m3u8-rs",
+ "mp4-atom",
+ "num-integer",
+ "quick-xml 0.38.3",
+ "serde",
+ "tempfile",
+ "url",
+]
+
+[[package]]
 name = "gst-plugin-json"
 version = "0.15.0-alpha.1"
 dependencies = [
@@ -3239,25 +3243,6 @@ dependencies = [
  "gtk4",
  "num-rational",
  "parking_lot",
-]
-
-[[package]]
-name = "gst-plugin-mp4"
-version = "0.15.0-alpha.1"
-dependencies = [
- "anyhow",
- "bitstream-io",
- "gst-plugin-version-helper",
- "gstreamer",
- "gstreamer-audio",
- "gstreamer-base",
- "gstreamer-pbutils",
- "gstreamer-tag",
- "gstreamer-video",
- "mp4-atom",
- "num-integer",
- "tempfile",
- "url",
 ]
 
 [[package]]

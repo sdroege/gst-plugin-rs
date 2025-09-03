@@ -92,9 +92,8 @@ plugins = {
   'inter': {'library': 'libgstrsinter'},
   'streamgrouper': {'library': 'libgststreamgrouper'},
 
-  'mp4': {'library': 'libgstmp4'},
-  'fmp4': {
-    'library': 'libgstfmp4',
+  'isobmff': {
+    'library': 'libgstisobmff',
     'examples': [
       'dash_vod',
       'hls_live',

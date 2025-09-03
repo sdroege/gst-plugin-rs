@@ -187,9 +187,7 @@ You will find the following plugins in this repository:
   * `mux`
     - `flavors`: FLV demuxer based on the [flavors](https://github.com/rust-av/flavors) library.
 
-    - `fmp4`: A fragmented MP4/ISOBMFF/CMAF muxer for generating e.g. DASH/HLS media fragments.
-
-    - `mp4`: A non-fragmented MP4 muxer for generating MP4 files.
+    - `isobmff`: A MP4/ISOBMFF/CMAF muxer for generating fragmented (e.g. DASH/HLS media) and non-fragmented (MP4) files.
 
   * `text`
     - `accumulate`: A plugin for segmenting text, designed to work in a live context

@@ -1,11 +1,3 @@
-// Copyright (C) 2022 Sebastian Dröge <sebastian@centricular.com>
-//
-// This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
-// If a copy of the MPL was not distributed with this file, You can obtain one at
-// <https://mozilla.org/MPL/2.0/>.
-//
-// SPDX-License-Identifier: MPL-2.0
-
 use anyhow::{bail, Context};
 use gst::glib;
 use gst::prelude::*;
@@ -19,17 +11,25 @@ use std::collections::VecDeque;
 use std::str::FromStr;
 use std::sync::Mutex;
 
-use crate::mp4mux::obu::read_seq_header_obu_bytes;
-use crate::mp4mux::AuxiliaryInformation;
-use crate::mp4mux::AuxiliaryInformationEntry;
-use crate::mp4mux::TaicClockType;
+use crate::av1::obu::read_seq_header_obu_bytes;
+use crate::isobmff::boxes::create_ftyp;
+use crate::isobmff::boxes::create_mdat_header_non_frag;
+use crate::isobmff::boxes::create_moov_non_frag;
+use crate::isobmff::AuxiliaryInformation;
+use crate::isobmff::AuxiliaryInformationEntry;
+use crate::isobmff::Chunk;
+use crate::isobmff::DeltaFrames;
+use crate::isobmff::ElstInfo;
+use crate::isobmff::PresentationConfiguration;
+use crate::isobmff::Sample;
+use crate::isobmff::TaiClockInfo;
+use crate::isobmff::TaicClockType;
+use crate::isobmff::TrackConfiguration;
+use crate::isobmff::Variant;
+use crate::isobmff::TAIC_TIME_UNCERTAINTY_UNKNOWN;
 use std::sync::LazyLock;
 
-use super::boxes;
-use super::PrecisionClockTimeUncertaintyNanosecondsTag;
-use super::PrecisionClockTypeTag;
-use super::TaiClockInfo;
-use super::TransformMatrix;
+use crate::isobmff::transform_matrix::TransformMatrix;
 
 /// Offset between NTP and UNIX epoch in seconds.
 /// NTP = UNIX + NTP_UNIX_OFFSET.
@@ -100,31 +100,6 @@ impl FromStr for TaicClockType {
     }
 }
 
-impl<'a> Tag<'a> for PrecisionClockTypeTag {
-    type TagType = &'a str;
-    const TAG_NAME: &'static glib::GStr = glib::gstr!("precision-clock-type");
-}
-
-impl CustomTag<'_> for PrecisionClockTypeTag {
-    const FLAG: gst::TagFlag = gst::TagFlag::Meta;
-    const NICK: &'static glib::GStr = glib::gstr!("precision-clock-type");
-    const DESCRIPTION: &'static glib::GStr =
-        glib::gstr!("ISO/IEC 23001-17 TAI Clock type information");
-}
-
-impl Tag<'_> for PrecisionClockTimeUncertaintyNanosecondsTag {
-    type TagType = i32;
-    const TAG_NAME: &'static glib::GStr =
-        glib::gstr!("precision-clock-time-uncertainty-nanoseconds");
-}
-
-impl CustomTag<'_> for PrecisionClockTimeUncertaintyNanosecondsTag {
-    const FLAG: gst::TagFlag = gst::TagFlag::Meta;
-    const NICK: &'static glib::GStr = glib::gstr!("precision-clock-time-uncertainty-nanoseconds");
-    const DESCRIPTION: &'static glib::GStr =
-        glib::gstr!("ISO/IEC 23001-17 TAI Clock time uncertainty (in nanoseconds) information");
-}
-
 const DEFAULT_INTERLEAVE_BYTES: Option<u64> = None;
 const DEFAULT_INTERLEAVE_TIME: Option<gst::ClockTime> = Some(gst::ClockTime::from_mseconds(500));
 
@@ -149,22 +124,6 @@ impl Default for Settings {
     }
 }
 
-// Standard values for taic box (ISO/IEC 23001-17 Amd 1)
-const TAIC_TIME_UNCERTAINTY_UNKNOWN: u64 = 0xFFFF_FFFF_FFFF_FFFF;
-const TAIC_CLOCK_RESOLUTION_MICROSECONDS: u32 = 1000;
-const TAIC_CLOCK_DRIFT_RATE_UNKNOWN: i32 = 0x7FFF_FFFF;
-
-impl Default for TaiClockInfo {
-    fn default() -> Self {
-        TaiClockInfo {
-            time_uncertainty: TAIC_TIME_UNCERTAINTY_UNKNOWN,
-            clock_resolution: TAIC_CLOCK_RESOLUTION_MICROSECONDS,
-            clock_drift_rate: TAIC_CLOCK_DRIFT_RATE_UNKNOWN,
-            clock_type: super::TaicClockType::Unknown,
-        }
-    }
-}
-
 #[derive(Debug)]
 struct PendingBuffer {
     buffer: gst::Buffer,
@@ -183,7 +142,7 @@ struct PendingAuxInfoEntry {
 #[derive(Debug)]
 struct Stream {
     /// Sink pad for this stream.
-    sinkpad: super::MP4MuxPad,
+    sinkpad: crate::isobmff::MP4MuxPad,
 
     /// Pre-queue for ONVIF variant to timestamp all buffers with their UTC time.
     pre_queue: VecDeque<(gst::FormattedSegment<gst::ClockTime>, gst::Buffer)>,
@@ -191,12 +150,12 @@ struct Stream {
     /// Currently configured caps for this stream.
     caps: gst::Caps,
     /// Whether this stream is intra-only and has frame reordering.
-    delta_frames: super::DeltaFrames,
+    delta_frames: DeltaFrames,
     /// Whether this stream might have header frames without timestamps that should be ignored.
     discard_header_buffers: bool,
 
     /// Already written out chunks with their samples for this stream
-    chunks: Vec<super::Chunk>,
+    chunks: Vec<Chunk>,
 
     /// Queued time in the latest chunk.
     queued_chunk_time: gst::ClockTime,
@@ -216,7 +175,7 @@ struct Stream {
     earliest_pts: Option<gst::ClockTime>,
 
     /// Edit list entries for this stream.
-    elst_infos: Vec<super::ElstInfo>,
+    elst_infos: Vec<ElstInfo>,
 
     /// Current end PTS.
     end_pts: Option<gst::ClockTime>,
@@ -249,7 +208,7 @@ impl Stream {
     fn get_elst_infos(
         &self,
         min_earliest_pts: gst::ClockTime,
-    ) -> Result<Vec<super::ElstInfo>, anyhow::Error> {
+    ) -> Result<Vec<ElstInfo>, anyhow::Error> {
         let mut elst_infos = self.elst_infos.clone();
         let earliest_pts = self
             .earliest_pts
@@ -266,7 +225,7 @@ impl Stream {
                 gst::Signed::Positive(gst::ClockTime::ZERO)
             };
 
-            elst_infos.push(super::ElstInfo {
+            elst_infos.push(ElstInfo {
                 start: Some(start),
                 duration: Some(end_pts - earliest_pts),
             });
@@ -278,7 +237,7 @@ impl Stream {
 
             elst_infos.insert(
                 0,
-                super::ElstInfo {
+                ElstInfo {
                     start: None,
                     duration: Some(gap_duration),
                 },
@@ -408,8 +367,8 @@ impl MP4Mux {
     /// Checks if a buffer is valid according to the stream configuration.
     fn check_buffer(
         buffer: &gst::BufferRef,
-        sinkpad: &super::MP4MuxPad,
-        delta_frames: super::DeltaFrames,
+        sinkpad: &crate::isobmff::MP4MuxPad,
+        delta_frames: DeltaFrames,
         discard_headers: bool,
     ) -> Result<(), gst::FlowError> {
         if discard_headers && buffer.flags().contains(gst::BufferFlags::HEADER) {
@@ -495,7 +454,7 @@ impl MP4Mux {
             None
         };
 
-        stream.elst_infos.push(super::ElstInfo {
+        stream.elst_infos.push(ElstInfo {
             start: Some(start.into()),
             duration,
         });
@@ -505,8 +464,8 @@ impl MP4Mux {
 
     fn peek_buffer(
         &self,
-        sinkpad: &super::MP4MuxPad,
-        delta_frames: super::DeltaFrames,
+        sinkpad: &crate::isobmff::MP4MuxPad,
+        delta_frames: DeltaFrames,
         discard_headers: bool,
         pre_queue: &mut VecDeque<(gst::FormattedSegment<gst::ClockTime>, gst::Buffer)>,
         running_time_utc_time_mapping: &Option<(gst::Signed<gst::ClockTime>, gst::ClockTime)>,
@@ -532,7 +491,7 @@ impl MP4Mux {
         //
         // After re-timestamping, put the buffer into the pre-queue so re-timestamping only has to
         // happen once.
-        if self.obj().class().as_ref().variant == super::Variant::ONVIF {
+        if self.obj().class().as_ref().variant == Variant::ONVIF {
             let running_time_utc_time_mapping = running_time_utc_time_mapping.unwrap();
 
             let pts_position = buffer.pts().unwrap();
@@ -601,7 +560,7 @@ impl MP4Mux {
 
         // In ONVIF mode we need to get UTC times for each buffer and synchronize based on that.
         // Queue up to 6s of data to get the first UTC time and then backdate.
-        if self.obj().class().as_ref().variant == super::Variant::ONVIF
+        if self.obj().class().as_ref().variant == Variant::ONVIF
             && stream.running_time_utc_time_mapping.is_none()
         {
             if let Some((last, first)) = Option::zip(pre_queue.back(), pre_queue.front()) {
@@ -718,7 +677,7 @@ impl MP4Mux {
         // - either it was set before already, in which case the next buffer would've been peeked
         //   for calculating the duration to the previous buffer, and then put into the pre-queue
         // - or this is the very first buffer and we just put it into the queue overselves above
-        if self.obj().class().as_ref().variant == super::Variant::ONVIF {
+        if self.obj().class().as_ref().variant == Variant::ONVIF {
             if stream.sinkpad.is_eos() {
                 return Ok(None);
             }
@@ -1121,7 +1080,7 @@ impl MP4Mux {
                 state.current_offset,
             );
 
-            stream.chunks.push(super::Chunk {
+            stream.chunks.push(Chunk {
                 offset: state.current_offset,
                 samples: Vec::new(),
             });
@@ -1351,17 +1310,12 @@ impl MP4Mux {
             stream.queued_chunk_time += duration;
             stream.queued_chunk_bytes += buffer.size() as u64;
 
-            stream
-                .chunks
-                .last_mut()
-                .unwrap()
-                .samples
-                .push(super::Sample {
-                    sync_point: !buffer.flags().contains(gst::BufferFlags::DELTA_UNIT),
-                    duration,
-                    composition_time_offset,
-                    size: buffer.size() as u32,
-                });
+            stream.chunks.last_mut().unwrap().samples.push(Sample {
+                sync_point: !buffer.flags().contains(gst::BufferFlags::DELTA_UNIT),
+                duration,
+                composition_time_offset,
+                size: buffer.size() as u32,
+            });
 
             {
                 let buffer = buffer.make_mut();
@@ -1386,7 +1340,7 @@ impl MP4Mux {
             .obj()
             .sink_pads()
             .into_iter()
-            .map(|pad| pad.downcast::<super::MP4MuxPad>().unwrap())
+            .map(|pad| pad.downcast::<crate::isobmff::MP4MuxPad>().unwrap())
         {
             // Check if language or orientation tags have already been
             // received
@@ -1475,7 +1429,7 @@ impl MP4Mux {
                         }
                         avg_bitrate = Some(bitrate);
                     }
-                    if let Some(tag_value) = ev.tag().get::<PrecisionClockTypeTag>() {
+                    if let Some(tag_value) = ev.tag().get::<crate::isobmff::PrecisionClockTypeTag>() {
                         let clock_type_str = tag_value.get();
                         gst::debug!(
                             CAT,
@@ -1503,7 +1457,7 @@ impl MP4Mux {
                     }
                     if let Some(tag_value) = ev
                         .tag()
-                        .get::<PrecisionClockTimeUncertaintyNanosecondsTag>()
+                        .get::<crate::isobmff::PrecisionClockTimeUncertaintyNanosecondsTag>()
                     {
                         let time_uncertainty_from_tag = tag_value.get();
                         if time_uncertainty_from_tag < 1 {
@@ -1546,18 +1500,14 @@ impl MP4Mux {
             // TODO: also set this when we have GIMI implemented
             if found_taic_part {
                 // TODO: set remaining parts if there are tags implemented
-                tai_clock_info = Some(TaiClockInfo {
-                    clock_type,
-                    time_uncertainty,
-                    ..Default::default()
-                });
+                tai_clock_info = Some(TaiClockInfo::new(clock_type, time_uncertainty));
             }
 
             gst::info!(CAT, obj = pad, "Configuring caps {caps:?}");
 
             let s = caps.structure(0).unwrap();
 
-            let mut delta_frames = super::DeltaFrames::IntraOnly;
+            let mut delta_frames = DeltaFrames::IntraOnly;
             let mut discard_header_buffers = false;
             match s.name().as_str() {
                 "video/x-h264" | "video/x-h265" => {
@@ -1565,20 +1515,20 @@ impl MP4Mux {
                         gst::error!(CAT, obj = pad, "Received caps without codec_data");
                         return Err(gst::FlowError::NotNegotiated);
                     }
-                    delta_frames = super::DeltaFrames::Bidirectional;
+                    delta_frames = DeltaFrames::Bidirectional;
                 }
                 "video/x-vp8" => {
-                    delta_frames = super::DeltaFrames::PredictiveOnly;
+                    delta_frames = DeltaFrames::PredictiveOnly;
                 }
                 "video/x-vp9" => {
                     if !s.has_field_with_type("colorimetry", str::static_type()) {
                         gst::error!(CAT, obj = pad, "Received caps without colorimetry");
                         return Err(gst::FlowError::NotNegotiated);
                     }
-                    delta_frames = super::DeltaFrames::PredictiveOnly;
+                    delta_frames = DeltaFrames::PredictiveOnly;
                 }
                 "video/x-av1" => {
-                    delta_frames = super::DeltaFrames::PredictiveOnly;
+                    delta_frames = DeltaFrames::PredictiveOnly;
                 }
                 "image/jpeg" => (),
                 "video/x-raw" => (),
@@ -1686,7 +1636,7 @@ impl MP4Mux {
 #[glib::object_subclass]
 impl ObjectSubclass for MP4Mux {
     const NAME: &'static str = "GstRsMP4Mux";
-    type Type = super::MP4Mux;
+    type Type = crate::isobmff::MP4Mux;
     type ParentType = gst_base::Aggregator;
     type Class = Class;
 }
@@ -2166,9 +2116,7 @@ impl AggregatorImpl for MP4Mux {
             let variant = self.obj().class().as_ref().variant;
             for stream in state.streams.iter().as_ref() {
                 let caps_structure = stream.caps.structure(0).unwrap();
-                if let (super::Variant::ISO, "video/x-av1") =
-                    (variant, caps_structure.name().as_str())
-                {
+                if let (Variant::ISO, "video/x-av1") = (variant, caps_structure.name().as_str()) {
                     minor_version = 1;
                     compatible_brands.insert(*b"iso4");
                     compatible_brands.insert(*b"av01");
@@ -2210,8 +2158,8 @@ impl AggregatorImpl for MP4Mux {
             }
             // Convert HashSet to Vector
             let compatible_brands_vec: Vec<&[u8; 4]> = compatible_brands.iter().collect();
-            let ftyp = boxes::create_ftyp(major_brand, minor_version, compatible_brands_vec)
-                .map_err(|err| {
+            let ftyp =
+                create_ftyp(major_brand, minor_version, compatible_brands_vec).map_err(|err| {
                     gst::error!(CAT, imp = self, "Failed to create ftyp box: {err}");
                     gst::FlowError::Error
                 })?;
@@ -2225,7 +2173,7 @@ impl AggregatorImpl for MP4Mux {
                 state.current_offset
             );
             state.mdat_offset = Some(state.current_offset);
-            let mdat = boxes::create_mdat_header(None).map_err(|err| {
+            let mdat = create_mdat_header_non_frag(None).map_err(|err| {
                 gst::error!(CAT, imp = self, "Failed to create mdat box header: {err}");
                 gst::FlowError::Error
             })?;
@@ -2267,10 +2215,10 @@ impl AggregatorImpl for MP4Mux {
                     None => continue, // empty stream
                 };
 
-                streams.push(super::Stream {
+                streams.push(TrackConfiguration {
                     caps: stream.caps.clone(),
                     delta_frames: stream.delta_frames,
-                    timescale: stream.timescale(),
+                    trak_timescale: stream.timescale(),
                     earliest_pts,
                     end_pts,
                     elst_infos: stream.get_elst_infos(min_earliest_pts).unwrap_or_else(|e| {
@@ -2287,13 +2235,19 @@ impl AggregatorImpl for MP4Mux {
                     chunks: stream.chunks,
                     tai_clock_info: stream.tai_clock_info,
                     auxiliary_info: stream.aux_info,
+                    codec_specific_boxes: vec![],
                 });
             }
 
-            let moov = boxes::create_moov(super::Header {
+            let moov = create_moov_non_frag(PresentationConfiguration {
                 variant: self.obj().class().as_ref().variant,
                 movie_timescale: settings.movie_timescale,
-                streams,
+                tracks: streams,
+                // TODO: rework this
+                update: false,
+                write_mehd: false,
+                duration: None,
+                write_edts: false,
             })
             .map_err(|err| {
                 gst::error!(CAT, imp = self, "Failed to create moov box: {err}");
@@ -2329,7 +2283,7 @@ impl AggregatorImpl for MP4Mux {
                 let mut segment = gst::FormattedSegment::<gst::format::Bytes>::new();
                 segment.set_start(gst::format::Bytes::from_u64(mdat_offset));
                 state.current_offset = mdat_offset;
-                let mdat = boxes::create_mdat_header(Some(state.mdat_size)).map_err(|err| {
+                let mdat = create_mdat_header_non_frag(Some(state.mdat_size)).map_err(|err| {
                     gst::error!(CAT, imp = self, "Failed to create mdat box header: {err}");
                     gst::FlowError::Error
                 })?;
@@ -2353,7 +2307,7 @@ impl AggregatorImpl for MP4Mux {
 #[repr(C)]
 pub(crate) struct Class {
     parent: gst_base::ffi::GstAggregatorClass,
-    variant: super::Variant,
+    variant: Variant,
 }
 
 unsafe impl ClassStruct for Class {
@@ -2368,7 +2322,7 @@ impl std::ops::Deref for Class {
     }
 }
 
-unsafe impl<T: MP4MuxImpl> IsSubclassable<T> for super::MP4Mux {
+unsafe impl<T: MP4MuxImpl> IsSubclassable<T> for crate::isobmff::MP4Mux {
     fn class_init(class: &mut glib::Class<Self>) {
         Self::parent_class_init::<T>(class);
 
@@ -2378,9 +2332,9 @@ unsafe impl<T: MP4MuxImpl> IsSubclassable<T> for super::MP4Mux {
 }
 
 pub(crate) trait MP4MuxImpl:
-    AggregatorImpl + ObjectSubclass<Type: IsA<super::MP4Mux>>
+    AggregatorImpl + ObjectSubclass<Type: IsA<crate::isobmff::MP4Mux>>
 {
-    const VARIANT: super::Variant;
+    const VARIANT: Variant;
 }
 
 #[derive(Default)]
@@ -2389,8 +2343,8 @@ pub(crate) struct ISOMP4Mux;
 #[glib::object_subclass]
 impl ObjectSubclass for ISOMP4Mux {
     const NAME: &'static str = "GstISOMP4Mux";
-    type Type = super::ISOMP4Mux;
-    type ParentType = super::MP4Mux;
+    type Type = crate::isobmff::ISOMP4Mux;
+    type ParentType = crate::isobmff::MP4Mux;
 }
 
 impl ObjectImpl for ISOMP4Mux {}
@@ -2545,7 +2499,7 @@ impl ElementImpl for ISOMP4Mux {
                 ]
                 .into_iter()
                 .collect::<gst::Caps>(),
-                super::MP4MuxPad::static_type(),
+                crate::isobmff::MP4MuxPad::static_type(),
             )
             .unwrap();
 
@@ -2559,7 +2513,7 @@ impl ElementImpl for ISOMP4Mux {
 impl AggregatorImpl for ISOMP4Mux {}
 
 impl MP4MuxImpl for ISOMP4Mux {
-    const VARIANT: super::Variant = super::Variant::ISO;
+    const VARIANT: Variant = Variant::ISO;
 }
 
 #[derive(Default)]
@@ -2568,8 +2522,8 @@ pub(crate) struct ONVIFMP4Mux;
 #[glib::object_subclass]
 impl ObjectSubclass for ONVIFMP4Mux {
     const NAME: &'static str = "GstONVIFMP4Mux";
-    type Type = super::ONVIFMP4Mux;
-    type ParentType = super::MP4Mux;
+    type Type = crate::isobmff::ONVIFMP4Mux;
+    type ParentType = crate::isobmff::MP4Mux;
 }
 
 impl ObjectImpl for ONVIFMP4Mux {}
@@ -2649,7 +2603,7 @@ impl ElementImpl for ONVIFMP4Mux {
                 ]
                 .into_iter()
                 .collect::<gst::Caps>(),
-                super::MP4MuxPad::static_type(),
+                crate::isobmff::MP4MuxPad::static_type(),
             )
             .unwrap();
 
@@ -2663,7 +2617,7 @@ impl ElementImpl for ONVIFMP4Mux {
 impl AggregatorImpl for ONVIFMP4Mux {}
 
 impl MP4MuxImpl for ONVIFMP4Mux {
-    const VARIANT: super::Variant = super::Variant::ONVIF;
+    const VARIANT: Variant = Variant::ONVIF;
 }
 
 #[derive(Default, Clone)]
@@ -2680,7 +2634,7 @@ pub(crate) struct MP4MuxPad {
 #[glib::object_subclass]
 impl ObjectSubclass for MP4MuxPad {
     const NAME: &'static str = "GstRsMP4MuxPad";
-    type Type = super::MP4MuxPad;
+    type Type = crate::isobmff::MP4MuxPad;
     type ParentType = gst_base::AggregatorPad;
 }
 
@@ -2743,7 +2697,7 @@ impl PadImpl for MP4MuxPad {}
 
 impl AggregatorPadImpl for MP4MuxPad {
     fn flush(&self, aggregator: &gst_base::Aggregator) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let mux = aggregator.downcast_ref::<super::MP4Mux>().unwrap();
+        let mux = aggregator.downcast_ref::<crate::isobmff::MP4Mux>().unwrap();
         let mut mux_state = mux.imp().state.lock().unwrap();
 
         gst::info!(CAT, imp = self, "Flushing");

@@ -3747,475 +3747,6 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
-    "fmp4": {
-        "description": "GStreamer Fragmented MP4 Plugin",
-        "elements": {
-            "cmafmux": {
-                "author": "Sebastian Dröge <sebastian@centricular.com>",
-                "description": "CMAF fragmented MP4 muxer",
-                "hierarchy": [
-                    "GstCMAFMux",
-                    "GstFMP4Mux",
-                    "GstAggregator",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Codec/Muxer",
-                "long-name": "CMAFMux",
-                "pad-templates": {
-                    "sink": {
-                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-av1:\n  stream-format: obu-stream\n      alignment: tu\n        profile: { (string)main, (string)high, (string)professional }\n  chroma-format: { (string)4:0:0, (string)4:2:0, (string)4:2:2, (string)4:4:4 }\n bit-depth-luma: { (uint)8, (uint)10, (uint)12 }\nbit-depth-chroma: { (uint)8, (uint)10, (uint)12 }\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\naudio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-opus:\nchannel-mapping-family: [ 0, 255 ]\n       channels: [ 1, 8 ]\n           rate: [ 1, 2147483647 ]\naudio/x-eac3:\n         framed: true\n      alignment: iec61937\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\n",
-                        "direction": "sink",
-                        "presence": "always",
-                        "type": "GstFMP4MuxPad"
-                    },
-                    "src": {
-                        "caps": "video/quicktime:\n        variant: cmaf\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "rank": "primary",
-                "signals": {
-                    "send-headers": {
-                        "action": true,
-                        "args": [],
-                        "return-type": "void",
-                        "when": "last"
-                    }
-                }
-            },
-            "dashmp4mux": {
-                "author": "Sebastian Dröge <sebastian@centricular.com>",
-                "description": "DASH fragmented MP4 muxer",
-                "hierarchy": [
-                    "GstDASHMP4Mux",
-                    "GstFMP4Mux",
-                    "GstAggregator",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Codec/Muxer",
-                "long-name": "DASHMP4Mux",
-                "pad-templates": {
-                    "sink": {
-                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-vp8:\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-vp9:\n        profile: { (string)0, (string)1, (string)2, (string)3 }\n  chroma-format: { (string)4:2:0, (string)4:2:2, (string)4:4:4 }\n bit-depth-luma: { (uint)8, (uint)10, (uint)12 }\nbit-depth-chroma: { (uint)8, (uint)10, (uint)12 }\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-av1:\n  stream-format: obu-stream\n      alignment: tu\n        profile: { (string)main, (string)high, (string)professional }\n  chroma-format: { (string)4:0:0, (string)4:2:0, (string)4:2:2, (string)4:4:4 }\n bit-depth-luma: { (uint)8, (uint)10, (uint)12 }\nbit-depth-chroma: { (uint)8, (uint)10, (uint)12 }\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\naudio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-opus:\nchannel-mapping-family: [ 0, 255 ]\n       channels: [ 1, 8 ]\n           rate: [ 1, 2147483647 ]\naudio/x-ac3:\n         framed: true\n      alignment: frame\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-eac3:\n         framed: true\n      alignment: iec61937\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\n",
-                        "direction": "sink",
-                        "presence": "always",
-                        "type": "GstFMP4MuxPad"
-                    },
-                    "src": {
-                        "caps": "video/quicktime:\n        variant: iso-fragmented\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "rank": "primary"
-            },
-            "isofmp4mux": {
-                "author": "Sebastian Dröge <sebastian@centricular.com>",
-                "description": "ISO fragmented MP4 muxer",
-                "hierarchy": [
-                    "GstISOFMP4Mux",
-                    "GstFMP4Mux",
-                    "GstAggregator",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Codec/Muxer",
-                "long-name": "ISOFMP4Mux",
-                "pad-templates": {
-                    "sink_%%u": {
-                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-vp8:\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-vp9:\n        profile: { (string)0, (string)1, (string)2, (string)3 }\n  chroma-format: { (string)4:2:0, (string)4:2:2, (string)4:4:4 }\n bit-depth-luma: { (uint)8, (uint)10, (uint)12 }\nbit-depth-chroma: { (uint)8, (uint)10, (uint)12 }\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-av1:\n  stream-format: obu-stream\n      alignment: tu\n        profile: { (string)main, (string)high, (string)professional }\n  chroma-format: { (string)4:0:0, (string)4:2:0, (string)4:2:2, (string)4:4:4 }\n bit-depth-luma: { (uint)8, (uint)10, (uint)12 }\nbit-depth-chroma: { (uint)8, (uint)10, (uint)12 }\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\naudio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-opus:\nchannel-mapping-family: [ 0, 255 ]\n       channels: [ 1, 8 ]\n           rate: [ 1, 2147483647 ]\naudio/x-flac:\n         framed: true\n       channels: [ 1, 8 ]\n           rate: [ 1, 655350 ]\naudio/x-ac3:\n         framed: true\n      alignment: frame\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-eac3:\n         framed: true\n      alignment: iec61937\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\n",
-                        "direction": "sink",
-                        "presence": "request",
-                        "type": "GstFMP4MuxPad"
-                    },
-                    "src": {
-                        "caps": "video/quicktime:\n        variant: iso-fragmented\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "properties": {
-                    "offset-to-zero": {
-                        "blurb": "Offsets all streams so that the earliest stream starts at 0",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "false",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gboolean",
-                        "writable": true
-                    }
-                },
-                "rank": "primary"
-            },
-            "onviffmp4mux": {
-                "author": "Sebastian Dröge <sebastian@centricular.com>",
-                "description": "ONVIF fragmented MP4 muxer",
-                "hierarchy": [
-                    "GstONVIFFMP4Mux",
-                    "GstFMP4Mux",
-                    "GstAggregator",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Codec/Muxer",
-                "long-name": "ONVIFFMP4Mux",
-                "pad-templates": {
-                    "sink_%%u": {
-                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nimage/jpeg:\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\naudio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-alaw:\n       channels: [ 1, 2 ]\n           rate: [ 1, 2147483647 ]\naudio/x-mulaw:\n       channels: [ 1, 2 ]\n           rate: [ 1, 2147483647 ]\naudio/x-adpcm:\n         layout: g726\n       channels: 1\n           rate: 8000\n        bitrate: { (int)16000, (int)24000, (int)32000, (int)40000 }\napplication/x-onvif-metadata:\n         parsed: true\n",
-                        "direction": "sink",
-                        "presence": "request",
-                        "type": "GstFMP4MuxPad"
-                    },
-                    "src": {
-                        "caps": "video/quicktime:\n        variant: iso-fragmented\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "rank": "primary"
-            }
-        },
-        "filename": "gstfmp4",
-        "license": "MPL",
-        "other-types": {
-            "GstFMP4Mux": {
-                "hierarchy": [
-                    "GstFMP4Mux",
-                    "GstAggregator",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "kind": "object",
-                "properties": {
-                    "chunk-duration": {
-                        "blurb": "Duration for each FMP4 chunk (default = no chunks)",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "18446744073709551615",
-                        "max": "18446744073709551615",
-                        "min": "0",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "guint64",
-                        "writable": true
-                    },
-                    "chunk-mode": {
-                        "blurb": "Mode to control chunking on key frame or duration",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "none (0)",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstFMP4MuxChunkMode",
-                        "writable": true
-                    },
-                    "decode-time-offset": {
-                        "blurb": "Offset to apply to the tfdt",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "0",
-                        "max": "9223372036854775807",
-                        "min": "-9223372036854775808",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gint64",
-                        "writable": true
-                    },
-                    "enable-keyframe-meta": {
-                        "blurb": "Writes key frame meta for use by `hlscmafsink`",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "false",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gboolean",
-                        "writable": true
-                    },
-                    "fragment-duration": {
-                        "blurb": "Duration for each FMP4 fragment in nanoseconds",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "10000000000",
-                        "max": "18446744073709551615",
-                        "min": "0",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "guint64",
-                        "writable": true
-                    },
-                    "header-update-mode": {
-                        "blurb": "Mode for updating the header at the end of the stream",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "none (0)",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstFMP4MuxHeaderUpdateMode",
-                        "writable": true
-                    },
-                    "interleave-bytes": {
-                        "blurb": "Interleave between streams in bytes",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "0",
-                        "max": "18446744073709551615",
-                        "min": "0",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "guint64",
-                        "writable": true
-                    },
-                    "interleave-time": {
-                        "blurb": "Interleave between streams in nanoseconds",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "250000000",
-                        "max": "18446744073709551615",
-                        "min": "0",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "guint64",
-                        "writable": true
-                    },
-                    "manual-split": {
-                        "blurb": "Don't split automatically based on the fragment-duration and chunk-duration properties",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "false",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gboolean",
-                        "writable": true
-                    },
-                    "movie-timescale": {
-                        "blurb": "Timescale to use for the movie (units per second, 0 is automatic)",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "0",
-                        "max": "-1",
-                        "min": "0",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": true
-                    },
-                    "send-force-keyunit": {
-                        "blurb": "Send force-keyunit events to request keyframes for the start of each fragment",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "true",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gboolean",
-                        "writable": true
-                    },
-                    "start-fragment-sequence-number": {
-                        "blurb": "Initial sequence number to use in the mfhd",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "1",
-                        "max": "-1",
-                        "min": "0",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": true
-                    },
-                    "write-edts-mode": {
-                        "blurb": "Mode for writing EDTS, when in auto mode, edts written only for non-live streams.",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "auto (0)",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstFMP4MuxWriteEdtsMode",
-                        "writable": true
-                    },
-                    "write-mehd": {
-                        "blurb": "Write movie extends header box with the duration at the end of the stream (needs a header-update-mode enabled)",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "false",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gboolean",
-                        "writable": true
-                    },
-                    "write-mfra": {
-                        "blurb": "Write fragment random access box at the end of the stream",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "false",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gboolean",
-                        "writable": true
-                    }
-                },
-                "signals": {
-                    "send-headers": {
-                        "action": true,
-                        "args": [],
-                        "return-type": "void",
-                        "when": "last"
-                    },
-                    "split-at-running-time": {
-                        "action": true,
-                        "args": [
-                            {
-                                "name": "arg0",
-                                "type": "guint64"
-                            }
-                        ],
-                        "return-type": "void",
-                        "when": "last"
-                    }
-                }
-            },
-            "GstFMP4MuxChunkMode": {
-                "kind": "enum",
-                "values": [
-                    {
-                        "desc": "None",
-                        "name": "none",
-                        "value": "0"
-                    },
-                    {
-                        "desc": "Duration",
-                        "name": "duration",
-                        "value": "1"
-                    },
-                    {
-                        "desc": "Keyframe",
-                        "name": "keyframe",
-                        "value": "2"
-                    }
-                ]
-            },
-            "GstFMP4MuxHeaderUpdateMode": {
-                "kind": "enum",
-                "values": [
-                    {
-                        "desc": "None",
-                        "name": "none",
-                        "value": "0"
-                    },
-                    {
-                        "desc": "Rewrite",
-                        "name": "rewrite",
-                        "value": "1"
-                    },
-                    {
-                        "desc": "Update",
-                        "name": "update",
-                        "value": "2"
-                    },
-                    {
-                        "desc": "Caps",
-                        "name": "caps",
-                        "value": "3"
-                    }
-                ]
-            },
-            "GstFMP4MuxPad": {
-                "hierarchy": [
-                    "GstFMP4MuxPad",
-                    "GstAggregatorPad",
-                    "GstPad",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "kind": "object",
-                "properties": {
-                    "trak-timescale": {
-                        "blurb": "Timescale to use for the track (units per second, 0 is automatic)",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "0",
-                        "max": "-1",
-                        "min": "0",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": true
-                    }
-                }
-            },
-            "GstFMP4MuxWriteEdtsMode": {
-                "kind": "enum",
-                "values": [
-                    {
-                        "desc": "Auto",
-                        "name": "auto",
-                        "value": "0"
-                    },
-                    {
-                        "desc": "Always",
-                        "name": "always",
-                        "value": "1"
-                    },
-                    {
-                        "desc": "Never",
-                        "name": "never",
-                        "value": "2"
-                    }
-                ]
-            }
-        },
-        "package": "gst-plugin-fmp4",
-        "source": "gst-plugin-fmp4",
-        "tracers": {},
-        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-    },
     "gif": {
         "description": "GStreamer GIF plugin",
         "elements": {
@@ -5545,6 +5076,637 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "isobmff": {
+        "description": "GStreamer ISO Base Media File Format (MP4) Plugin",
+        "elements": {
+            "cmafmux": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "CMAF fragmented MP4 muxer",
+                "hierarchy": [
+                    "GstCMAFMux",
+                    "GstFMP4Mux",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Muxer",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-av1:\n  stream-format: obu-stream\n      alignment: tu\n        profile: { (string)main, (string)high, (string)professional }\n  chroma-format: { (string)4:0:0, (string)4:2:0, (string)4:2:2, (string)4:4:4 }\n bit-depth-luma: { (uint)8, (uint)10, (uint)12 }\nbit-depth-chroma: { (uint)8, (uint)10, (uint)12 }\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\naudio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-opus:\nchannel-mapping-family: [ 0, 255 ]\n       channels: [ 1, 8 ]\n           rate: [ 1, 2147483647 ]\naudio/x-eac3:\n         framed: true\n      alignment: iec61937\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\n",
+                        "direction": "sink",
+                        "presence": "always",
+                        "type": "GstFMP4MuxPad"
+                    },
+                    "src": {
+                        "caps": "video/quicktime:\n        variant: cmaf\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "primary"
+            },
+            "dashmp4mux": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "DASH fragmented MP4 muxer",
+                "hierarchy": [
+                    "GstDASHMP4Mux",
+                    "GstFMP4Mux",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Muxer",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-vp8:\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-vp9:\n        profile: { (string)0, (string)1, (string)2, (string)3 }\n  chroma-format: { (string)4:2:0, (string)4:2:2, (string)4:4:4 }\n bit-depth-luma: { (uint)8, (uint)10, (uint)12 }\nbit-depth-chroma: { (uint)8, (uint)10, (uint)12 }\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-av1:\n  stream-format: obu-stream\n      alignment: tu\n        profile: { (string)main, (string)high, (string)professional }\n  chroma-format: { (string)4:0:0, (string)4:2:0, (string)4:2:2, (string)4:4:4 }\n bit-depth-luma: { (uint)8, (uint)10, (uint)12 }\nbit-depth-chroma: { (uint)8, (uint)10, (uint)12 }\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\naudio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-opus:\nchannel-mapping-family: [ 0, 255 ]\n       channels: [ 1, 8 ]\n           rate: [ 1, 2147483647 ]\naudio/x-ac3:\n         framed: true\n      alignment: frame\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-eac3:\n         framed: true\n      alignment: iec61937\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\n",
+                        "direction": "sink",
+                        "presence": "always",
+                        "type": "GstFMP4MuxPad"
+                    },
+                    "src": {
+                        "caps": "video/quicktime:\n        variant: iso-fragmented\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "primary"
+            },
+            "isofmp4mux": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "ISO fragmented MP4 muxer",
+                "hierarchy": [
+                    "GstISOFMP4Mux",
+                    "GstFMP4Mux",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Muxer",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-vp8:\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-vp9:\n        profile: { (string)0, (string)1, (string)2, (string)3 }\n  chroma-format: { (string)4:2:0, (string)4:2:2, (string)4:4:4 }\n bit-depth-luma: { (uint)8, (uint)10, (uint)12 }\nbit-depth-chroma: { (uint)8, (uint)10, (uint)12 }\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-av1:\n  stream-format: obu-stream\n      alignment: tu\n        profile: { (string)main, (string)high, (string)professional }\n  chroma-format: { (string)4:0:0, (string)4:2:0, (string)4:2:2, (string)4:4:4 }\n bit-depth-luma: { (uint)8, (uint)10, (uint)12 }\nbit-depth-chroma: { (uint)8, (uint)10, (uint)12 }\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\naudio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-opus:\nchannel-mapping-family: [ 0, 255 ]\n       channels: [ 1, 8 ]\n           rate: [ 1, 2147483647 ]\naudio/x-flac:\n         framed: true\n       channels: [ 1, 8 ]\n           rate: [ 1, 655350 ]\naudio/x-ac3:\n         framed: true\n      alignment: frame\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-eac3:\n         framed: true\n      alignment: iec61937\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstFMP4MuxPad"
+                    },
+                    "src": {
+                        "caps": "video/quicktime:\n        variant: iso-fragmented\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "offset-to-zero": {
+                        "blurb": "Offsets all streams so that the earliest stream starts at 0",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
+                "rank": "primary"
+            },
+            "isomp4mux": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "ISO MP4 muxer",
+                "hierarchy": [
+                    "GstISOMP4Mux",
+                    "GstRsMP4Mux",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Muxer",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-vp8:\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-vp9:\n        profile: { (string)0, (string)1, (string)2, (string)3 }\n  chroma-format: { (string)4:2:0, (string)4:2:2, (string)4:4:4 }\n bit-depth-luma: { (uint)8, (uint)10, (uint)12 }\nbit-depth-chroma: { (uint)8, (uint)10, (uint)12 }\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-av1:\n  stream-format: obu-stream\n      alignment: tu\n        profile: { (string)main, (string)high, (string)professional }\n  chroma-format: { (string)4:0:0, (string)4:2:0, (string)4:2:2, (string)4:4:4 }\n bit-depth-luma: { (uint)8, (uint)10, (uint)12 }\nbit-depth-chroma: { (uint)8, (uint)10, (uint)12 }\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-raw:\n         format: { IYU2, RGB, BGR, NV12, NV21, RGBA, ARGB, ABGR, BGRA, RGBx, BGRx, Y444, AYUV, GRAY8, GRAY16_BE, GBR, RGBP, BGRP, v308, r210 }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\nvideo/x-raw:\n         format: { Y41B, NV16, NV61, Y42B }\n          width: [ 4, 2147483644, 4 ]\n         height: [ 1, 2147483647 ]\nvideo/x-raw:\n         format: { I420, YV12, YUY2, YVYU, UYVY, VYUY }\n          width: [ 4, 2147483644, 4 ]\n         height: [ 2, 2147483646, 2 ]\naudio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-opus:\nchannel-mapping-family: [ 0, 255 ]\n       channels: [ 1, 8 ]\n           rate: [ 1, 2147483647 ]\naudio/x-flac:\n         framed: true\n       channels: [ 1, 8 ]\n           rate: [ 1, 655350 ]\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstRsMP4MuxPad"
+                    },
+                    "src": {
+                        "caps": "video/quicktime:\n        variant: iso\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "onviffmp4mux": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "ONVIF fragmented MP4 muxer",
+                "hierarchy": [
+                    "GstONVIFFMP4Mux",
+                    "GstFMP4Mux",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Muxer",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nimage/jpeg:\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\naudio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-alaw:\n       channels: [ 1, 2 ]\n           rate: [ 1, 2147483647 ]\naudio/x-mulaw:\n       channels: [ 1, 2 ]\n           rate: [ 1, 2147483647 ]\naudio/x-adpcm:\n         layout: g726\n       channels: 1\n           rate: 8000\n        bitrate: { (int)16000, (int)24000, (int)32000, (int)40000 }\napplication/x-onvif-metadata:\n         parsed: true\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstFMP4MuxPad"
+                    },
+                    "src": {
+                        "caps": "video/quicktime:\n        variant: iso-fragmented\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "primary"
+            },
+            "onvifmp4mux": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "ONVIF MP4 muxer",
+                "hierarchy": [
+                    "GstONVIFMP4Mux",
+                    "GstRsMP4Mux",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Muxer",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nimage/jpeg:\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\naudio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-alaw:\n       channels: [ 1, 2 ]\n           rate: [ 1, 2147483647 ]\naudio/x-mulaw:\n       channels: [ 1, 2 ]\n           rate: [ 1, 2147483647 ]\naudio/x-adpcm:\n         layout: g726\n       channels: 1\n           rate: 8000\n        bitrate: { (int)16000, (int)24000, (int)32000, (int)40000 }\napplication/x-onvif-metadata:\n         parsed: true\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstRsMP4MuxPad"
+                    },
+                    "src": {
+                        "caps": "video/quicktime:\n        variant: iso\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            }
+        },
+        "filename": "gstisobmff",
+        "license": "MPL",
+        "other-types": {
+            "GstFMP4Mux": {
+                "hierarchy": [
+                    "GstFMP4Mux",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "chunk-duration": {
+                        "blurb": "Duration for each FMP4 chunk (default = no chunks)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "18446744073709551615",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "chunk-mode": {
+                        "blurb": "Mode to control chunking on key frame or duration",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "none (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstFMP4MuxChunkMode",
+                        "writable": true
+                    },
+                    "decode-time-offset": {
+                        "blurb": "Offset to apply to the tfdt",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "9223372036854775807",
+                        "min": "-9223372036854775808",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gint64",
+                        "writable": true
+                    },
+                    "enable-keyframe-meta": {
+                        "blurb": "Writes key frame meta for use by `hlscmafsink`",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "fragment-duration": {
+                        "blurb": "Duration for each FMP4 fragment in nanoseconds",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "10000000000",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "header-update-mode": {
+                        "blurb": "Mode for updating the header at the end of the stream",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "none (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstFMP4MuxHeaderUpdateMode",
+                        "writable": true
+                    },
+                    "interleave-bytes": {
+                        "blurb": "Interleave between streams in bytes",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "interleave-time": {
+                        "blurb": "Interleave between streams in nanoseconds",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "250000000",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "manual-split": {
+                        "blurb": "Don't split automatically based on the fragment-duration and chunk-duration properties",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "movie-timescale": {
+                        "blurb": "Timescale to use for the movie (units per second, 0 is automatic)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "send-force-keyunit": {
+                        "blurb": "Send force-keyunit events to request keyframes for the start of each fragment",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "start-fragment-sequence-number": {
+                        "blurb": "Initial sequence number to use in the mfhd",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "write-edts-mode": {
+                        "blurb": "Mode for writing EDTS, when in auto mode, edts written only for non-live streams.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "auto (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstFMP4MuxWriteEdtsMode",
+                        "writable": true
+                    },
+                    "write-mehd": {
+                        "blurb": "Write movie extends header box with the duration at the end of the stream (needs a header-update-mode enabled)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "write-mfra": {
+                        "blurb": "Write fragment random access box at the end of the stream",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
+                "signals": {
+                    "send-headers": {
+                        "action": true,
+                        "args": [],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "split-at-running-time": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "guint64"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    }
+                }
+            },
+            "GstFMP4MuxChunkMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "None",
+                        "name": "none",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Duration",
+                        "name": "duration",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Keyframe",
+                        "name": "keyframe",
+                        "value": "2"
+                    }
+                ]
+            },
+            "GstFMP4MuxHeaderUpdateMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "None",
+                        "name": "none",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Rewrite",
+                        "name": "rewrite",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Update",
+                        "name": "update",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "Caps",
+                        "name": "caps",
+                        "value": "3"
+                    }
+                ]
+            },
+            "GstFMP4MuxPad": {
+                "hierarchy": [
+                    "GstFMP4MuxPad",
+                    "GstAggregatorPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "trak-timescale": {
+                        "blurb": "Timescale to use for the track (units per second, 0 is automatic)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                }
+            },
+            "GstFMP4MuxWriteEdtsMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Auto",
+                        "name": "auto",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Always",
+                        "name": "always",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Never",
+                        "name": "never",
+                        "value": "2"
+                    }
+                ]
+            },
+            "GstRsMP4Mux": {
+                "hierarchy": [
+                    "GstRsMP4Mux",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "extra-brands": {
+                        "blurb": "Comma-separated list of 4-character brand codes (e.g. duke,sook)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "interleave-bytes": {
+                        "blurb": "Interleave between streams in bytes",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "interleave-time": {
+                        "blurb": "Interleave between streams in nanoseconds",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "500000000",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "movie-timescale": {
+                        "blurb": "Timescale to use for the movie (units per second, 0 is automatic)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "tai-precision-timestamps": {
+                        "blurb": "Whether to encode ISO/IEC 23001-17 TAI timestamps as auxiliary data",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                }
+            },
+            "GstRsMP4MuxPad": {
+                "hierarchy": [
+                    "GstRsMP4MuxPad",
+                    "GstAggregatorPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "image-sequence": {
+                        "blurb": "Generate ISO/IEC 23008-12 image sequence instead of video",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "trak-timescale": {
+                        "blurb": "Timescale to use for the track (units per second, 0 is automatic)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                }
+            }
+        },
+        "package": "gst-plugin-isobmff",
+        "source": "gst-plugin-isobmff",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "json": {
         "description": "GStreamer JSON Plugin",
         "elements": {
@@ -5805,193 +5967,6 @@
         "other-types": {},
         "package": "gst-plugin-livesync",
         "source": "gst-plugin-livesync",
-        "tracers": {},
-        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-    },
-    "mp4": {
-        "description": "GStreamer Rust MP4 Plugin",
-        "elements": {
-            "isomp4mux": {
-                "author": "Sebastian Dröge <sebastian@centricular.com>",
-                "description": "ISO MP4 muxer",
-                "hierarchy": [
-                    "GstISOMP4Mux",
-                    "GstRsMP4Mux",
-                    "GstAggregator",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Codec/Muxer",
-                "pad-templates": {
-                    "sink_%%u": {
-                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-vp8:\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-vp9:\n        profile: { (string)0, (string)1, (string)2, (string)3 }\n  chroma-format: { (string)4:2:0, (string)4:2:2, (string)4:4:4 }\n bit-depth-luma: { (uint)8, (uint)10, (uint)12 }\nbit-depth-chroma: { (uint)8, (uint)10, (uint)12 }\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-av1:\n  stream-format: obu-stream\n      alignment: tu\n        profile: { (string)main, (string)high, (string)professional }\n  chroma-format: { (string)4:0:0, (string)4:2:0, (string)4:2:2, (string)4:4:4 }\n bit-depth-luma: { (uint)8, (uint)10, (uint)12 }\nbit-depth-chroma: { (uint)8, (uint)10, (uint)12 }\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-raw:\n         format: { IYU2, RGB, BGR, NV12, NV21, RGBA, ARGB, ABGR, BGRA, RGBx, BGRx, Y444, AYUV, GRAY8, GRAY16_BE, GBR, RGBP, BGRP, v308, r210 }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\nvideo/x-raw:\n         format: { Y41B, NV16, NV61, Y42B }\n          width: [ 4, 2147483644, 4 ]\n         height: [ 1, 2147483647 ]\nvideo/x-raw:\n         format: { I420, YV12, YUY2, YVYU, UYVY, VYUY }\n          width: [ 4, 2147483644, 4 ]\n         height: [ 2, 2147483646, 2 ]\naudio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-opus:\nchannel-mapping-family: [ 0, 255 ]\n       channels: [ 1, 8 ]\n           rate: [ 1, 2147483647 ]\naudio/x-flac:\n         framed: true\n       channels: [ 1, 8 ]\n           rate: [ 1, 655350 ]\n",
-                        "direction": "sink",
-                        "presence": "request",
-                        "type": "GstRsMP4MuxPad"
-                    },
-                    "src": {
-                        "caps": "video/quicktime:\n        variant: iso\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "rank": "marginal"
-            },
-            "onvifmp4mux": {
-                "author": "Sebastian Dröge <sebastian@centricular.com>",
-                "description": "ONVIF MP4 muxer",
-                "hierarchy": [
-                    "GstONVIFMP4Mux",
-                    "GstRsMP4Mux",
-                    "GstAggregator",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Codec/Muxer",
-                "pad-templates": {
-                    "sink_%%u": {
-                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\nimage/jpeg:\n          width: [ 1, 65535 ]\n         height: [ 1, 65535 ]\naudio/mpeg:\n    mpegversion: 4\n  stream-format: raw\n       channels: [ 1, 65535 ]\n           rate: [ 1, 2147483647 ]\naudio/x-alaw:\n       channels: [ 1, 2 ]\n           rate: [ 1, 2147483647 ]\naudio/x-mulaw:\n       channels: [ 1, 2 ]\n           rate: [ 1, 2147483647 ]\naudio/x-adpcm:\n         layout: g726\n       channels: 1\n           rate: 8000\n        bitrate: { (int)16000, (int)24000, (int)32000, (int)40000 }\napplication/x-onvif-metadata:\n         parsed: true\n",
-                        "direction": "sink",
-                        "presence": "request",
-                        "type": "GstRsMP4MuxPad"
-                    },
-                    "src": {
-                        "caps": "video/quicktime:\n        variant: iso\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "rank": "marginal"
-            }
-        },
-        "filename": "gstmp4",
-        "license": "MPL",
-        "other-types": {
-            "GstRsMP4Mux": {
-                "hierarchy": [
-                    "GstRsMP4Mux",
-                    "GstAggregator",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "kind": "object",
-                "properties": {
-                    "extra-brands": {
-                        "blurb": "Comma-separated list of 4-character brand codes (e.g. duke,sook)",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gchararray",
-                        "writable": true
-                    },
-                    "interleave-bytes": {
-                        "blurb": "Interleave between streams in bytes",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "0",
-                        "max": "18446744073709551615",
-                        "min": "0",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "guint64",
-                        "writable": true
-                    },
-                    "interleave-time": {
-                        "blurb": "Interleave between streams in nanoseconds",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "500000000",
-                        "max": "18446744073709551615",
-                        "min": "0",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "guint64",
-                        "writable": true
-                    },
-                    "movie-timescale": {
-                        "blurb": "Timescale to use for the movie (units per second, 0 is automatic)",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "0",
-                        "max": "-1",
-                        "min": "0",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": true
-                    },
-                    "tai-precision-timestamps": {
-                        "blurb": "Whether to encode ISO/IEC 23001-17 TAI timestamps as auxiliary data",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "false",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gboolean",
-                        "writable": true
-                    }
-                }
-            },
-            "GstRsMP4MuxPad": {
-                "hierarchy": [
-                    "GstRsMP4MuxPad",
-                    "GstAggregatorPad",
-                    "GstPad",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "kind": "object",
-                "properties": {
-                    "image-sequence": {
-                        "blurb": "Generate ISO/IEC 23008-12 image sequence instead of video",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "false",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "gboolean",
-                        "writable": true
-                    },
-                    "trak-timescale": {
-                        "blurb": "Timescale to use for the track (units per second, 0 is automatic)",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "0",
-                        "max": "-1",
-                        "min": "0",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": true
-                    }
-                }
-            }
-        },
-        "package": "gst-plugin-mp4",
-        "source": "gst-plugin-mp4",
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },

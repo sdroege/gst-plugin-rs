@@ -8,8 +8,15 @@
 //
 
 use gst::prelude::*;
+use mp4_atom::{Atom, ReadAtom as _, ReadFrom as _};
+use tempfile::tempdir;
 
-use std::thread;
+use std::{fs::File, path::Path, thread};
+
+pub mod support;
+use support::{check_ftyp_output, check_mvhd_sanity, ExpectedConfiguration};
+
+use crate::support::check_trak_sanity;
 
 fn init() {
     use std::sync::Once;
@@ -17,7 +24,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstfmp4::plugin_register_static().unwrap();
+        gstisobmff::plugin_register_static().unwrap();
     });
 }
 
@@ -4183,4 +4190,442 @@ fn test_multi_stream_late_key_frame_sparse_on_frag_boundary() {
 #[test]
 fn test_multi_stream_late_key_frame_sparse_on_frag_boundary_gap() {
     test_late_key_frame_sparse(2_000, true, true)
+}
+
+fn check_mvex_sanity(maybe_mvex: &Option<mp4_atom::Mvex>) {
+    assert!(maybe_mvex.as_ref().is_some_and(|mvex| {
+        assert!(mvex.mehd.is_none());
+        assert_eq!(mvex.trex.len(), 1);
+        let trex0 = &mvex.trex[0];
+        assert_eq!(trex0.track_id, 1);
+        assert_eq!(trex0.default_sample_description_index, 1);
+        assert_eq!(trex0.default_sample_duration, 0);
+        assert_eq!(trex0.default_sample_flags, 0);
+        assert_eq!(trex0.default_sample_size, 0);
+        true
+    }));
+    // TODO: see if there is anything generic about the stco entries we could check
+}
+
+fn check_frag_file_structure(
+    location: &Path,
+    expected_major_brand: mp4_atom::FourCC,
+    expected_minor_version: u32,
+    expected_compatible_brands: Vec<mp4_atom::FourCC>,
+    expected_config: ExpectedConfiguration,
+) {
+    let mut required_top_level_boxes: Vec<mp4_atom::FourCC> = vec![
+        b"ftyp".into(),
+        b"moov".into(),
+        b"styp".into(),
+        b"moof".into(),
+        b"mdat".into(),
+    ];
+
+    let mut input = File::open(location).unwrap();
+    while let Ok(header) = mp4_atom::Header::read_from(&mut input) {
+        println!("header.kind: {:?}", &header.kind);
+        assert!(required_top_level_boxes.contains(&header.kind));
+        let pos = required_top_level_boxes
+            .iter()
+            .position(|&fourcc| fourcc == header.kind)
+            .unwrap_or_else(|| panic!("expected to find a matching fourcc {:?}", header.kind));
+        required_top_level_boxes.remove(pos);
+        match header.kind {
+            mp4_atom::Ftyp::KIND => {
+                let ftyp = mp4_atom::Ftyp::read_atom(&header, &mut input).unwrap();
+                check_ftyp_output(
+                    expected_major_brand,
+                    expected_minor_version,
+                    &expected_compatible_brands,
+                    ftyp,
+                );
+            }
+            mp4_atom::Moov::KIND => {
+                let moov = mp4_atom::Moov::read_atom(&header, &mut input).unwrap();
+                assert!(moov.meta.is_none());
+                assert!(moov.udta.is_none());
+                check_mvex_sanity(&moov.mvex);
+                check_trak_sanity(&moov.trak, &expected_config);
+                check_mvhd_sanity(&moov.mvhd, &expected_config);
+            }
+            mp4_atom::Styp::KIND => {
+                let styp = mp4_atom::Styp::read_atom(&header, &mut input).unwrap();
+                assert_eq!(styp.major_brand, expected_major_brand);
+                // TODO: check the rest
+            }
+            mp4_atom::Moof::KIND => {
+                let moof = mp4_atom::Moof::read_atom(&header, &mut input).unwrap();
+                assert_eq!(moof.mfhd.sequence_number, 1);
+                assert_eq!(moof.traf.len(), 1);
+                let traf0 = &moof.traf[0];
+                assert!(traf0
+                    .tfdt
+                    .as_ref()
+                    .is_some_and(|tfdt| { tfdt.base_media_decode_time == 0 }));
+                assert_eq!(traf0.tfhd.track_id, 1);
+                assert!(traf0.tfhd.base_data_offset.is_none());
+                if expected_config.is_audio {
+                    // TODO: work out why this isn't always Some()
+                    // assert!(traf0.tfhd.default_sample_duration.is_some());
+                } else {
+                    assert_eq!(traf0.tfhd.default_sample_duration, Some(100));
+                }
+                assert!(traf0.tfhd.default_sample_size.is_none());
+                assert!(traf0.tfhd.sample_description_index.is_none());
+                if expected_config.is_audio {
+                    assert_eq!(traf0.tfhd.default_sample_flags, Some(0x02800000));
+                } else {
+                    assert_eq!(traf0.tfhd.default_sample_flags, Some(0x01010000));
+                }
+                assert_eq!(traf0.trun.len(), 1);
+                let trun = traf0.trun.first().unwrap();
+                if expected_config.is_audio {
+                    // This offset and count is a bit arbitrary, since its codec specific
+                    assert!(trun.data_offset.is_some_and(|offset| offset >= 112));
+                    assert!(trun.entries.len() >= 3);
+                } else {
+                    assert_eq!(trun.data_offset, Some(184));
+                    assert_eq!(trun.entries.len(), 10);
+                }
+                // TODO: this could check the entries.
+            }
+            mp4_atom::Mdat::KIND => {
+                let mdat = mp4_atom::Mdat::read_atom(&header, &mut input).unwrap();
+                assert!(!mdat.data.is_empty());
+            }
+            _ => {
+                panic!("Unexpected top level box: {:?}", header.kind);
+            }
+        }
+    }
+    assert!(
+        required_top_level_boxes.is_empty(),
+        "expected all top level boxes to be found, but these were missed: {required_top_level_boxes:?}"
+    );
+}
+
+#[test]
+fn test_fmux_boxes() {
+    init();
+
+    let video_enc = "x264enc";
+    let filename = format!("frag_{video_enc}.mp4").to_string();
+    let temp_dir = tempdir().unwrap();
+    let temp_file_path = temp_dir.path().join(filename);
+    let location = temp_file_path.as_path();
+    let pipeline_text = format!(
+        "videotestsrc num-buffers=10 ! {video_enc} ! isofmp4mux ! filesink location={location:?}"
+    );
+
+    let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
+        panic!("could not build encoding pipeline")
+    };
+    pipeline
+        .set_state(gst::State::Playing)
+        .expect("Unable to set the pipeline to the `Playing` state");
+    for msg in pipeline.bus().unwrap().iter_timed(gst::ClockTime::NONE) {
+        use gst::MessageView;
+
+        match msg.view() {
+            MessageView::Eos(..) => break,
+            MessageView::Error(err) => {
+                panic!(
+                    "Error from {:?}: {} ({:?})",
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
+                );
+            }
+            _ => (),
+        }
+    }
+    pipeline
+        .set_state(gst::State::Null)
+        .expect("Unable to set the pipeline to the `Null` state");
+
+    check_frag_file_structure(
+        location,
+        b"iso6".into(),
+        0,
+        vec![b"iso6".into()],
+        ExpectedConfiguration {
+            has_stss: true,
+            is_fragmented: true,
+            ..Default::default()
+        },
+    );
+}
+
+#[test]
+fn test_cmaf_fmux_boxes() {
+    init();
+
+    let video_enc = "x264enc";
+    let filename = format!("cmaf_{video_enc}.mp4").to_string();
+    let temp_dir = tempdir().unwrap();
+    let temp_file_path = temp_dir.path().join(filename);
+    let location = temp_file_path.as_path();
+    let pipeline_text = format!(
+        "videotestsrc num-buffers=10 ! {video_enc} ! cmafmux ! filesink location={location:?}"
+    );
+
+    let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
+        panic!("could not build encoding pipeline")
+    };
+    pipeline
+        .set_state(gst::State::Playing)
+        .expect("Unable to set the pipeline to the `Playing` state");
+    for msg in pipeline.bus().unwrap().iter_timed(gst::ClockTime::NONE) {
+        use gst::MessageView;
+
+        match msg.view() {
+            MessageView::Eos(..) => break,
+            MessageView::Error(err) => {
+                panic!(
+                    "Error from {:?}: {} ({:?})",
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
+                );
+            }
+            _ => (),
+        }
+    }
+    pipeline
+        .set_state(gst::State::Null)
+        .expect("Unable to set the pipeline to the `Null` state");
+
+    check_frag_file_structure(
+        location,
+        b"cmf2".into(),
+        0,
+        vec![b"iso6".into(), b"cmfc".into()],
+        ExpectedConfiguration {
+            has_stss: true,
+            has_taic: false,
+            is_fragmented: true,
+            ..Default::default()
+        },
+    );
+}
+
+#[test]
+fn test_dash_fmux_boxes() {
+    init();
+
+    let video_enc = "x264enc";
+    let filename = format!("dash_{video_enc}.mp4").to_string();
+    let temp_dir = tempdir().unwrap();
+    let temp_file_path = temp_dir.path().join(filename);
+    let location = temp_file_path.as_path();
+    let pipeline_text = format!(
+        "videotestsrc num-buffers=10 ! {video_enc} ! dashmp4mux ! filesink location={location:?}"
+    );
+
+    let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
+        panic!("could not build encoding pipeline")
+    };
+    pipeline
+        .set_state(gst::State::Playing)
+        .expect("Unable to set the pipeline to the `Playing` state");
+    for msg in pipeline.bus().unwrap().iter_timed(gst::ClockTime::NONE) {
+        use gst::MessageView;
+
+        match msg.view() {
+            MessageView::Eos(..) => break,
+            MessageView::Error(err) => {
+                panic!(
+                    "Error from {:?}: {} ({:?})",
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
+                );
+            }
+            _ => (),
+        }
+    }
+    pipeline
+        .set_state(gst::State::Null)
+        .expect("Unable to set the pipeline to the `Null` state");
+
+    check_frag_file_structure(
+        location,
+        b"msdh".into(),
+        0,
+        vec![b"iso6".into(), b"dums".into(), b"msdh".into()],
+        ExpectedConfiguration {
+            has_stss: true,
+            is_fragmented: true,
+            ..Default::default()
+        },
+    );
+}
+
+#[test]
+fn test_flac_fmux_boxes() {
+    init();
+
+    let filename = "flac_fmp4.mp4".to_string();
+    let temp_dir = tempdir().unwrap();
+    let temp_file_path = temp_dir.path().join(filename);
+    let location = temp_file_path.as_path();
+    let pipeline_text = format!(
+        "audiotestsrc num-buffers=10 ! flacenc ! flacparse ! isofmp4mux ! filesink location={location:?}"
+    );
+
+    let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
+        println!("could not build encoding pipeline");
+        return;
+    };
+    pipeline
+        .set_state(gst::State::Playing)
+        .expect("Unable to set the pipeline to the `Playing` state");
+    for msg in pipeline.bus().unwrap().iter_timed(gst::ClockTime::NONE) {
+        use gst::MessageView;
+
+        match msg.view() {
+            MessageView::Eos(..) => break,
+            MessageView::Error(err) => {
+                panic!(
+                    "Error from {:?}: {} ({:?})",
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
+                );
+            }
+            _ => (),
+        }
+    }
+    pipeline
+        .set_state(gst::State::Null)
+        .expect("Unable to set the pipeline to the `Null` state");
+    let s = location.to_str().unwrap();
+    println!("s = {s:?}");
+    check_frag_file_structure(
+        location,
+        b"iso6".into(),
+        0,
+        vec![b"iso6".into()],
+        ExpectedConfiguration {
+            is_audio: true,
+            is_fragmented: true,
+            audio_channel_count: 1,
+            audio_sample_rate: 44100.into(),
+            audio_sample_size: 8,
+            ..Default::default()
+        },
+    );
+}
+
+#[test]
+fn test_ac3_fmux_boxes() {
+    init();
+
+    let filename = "ac3_fmp4.mp4".to_string();
+    let temp_dir = tempdir().unwrap();
+    let temp_file_path = temp_dir.path().join(filename);
+    let location = temp_file_path.as_path();
+    let pipeline_text = format!(
+        "audiotestsrc num-buffers=10 ! audio/x-raw,channels=2 ! avenc_ac3 bitrate=192000 ! isofmp4mux ! filesink location={location:?}"
+    );
+
+    let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
+        println!("could not build encoding pipeline");
+        return;
+    };
+    pipeline
+        .set_state(gst::State::Playing)
+        .expect("Unable to set the pipeline to the `Playing` state");
+    for msg in pipeline.bus().unwrap().iter_timed(gst::ClockTime::NONE) {
+        use gst::MessageView;
+
+        match msg.view() {
+            MessageView::Eos(..) => break,
+            MessageView::Error(err) => {
+                panic!(
+                    "Error from {:?}: {} ({:?})",
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
+                );
+            }
+            _ => (),
+        }
+    }
+    pipeline
+        .set_state(gst::State::Null)
+        .expect("Unable to set the pipeline to the `Null` state");
+    let s = location.to_str().unwrap();
+    println!("s = {s:?}");
+    check_frag_file_structure(
+        location,
+        b"iso6".into(),
+        0,
+        vec![b"iso6".into()],
+        ExpectedConfiguration {
+            is_audio: true,
+            is_fragmented: true,
+            audio_channel_count: 2,
+            audio_sample_rate: 44100.into(),
+            audio_sample_size: 16,
+            ..Default::default()
+        },
+    );
+}
+
+#[test]
+fn test_eac3_fmux_boxes() {
+    init();
+
+    let filename = "eac3_fmp4.mp4".to_string();
+    let temp_dir = tempdir().unwrap();
+    let temp_file_path = temp_dir.path().join(filename);
+    let location = temp_file_path.as_path();
+    let pipeline_text = format!(
+        "audiotestsrc num-buffers=10 ! audio/x-raw,channels=2 ! avenc_eac3 bitrate=192000 ! isofmp4mux ! filesink location={location:?}"
+    );
+
+    let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
+        println!("could not build encoding pipeline");
+        return;
+    };
+    pipeline
+        .set_state(gst::State::Playing)
+        .expect("Unable to set the pipeline to the `Playing` state");
+    for msg in pipeline.bus().unwrap().iter_timed(gst::ClockTime::NONE) {
+        use gst::MessageView;
+
+        match msg.view() {
+            MessageView::Eos(..) => break,
+            MessageView::Error(err) => {
+                panic!(
+                    "Error from {:?}: {} ({:?})",
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
+                );
+            }
+            _ => (),
+        }
+    }
+    pipeline
+        .set_state(gst::State::Null)
+        .expect("Unable to set the pipeline to the `Null` state");
+    let s = location.to_str().unwrap();
+    println!("s = {s:?}");
+    check_frag_file_structure(
+        location,
+        b"iso6".into(),
+        0,
+        vec![b"iso6".into()],
+        ExpectedConfiguration {
+            is_audio: true,
+            is_fragmented: true,
+            audio_channel_count: 2,
+            audio_sample_rate: 44100.into(),
+            audio_sample_size: 16,
+            ..Default::default()
+        },
+    );
 }
