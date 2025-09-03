@@ -58,13 +58,7 @@ async fn main() -> Result<(), Error> {
 
     initialize_logging("WEBRTCSINK_SIGNALLING_SERVER_LOG")?;
 
-    // We do the same when `run-signalling-server=true`
-    let host = match args.host.as_str() {
-        "0.0.0.0" => "127.0.0.1".to_string(),
-        "::" | "[::]" => "[::1]".to_string(),
-        host => host.to_string(),
-    };
-    let addr = format!("{}:{}", host, args.port);
+    let addr = format!("{}:{}", args.host, args.port);
 
     // Create the event loop and TCP listener we'll accept connections on.
     let listener = TcpListener::bind(&addr).await?;
