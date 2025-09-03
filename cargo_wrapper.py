@@ -13,7 +13,7 @@ from argparse import ArgumentParser
 from pathlib import Path as P
 
 PARSER = ArgumentParser()
-PARSER.add_argument('command', choices=['build', 'test'])
+PARSER.add_argument('command', choices=['build', 'test', 'clippy'])
 PARSER.add_argument('build_dir', type=P)
 PARSER.add_argument('src_dir', type=P)
 PARSER.add_argument('root_dir', type=P)
@@ -197,7 +197,11 @@ def setup_library_paths_for_tests(env, builddir, logfile=None):
 if __name__ == '__main__':
     opts = PARSER.parse_args()
     logdir = opts.root_dir / 'meson-logs'
-    logfile_path = logdir / f"{opts.depfile.name.replace('.dep', '') if opts.depfile else opts.command}-cargo-wrapper.log"
+    run_clippy = opts.command == "clippy"
+    logfile_path = (
+        logdir
+        / f"{opts.depfile.name.replace('.dep', '') if opts.depfile else f'{P(__file__).parent.name}-{opts.command}'}-cargo-wrapper.log"
+    )
     logfile = open(logfile_path, mode='w', buffering=1, encoding='utf-8')
 
     print(opts, file=logfile)
@@ -231,9 +235,11 @@ if __name__ == '__main__':
         env['RUSTC'] = rustc_cmdline[0]
 
     features = opts.features
-    if opts.command == 'build':
+    if opts.command in ['build', 'clippy']:
         cargo_cmd = ['cargo']
-        if opts.bin or opts.examples:
+        if run_clippy:
+            cargo_cmd += ["clippy"]
+        elif opts.bin or opts.examples:
             cargo_cmd += ['build']
         else:
             cargo_cmd += ['cbuild']
@@ -269,7 +275,7 @@ if __name__ == '__main__':
     if opts.bin:
         cargo_cmd.extend(['--bin', opts.bin.name])
     else:
-        if not opts.examples and not opts.command == 'test':
+        if not opts.examples and not opts.command == 'test' and not run_clippy:
             cargo_cmd.extend([
                 '--prefix',
                 opts.prefix,

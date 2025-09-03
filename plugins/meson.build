@@ -30,3 +30,17 @@ if output.length() > 0
     endif
   endforeach
 endif
+
+run_target('clippy',
+  env: extra_env,
+  command: [cargo_wrapper,
+    'clippy',
+    meson.current_build_dir(),
+    meson.current_source_dir() / '../',
+    meson.global_build_root(),
+    target,
+    get_option('prefix'),
+    get_option('libdir'),
+    '--packages', packages,
+    '--lib-suffixes', library_suffixes,
+  ] + feature_args + extra_args)
