@@ -12,6 +12,7 @@
 #[cfg(target_os = "android")]
 pub mod getifaddrs {
     use bitflags::bitflags;
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
     bitflags! {
         /// Flags representing the status and capabilities of a network interface.
@@ -34,6 +35,9 @@ pub mod getifaddrs {
         }
     }
 
+    /// This represents the index of a network interface.
+    pub type InterfaceIndex = u32;
+
     /// Represents a network interface.
     ///
     /// This struct contains information about a network interface, including its name,
@@ -45,20 +49,119 @@ pub mod getifaddrs {
         /// The description of the interface (Windows-specific).
         #[cfg(windows)]
         pub description: String,
-        /// The IP address associated with the interface.
-        pub address: std::net::IpAddr,
-        // TODO: This may be implementable for Windows.
-        #[cfg(not(windows))]
-        /// The associated address of the interface. For broadcast interfaces, this
-        /// is the broadcast address. For point-to-point interfaces, this is the
-        /// peer address.
-        pub associated_address: Option<std::net::IpAddr>,
-        /// The netmask of the interface, if available.
-        pub netmask: Option<std::net::IpAddr>,
+        /// The address(es) associated with the interface.
+        pub address: Address,
         /// The flags indicating the interface's properties and state.
         pub flags: InterfaceFlags,
         /// The index of the interface, if available.
-        pub index: Option<u32>,
+        pub index: Option<InterfaceIndex>,
+    }
+
+    /// Represents a network address family.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub enum AddressFamily {
+        /// An IPv4 address.
+        V4,
+        /// An IPv6 address.
+        V6,
+        /// A MAC (aka Ethernet) address.
+        Mac,
+    }
+
+    /// Represents a network address of a given type.
+    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub enum Address {
+        /// An IPv4 address.
+        V4(NetworkAddress<Ipv4Addr>),
+        /// An IPv6 address.
+        V6(NetworkAddress<Ipv6Addr>),
+        /// A MAC (aka Ethernet) address.
+        Mac([u8; 6]),
+    }
+
+    impl Address {
+        /// Returns `true` if the address is an IPv4 address.
+        pub fn is_ipv4(&self) -> bool {
+            matches!(self, Address::V4(_))
+        }
+
+        /// Returns `true` if the address is an IPv6 address.
+        pub fn is_ipv6(&self) -> bool {
+            matches!(self, Address::V6(_))
+        }
+
+        /// Returns `true` if the address is a MAC (aka Ethernet) address.
+        pub fn is_mac(&self) -> bool {
+            matches!(self, Address::Mac(_))
+        }
+
+        /// Returns the address family of the address.
+        pub fn family(&self) -> AddressFamily {
+            match self {
+                Address::V4(_) => AddressFamily::V4,
+                Address::V6(_) => AddressFamily::V6,
+                Address::Mac(_) => AddressFamily::Mac,
+            }
+        }
+
+        /// Returns the MAC address of the address, if this is a MAC address.
+        pub fn mac_addr(&self) -> Option<[u8; 6]> {
+            match self {
+                Address::Mac(addr) => Some(*addr),
+                _ => None,
+            }
+        }
+
+        /// Returns the IP address of the address, if this is an IPv4 or IPv6 address.
+        pub fn ip_addr(&self) -> Option<IpAddr> {
+            match self {
+                Address::V4(addr) => Some(IpAddr::V4(addr.address)),
+                Address::V6(addr) => Some(IpAddr::V6(addr.address)),
+                Address::Mac(_) => None,
+            }
+        }
+
+        /// Returns the netmask of the address, if this is an IPv4 or IPv6 address.
+        pub fn netmask(&self) -> Option<IpAddr> {
+            match self {
+                Address::V4(addr) => addr.netmask.map(IpAddr::V4),
+                Address::V6(addr) => addr.netmask.map(IpAddr::V6),
+                Address::Mac(_) => None,
+            }
+        }
+
+        /// Returns the associated address of the address, if this is an IPv4 or IPv6 address.
+        pub fn associated_address(&self) -> Option<IpAddr> {
+            match self {
+                Address::V4(addr) => addr.associated_address.map(IpAddr::V4),
+                Address::V6(addr) => addr.associated_address.map(IpAddr::V6),
+                Address::Mac(_) => None,
+            }
+        }
+    }
+
+    impl PartialEq<IpAddr> for Address {
+        fn eq(&self, other: &IpAddr) -> bool {
+            match self {
+                Address::V4(addr) => addr.address == *other,
+                Address::V6(addr) => addr.address == *other,
+                Address::Mac(_) => false,
+            }
+        }
+    }
+
+    /// Represents a network address of a given type.
+    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct NetworkAddress<T> {
+        /// The address associated with the interface.
+        pub address: T,
+        /// The netmask associated with the interface.
+        pub netmask: Option<T>,
+
+        /// The associated address of the interface. For broadcast interfaces, this
+        /// is the broadcast address. For point-to-point interfaces, this is the
+        /// peer address.
+        pub associated_address: Option<T>,
     }
 }
 
