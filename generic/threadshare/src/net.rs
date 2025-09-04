@@ -8,6 +8,60 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+//FIXME: Remove this when https://github.com/mmastrac/getifaddrs/issues/5 is fixed in the `getifaddrs` crate
+#[cfg(target_os = "android")]
+pub mod getifaddrs {
+    use bitflags::bitflags;
+
+    bitflags! {
+        /// Flags representing the status and capabilities of a network interface.
+        ///
+        /// These flags provide information about the current state and features of a network interface.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub struct InterfaceFlags: u32 {
+            /// The interface is up and running.
+            const UP = 0x1;
+            /// The interface is in a running state.
+            const RUNNING = 0x2;
+            /// The interface supports broadcast.
+            const BROADCAST = 0x4;
+            /// The interface is a loopback interface.
+            const LOOPBACK = 0x8;
+            /// The interface is a point-to-point link.
+            const POINTTOPOINT = 0x10;
+            /// The interface supports multicast.
+            const MULTICAST = 0x20;
+        }
+    }
+
+    /// Represents a network interface.
+    ///
+    /// This struct contains information about a network interface, including its name,
+    /// IP address, netmask, flags, and index.
+    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct Interface {
+        /// The name of the interface.
+        pub name: String,
+        /// The description of the interface (Windows-specific).
+        #[cfg(windows)]
+        pub description: String,
+        /// The IP address associated with the interface.
+        pub address: std::net::IpAddr,
+        // TODO: This may be implementable for Windows.
+        #[cfg(not(windows))]
+        /// The associated address of the interface. For broadcast interfaces, this
+        /// is the broadcast address. For point-to-point interfaces, this is the
+        /// peer address.
+        pub associated_address: Option<std::net::IpAddr>,
+        /// The netmask of the interface, if available.
+        pub netmask: Option<std::net::IpAddr>,
+        /// The flags indicating the interface's properties and state.
+        pub flags: InterfaceFlags,
+        /// The index of the interface, if available.
+        pub index: Option<u32>,
+    }
+}
+
 use getifaddrs::Interface;
 
 #[cfg(unix)]

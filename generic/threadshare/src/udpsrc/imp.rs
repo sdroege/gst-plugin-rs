@@ -39,6 +39,10 @@ use crate::socket::{wrap_socket, GioSocketWrapper, Socket, SocketError, SocketRe
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::pin_mut;
 
+//FIXME: Remove this when https://github.com/mmastrac/getifaddrs/issues/5 is fixed in the `getifaddrs` crate
+#[cfg(target_os = "android")]
+use net::getifaddrs;
+
 const DEFAULT_ADDRESS: Option<&str> = Some("0.0.0.0");
 const DEFAULT_PORT: i32 = 5004;
 const DEFAULT_REUSE: bool = true;
@@ -380,42 +384,46 @@ impl TaskImpl for UdpSrcTask {
                     let multi_ifaces: Vec<String> =
                         multicast_iface.split(',').map(|s| s.to_string()).collect();
 
-                    let iter = getifaddrs::getifaddrs().map_err(|err| {
-                        gst::error_msg!(
-                            gst::ResourceError::OpenRead,
-                            ["Failed to get interfaces: {}", err]
-                        )
-                    })?;
+                    //FIXME: Remove this when https://github.com/mmastrac/getifaddrs/issues/5 is fixed in the `getifaddrs` crate
+                    #[cfg(not(target_os = "android"))]
+                    {
+                        let iter = getifaddrs::getifaddrs().map_err(|err| {
+                            gst::error_msg!(
+                                gst::ResourceError::OpenRead,
+                                ["Failed to get interfaces: {}", err]
+                            )
+                        })?;
 
-                    iter.for_each(|iface| {
-                        let ip_ver = if iface.address.is_ipv4() {
-                            "IPv4"
-                        } else {
-                            "IPv6"
-                        };
-
-                        for m in &multi_ifaces {
-                            if &iface.name == m {
-                                self.multicast_ifaces.push(iface.clone());
-                                gst::debug!(
-                                    CAT,
-                                    obj = self.element,
-                                    "Interface {m} available, version: {ip_ver}"
-                                );
+                        iter.for_each(|iface| {
+                            let ip_ver = if iface.address.is_ipv4() {
+                                "IPv4"
                             } else {
-                                // check if name matches the interface description (Friendly name) on Windows
-                                #[cfg(windows)]
-                                if &iface.description == m {
+                                "IPv6"
+                            };
+
+                            for m in &multi_ifaces {
+                                if &iface.name == m {
                                     self.multicast_ifaces.push(iface.clone());
                                     gst::debug!(
                                         CAT,
                                         obj = self.element,
                                         "Interface {m} available, version: {ip_ver}"
                                     );
+                                } else {
+                                    // check if name matches the interface description (Friendly name) on Windows
+                                    #[cfg(windows)]
+                                    if &iface.description == m {
+                                        self.multicast_ifaces.push(iface.clone());
+                                        gst::debug!(
+                                            CAT,
+                                            obj = self.element,
+                                            "Interface {m} available, version: {ip_ver}"
+                                        );
+                                    }
                                 }
                             }
-                        }
-                    });
+                        });
+                    }
                 }
 
                 if self.multicast_ifaces.is_empty() {
