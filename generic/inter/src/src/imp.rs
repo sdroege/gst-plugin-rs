@@ -130,6 +130,10 @@ impl ObjectImpl for InterSrc {
         obj.set_element_flags(gst::ElementFlags::SOURCE);
 
         let state = self.state.lock().unwrap();
+        // The name of GstObjects can still be changed until they become child of another object.
+        state
+            .appsrc
+            .set_property("name", format!("{}-appsrc", self.obj().name()));
         gst_utils::StreamProducer::configure_consumer(&state.appsrc);
         obj.add(&state.appsrc).unwrap();
         obj.add_pad(&state.srcpad).unwrap();
