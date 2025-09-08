@@ -25,32 +25,25 @@ impl Default for Settings {
     }
 }
 
-struct State {
+pub struct InterSrc {
     srcpad: gst::GhostPad,
     appsrc: gst_app::AppSrc,
-}
-
-/* Locking order is field order */
-pub struct InterSrc {
     settings: Mutex<Settings>,
-    state: Mutex<State>,
 }
 
 impl InterSrc {
     fn prepare(&self) -> Result<(), Error> {
         let settings = self.settings.lock().unwrap();
-        let state = self.state.lock().unwrap();
 
-        InterStreamProducer::subscribe(&settings.producer_name, &state.appsrc);
+        InterStreamProducer::subscribe(&settings.producer_name, &self.appsrc);
 
         Ok(())
     }
 
     fn unprepare(&self) {
         let settings = self.settings.lock().unwrap();
-        let state = self.state.lock().unwrap();
 
-        InterStreamProducer::unsubscribe(&settings.producer_name, &state.appsrc);
+        InterStreamProducer::unsubscribe(&settings.producer_name, &self.appsrc);
     }
 }
 
@@ -70,11 +63,9 @@ impl ObjectSubclass for InterSrc {
         let srcpad = gst::GhostPad::from_template(&templ);
 
         Self {
+            srcpad: srcpad.upcast(),
+            appsrc: gst_app::AppSrc::builder().name("appsrc").build(),
             settings: Mutex::new(Default::default()),
-            state: Mutex::new(State {
-                srcpad: srcpad.upcast(),
-                appsrc: gst_app::AppSrc::builder().name("appsrc").build(),
-            }),
         }
     }
 }
@@ -102,10 +93,8 @@ impl ObjectImpl for InterSrc {
                     .get::<String>()
                     .unwrap_or_else(|_| DEFAULT_PRODUCER_NAME.to_string());
 
-                let state = self.state.lock().unwrap();
-
-                if InterStreamProducer::unsubscribe(&old_producer_name, &state.appsrc) {
-                    InterStreamProducer::subscribe(&settings.producer_name, &state.appsrc);
+                if InterStreamProducer::unsubscribe(&old_producer_name, &self.appsrc) {
+                    InterStreamProducer::subscribe(&settings.producer_name, &self.appsrc);
                 }
             }
             _ => unimplemented!(),
@@ -129,17 +118,14 @@ impl ObjectImpl for InterSrc {
         obj.set_suppressed_flags(gst::ElementFlags::SINK | gst::ElementFlags::SOURCE);
         obj.set_element_flags(gst::ElementFlags::SOURCE);
 
-        let state = self.state.lock().unwrap();
         // The name of GstObjects can still be changed until they become child of another object.
-        state
-            .appsrc
+        self.appsrc
             .set_property("name", format!("{}-appsrc", self.obj().name()));
-        gst_utils::StreamProducer::configure_consumer(&state.appsrc);
-        obj.add(&state.appsrc).unwrap();
-        obj.add_pad(&state.srcpad).unwrap();
-        state
-            .srcpad
-            .set_target(Some(&state.appsrc.static_pad("src").unwrap()))
+        gst_utils::StreamProducer::configure_consumer(&self.appsrc);
+        obj.add(&self.appsrc).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
+        self.srcpad
+            .set_target(Some(&self.appsrc.static_pad("src").unwrap()))
             .unwrap();
     }
 }

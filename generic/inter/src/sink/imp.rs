@@ -27,23 +27,17 @@ impl Default for Settings {
     }
 }
 
-struct State {
+pub struct InterSink {
     appsink: gst_app::AppSink,
     sinkpad: gst::GhostPad,
-}
-
-/* Locking order is field order */
-pub struct InterSink {
     settings: Mutex<Settings>,
-    state: Mutex<State>,
 }
 
 impl InterSink {
     fn prepare(&self) -> Result<(), Error> {
         let settings = self.settings.lock().unwrap();
-        let state = self.state.lock().unwrap();
 
-        InterStreamProducer::acquire(&settings.producer_name, &state.appsink).map(|producer| {
+        InterStreamProducer::acquire(&settings.producer_name, &self.appsink).map(|producer| {
             producer.set_forward_events(settings.event_types.clone());
         })
     }
@@ -73,11 +67,9 @@ impl ObjectSubclass for InterSink {
         let sinkpad = gst::GhostPad::from_template(&templ);
 
         Self {
+            appsink: gst_app::AppSink::builder().name("appsink").build(),
+            sinkpad: sinkpad.upcast(),
             settings: Mutex::new(Default::default()),
-            state: Mutex::new(State {
-                appsink: gst_app::AppSink::builder().name("appsink").build(),
-                sinkpad: sinkpad.upcast(),
-            }),
         }
     }
 }
@@ -181,16 +173,13 @@ impl ObjectImpl for InterSink {
         obj.set_suppressed_flags(gst::ElementFlags::SINK | gst::ElementFlags::SOURCE);
         obj.set_element_flags(gst::ElementFlags::SINK);
 
-        let state = self.state.lock().unwrap();
         // The name of GstObjects can still be changed until they become child of another object.
-        state
-            .appsink
+        self.appsink
             .set_property("name", format!("{}-appsink", self.obj().name()));
-        obj.add(&state.appsink).unwrap();
-        obj.add_pad(&state.sinkpad).unwrap();
-        state
-            .sinkpad
-            .set_target(Some(&state.appsink.static_pad("sink").unwrap()))
+        obj.add(&self.appsink).unwrap();
+        obj.add_pad(&self.sinkpad).unwrap();
+        self.sinkpad
+            .set_target(Some(&self.appsink.static_pad("sink").unwrap()))
             .unwrap();
     }
 }
