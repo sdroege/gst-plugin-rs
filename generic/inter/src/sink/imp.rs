@@ -182,6 +182,10 @@ impl ObjectImpl for InterSink {
         obj.set_element_flags(gst::ElementFlags::SINK);
 
         let state = self.state.lock().unwrap();
+        // The name of GstObjects can still be changed until they become child of another object.
+        state
+            .appsink
+            .set_property("name", format!("{}-appsink", self.obj().name()));
         obj.add(&state.appsink).unwrap();
         obj.add_pad(&state.sinkpad).unwrap();
         state
