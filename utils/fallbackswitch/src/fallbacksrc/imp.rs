@@ -4101,10 +4101,12 @@ impl FallbackSrc {
                                 // See https://gitlab.freedesktop.org/gstreamer/gst-plugins-base/-/issues/746
                                 element.remove(&state.source.bin).unwrap();
 
-                                let source = imp.create_main_input(
+                                let mut source = imp.create_main_input(
                                     &state.configured_source,
                                     state.settings.buffer_duration,
                                 );
+
+                                source.running = state.source.running;
 
                                 (
                                     source.bin.clone(),
