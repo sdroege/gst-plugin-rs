@@ -1175,9 +1175,43 @@ impl Window {
                 };
             Dimensions { w: x, h: y }
         } else {
-            // FIXME
-            gst::fixme!(CAT, "Handle non-relative-positioning");
-            padding
+            // Non-relative positioning implementation
+            let aspect_ratio = self.video_dims.w as f32 / self.video_dims.h as f32;
+            let is_widescreen = (aspect_ratio - 1.777).abs() < 0.01; // Allow a small tolerance
+            let (grid_width, grid_height) = if is_widescreen {
+                (209_f32, 74_f32) // 16:9 format
+            } else {
+                (159_f32, 74_f32) // 4:3 format
+            };
+
+            // Map anchor_horizontal and anchor_vertical to absolute grid coordinates
+            let x = self.define.anchor_horizontal.min(grid_width as u8) as f32;
+            let y = self.define.anchor_vertical.min(grid_height as u8) as f32;
+
+            // Convert grid coordinates to pixel coordinates within the safe-title area
+            let grid_x = padding.w + ((safe_area.w as f32) * (x / grid_width)) as u32;
+            let grid_y = padding.h + ((safe_area.h as f32) * (y / grid_height)) as u32;
+
+            // Calculate the final x position with horizontal alignment applied
+            let halign = Align::horizontal_from_anchor(self.define.anchor_point);
+            let valign = Align::vertical_from_anchor(self.define.anchor_point);
+
+            let x = match halign {
+                Align::First => grid_x,
+                Align::Center => grid_x.saturating_sub(self.max_layout_dims.w / 2),
+                Align::Last => grid_x.saturating_sub(self.window_dims.w),
+            };
+
+            // Calculate the final y position with vertical alignment applied
+            let y = match valign {
+                Align::First => grid_y,
+                Align::Center => grid_y.saturating_sub(self.max_layout_dims.h / 2),
+                Align::Last => grid_y.saturating_sub(self.window_dims.h),
+            };
+
+            let center = x + (self.video_dims.w / 2) - (self.window_dims.w / 2);
+
+            Dimensions { w: center, h: y }
         };
 
         gst::trace!(
