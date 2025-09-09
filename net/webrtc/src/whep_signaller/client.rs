@@ -12,7 +12,6 @@ use crate::utils::{
     build_reqwest_client, parse_redirect_location, set_ice_servers, wait, wait_async, WaitError,
 };
 use crate::RUNTIME;
-use async_recursion::async_recursion;
 use bytes::Bytes;
 use futures::future;
 use gst::glib::RustClosure;
@@ -331,7 +330,7 @@ impl WhepClient {
                                 redirect_url.as_str()
                             );
 
-                            self.do_post(sess_desc, webrtcbin, redirect_url).await
+                            Box::pin(self.do_post(sess_desc, webrtcbin, redirect_url)).await
                         }
                         Err(e) => self.raise_error(e.to_string()),
                     }
@@ -398,7 +397,6 @@ impl WhepClient {
         }
     }
 
-    #[async_recursion]
     async fn do_post(
         &self,
         offer: WebRTCSessionDescription,

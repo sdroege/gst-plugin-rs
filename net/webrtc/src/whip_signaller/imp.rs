@@ -6,7 +6,6 @@ use crate::utils::{
     wait_async, WaitError,
 };
 use crate::RUNTIME;
-use async_recursion::async_recursion;
 use gst::glib::{self, RustClosure};
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -140,7 +139,6 @@ impl WhipClient {
         }
     }
 
-    #[async_recursion]
     async fn do_post(
         &self,
         offer: gst_webrtc::WebRTCSessionDescription,
@@ -348,7 +346,7 @@ impl WhipClient {
                                 redirect_url.as_str()
                             );
 
-                            self.do_post(offer, webrtcbin, redirect_url).await
+                            Box::pin(self.do_post(offer, webrtcbin, redirect_url)).await
                         }
                         Err(e) => self.raise_error(e.to_string()),
                     }

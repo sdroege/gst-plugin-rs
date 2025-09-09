@@ -3726,7 +3726,6 @@ name = "gst-plugin-webrtc"
 version = "0.15.0-alpha.1"
 dependencies = [
  "anyhow",
- "async-recursion",
  "async-tungstenite",
  "aws-config",
  "aws-credential-types",
