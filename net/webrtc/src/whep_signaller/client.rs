@@ -33,7 +33,8 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 
 const MAX_REDIRECTS: u8 = 10;
 const DEFAULT_TIMEOUT: u32 = 15;
-const SESSION_ID: &str = "whep-client";
+const WHEP_CLIENT_OFFER: &str = "whep-client-offer";
+const WHEP_SSO: &str = "whep-server-sent-offer";
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -55,7 +56,16 @@ impl Default for Settings {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone)]
+enum PatchType {
+    // Answer to the counter offer sent by the WHEP Server
+    AnswerCounterOffer { whep_resource: String },
+    // TODO: :
+    // IceRestart,
+    // IceTrickle,
+}
+
+#[derive(Debug, Default, Clone)]
 enum State {
     #[default]
     Stopped,
@@ -65,6 +75,27 @@ enum State {
     Running {
         whep_resource: String,
     },
+    Patch {
+        patch: PatchType,
+    },
+}
+
+impl std::fmt::Display for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            State::Stopped => write!(f, "Stopped"),
+            State::Post { redirects } => write!(f, "Post (redirects: {redirects})"),
+            State::Running { whep_resource } => {
+                write!(f, "Running (whep_resource: {whep_resource})")
+            }
+            State::Patch { patch } => match patch {
+                PatchType::AnswerCounterOffer { whep_resource } => write!(
+                    f,
+                    "Patch AnswerCounterOffer (whep_resource {whep_resource})"
+                ),
+            },
+        }
+    }
 }
 
 pub struct WhepClient {
@@ -195,7 +226,7 @@ impl WhepClient {
         };
     }
 
-    fn sdp_message_parse(&self, sdp_bytes: Bytes, _webrtcbin: &gst::Element) {
+    fn sdp_message_parse(&self, sdp_bytes: Bytes, server_sent_offer: bool) {
         let sdp = match sdp_message::SDPMessage::parse_buffer(&sdp_bytes) {
             Ok(sdp) => sdp,
             Err(_) => {
@@ -204,10 +235,34 @@ impl WhepClient {
             }
         };
 
-        let remote_sdp = WebRTCSessionDescription::new(WebRTCSDPType::Answer, sdp);
+        let remote_sdp = WebRTCSessionDescription::new(
+            if server_sent_offer {
+                WebRTCSDPType::Offer
+            } else {
+                WebRTCSDPType::Answer
+            },
+            sdp,
+        );
 
-        self.obj()
-            .emit_by_name::<()>("session-description", &[&SESSION_ID, &remote_sdp]);
+        if !server_sent_offer {
+            self.obj()
+                .emit_by_name::<()>("session-description", &[&WHEP_CLIENT_OFFER, &remote_sdp]);
+        } else {
+            // end the current session
+            if self
+                .obj()
+                .emit_by_name::<bool>("session-ended", &[&WHEP_CLIENT_OFFER])
+            {
+                // request a new session for the server sent offer
+                gst::debug!(CAT, imp = self, "Requesting new session");
+                self.obj()
+                    .emit_by_name::<()>("session-started", &[&WHEP_SSO, &WHEP_SSO]);
+
+                gst::debug!(CAT, imp = self, "Sending new session description as Offer");
+                self.obj()
+                    .emit_by_name::<()>("session-description", &[&WHEP_SSO, &remote_sdp]);
+            }
+        }
     }
 
     async fn parse_endpoint_response(
@@ -228,12 +283,14 @@ impl WhepClient {
             drop(settings);
         }
 
-        match resp.status() {
+        let status = resp.status();
+
+        match status {
             StatusCode::OK | StatusCode::NO_CONTENT => {
-                gst::info!(CAT, imp = self, "SDP offer successfully send");
+                gst::info!(CAT, imp = self, "SDP offer successfully sent");
             }
 
-            StatusCode::CREATED => {
+            StatusCode::CREATED | StatusCode::NOT_ACCEPTABLE => {
                 gst::debug!(CAT, imp = self, "Response headers: {:?}", resp.headers());
 
                 if use_link_headers {
@@ -275,13 +332,25 @@ impl WhepClient {
                     }
                 };
 
+                let server_sent_offer = status == StatusCode::NOT_ACCEPTABLE;
+
                 match resp.bytes().await {
-                    Ok(ans_bytes) => {
+                    Ok(sdp) => {
                         let mut state = self.state.lock().unwrap();
                         *state = match *state {
-                            State::Post { redirects: _r } => State::Running {
-                                whep_resource: url.to_string(),
-                            },
+                            State::Post { redirects: _r } => {
+                                if server_sent_offer {
+                                    State::Patch {
+                                        patch: PatchType::AnswerCounterOffer {
+                                            whep_resource: url.to_string(),
+                                        },
+                                    }
+                                } else {
+                                    State::Running {
+                                        whep_resource: url.to_string(),
+                                    }
+                                }
+                            }
                             _ => {
                                 self.raise_error("Expected to be in POST state".to_string());
                                 return;
@@ -289,7 +358,7 @@ impl WhepClient {
                         };
                         drop(state);
 
-                        self.sdp_message_parse(ans_bytes, &webrtcbin)
+                        self.sdp_message_parse(sdp, server_sent_offer)
                     }
                     Err(err) => self.raise_error(err.to_string()),
                 }
@@ -317,7 +386,7 @@ impl WhepClient {
                                         );
                                         return;
                                     }
-                                    State::Stopped => unreachable!(),
+                                    _ => unreachable!(),
                                 };
                                 drop(state);
                             }
@@ -396,19 +465,143 @@ impl WhepClient {
         }
     }
 
+    // SDP answer to the counter offser sent by the server
+    async fn answer_sso(&self, webrtcbin: gst::Element) {
+        let local_desc =
+            webrtcbin.property::<Option<WebRTCSessionDescription>>("local-description");
+        let timeout = self.settings.lock().unwrap().timeout;
+        let sess_desc = match local_desc {
+            None => {
+                self.raise_error("Local description is not set".to_string());
+                return;
+            }
+            Some(mut local_desc) => {
+                local_desc.set_type(WebRTCSDPType::Answer);
+                local_desc
+            }
+        };
+
+        gst::debug!(
+            CAT,
+            imp = self,
+            "Sending answer SDP: {}",
+            sess_desc.sdp().to_string()
+        );
+
+        if let Err(e) = wait_async(&self.canceller, self.do_patch(sess_desc), timeout).await {
+            self.handle_future_error(e);
+        }
+    }
+
+    async fn do_patch(&self, offer: WebRTCSessionDescription) -> Result<(), gst::ErrorMessage> {
+        let resource_url = {
+            let state = self.state.lock().unwrap();
+            match &*state {
+                State::Patch { patch: p } => match p {
+                    PatchType::AnswerCounterOffer { whep_resource } => whep_resource.clone(),
+                },
+                State::Running { whep_resource: _ } => {
+                    return Err(gst::error_msg!(
+                        gst::ResourceError::Failed,
+                        ["Trying to do PATCH in Running state"]
+                    ));
+                }
+                _ => {
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Not allowed to do PATCH request in {} state",
+                        &*state
+                    );
+                    return Ok(());
+                }
+            }
+        };
+
+        let auth_token = self.settings.lock().unwrap().auth_token.clone();
+
+        let sdp = offer.sdp();
+        let body = sdp.as_text().unwrap();
+
+        let mut headermap = HeaderMap::new();
+        headermap.insert(
+            reqwest::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/sdp"),
+        );
+
+        if let Some(token) = auth_token.as_ref() {
+            let bearer_token = format!("Bearer {token}");
+            headermap.insert(
+                reqwest::header::AUTHORIZATION,
+                HeaderValue::from_str(bearer_token.as_str())
+                    .expect("Failed to set auth token to header"),
+            );
+        }
+
+        gst::debug!(
+            CAT,
+            imp = self,
+            "Url for HTTP PATCH request: {resource_url}",
+        );
+
+        let resp = self
+            .client
+            .request(reqwest::Method::PATCH, resource_url)
+            .headers(headermap)
+            .body(body)
+            .send()
+            .await;
+
+        match resp {
+            Ok(r) => match r.status() {
+                StatusCode::OK | StatusCode::NO_CONTENT => {
+                    let mut state = self.state.lock().unwrap();
+                    if let State::Patch { patch } = &mut *state {
+                        match patch {
+                            PatchType::AnswerCounterOffer { whep_resource } => {
+                                *state = State::Running {
+                                    whep_resource: whep_resource.clone(),
+                                };
+                            }
+                        }
+                    }
+                    gst::debug!(CAT, imp = self, "Server accepted SDP answer",);
+                }
+                _ => {
+                    return Err(gst::error_msg!(
+                        gst::ResourceError::Failed,
+                        ["Unexpected response from the server: {}", r.status()]
+                    ))
+                }
+            },
+            Err(err) => return Err(gst::error_msg!(gst::ResourceError::Failed, ["{err}"])),
+        }
+        Ok(())
+    }
+
     async fn do_post(
         &self,
         offer: WebRTCSessionDescription,
         webrtcbin: gst::Element,
         endpoint: reqwest::Url,
     ) {
-        let auth_token;
+        let redirects = {
+            let state = self.state.lock().unwrap();
+            match *state {
+                State::Post { redirects } => redirects,
+                State::Running { whep_resource: _ } => {
+                    let err = "Trying to do POST in Running state".to_string();
+                    self.raise_error(err);
+                    return;
+                }
+                _ => {
+                    gst::warning!(CAT, imp = self, "Not allowed to POST in {} state", &*state);
+                    return;
+                }
+            }
+        };
 
-        {
-            let settings = self.settings.lock().unwrap();
-            auth_token = settings.auth_token.clone();
-            drop(settings);
-        }
+        let auth_token = self.settings.lock().unwrap().auth_token.clone();
 
         let sdp = offer.sdp();
         let body = sdp.as_text().unwrap();
@@ -447,21 +640,6 @@ impl WhepClient {
 
         match resp {
             Ok(r) => {
-                #[allow(unused_mut)]
-                let mut redirects;
-
-                {
-                    let state = self.state.lock().unwrap();
-                    redirects = match *state {
-                        State::Post { redirects } => redirects,
-                        _ => {
-                            self.raise_error("Trying to do POST in unexpected state".to_string());
-                            return;
-                        }
-                    };
-                    drop(state);
-                }
-
                 self.parse_endpoint_response(offer, r, redirects, webrtcbin)
                     .await
             }
@@ -469,22 +647,9 @@ impl WhepClient {
         }
     }
 
-    fn terminate_session(&self) {
+    fn terminate_session(&self, resource_url: &String) {
         let settings = self.settings.lock().unwrap();
-        let state = self.state.lock().unwrap();
         let timeout = settings.timeout;
-
-        let resource_url = match *state {
-            State::Running {
-                whep_resource: ref whep_resource_url,
-            } => whep_resource_url.clone(),
-            _ => {
-                self.raise_error("Terminated in unexpected state".to_string());
-                return;
-            }
-        };
-
-        drop(state);
 
         let mut headermap = HeaderMap::new();
         if let Some(token) = &settings.auth_token {
@@ -555,7 +720,7 @@ impl WhepClient {
                                 let webrtcbin = webrtcbin.clone();
 
                                 RUNTIME.spawn(async move {
-                                    signaller.imp().whep_offer(webrtcbin).await
+                                    signaller.imp().on_ice_gathering_complete(webrtcbin).await
                                 });
                             }
                             _ => (),
@@ -564,6 +729,23 @@ impl WhepClient {
                 ),
             );
         })
+    }
+
+    async fn on_ice_gathering_complete(&self, webrtcbin: gst::Element) {
+        let state = self.state.lock().unwrap().clone();
+
+        // Reading the state here only to decide what request (POST/PATCH) to make.
+        // We again check the current state before doing the request to ensure the
+        // session is not terminated
+        match state {
+            State::Patch { patch: p } => match p.clone() {
+                PatchType::AnswerCounterOffer { whep_resource: _ } => {
+                    self.answer_sso(webrtcbin).await
+                }
+            },
+            State::Post { redirects: _ } => self.whep_offer(webrtcbin).await,
+            _ => {}
+        }
     }
 }
 
@@ -585,14 +767,16 @@ impl SignallableImpl for WhepClient {
         // so spawn a new thread and emit the signals inside it, so that there won't be a deadlock
         RUNTIME.spawn(async move {
             if let Some(this) = this_weak.upgrade() {
-                this.obj()
-                    .emit_by_name::<()>("session-started", &[&SESSION_ID, &SESSION_ID]);
+                this.obj().emit_by_name::<()>(
+                    "session-started",
+                    &[&WHEP_CLIENT_OFFER, &WHEP_CLIENT_OFFER],
+                );
 
                 this.obj().emit_by_name::<()>(
                     "session-requested",
                     &[
-                        &SESSION_ID,
-                        &SESSION_ID,
+                        &WHEP_CLIENT_OFFER,
+                        &WHEP_CLIENT_OFFER,
                         &None::<gst_webrtc::WebRTCSessionDescription>,
                     ],
                 );
@@ -602,17 +786,29 @@ impl SignallableImpl for WhepClient {
 
     fn stop(&self) {}
 
-    fn end_session(&self, _session_id: &str) {
+    fn end_session(&self, session_id: &str) {
+        gst::debug!(CAT, imp = self, " ending session {session_id}");
         // Interrupt requests in progress, if any
         if let Some(canceller) = &*self.canceller.lock().unwrap() {
             canceller.abort();
         }
 
-        let state = self.state.lock().unwrap();
-        if let State::Running { .. } = *state {
-            // Release server-side resources
-            drop(state);
-            self.terminate_session();
-        }
+        let mut state = self.state.lock().unwrap();
+        match &*state {
+            State::Running { whep_resource } => {
+                // Release server-side resources
+                self.terminate_session(whep_resource);
+                *state = State::Stopped;
+            }
+            State::Patch { patch } => match patch {
+                PatchType::AnswerCounterOffer { whep_resource } => {
+                    if session_id == WHEP_SSO {
+                        self.terminate_session(whep_resource);
+                        *state = State::Stopped;
+                    }
+                }
+            },
+            _ => {}
+        };
     }
 }
