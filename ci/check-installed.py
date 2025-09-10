@@ -14,13 +14,23 @@ plugins = glob.glob(os.path.join(
 plugins = list(map(os.path.basename, plugins))
 print("Built plugins:", plugins)
 
+pc_files = glob.glob(os.path.join(
+    prefix, '**', 'gstreamer-1.0', 'pkgconfig', '*.pc'), recursive=True)
+pc_files = list(map(os.path.basename, pc_files))
+print("Built .pc files:", pc_files)
+
 success = True
 
 for name in iterate_plugins():
     plugin = "libgst{}.so".format(name)
+    pc_file = "gst{}.pc".format(name)
 
     if plugin not in plugins:
-        print(name, "missing in", prefix)
+        print(name, ".so missing in", prefix)
+        success = False
+
+    if pc_file not in pc_files:
+        print(name, ".pc missing in", prefix)
         success = False
 
 if len(glob.glob(os.path.join(prefix, '**', 'bin', 'gst-webrtc-signalling-server'), recursive=True)) != 1:
