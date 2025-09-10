@@ -860,6 +860,14 @@ impl ElementImpl for FallbackSrc {
             }
             gst::StateChange::ReadyToPaused => {
                 self.post_initial_collection()?;
+
+                if let Some(parent) = self.obj().parent() {
+                    if let Some(bin) = parent.downcast_ref::<gst::Bin>() {
+                        if !bin.bin_flags().contains(gst::BinFlags::STREAMS_AWARE) {
+                            self.obj().no_more_pads();
+                        }
+                    }
+                }
             }
             _ => (),
         }
