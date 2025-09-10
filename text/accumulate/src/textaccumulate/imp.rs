@@ -24,12 +24,16 @@ use std::sync::{mpsc, Condvar, Mutex};
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(2);
 const DEFAULT_LATENESS: gst::ClockTime = gst::ClockTime::from_seconds(0);
 const DEFAULT_TIMEOUT_TERMINATORS: &str = r"\,\s|\:\s|\;\s";
+const DEFAULT_DRAIN_ON_FINAL_TRANSCRIPTS: bool = true;
+const DEFAULT_DRAIN_ON_SPEAKER_CHANGE: bool = true;
 
 #[derive(Debug, Clone)]
 struct Settings {
     latency: gst::ClockTime,
     lateness: gst::ClockTime,
     timeout_terminators: String,
+    drain_on_final_transcripts: bool,
+    drain_on_speaker_change: bool,
 }
 
 impl Default for Settings {
@@ -38,6 +42,8 @@ impl Default for Settings {
             latency: DEFAULT_LATENCY,
             lateness: DEFAULT_LATENESS,
             timeout_terminators: DEFAULT_TIMEOUT_TERMINATORS.to_string(),
+            drain_on_final_transcripts: DEFAULT_DRAIN_ON_FINAL_TRANSCRIPTS,
+            drain_on_speaker_change: DEFAULT_DRAIN_ON_SPEAKER_CHANGE,
         }
     }
 }
@@ -231,7 +237,6 @@ struct State {
     accumulate_tx: Option<mpsc::Sender<AccumulateInput>>,
     serialized_query_return: Option<bool>,
     seqnum: gst::Seqnum,
-    current_speaker: Option<String>,
     timeout_terminators_regex: Option<Regex>,
     task_started: bool,
 }
@@ -245,7 +250,6 @@ impl Default for State {
             accumulate_tx: None,
             serialized_query_return: None,
             seqnum: gst::Seqnum::next(),
-            current_speaker: None,
             timeout_terminators_regex: None,
             task_started: false,
         }
@@ -484,14 +488,20 @@ impl Accumulate {
 
                 let drain = match s.name().as_str() {
                     "rstranscribe/final-transcript" => {
-                        gst::debug!(CAT, imp = self, "transcript is final, draining");
-                        true
+                        if self.settings.lock().unwrap().drain_on_final_transcripts {
+                            gst::log!(CAT, imp = self, "transcript is final, draining");
+                            true
+                        } else {
+                            false
+                        }
                     }
                     "rstranscribe/speaker-change" => {
-                        gst::debug!(CAT, imp = self, "speaker change, draining");
-                        self.state.lock().unwrap().current_speaker =
-                            s.get::<String>("speaker").ok();
-                        true
+                        if self.settings.lock().unwrap().drain_on_final_transcripts {
+                            gst::log!(CAT, imp = self, "speaker change, draining");
+                            true
+                        } else {
+                            false
+                        }
                     }
                     _ => false,
                 };
@@ -1000,6 +1010,20 @@ impl ObjectImpl for Accumulate {
                     .default_value(DEFAULT_TIMEOUT_TERMINATORS)
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("drain-on-final-transcripts")
+                    .nick("Drain On Final Transcripts")
+                    .blurb("whether the element should entirely drain itself when \
+                        receiving rstranscribe/final-transcript events")
+                    .default_value(DEFAULT_DRAIN_ON_FINAL_TRANSCRIPTS)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder("drain-on-speaker-change")
+                    .nick("Drain On Speaker Change")
+                    .blurb("whether the element should entirely drain itself when \
+                        receiving rstranscribe/speaker-change events")
+                    .default_value(DEFAULT_DRAIN_ON_SPEAKER_CHANGE)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -1033,6 +1057,16 @@ impl ObjectImpl for Accumulate {
                 settings.timeout_terminators =
                     value.get::<String>().expect("type checked upstream");
             }
+            "drain-on-final-transcripts" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.drain_on_final_transcripts =
+                    value.get::<bool>().expect("type checked upstream");
+            }
+            "drain-on-speaker-change" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.drain_on_speaker_change =
+                    value.get::<bool>().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -1050,6 +1084,14 @@ impl ObjectImpl for Accumulate {
             "timeout-terminators" => {
                 let settings = self.settings.lock().unwrap();
                 settings.timeout_terminators.to_value()
+            }
+            "drain-on-final-transcripts" => {
+                let settings = self.settings.lock().unwrap();
+                settings.drain_on_final_transcripts.to_value()
+            }
+            "drain-on-speaker-change" => {
+                let settings = self.settings.lock().unwrap();
+                settings.drain_on_speaker_change.to_value()
             }
             _ => unimplemented!(),
         }
