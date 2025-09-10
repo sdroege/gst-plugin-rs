@@ -147,7 +147,7 @@ meson shared:
   script:
     # Remove cmake because the meson cmake dependency resolver is broken
     - apt purge cmake -y
-    - meson build --default-library=shared --prefix=$(pwd)/install --fatal-meson-warnings
+    - meson build --default-library=both --prefix=$(pwd)/install --fatal-meson-warnings
     - ninja -C build install
     - ./ci/check-installed.py install
     - ninja -C build docs/gst_plugins_cache.json
@@ -169,7 +169,7 @@ meson static:
     - ninja -C build install
     - ./ci/generate-static-test.py test-static-link-all
     - cd test-static-link-all
-    - PKG_CONFIG_PATH=$PKG_CONFIG_PATH:$(pwd)/../install/lib/x86_64-linux-gnu/pkgconfig meson build
+    - PKG_CONFIG_PATH=$PKG_CONFIG_PATH:$(pwd)/../install/lib/x86_64-linux-gnu/pkgconfig:$(pwd)/../install/lib/x86_64-linux-gnu/gstreamer-1.0/pkgconfig  meson build
     - ninja -C build
     - ./build/test-gst-static
   artifacts:

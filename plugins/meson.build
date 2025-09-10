@@ -6,7 +6,7 @@ if output.length() > 0
     output: output,
     console: true,
     install: true,
-    install_dir: plugins_install_dir,
+    install_dir: install_dirs,
     depends: depends,
     depfile: 'gst-plugins-rs.dep',
     env: extra_env,
@@ -23,5 +23,10 @@ if output.length() > 0
       '--lib-suffixes', library_suffixes,
       '--target-dir', meson.current_build_dir() / '..' / 'target',
     ] + feature_args + extra_args)
-  plugins = rs_plugins.to_list()
+  plugins = []
+  foreach plugin: rs_plugins.to_list()
+    if not plugin.full_path().endswith('.pc')
+      plugins += plugin
+    endif
+  endforeach
 endif
