@@ -87,12 +87,8 @@ const DEFAULT_VOICE_ID: &str = "9BWtsMINqrJLrRacOk9x"; // Aria
 const DEFAULT_MODEL_ID: &str = "eleven_flash_v2_5";
 const DEFAULT_LANGUAGE_CODE: Option<&str> = None;
 const DEFAULT_RETRY_WITH_SPEED: bool = true;
+const DEFAULT_MAX_PREVIOUS_REQUESTS: u32 = 0;
 const DEFAULT_MAX_OVERFLOW: gst::ClockTime = gst::ClockTime::from_seconds(0);
-
-// https://elevenlabs.io/docs/api-reference/text-to-speech/convert:
-//
-// > A maximum of 3 request_ids can be send.
-const MAX_PREVIOUS_REQUEST_IDS: usize = 3;
 
 #[derive(Debug, Clone)]
 pub(super) struct Settings {
@@ -104,6 +100,7 @@ pub(super) struct Settings {
     language_code: Option<String>,
     retry_with_speed: bool,
     max_overflow: gst::ClockTime,
+    max_previous_requests: u32,
 }
 
 impl Default for Settings {
@@ -117,6 +114,7 @@ impl Default for Settings {
             language_code: DEFAULT_LANGUAGE_CODE.map(String::from),
             retry_with_speed: DEFAULT_RETRY_WITH_SPEED,
             max_overflow: DEFAULT_MAX_OVERFLOW,
+            max_previous_requests: DEFAULT_MAX_PREVIOUS_REQUESTS,
         }
     }
 }
@@ -342,7 +340,14 @@ impl Synthesizer {
         mut pts: gst::ClockTime,
         input_duration: gst::ClockTime,
     ) -> Result<Option<gst::Buffer>, Error> {
-        let (voice_id, model_id, language_code, retry_with_speed, our_latency) = {
+        let (
+            voice_id,
+            model_id,
+            language_code,
+            retry_with_speed,
+            our_latency,
+            max_previous_requests,
+        ) = {
             let settings = self.settings.lock().unwrap();
 
             (
@@ -351,6 +356,7 @@ impl Synthesizer {
                 settings.language_code.as_ref().cloned(),
                 settings.retry_with_speed,
                 settings.latency,
+                settings.max_previous_requests,
             )
         };
 
@@ -556,7 +562,7 @@ impl Synthesizer {
 
         if let Some(id) = request_id {
             state.previous_request_ids.push_back(id);
-            while state.previous_request_ids.len() > MAX_PREVIOUS_REQUEST_IDS {
+            while state.previous_request_ids.len() > max_previous_requests as usize {
                 state.previous_request_ids.pop_front();
             }
         } else {
@@ -1011,6 +1017,14 @@ impl ObjectImpl for Synthesizer {
                     .default_value(DEFAULT_MAX_OVERFLOW.mseconds() as u32)
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecUInt::builder("max-previous-requests")
+                    .nick("Max Previous Requests")
+                    .blurb("How many previous request IDs to track, see https://elevenlabs.io/docs/api-reference/text-to-speech/convert#request.body.previous_request_ids")
+                    .default_value(DEFAULT_MAX_PREVIOUS_REQUESTS)
+                    .minimum(0)
+                    .maximum(3)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -1063,6 +1077,10 @@ impl ObjectImpl for Synthesizer {
                     value.get::<u32>().expect("type checked upstream").into(),
                 );
             }
+            "max-previous-requests" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.max_previous_requests = value.get::<u32>().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -1100,6 +1118,10 @@ impl ObjectImpl for Synthesizer {
             "max-overflow" => {
                 let settings = self.settings.lock().unwrap();
                 (settings.latency.mseconds() as u32).to_value()
+            }
+            "max-previous-requests" => {
+                let settings = self.settings.lock().unwrap();
+                settings.max_previous_requests.to_value()
             }
             _ => unimplemented!(),
         }

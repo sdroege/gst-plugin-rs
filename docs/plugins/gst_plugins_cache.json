@@ -2843,6 +2843,20 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "max-previous-requests": {
+                        "blurb": "How many previous request IDs to track, see https://elevenlabs.io/docs/api-reference/text-to-speech/convert#request.body.previous_request_ids",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "3",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
                     "model-id": {
                         "blurb": "ElevenLabs Model ID, see https://help.elevenlabs.io/hc/en-us/articles/21811236079505-How-do-I-find-the-model-ID",
                         "conditionally-available": false,
