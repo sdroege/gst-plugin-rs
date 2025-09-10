@@ -543,7 +543,7 @@ impl Synthesizer {
             }
         }
 
-        let duration = gst::ClockTime::from_nseconds(
+        let mut duration = gst::ClockTime::from_nseconds(
             (bytes.len() as u64)
                 .mul_div_round(1_000_000_000, bytes_per_second)
                 .unwrap(),
@@ -593,12 +593,21 @@ impl Synthesizer {
 
                 if deadline < current_rtime {
                     let delta = current_rtime - deadline;
-                    gst::warning!(
-                        CAT,
-                        "received running time {buffer_rtime} + {upstream_min} + {our_latency} < current rtime {current_rtime}, shifting forward by {delta}, consider increasing latency"
-                    );
 
-                    pts += delta;
+                    if duration > delta {
+                        gst::warning!(
+                            CAT,
+                            "received running time {buffer_rtime} + {upstream_min} + {our_latency} < current rtime {current_rtime}, shifting forward by {delta}, consider increasing latency"
+                        );
+                        pts += delta;
+                        duration -= delta;
+                    } else {
+                        gst::warning!(
+                            CAT,
+                            "received running time {buffer_rtime} + {upstream_min} + {our_latency} < current rtime {current_rtime} and delta {delta} is greater than duration {duration}, dropping, consider increasing latency"
+                        );
+                        return Ok(None);
+                    }
                 }
             }
         }
