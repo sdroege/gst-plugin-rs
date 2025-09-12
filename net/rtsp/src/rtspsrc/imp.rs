@@ -681,7 +681,7 @@ impl RtspSrc {
             .stream_type(gst_app::AppStreamType::Stream)
             .max_bytes(0)
             .max_buffers(0)
-            .max_time(Some(gst::ClockTime::from_seconds(2)))
+            .max_time(gst::ClockTime::from_seconds(2))
             .leaky_type(gst_app::AppLeakyType::Downstream)
             .callbacks(callbacks)
             .is_live(true)
