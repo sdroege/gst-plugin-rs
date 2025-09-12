@@ -1,0 +1,10 @@
+[project]
+name = "service"
+version = "0.1.0"
+description = "WebSocket based audio streaming service around demucs"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "demucs>=4.0.1",
+    "websockets>=15.0.1",
+]

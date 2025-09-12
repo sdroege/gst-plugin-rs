@@ -9,6 +9,7 @@ option('audiofx', type: 'feature', value: 'auto', description: 'Build audiofx pl
 option('audioparsers', type: 'feature', value: 'auto', description: 'Build audioparsers plugin')
 option('claxon', type: 'feature', value: 'auto', description: 'Build claxon plugin')
 option('csound', type: 'feature', value: 'auto', description: 'Build csound plugin')
+option('demucs', type: 'feature', value: 'auto', description: 'Build demucs plugin')
 option('elevenlabs', type: 'feature', value: 'auto', description: 'Build elevenlabs plugin')
 option('lewton', type: 'feature', value: 'auto', description: 'Build lewton plugin')
 option('spotify', type: 'feature', value: 'auto', description: 'Build spotify plugin')

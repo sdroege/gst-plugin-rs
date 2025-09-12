@@ -1,0 +1,58 @@
+[package]
+name = "gst-plugin-demucs"
+version.workspace = true
+authors = ["Sebastian Dröge <sebastian@centricular.com>"]
+repository.workspace = true
+license = "MPL-2.0"
+description = "GStreamer Demucs Plugin"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+glib.workspace = true
+gst.workspace = true
+gst-base.workspace = true
+gst-audio.workspace = true
+async-tungstenite = { version = "0.31", features = ["tokio-runtime", "tokio-rustls-native-certs"], optional = true }
+rustls = { version = "0.23", default-features = false, features = ["std", "ring"], optional = true }
+futures = "0.3"
+tokio = { version = "1", features = ["net", "time", "rt", "rt-multi-thread", "io-util"] }
+url = "2"
+http = { version = "1", optional = true }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+pyo3 = { version = "0.26", features = ["auto-initialize"], optional = true }
+anyhow = "1"
+libc = "0.2"
+async-channel = "2"
+
+[build-dependencies]
+gst-plugin-version-helper.workspace = true
+
+[lib]
+name = "gstdemucs"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[features]
+static = []
+capi = []
+doc = []
+websocket = ["async-tungstenite", "rustls", "http"]
+inprocess = ["pyo3"]
+default = ["websocket"]
+
+[package.metadata.capi]
+min_version = "0.9.21"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+import_library = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gstreamer-audio-1.0, gobject-2.0, glib-2.0, gmodule-2.0"
+

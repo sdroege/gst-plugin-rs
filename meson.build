@@ -74,6 +74,7 @@ plugins = {
   'claxon': {'library': 'libgstclaxon'},
   # csound has a non-trivial external dependency, see below
   'csound': {},
+  'demucs': {'library': 'libgstdemucs'},
   'lewton': {'library': 'libgstlewton'},
   'spotify': {'library': 'libgstspotify'},
 

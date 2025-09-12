@@ -110,6 +110,8 @@ You will find the following plugins in this repository:
 
     - `csound`: A plugin to implement audio effects using the [Csound](https://csound.com/) library.
 
+    - `demucs`: An audio source separation plugin using [demucs](https://github.com/adefossez/demucs).
+
     - `elevenlabs`:
 
       - `elevenlabssynthesizer`: Generate audio speech from text using the [ElevenLabs](https://elevenlabs.io) API/service.

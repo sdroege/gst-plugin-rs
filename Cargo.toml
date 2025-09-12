@@ -12,6 +12,7 @@ members = [
     "audio/audioparsers",
     "audio/claxon",
     "audio/csound",
+    "audio/demucs",
     "audio/elevenlabs",
     "audio/lewton",
     "audio/speechmatics",
@@ -83,6 +84,7 @@ default-members = [
     "audio/audioparsers",
     "audio/audiofx",
     "audio/claxon",
+    "audio/demucs",
     "audio/lewton",
 
     "generic/originalbuffer",

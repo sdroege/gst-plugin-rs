@@ -3137,6 +3137,111 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "demucs": {
+        "description": "GStreamer Demucs Plugin",
+        "elements": {
+            "demucs": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Demucs Music Source Separation",
+                "hierarchy": [
+                    "GstDemucs",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Filter/Audio",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-raw:\n           rate: [ 32000, 48000 ]\n       channels: 2\n         layout: interleaved\n         format: F32LE\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src_%%s": {
+                        "caps": "audio/x-raw:\n           rate: [ 32000, 48000 ]\n       channels: 2\n         layout: interleaved\n         format: F32LE\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "properties": {
+                    "chunk-duration": {
+                        "blurb": "Duration of each chunk passed to demucs",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "3000000000",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "model-name": {
+                        "blurb": "Demucs model name",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "htdemucs",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "overlap": {
+                        "blurb": "Overlap between chunks passed to demucs",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0.25",
+                        "max": "3.40282e+38",
+                        "min": "-3.40282e+38",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gfloat",
+                        "writable": true
+                    },
+                    "processing-latency": {
+                        "blurb": "Latency introduced by the service and network for one chunk",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1000000000",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "url": {
+                        "blurb": "URL for the demucs service, NULL runs it locally",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstdemucs",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-demucs",
+        "source": "gst-plugin-demucs",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "elevenlabs": {
         "description": "GStreamer ElevenLabs plugin",
         "elements": {
