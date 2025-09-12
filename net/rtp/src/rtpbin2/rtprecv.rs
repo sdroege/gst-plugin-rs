@@ -2045,7 +2045,7 @@ impl ObjectImpl for RtpRecv {
                     .default_value(DEFAULT_LATENCY.mseconds() as u32)
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecUInt::builder("stats")
+                glib::ParamSpecBoxed::builder::<gst::Structure>("stats")
                     .nick("Statistics")
                     .blurb("Statistics about the session")
                     .read_only()
