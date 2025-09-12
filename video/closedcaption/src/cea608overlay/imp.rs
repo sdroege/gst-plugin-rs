@@ -53,6 +53,7 @@ struct State {
     attach: bool,
     selected_field: Option<u8>,
     last_cc_pts: Option<gst::ClockTime>,
+    upstream_caps: Option<gst::Caps>,
 }
 
 impl Default for State {
@@ -64,6 +65,7 @@ impl Default for State {
             attach: false,
             selected_field: None,
             last_cc_pts: gst::ClockTime::NONE,
+            upstream_caps: None,
         }
     }
 }
@@ -83,6 +85,16 @@ impl Cea608Overlay {
     }
 
     fn negotiate(&self, state: &mut State) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let Some(caps) = state.upstream_caps.as_ref() else {
+            gst::element_imp_error!(
+                self,
+                gst::CoreError::Negotiation,
+                ["Element hasn't received valid video caps at negotiation time"]
+            );
+            self.srcpad.mark_reconfigure();
+            return Err(gst::FlowError::NotNegotiated);
+        };
+
         let video_info = match state.video_info.as_ref() {
             Some(video_info) => Ok(video_info),
             None => {
@@ -95,8 +107,8 @@ impl Cea608Overlay {
             }
         }?;
 
-        let mut caps = video_info.to_caps().unwrap();
         let mut downstream_accepts_meta = false;
+        let mut caps = caps.clone();
 
         let upstream_has_meta = caps
             .features(0)
@@ -330,6 +342,7 @@ impl Cea608Overlay {
         match event.view() {
             EventView::Caps(c) => {
                 let mut state = self.state.lock().unwrap();
+                state.upstream_caps = Some(c.caps_owned());
                 state.video_info = gst_video::VideoInfo::from_caps(c.caps()).ok();
                 self.srcpad.check_reconfigure();
                 match self.negotiate(&mut state) {
