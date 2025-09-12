@@ -21,6 +21,7 @@ RS_PREFIXED = [
     'webp',
     'videofx',
     'webrtc',
+    'webrtcbin2',
     'png',
     'tracers',
     'rtp',

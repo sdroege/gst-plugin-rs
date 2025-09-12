@@ -198,7 +198,7 @@ gst-launch-1.0 webrtcsrc signaller::producer-peer-id=<webrtcsink-peer-id> enable
 
 ### Sending HTTP headers
 
-During the initial signalling server handshake, you have the option to transmit 
+During the initial signalling server handshake, you have the option to transmit
 HTTP headers, which can be utilized, for instance, for authentication purposes or sticky sessions:
 
 ``` shell

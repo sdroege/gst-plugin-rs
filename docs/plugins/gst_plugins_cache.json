@@ -18431,6 +18431,406 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "rswebrtcbin2": {
+        "description": "GStreamer plugin for low level WebRTC elements",
+        "elements": {
+            "webrtcrecv": {
+                "author": "Matthew Waters <matthew@centricular.com>",
+                "description": "Receive streams using WebRTC",
+                "hierarchy": [
+                    "GstWebRTCRecv",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Network/Bin/WebRTC",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    },
+                    "src_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "src",
+                        "presence": "sometimes",
+                        "type": "GstWebRTCRecvSrcPad"
+                    }
+                },
+                "properties": {
+                    "id": {
+                        "blurb": "The identifier to connect with another webrtcsend element",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "session": {
+                        "blurb": "The internal session object. Only valid after reaching READY state",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstWebRTCSession",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
+            "webrtcsend": {
+                "author": "Matthew Waters <matthew@centricular.com>",
+                "description": "Send streams using WebRTC",
+                "hierarchy": [
+                    "GstWebRTCSend",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Network/Bin/WebRTC",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstWebRTCSendSinkPad"
+                    },
+                    "src_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "properties": {
+                    "id": {
+                        "blurb": "The identifier to connect with another webrtcrecv element",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "session": {
+                        "blurb": "The internal session object. Only valid after reaching READY state",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstWebRTCSession",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstrswebrtcbin2",
+        "license": "MPL-2.0",
+        "other-types": {
+            "GstWebRTCBin2SignalingStatus": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Stable",
+                        "name": "stable",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "HaveLocalOffer",
+                        "name": "have-local-offer",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "HaveLocalPrAnswer",
+                        "name": "have-local-pr-answer",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "HaveRemoteOffer",
+                        "name": "have-remote-offer",
+                        "value": "3"
+                    },
+                    {
+                        "desc": "HaveRemotePrAnswer",
+                        "name": "have-remote-pr-answer",
+                        "value": "4"
+                    },
+                    {
+                        "desc": "Closed",
+                        "name": "closed",
+                        "value": "5"
+                    }
+                ]
+            },
+            "GstWebRTCBin2Transceiver": {
+                "hierarchy": [
+                    "GstWebRTCBin2Transceiver",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object"
+            },
+            "GstWebRTCRecvSrcPad": {
+                "hierarchy": [
+                    "GstWebRTCRecvSrcPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object"
+            },
+            "GstWebRTCSendSinkPad": {
+                "hierarchy": [
+                    "GstWebRTCSendSinkPad",
+                    "GstGhostPad",
+                    "GstProxyPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "transceiver": {
+                        "blurb": "The transceiver in use for this sink pad",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstWebRTCBin2Transceiver",
+                        "writable": false
+                    }
+                }
+            },
+            "GstWebRTCSession": {
+                "hierarchy": [
+                    "GstWebRTCSession",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "current-local-description": {
+                        "blurb": "The latest local description that was successfully negotiated and caused the signaling-state to transition to stable",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": false
+                    },
+                    "current-remote-description": {
+                        "blurb": "The latest remote description that was successfully negotiated and caused the signaling-state to transition to stable",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": false
+                    },
+                    "pending-local-description": {
+                        "blurb": "The local description that is in the process of being negotiated",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": false
+                    },
+                    "pending-remote-description": {
+                        "blurb": "The remote description that is in the process of being negotiated",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": false
+                    },
+                    "signaling-state": {
+                        "blurb": "The signaling state of the WebRTC connection",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "stable (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstWebRTCBin2SignalingStatus",
+                        "writable": false
+                    }
+                },
+                "signals": {
+                    "add-ice-candidate": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "guint"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg3",
+                                "type": "GstPromise"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "add-stun-server": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "create-answer": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "GstStructure"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "GstPromise"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "create-offer": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "GstStructure"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "GstPromise"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "on-ice-candidate": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "guint"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "on-negotiation-needed": {
+                        "args": [],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "set-local-description": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "GstPromise"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "set-remote-description": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "GstPromise"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    }
+                }
+            }
+        },
+        "package": "gst-plugin-webrtcbin2",
+        "source": "gst-plugin-webrtcbin2",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "skia": {
         "description": "GStreamer skia plugin",
         "elements": {

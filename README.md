@@ -141,6 +141,10 @@ You will find the following plugins in this repository:
 
     - `webrtchttp`: Simple WebRTC HTTP elements (WHIP/WHEP).
 
+    - `webrtcbin2`: new WebRTC elements with less threads based on `rtpsend`/`rtprecv`.
+      - `webrtcsend`: Send half of a WebRTC session.
+      - `webrtcreceive`: Receive half of a WebRTC session.
+
   * `audio`
     - `audiofx`: Elements to apply audio effects to a stream
       - `rsaudioecho`: a simple echo/reverb filter.

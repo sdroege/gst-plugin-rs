@@ -130,6 +130,10 @@ plugins = {
     'examples': ['webrtcsink-stats-server'],
     'option-features': ['aws', 'livekit']
   },
+  'webrtcbin2': {
+    'library': 'libgstrswebrtcbin2',
+    'extra-deps': {'openssl': ['>=1.1']},
+  },
 
   'textaccumulate': {'library': 'libgsttextaccumulate'},
   'textahead': {'library': 'libgsttextahead'},
@@ -221,6 +225,7 @@ endforeach
 
 rtp_option = rtp_option.enable_if(webrtc_option.enabled(), error_message: 'webrtc option needs rtp')
 rtp_option = rtp_option.enable_if(rtsp_option.enabled(), error_message: 'rtsp option needs rtp')
+rtp_option = rtp_option.enable_if(webrtcbin2_option.enabled(), error_message: 'webrtcbin2 option needs rtp')
 
 deps = [
   # name, subproject name, subproject dep, library object

@@ -1,0 +1,65 @@
+[package]
+name = "gst-plugin-webrtcbin2"
+version.workspace = true
+edition.workspace = true
+authors = ["Matthew Waters <matthew@centricular.com>"]
+license = "MPL-2.0"
+description = "GStreamer plugin for low level WebRTC elements"
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+gst = { workspace = true, features = ["v1_22", "serde"] }
+gst-app = { workspace = true, features = ["v1_22"] }
+gst-base.workspace = true
+
+thiserror = "2"
+futures = "0.3"
+librice = { version = "0.4.3", default-features = false, features = ["runtime-tokio"] }
+sdp-types = "0.1"
+tokio = { version = "1", features = ["net", "rt-multi-thread", "time", "sync"] }
+human_bytes = "0.4"
+rand = "0.9"
+openssl = "0.10"
+url = "2"
+
+tracing = { version = "0.1", features = ["log"] }
+
+[dev-dependencies]
+gst-check = { workspace = true, features = ["v1_22"] }
+gst-plugin-rtp = { path = "../rtp" }
+
+anyhow = "1"
+async-tungstenite = { version = "0.30", features = ["tokio-runtime", "tokio-native-tls"] }
+clap = { version = "4", features = ["derive"] }
+futures = "0.3"
+serde = "1"
+serde_derive = "1"
+serde_json = "1"
+
+[lib]
+name = "gstrswebrtcbin2"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper.workspace = true
+
+[features]
+static = []
+capi = []
+doc = []
+
+[package.metadata.capi]
+min_version = "0.9.21"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+import_library = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0 >= 1.22, gstreamer-app-1.0 >= 1.20, gobject-2.0, glib-2.0, gmodule-2.0"

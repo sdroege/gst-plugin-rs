@@ -40,6 +40,7 @@ RENAMES = {
     'rsvalidate': 'validate',
     'rsclosedcaption': 'closedcaption',
     'rswebrtc': 'webrtc',
+    'rswebrtcbin2': 'webrtcbin2',
     'rspng': 'png',
     'rsvideofx': 'videofx',
     'rsinter': 'inter',

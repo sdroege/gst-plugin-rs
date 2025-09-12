@@ -49,6 +49,7 @@ members = [
     "net/webrtc",
     "net/webrtc/protocol",
     "net/webrtc/signalling",
+    "net/webrtcbin2",
     "net/quinn",
 
     "text/accumulate",
