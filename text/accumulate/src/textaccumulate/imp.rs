@@ -1006,7 +1006,7 @@ impl ObjectImpl for Accumulate {
                     .nick("Latency")
                     .blurb("Amount of milliseconds to allow for accumulating")
                     .default_value(DEFAULT_LATENCY.mseconds() as u32)
-                    .minimum(100u32)
+                    .minimum(0u32)
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecUInt::builder("lateness")
