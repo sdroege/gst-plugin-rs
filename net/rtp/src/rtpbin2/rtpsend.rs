@@ -554,7 +554,7 @@ impl ObjectImpl for RtpSend {
                     .default_value(DEFAULT_MIN_RTCP_INTERVAL.as_millis() as u32)
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecUInt::builder("stats")
+                glib::ParamSpecBoxed::builder::<gst::Structure>("stats")
                     .nick("Statistics")
                     .blurb("Statistics about the session")
                     .read_only()

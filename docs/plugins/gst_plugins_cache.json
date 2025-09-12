@@ -11931,9 +11931,10 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
+                        "default": "application/x-rtp2-stats;",
                         "mutable": "null",
                         "readable": true,
-                        "type": "guint",
+                        "type": "GstStructure",
                         "writable": false
                     },
                     "timestamping-mode": {
@@ -12049,9 +12050,10 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
+                        "default": "application/x-rtp2-stats;",
                         "mutable": "null",
                         "readable": true,
-                        "type": "guint",
+                        "type": "GstStructure",
                         "writable": false
                     }
                 },
