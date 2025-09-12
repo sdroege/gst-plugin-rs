@@ -234,7 +234,7 @@ struct State {
     upstream_latency: Option<(bool, gst::ClockTime, Option<gst::ClockTime>)>,
     segment: gst::FormattedSegment<gst::ClockTime>,
     input: Option<Input>,
-    accumulate_tx: Option<mpsc::Sender<AccumulateInput>>,
+    accumulate_tx: Option<mpsc::SyncSender<AccumulateInput>>,
     serialized_query_return: Option<bool>,
     seqnum: gst::Seqnum,
     timeout_terminators_regex: Option<Regex>,
@@ -436,7 +436,8 @@ impl Accumulate {
                 true
             }
             Caps(_) => {
-                if let Some(tx) = self.state.lock().unwrap().accumulate_tx.as_ref() {
+                let accumulate_tx = self.state.lock().unwrap().accumulate_tx.clone();
+                if let Some(tx) = accumulate_tx {
                     let _ = tx.send(AccumulateInput::Event(event));
                 }
 
@@ -455,7 +456,8 @@ impl Accumulate {
                     .map(|input| input.is_empty())
                     .unwrap_or(true)
                 {
-                    if let Some(accumulate_tx) = state.accumulate_tx.as_ref() {
+                    if let Some(accumulate_tx) = state.accumulate_tx.clone() {
+                        drop(state);
                         let _ = accumulate_tx.send(AccumulateInput::Gap { pts, duration });
                     }
                 }
@@ -522,7 +524,9 @@ impl Accumulate {
                     }
                 }
 
-                if let Some(tx) = self.state.lock().unwrap().accumulate_tx.as_ref() {
+                let accumulate_tx = self.state.lock().unwrap().accumulate_tx.clone();
+
+                if let Some(tx) = accumulate_tx {
                     let _ = tx.send(AccumulateInput::Event(event));
                 }
 
@@ -530,7 +534,8 @@ impl Accumulate {
             }
             _ => {
                 if event.is_serialized() {
-                    if let Some(tx) = self.state.lock().unwrap().accumulate_tx.as_ref() {
+                    let accumulate_tx = self.state.lock().unwrap().accumulate_tx.clone();
+                    if let Some(tx) = accumulate_tx {
                         let _ = tx.send(AccumulateInput::Event(event));
                     }
 
@@ -664,7 +669,7 @@ impl Accumulate {
 
         gst::debug!(CAT, imp = self, "starting source pad task");
 
-        let (accumulate_tx, accumulate_rx) = mpsc::channel();
+        let (accumulate_tx, accumulate_rx) = mpsc::sync_channel(0);
 
         self.state.lock().unwrap().accumulate_tx = Some(accumulate_tx);
 
@@ -830,8 +835,10 @@ impl Accumulate {
         };
 
         if let Some(items) = drained_items {
-            if let Some(tx) = state.accumulate_tx.as_ref() {
+            if let Some(tx) = state.accumulate_tx.clone() {
+                drop(state);
                 let _ = tx.send(AccumulateInput::Items(items));
+                state = self.state.lock().unwrap();
             }
         }
 
@@ -856,8 +863,10 @@ impl Accumulate {
 
         while let Some(items) = state.input.as_mut().and_then(|input| input.next_sentence()) {
             gst::log!(CAT, imp = self, "drained next sentence: {:#?}", items);
-            if let Some(tx) = state.accumulate_tx.as_ref() {
+            if let Some(tx) = state.accumulate_tx.clone() {
+                drop(state);
                 let _ = tx.send(AccumulateInput::Items(items));
+                state = self.state.lock().unwrap();
             }
         }
 
@@ -869,8 +878,10 @@ impl Accumulate {
             .unwrap_or(0)
             == 1
         {
-            if let Some(tx) = state.accumulate_tx.as_ref() {
+            if let Some(tx) = state.accumulate_tx.clone() {
+                drop(state);
                 let _ = tx.send(AccumulateInput::RecalculateTimeout);
+                state = self.state.lock().unwrap();
             }
         }
 
