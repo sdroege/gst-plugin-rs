@@ -10696,6 +10696,48 @@
                     }
                 },
                 "properties": {
+                    "max-buffers": {
+                        "blurb": "Maximum number of buffers to queue (0=unlimited)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "max-bytes": {
+                        "blurb": "Maximum number of bytes to queue (0=unlimited)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "max-time": {
+                        "blurb": "Maximum number of nanoseconds to queue (0=unlimited)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "500000000",
+                        "max": "9223372036854775807",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
                     "producer-name": {
                         "blurb": "Producer Name to consume from",
                         "conditionally-available": false,
