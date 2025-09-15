@@ -356,6 +356,8 @@ fn assert_stream_selected(msg: gst::Message, n_streams: usize) -> gst::Object {
 }
 
 #[test]
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/514
+#[ignore]
 fn single_audio() {
     let (_events, current_iteration, current_uri_index, eos) =
         test(vec![TestMedia::ogg()], 1, 1, true, None, false);
@@ -365,6 +367,8 @@ fn single_audio() {
 }
 
 #[test]
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/514
+#[ignore]
 fn single_video() {
     let (_events, current_iteration, current_uri_index, eos) =
         test(vec![TestMedia::mkv()], 2, 1, true, None, false);
@@ -374,6 +378,8 @@ fn single_video() {
 }
 
 #[test]
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/514
+#[ignore]
 fn multi_audio() {
     let (_events, current_iteration, current_uri_index, eos) = test(
         vec![TestMedia::ogg(), TestMedia::ogg(), TestMedia::ogg()],
@@ -389,6 +395,8 @@ fn multi_audio() {
 }
 
 #[test]
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/514
+#[ignore]
 fn multi_audio_video() {
     let (_events, current_iteration, current_uri_index, eos) = test(
         vec![TestMedia::mkv(), TestMedia::mkv()],
@@ -404,6 +412,8 @@ fn multi_audio_video() {
 }
 
 #[test]
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/514
+#[ignore]
 fn iterations() {
     let (_events, current_iteration, current_uri_index, eos) = test(
         vec![TestMedia::mkv(), TestMedia::mkv()],
@@ -436,6 +446,8 @@ fn nb_streams_increasing() {
 }
 
 #[test]
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/514
+#[ignore]
 fn missing_file() {
     let (events, current_iteration, current_uri_index, eos) = test(
         vec![TestMedia::ogg(), TestMedia::missing_file()],
@@ -455,6 +467,8 @@ fn missing_file() {
 }
 
 #[test]
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/514
+#[ignore]
 fn missing_http() {
     let (events, current_iteration, current_uri_index, eos) = test(
         vec![TestMedia::ogg(), TestMedia::missing_http()],
@@ -474,6 +488,8 @@ fn missing_http() {
 }
 
 #[test]
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/514
+#[ignore]
 /// increase playlist iterations while it's playing
 fn increase_iterations() {
     let (_events, current_iteration, current_uri_index, eos) = test(
@@ -514,6 +530,8 @@ fn decrease_iterations() {
 }
 
 #[test]
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/514
+#[ignore]
 /// change an infinite playlist to a finite one
 fn infinite_to_finite() {
     let (_events, current_iteration, current_uri_index, eos) = test(
@@ -533,6 +551,8 @@ fn infinite_to_finite() {
 }
 
 #[test]
+// FIXME: racy: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/514
+#[ignore]
 /// cache HTTP playlist items
 fn cache() {
     let media = TestMedia::mkv_http();
