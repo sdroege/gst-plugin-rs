@@ -314,7 +314,7 @@ test windows stable:
 rustfmt:
   extends: '.debian:12-stable'
   stage: "lint"
-  tags: [ 'placeholder-job' ]
+  tags: [ 'priority:medium' ]
   needs: []
   script:
     - cargo fmt --version
@@ -323,7 +323,7 @@ rustfmt:
 gstwebrtc-api lint:
   image: node:lts
   stage: "lint"
-  tags: [ 'placeholder-job' ]
+  tags: [ 'priority:medium' ]
   needs: []
   script:
     - cd net/webrtc/gstwebrtc-api
@@ -333,7 +333,7 @@ gstwebrtc-api lint:
 check commits:
   extends: '.debian:12-stable'
   stage: "lint"
-  tags: [ 'placeholder-job' ]
+  tags: [ 'priority:medium' ]
   needs: []
   script:
     - ci-fairy check-commits --textwidth 0 --no-signed-off-by
@@ -343,7 +343,7 @@ check commits:
 check readme:
   extends: '.debian:12-stable'
   stage: "lint"
-  tags: [ 'placeholder-job' ]
+  tags: [ 'priority:medium' ]
   needs: []
   script:
     - ci/check-readme-against-plugins-list.py
