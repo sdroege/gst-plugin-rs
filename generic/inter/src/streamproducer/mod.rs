@@ -1,5 +1,7 @@
 use gst::prelude::*;
-use std::collections::{HashMap, HashSet};
+use gst_utils::streamproducer::ConsumerSettings;
+
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use anyhow::{anyhow, Error};
@@ -7,7 +9,7 @@ use std::sync::LazyLock;
 
 pub enum InterStreamProducer {
     Pending {
-        consumers: HashSet<gst_app::AppSrc>,
+        consumers: HashMap<gst_app::AppSrc, ConsumerSettings>,
     },
     Active {
         producer: gst_utils::StreamProducer,
@@ -54,11 +56,11 @@ impl InterStreamProducer {
                     let producer = gst_utils::StreamProducer::from(appsink);
                     let mut links = HashMap::new();
 
-                    for consumer in consumers {
+                    for (consumer, settings) in consumers {
                         ensure_different_toplevel(appsink, &consumer);
 
                         let link = producer
-                            .add_consumer(&consumer)
+                            .add_consumer_with(&consumer, settings)
                             .expect("consumer should not have already been added");
                         links.insert(consumer, link);
                     }
@@ -108,7 +110,11 @@ impl InterStreamProducer {
                     producers.insert(
                         name.to_string(),
                         InterStreamProducer::Pending {
-                            consumers: links.into_keys().collect(),
+                            consumers: HashMap::from_iter(
+                                links
+                                    .iter()
+                                    .map(|(consumer, link)| (consumer.clone(), link.settings())),
+                            ),
                         },
                     );
 
@@ -120,26 +126,26 @@ impl InterStreamProducer {
         }
     }
 
-    pub fn subscribe(name: &str, consumer: &gst_app::AppSrc) {
+    pub fn subscribe(name: &str, consumer: &gst_app::AppSrc, settings: ConsumerSettings) {
         let mut producers = PRODUCERS.lock().unwrap();
 
         if let Some(producer) = producers.get_mut(name) {
             match producer {
                 InterStreamProducer::Pending { consumers } => {
-                    consumers.insert(consumer.clone());
+                    consumers.insert(consumer.clone(), settings);
                 }
                 InterStreamProducer::Active { producer, links } => {
                     ensure_different_toplevel(producer.appsink(), consumer);
 
                     let link = producer
-                        .add_consumer(consumer)
+                        .add_consumer_with(consumer, settings)
                         .expect("consumer should not already have been added");
                     links.insert(consumer.clone(), link);
                 }
             }
         } else {
             let producer = InterStreamProducer::Pending {
-                consumers: [consumer.clone()].into(),
+                consumers: [(consumer.clone(), settings)].into(),
             };
             producers.insert(name.to_string(), producer);
         }
@@ -150,7 +156,7 @@ impl InterStreamProducer {
 
         if let Some(producer) = producers.get_mut(name) {
             match producer {
-                InterStreamProducer::Pending { consumers } => consumers.remove(consumer),
+                InterStreamProducer::Pending { consumers } => consumers.remove(consumer).is_some(),
                 InterStreamProducer::Active { links, .. } => links.remove(consumer).is_some(),
             }
         } else {

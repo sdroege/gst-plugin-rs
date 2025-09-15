@@ -5,6 +5,10 @@ use anyhow::Error;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst_utils::streamproducer::{
+    ConsumerSettings, DEFAULT_CONSUMER_MAX_BUFFERS, DEFAULT_CONSUMER_MAX_BYTES,
+    DEFAULT_CONSUMER_MAX_TIME,
+};
 
 use std::sync::Mutex;
 
@@ -15,12 +19,14 @@ const DEFAULT_PRODUCER_NAME: &str = "default";
 #[derive(Debug)]
 struct Settings {
     producer_name: String,
+    consumer: ConsumerSettings,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Settings {
             producer_name: DEFAULT_PRODUCER_NAME.to_string(),
+            consumer: ConsumerSettings::default(),
         }
     }
 }
@@ -35,7 +41,7 @@ impl InterSrc {
     fn prepare(&self) -> Result<(), Error> {
         let settings = self.settings.lock().unwrap();
 
-        InterStreamProducer::subscribe(&settings.producer_name, &self.appsrc);
+        InterStreamProducer::subscribe(&settings.producer_name, &self.appsrc, settings.consumer);
 
         Ok(())
     }
@@ -73,12 +79,34 @@ impl ObjectSubclass for InterSrc {
 impl ObjectImpl for InterSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecString::builder("producer-name")
-                .nick("Producer Name")
-                .blurb("Producer Name to consume from")
-                .doc_show_default()
-                .mutable_playing()
-                .build()]
+            vec![
+                glib::ParamSpecString::builder("producer-name")
+                    .nick("Producer Name")
+                    .blurb("Producer Name to consume from")
+                    .doc_show_default()
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecUInt64::builder("max-buffers")
+                    .nick("Max Buffers")
+                    .blurb("Maximum number of buffers to queue (0=unlimited)")
+                    .default_value(DEFAULT_CONSUMER_MAX_BUFFERS)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt64::builder("max-bytes")
+                    .nick("Max Bytes")
+                    .blurb("Maximum number of bytes to queue (0=unlimited)")
+                    .default_value(DEFAULT_CONSUMER_MAX_BYTES.into())
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt64::builder("max-time")
+                    .nick("Max Time")
+                    .blurb("Maximum number of nanoseconds to queue (0=unlimited)")
+                    // appsrc `max-time` property is an Int64 even though negative range is not used
+                    .maximum(i64::MAX as u64)
+                    .default_value(DEFAULT_CONSUMER_MAX_TIME.nseconds())
+                    .mutable_ready()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()
@@ -94,8 +122,23 @@ impl ObjectImpl for InterSrc {
                     .unwrap_or_else(|_| DEFAULT_PRODUCER_NAME.to_string());
 
                 if InterStreamProducer::unsubscribe(&old_producer_name, &self.appsrc) {
-                    InterStreamProducer::subscribe(&settings.producer_name, &self.appsrc);
+                    InterStreamProducer::subscribe(
+                        &settings.producer_name,
+                        &self.appsrc,
+                        settings.consumer,
+                    );
                 }
+            }
+            "max-buffers" => {
+                self.settings.lock().unwrap().consumer.max_buffer = value.get::<u64>().unwrap();
+            }
+            "max-bytes" => {
+                self.settings.lock().unwrap().consumer.max_bytes =
+                    gst::format::Bytes::from_u64(value.get::<u64>().unwrap());
+            }
+            "max-time" => {
+                self.settings.lock().unwrap().consumer.max_time =
+                    gst::ClockTime::from_nseconds(value.get::<u64>().unwrap());
             }
             _ => unimplemented!(),
         };
@@ -107,6 +150,9 @@ impl ObjectImpl for InterSrc {
                 let settings = self.settings.lock().unwrap();
                 settings.producer_name.to_value()
             }
+            "max-buffers" => self.settings.lock().unwrap().consumer.max_buffer.to_value(),
+            "max-bytes" => self.settings.lock().unwrap().consumer.max_bytes.to_value(),
+            "max-time" => self.settings.lock().unwrap().consumer.max_time.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -121,7 +167,10 @@ impl ObjectImpl for InterSrc {
         // The name of GstObjects can still be changed until they become child of another object.
         self.appsrc
             .set_property("name", format!("{}-appsrc", self.obj().name()));
-        gst_utils::StreamProducer::configure_consumer(&self.appsrc);
+        gst_utils::StreamProducer::configure_consumer_with(
+            &self.appsrc,
+            self.settings.lock().unwrap().consumer,
+        );
         obj.add(&self.appsrc).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
         self.srcpad
