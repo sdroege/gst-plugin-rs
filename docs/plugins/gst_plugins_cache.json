@@ -10504,6 +10504,18 @@
                         "readable": true,
                         "type": "gchararray",
                         "writable": true
+                    },
+                    "sync": {
+                        "blurb": "Sync on the clock",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
                     }
                 },
                 "rank": "none"

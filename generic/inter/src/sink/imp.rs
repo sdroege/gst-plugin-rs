@@ -5,6 +5,7 @@ use anyhow::Error;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst_utils::streamproducer::{ProducerSettings, DEFAULT_PRODUCER_SYNC};
 
 use std::sync::Mutex;
 
@@ -15,6 +16,7 @@ const DEFAULT_PRODUCER_NAME: &str = "default";
 #[derive(Debug)]
 struct Settings {
     producer_name: String,
+    producer: ProducerSettings,
     event_types: Vec<gst::EventType>,
 }
 
@@ -22,6 +24,7 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             producer_name: DEFAULT_PRODUCER_NAME.to_string(),
+            producer: ProducerSettings::default(),
             event_types: vec![gst::EventType::Eos],
         }
     }
@@ -37,9 +40,11 @@ impl InterSink {
     fn prepare(&self) -> Result<(), Error> {
         let settings = self.settings.lock().unwrap();
 
-        InterStreamProducer::acquire(&settings.producer_name, &self.appsink).map(|producer| {
-            producer.set_forward_events(settings.event_types.clone());
-        })
+        InterStreamProducer::acquire(&settings.producer_name, &self.appsink, settings.producer).map(
+            |producer| {
+                producer.set_forward_events(settings.event_types.clone());
+            },
+        )
     }
 
     fn unprepare(&self) {
@@ -98,6 +103,12 @@ impl ObjectImpl for InterSink {
                     .blurb("Forward Event Types (default EOS)")
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("sync")
+                    .nick("Sync")
+                    .blurb("Sync on the clock")
+                    .default_value(DEFAULT_PRODUCER_SYNC)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -114,9 +125,11 @@ impl ObjectImpl for InterSink {
                     .unwrap_or_else(|_| DEFAULT_PRODUCER_NAME.to_string());
 
                 if let Some(appsink) = InterStreamProducer::release(&old_producer_name) {
-                    if let Err(err) =
-                        InterStreamProducer::acquire(&settings.producer_name, &appsink)
-                    {
+                    if let Err(err) = InterStreamProducer::acquire(
+                        &settings.producer_name,
+                        &appsink,
+                        settings.producer,
+                    ) {
                         drop(settings);
                         gst::error!(CAT, imp = self, "{err}");
                         self.post_error_message(gst::error_msg!(
@@ -143,6 +156,9 @@ impl ObjectImpl for InterSink {
                     .collect::<Vec<_>>();
                 settings.event_types = types;
             }
+            "sync" => {
+                self.settings.lock().unwrap().producer.sync = value.get::<bool>().unwrap();
+            }
             _ => unimplemented!(),
         };
     }
@@ -162,6 +178,7 @@ impl ObjectImpl for InterSink {
                     .collect::<gst::Array>()
                     .to_value()
             }
+            "sync" => self.settings.lock().unwrap().producer.sync.to_value(),
             _ => unimplemented!(),
         }
     }

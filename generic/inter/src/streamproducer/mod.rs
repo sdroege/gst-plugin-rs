@@ -1,5 +1,5 @@
 use gst::prelude::*;
-use gst_utils::streamproducer::ConsumerSettings;
+use gst_utils::streamproducer::{ConsumerSettings, ProducerSettings};
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -47,13 +47,14 @@ impl InterStreamProducer {
     pub fn acquire(
         name: &str,
         appsink: &gst_app::AppSink,
+        settings: ProducerSettings,
     ) -> Result<gst_utils::StreamProducer, Error> {
         let mut producers = PRODUCERS.lock().unwrap();
 
         if let Some(producer) = producers.remove(name) {
             match producer {
                 InterStreamProducer::Pending { consumers } => {
-                    let producer = gst_utils::StreamProducer::from(appsink);
+                    let producer = gst_utils::StreamProducer::with(appsink, settings);
                     let mut links = HashMap::new();
 
                     for (consumer, settings) in consumers {
@@ -85,7 +86,7 @@ impl InterStreamProducer {
                 }
             }
         } else {
-            let producer = gst_utils::StreamProducer::from(appsink);
+            let producer = gst_utils::StreamProducer::with(appsink, settings);
 
             producers.insert(
                 name.to_string(),

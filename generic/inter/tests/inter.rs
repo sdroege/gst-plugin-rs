@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: MPL-2.0
 
+use futures::prelude::*;
 use gst::prelude::*;
 use serial_test::serial;
 
 use pretty_assertions::assert_eq;
+
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 fn init() {
     use std::sync::Once;
@@ -185,4 +191,133 @@ fn test_event_forwarding() {
     }
     intersink.set_state(gst::State::Null).unwrap();
     assert!(found);
+}
+
+fn test_latency_propagation_with(sync: bool) {
+    init();
+
+    let pipe_up = gst::parse::launch(&format!(
+        "videotestsrc is-live=true ! intersink sync={sync} name=producer"
+    ))
+    .unwrap()
+    .downcast::<gst::Pipeline>()
+    .unwrap();
+    let pipe_down = gst::parse::launch("intersrc ! fakesink name=sink")
+        .unwrap()
+        .downcast::<gst::Pipeline>()
+        .unwrap();
+
+    let got_latency = Arc::new(AtomicBool::new(false));
+    let sink_pad = pipe_down
+        .by_name("sink")
+        .unwrap()
+        .static_pad("sink")
+        .unwrap();
+    sink_pad.add_probe(
+        gst::PadProbeType::QUERY_UPSTREAM | gst::PadProbeType::PULL,
+        {
+            let got_latency = got_latency.clone();
+            move |_, info| {
+                let Some(q) = info.query() else {
+                    unreachable!();
+                };
+
+                if let gst::QueryView::Latency(q) = q.view() {
+                    println!(
+                        "==> Downstream: latency query (sync {sync}): {}",
+                        q.result().1
+                    );
+                    if q.result().1 > gst::ClockTime::ZERO {
+                        got_latency.store(true, Ordering::SeqCst);
+                    }
+                }
+                gst::PadProbeReturn::Ok
+            }
+        },
+    );
+
+    let clock = gst::SystemClock::obtain();
+    let base_time = clock.time();
+
+    pipe_up.set_clock(Some(&clock)).unwrap();
+    pipe_up.set_start_time(gst::ClockTime::NONE);
+    pipe_up.set_base_time(base_time);
+
+    pipe_down.set_clock(Some(&clock)).unwrap();
+    pipe_down.set_start_time(gst::ClockTime::NONE);
+    pipe_down.set_base_time(base_time);
+
+    pipe_up.set_state(gst::State::Playing).unwrap();
+    pipe_down.set_state(gst::State::Playing).unwrap();
+
+    futures::executor::block_on(async {
+        use gst::MessageView::*;
+
+        let mut bus_up_stream = pipe_up.bus().unwrap().stream();
+        let mut bus_down_stream = pipe_down.bus().unwrap().stream();
+
+        loop {
+            if got_latency.load(Ordering::SeqCst) {
+                break;
+            }
+
+            futures::select! {
+                msg = bus_down_stream.next() => {
+                    let Some(msg) = msg else { continue };
+                    match msg.view() {
+                        Latency(_) => {
+                            println!("\n==> Got downstream pipeline latency message (sync {sync})");
+                            let _ = pipe_down.recalculate_latency();
+                        }
+                        Error(err) => unreachable!("inter::latency_propagation (sync {sync}) {err:?}"),
+                        _ => (),
+                    }
+                }
+                msg = bus_up_stream.next() => {
+                    let Some(msg) = msg else { continue };
+                    match msg.view() {
+                        Latency(_) => {
+                            println!("\n==> Got upstream pipeline latency message (sync {sync})");
+                            let _ = pipe_up.recalculate_latency();
+                        }
+                        Error(err) => unreachable!("inter::latency_propagation (sync {sync}) {err:?}"),
+                        _ => (),
+                    }
+                }
+            };
+        }
+    });
+
+    let producer_pad = pipe_up
+        .by_name("producer")
+        .unwrap()
+        .static_pad("sink")
+        .unwrap();
+    let mut q_lat_prod = gst::query::Latency::new();
+    assert!(producer_pad.peer_query(&mut q_lat_prod));
+
+    let mut q_lat_sink = gst::query::Latency::new();
+    assert!(sink_pad.peer_query(&mut q_lat_sink));
+
+    let expected = if sync {
+        q_lat_prod.result().1 + 20.mseconds() // appsink's processing deadline
+    } else {
+        q_lat_prod.result().1
+    };
+    assert_eq!(expected, q_lat_sink.result().1);
+
+    pipe_up.set_state(gst::State::Null).unwrap();
+    pipe_down.set_state(gst::State::Null).unwrap();
+}
+
+#[test]
+#[serial]
+fn test_latency_propagation_sync() {
+    test_latency_propagation_with(true);
+}
+
+#[test]
+#[serial]
+fn test_latency_propagation_non_sync() {
+    test_latency_propagation_with(false);
 }
