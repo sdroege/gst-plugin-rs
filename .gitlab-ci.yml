@@ -6,7 +6,7 @@ include:
     file: '/templates/debian.yml'
 
   - project: 'gstreamer/gstreamer-rs'
-    ref: main
+    ref: '0.24'
     file: '/ci/images_template.yml'
 
   - project: 'gstreamer/gstreamer'
