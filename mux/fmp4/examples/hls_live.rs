@@ -422,7 +422,6 @@ impl VideoStream {
             .build()?;
         let mux = gst::ElementFactory::make("cmafmux")
             .property("fragment-duration", 3000.mseconds())
-            .property("write-mehd", true)
             .build()?;
         let appsink = gst_app::AppSink::builder().buffer_list(true).build();
 
