@@ -149,11 +149,11 @@ fn trim_segments(state: &mut StreamState) {
         state.trimmed_segments.push_back(UnreffedSegment {
             // HLS spec mandates that segments are removed from the filesystem no sooner
             // than the duration of the longest playlist + duration of the segment.
-            // This is 15 seconds (12.5 + 2.5) in our case, we use 20 seconds to be on the
+            // This is 18 seconds (15 + 3) in our case, we use 25 seconds to be on the
             // safe side
             removal_time: segment
                 .date_time
-                .checked_add_signed(Duration::try_seconds(20).unwrap())
+                .checked_add_signed(Duration::try_seconds(25).unwrap())
                 .unwrap(),
             path: segment.path.clone(),
         });
