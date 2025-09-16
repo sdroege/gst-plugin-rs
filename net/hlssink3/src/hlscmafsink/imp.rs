@@ -405,7 +405,7 @@ impl HlsCmafSink {
         };
 
         let playlist = MediaPlaylist {
-            version: Some(6),
+            version: Some(7),
             target_duration: target_duration as u64,
             playlist_type,
             independent_segments: true,
