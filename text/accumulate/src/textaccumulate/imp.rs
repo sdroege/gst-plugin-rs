@@ -21,11 +21,13 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::LazyLock;
 use std::sync::{mpsc, Condvar, Mutex};
 
-const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(2);
+const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(3);
 const DEFAULT_LATENESS: gst::ClockTime = gst::ClockTime::from_seconds(0);
 const DEFAULT_TIMEOUT_TERMINATORS: &str = r"\,\s|\:\s|\;\s";
 const DEFAULT_DRAIN_ON_FINAL_TRANSCRIPTS: bool = true;
 const DEFAULT_DRAIN_ON_SPEAKER_CHANGE: bool = true;
+const DEFAULT_EXTEND_DURATION: bool = false;
+const DEFAULT_EXTENDED_DURATION_GAP: gst::ClockTime = gst::ClockTime::from_mseconds(500);
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -34,6 +36,8 @@ struct Settings {
     timeout_terminators: String,
     drain_on_final_transcripts: bool,
     drain_on_speaker_change: bool,
+    extend_duration: bool,
+    extended_duration_gap: gst::ClockTime,
 }
 
 impl Default for Settings {
@@ -44,6 +48,8 @@ impl Default for Settings {
             timeout_terminators: DEFAULT_TIMEOUT_TERMINATORS.to_string(),
             drain_on_final_transcripts: DEFAULT_DRAIN_ON_FINAL_TRANSCRIPTS,
             drain_on_speaker_change: DEFAULT_DRAIN_ON_SPEAKER_CHANGE,
+            extend_duration: DEFAULT_EXTEND_DURATION,
+            extended_duration_gap: DEFAULT_EXTENDED_DURATION_GAP,
         }
     }
 }
@@ -591,6 +597,8 @@ impl Accumulate {
     }
 
     fn do_push(&self, mut to_push: Vec<Item>) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let settings = self.settings.lock().unwrap().clone();
+
         if to_push.is_empty() {
             gst::trace!(CAT, imp = self, "nothing to push, returning early");
             return Ok(gst::FlowSuccess::Ok);
@@ -623,9 +631,7 @@ impl Accumulate {
             new_position = Some(item.pts + item.duration);
         }
 
-        self.srcpad.push_list(bufferlist)?;
-
-        if let Some(gap) = {
+        let gap = {
             let mut state = self.state.lock().unwrap();
 
             if let Some(position) = new_position {
@@ -637,9 +643,38 @@ impl Accumulate {
                 .as_ref()
                 .and_then(|input| input.items.front().map(|item| item.pts))
             {
-                let segment_position = state.segment.position().expect("position was set");
+                let mut segment_position = state.segment.position().expect("position was set");
+
+                if settings.extend_duration
+                    && segment_position + settings.extended_duration_gap < next_item_pts
+                {
+                    let buffer = bufferlist_mut.get_mut(bufferlist_mut.len() - 1).unwrap();
+
+                    let new_duration =
+                        next_item_pts - settings.extended_duration_gap - buffer.pts().unwrap();
+
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "Updating last buffer duration from {} to {}",
+                        buffer.duration().unwrap(),
+                        new_duration
+                    );
+
+                    buffer.set_duration(new_duration);
+                    state
+                        .segment
+                        .set_position(buffer.pts().unwrap() + buffer.duration().unwrap());
+                    segment_position = buffer.pts().unwrap() + buffer.duration().unwrap();
+                }
 
                 if segment_position < next_item_pts {
+                    gst::log!(
+                        CAT,
+                        "pushing our own gap {} {}",
+                        segment_position,
+                        next_item_pts - segment_position
+                    );
                     let gap = gst::event::Gap::builder(segment_position)
                         .duration(next_item_pts - segment_position)
                         .seqnum(state.seqnum)
@@ -654,7 +689,11 @@ impl Accumulate {
             } else {
                 None
             }
-        } {
+        };
+
+        self.srcpad.push_list(bufferlist)?;
+
+        if let Some(gap) = gap {
             self.srcpad.push_event(gap);
         }
 
@@ -736,6 +775,14 @@ impl Accumulate {
                                 state
                                     .segment
                                     .set_position(pts + duration.unwrap_or(gst::ClockTime::ZERO));
+
+                                gst::debug!(
+                                    CAT,
+                                    imp = this,
+                                    "forwarding gap {} {:?}",
+                                    pts,
+                                    duration
+                                );
 
                                 gst::event::Gap::builder(pts)
                                     .duration(duration)
@@ -1035,6 +1082,20 @@ impl ObjectImpl for Accumulate {
                     .default_value(DEFAULT_DRAIN_ON_SPEAKER_CHANGE)
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("extend-duration")
+                    .nick("Extend Duration")
+                    .blurb("whether the element should extend the duration of an item \
+                        to match the start time of the next non-drained item, if any. \
+                        This is useful when a speech synthesis element is further downstream.")
+                    .default_value(DEFAULT_EXTEND_DURATION)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("extended-duration-gap")
+                    .nick("Extended Duration Gap")
+                    .blurb("Amount of milliseconds to preserve between items when extend-duration is true")
+                    .default_value(DEFAULT_EXTENDED_DURATION_GAP.mseconds() as u32)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -1078,6 +1139,16 @@ impl ObjectImpl for Accumulate {
                 settings.drain_on_speaker_change =
                     value.get::<bool>().expect("type checked upstream");
             }
+            "extend-duration" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.extend_duration = value.get::<bool>().expect("type checked upstream");
+            }
+            "extended-duration-gap" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.extended_duration_gap = gst::ClockTime::from_mseconds(
+                    value.get::<u32>().expect("type checked upstream").into(),
+                );
+            }
             _ => unimplemented!(),
         }
     }
@@ -1103,6 +1174,14 @@ impl ObjectImpl for Accumulate {
             "drain-on-speaker-change" => {
                 let settings = self.settings.lock().unwrap();
                 settings.drain_on_speaker_change.to_value()
+            }
+            "extend-duration" => {
+                let settings = self.settings.lock().unwrap();
+                settings.extend_duration.to_value()
+            }
+            "extended-duration-gap" => {
+                let settings = self.settings.lock().unwrap();
+                settings.extended_duration_gap.to_value()
             }
             _ => unimplemented!(),
         }
