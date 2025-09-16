@@ -262,15 +262,6 @@ impl Polly {
             )
         };
 
-        let Some(buffer_rtime) = out_segment.to_running_time(pts) else {
-            gst::warning!(
-                CAT,
-                imp = self,
-                "buffer PTS {pts} not in segment {out_segment:?}"
-            );
-            return Ok(None);
-        };
-
         let our_latency = self.settings.lock().unwrap().latency;
 
         let upstream_latency = self.upstream_latency();
@@ -426,6 +417,15 @@ impl Polly {
                 pts = position;
             }
         }
+
+        let Some(buffer_rtime) = out_segment.to_running_time(pts) else {
+            gst::warning!(
+                CAT,
+                imp = self,
+                "buffer PTS {pts} not in segment {out_segment:?}"
+            );
+            return Ok(None);
+        };
 
         if let Some(upstream_latency) = upstream_latency {
             let (upstream_live, upstream_min, _) = upstream_latency;

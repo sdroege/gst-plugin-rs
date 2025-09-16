@@ -378,15 +378,6 @@ impl Synthesizer {
             )
         };
 
-        let Some(buffer_rtime) = out_segment.to_running_time(pts) else {
-            gst::warning!(
-                CAT,
-                imp = self,
-                "buffer PTS {pts} not in segment {out_segment:?}"
-            );
-            return Ok(None);
-        };
-
         let output_format = format!("pcm_{}", out_info.rate());
 
         let bytes_per_second = (out_info.bpf() * out_info.rate()) as u64;
@@ -579,6 +570,15 @@ impl Synthesizer {
                 pts = position;
             }
         }
+
+        let Some(buffer_rtime) = out_segment.to_running_time(pts) else {
+            gst::warning!(
+                CAT,
+                imp = self,
+                "buffer PTS {pts} not in segment {out_segment:?}"
+            );
+            return Ok(None);
+        };
 
         if let Some(upstream_latency) = upstream_latency {
             let (upstream_live, upstream_min, _) = upstream_latency;
