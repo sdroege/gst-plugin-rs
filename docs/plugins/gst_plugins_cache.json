@@ -1779,6 +1779,11 @@
                         "desc": "Shift",
                         "name": "shift",
                         "value": "2"
+                    },
+                    {
+                        "desc": "Compress",
+                        "name": "compress",
+                        "value": "3"
                     }
                 ]
             },
@@ -3572,6 +3577,11 @@
                         "desc": "Shift",
                         "name": "shift",
                         "value": "2"
+                    },
+                    {
+                        "desc": "Compress",
+                        "name": "compress",
+                        "value": "3"
                     }
                 ]
             }
