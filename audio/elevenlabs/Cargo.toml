@@ -31,7 +31,7 @@ path = "src/lib.rs"
 gst-plugin-version-helper.workspace = true
 
 [features]
-default = ["signalsmith_stretch"]
+default = []
 static = []
 capi = []
 doc = ["gst/v1_18"]
