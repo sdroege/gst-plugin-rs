@@ -92,7 +92,7 @@ def generate_depfile_for(fpath, build_start_time, logfile=None):
 if __name__ == '__main__':
     opts = PARSER.parse_args()
     logdir = opts.root_dir / 'meson-logs'
-    logfile_path = logdir / f'{opts.depfile.name.replace('.dep', '')}-cargo-wrapper.log'
+    logfile_path = logdir / f"{opts.depfile.name.replace('.dep', '')}-cargo-wrapper.log"
     logfile = open(logfile_path, mode='w', buffering=1, encoding='utf-8')
 
     print(opts, file=logfile)
