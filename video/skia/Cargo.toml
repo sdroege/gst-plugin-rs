@@ -9,7 +9,7 @@ license = "MPL-2.0"
 description = "GStreamer skia plugin"
 
 [dependencies]
-skia = { package = "skia-safe", version = "0.87" }
+skia = { package = "skia-safe", version = "0.88" }
 gst.workspace = true
 gst-base.workspace = true
 gst-video = { workspace = true, features = ["v1_20"] }
