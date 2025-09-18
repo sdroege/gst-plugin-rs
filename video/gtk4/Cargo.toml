@@ -30,7 +30,7 @@ gst-gl = { workspace = true, features = ["v1_16"] }
 [target.'cfg(target_os = "windows")'.dependencies]
 gdk-win32.workspace = true
 gst-gl = { workspace = true, features = ["v1_20"] }
-windows-sys = { version = ">=0.52, <=0.60", features = ["Win32_Graphics_OpenGL", "Win32_Foundation", "Win32_Graphics_Gdi"] }
+windows-sys = { version = ">=0.52, <=0.61", features = ["Win32_Graphics_OpenGL", "Win32_Foundation", "Win32_Graphics_Gdi"] }
 
 [lib]
 name = "gstgtk4"
