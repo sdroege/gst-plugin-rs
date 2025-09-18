@@ -75,7 +75,7 @@ impl ColorDetect {
 
         let dominant_color = palette[0];
         let dominant_color_name =
-            color_name::Color::similar([dominant_color.r, dominant_color.g, dominant_color.b])
+            color_name::css::Color::similar([dominant_color.r, dominant_color.g, dominant_color.b])
                 .to_lowercase();
         if state.current_color.as_ref() != Some(&dominant_color_name) {
             let name = dominant_color_name.clone();
