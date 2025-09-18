@@ -20,7 +20,6 @@ allow = [
   "BSD-3-Clause",
   "BSD-3-Clause-Clear",
   "ISC",
-  "OpenSSL",
   "Zlib",
   "Unicode-3.0",
   "Apache-2.0",
@@ -57,20 +56,12 @@ name = "aws-lc-rs"
 # Various crates depend on an older version of base64
 [[bans.skip]]
 name = "base64"
-version = "0.13"
-[[bans.skip]]
-name = "base64"
 version = "0.21"
 
 # Various crates depend on an older version of bitflags
 [[bans.skip]]
 name = "bitflags"
 version = "1.0"
-
-# tracing-subscriber depends on an older version of regex-syntax
-[[bans.skip]]
-name = "regex-syntax"
-version = "0.6"
 
 # various livekit dependencies depend on an older versions of various crates
 [[bans.skip]]
@@ -89,11 +80,6 @@ version = "0.26"
 name = "tokio-rustls"
 version = "0.25"
 
-# chrono via iana-time-zone depends on old windows-core
-[[bans.skip]]
-name = "windows-result"
-version = "0.1"
-
 # rav1e / dssim-core depend on old versions of itertools
 [[bans.skip]]
 name = "itertools"
@@ -107,15 +93,10 @@ version = "0.13"
 # vvdec-sys uses bindgen 0.70 while aws-lc-sys uses bindgen 0.69
 [[bans.skip]]
 name = "bindgen"
-version = "0.69"
+version = "0.70"
 [[bans.skip]]
 name = "bindgen"
 version = "0.71"
-
-# matchers depends on an old version of regex-automata
-[[bans.skip]]
-name = "regex-automata"
-version = "0.1"
 
 # Various crates depend on old versions of the windows crates
 [[bans.skip]]
@@ -206,14 +187,20 @@ version = "0.52"
 name = "windows-sys"
 version = "0.59"
 [[bans.skip]]
-name = "windows-interface"
-version = "0.57"
+name = "windows-sys"
+version = "0.60"
 [[bans.skip]]
-name = "windows-implement"
-version = "0.57"
+name = "windows-strings"
+version = "0.4"
+[[bans.skip]]
+name = "windows-result"
+version = "0.3"
+[[bans.skip]]
+name = "windows-link"
+version = "0.1"
 [[bans.skip]]
 name = "windows-core"
-version = "0.57"
+version = "0.61"
 
 # Various crates depend on an older version of crypto-bigint
 [[bans.skip]]
@@ -280,11 +267,6 @@ version = "0.102"
 name = "rustls"
 version = "0.22"
 
-# various crates depend on an older version of windows-sys
-[[bans.skip]]
-name = "windows-sys"
-version = "0.52"
-
 # derived-into-owned (via pcap-file) depends on old syn
 [[bans.skip]]
 name = "syn"
@@ -339,11 +321,6 @@ version = "2"
 name = "core-foundation"
 version = "0.9"
 
-# Various crates depend on old zerocopy
-[[bans.skip]]
-name = "zerocopy"
-version = "0.7"
-
 # Various crates depend on old wasi
 [[bans.skip]]
 name = "wasi"
@@ -383,6 +360,12 @@ version = "0.6"
 [[bans.skip]]
 name = "toml_edit"
 version = "0.22"
+[[bans.skip]]
+name = "toml"
+version = "0.8"
+[[bans.skip]]
+name = "serde_spanned"
+version = "0.6"
 
 [sources]
 unknown-registry = "deny"
