@@ -1181,7 +1181,7 @@ impl ObjectImpl for Accumulate {
             }
             "extended-duration-gap" => {
                 let settings = self.settings.lock().unwrap();
-                settings.extended_duration_gap.to_value()
+                (settings.extended_duration_gap.mseconds() as u32).to_value()
             }
             _ => unimplemented!(),
         }
