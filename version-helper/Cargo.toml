@@ -17,4 +17,4 @@ chrono = { version = "0.4.23", default-features = false, features = ["std", "clo
 toml_edit = { version = "0.23", default-features = false, features = ["parse"] }
 
 [package.metadata.gstreamer]
-release_date = "2025-07-16"
+release_date = "2025-09-18"
