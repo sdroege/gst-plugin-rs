@@ -5,6 +5,39 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.14.2] - 2025-09-18
+### Fixed
+- analyticscombiner: Fix running with latest GStreamer git main.
+- aws: Ensure pad tasks are stopped during PAUSED->READY state change.
+- cea608overlay: Support non-system memory properly.
+- fallbacksrc: Fix panic during retries in parallel with element shutdown.
+- fallbacksrc: Don't restart source if element is being shut down.
+- fallbacksrc: Fix deadlock when using a custom source element.
+- fallbacksrc: Signal no-more-pads for streams-unaware parent elements.
+- gtk4paintablesink: Also try importing dmabufs if not signalled via caps.
+- gtk4paintablesink: Add support for 10/12/16 bit YUV formats in sysmem.
+- rtpgccbwe: Avoid panic when min-bitrate > max-bitrate.
+- rtpmp4gdepay2: Fix handling of specific caps.
+- rtprecv: Fix deadlock race condition when receiving the first buffer.
+- spotify: Fixes for spotify API changes that broke the element.
+- ts-audiotestsrc: Fix deadlock when setting samples-per-buffer property.
+- ts-inter: Fix latency handling.
+- ts-intersink: Fix deadlock on shutdown.
+- threadshare: Fix potential panics during state changes.
+- transcriberbin: Fix various deadlocks.
+- webrtcsink: Fix setting URI and CA file in signaller.
+
+### Added
+- intersink: Allow setting sync=false.
+- intersrc: Allow setting bytes/time/buffers limits.
+- ts-blocking-adapter: New element to translate between threadshare upstream
+  elements and blocking downstream elements.
+
+### Changed
+- Various elements were switched from tokio-native-tls to rustls due to the
+  former being unmaintained and buggy.
+- Various dependency updates.
+
 ## [0.14.1] - 2025-08-10
 ### Fixed
 - Various new clippy 1.89 warnings.
@@ -801,7 +834,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.1...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.2...HEAD
+[0.14.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.1...0.14.2
 [0.14.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.0...0.14.1
 [0.14.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.7...0.14.0
 [0.13.7]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.6...0.13.7
