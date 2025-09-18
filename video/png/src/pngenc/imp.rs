@@ -18,10 +18,10 @@ use parking_lot::Mutex;
 use std::sync::LazyLock;
 
 use super::CompressionLevel;
-use super::FilterType;
+use super::Filter;
 
 const DEFAULT_COMPRESSION_LEVEL: CompressionLevel = CompressionLevel::Default;
-const DEFAULT_FILTER_TYPE: FilterType = FilterType::NoFilter;
+const DEFAULT_FILTER_TYPE: Filter = Filter::Adaptive;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -34,7 +34,7 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 #[derive(Debug, Clone, Copy)]
 struct Settings {
     compression: CompressionLevel,
-    filter: FilterType,
+    filter: Filter,
 }
 
 impl Default for Settings {
@@ -96,7 +96,7 @@ impl ObjectImpl for PngEncoder {
             }
             "filter" => {
                 let mut settings = self.settings.lock();
-                settings.filter = value.get::<FilterType>().expect("type checked upstream");
+                settings.filter = value.get::<Filter>().expect("type checked upstream");
             }
             _ => unreachable!(),
         }
@@ -229,7 +229,7 @@ impl VideoEncoderImpl for PngEncoder {
         encoder.set_color(color);
         encoder.set_depth(depth);
         encoder.set_compression(png::Compression::from(settings.compression));
-        encoder.set_filter(png::FilterType::from(settings.filter));
+        encoder.set_filter(png::Filter::from(settings.filter));
 
         let mut writer = encoder.write_header().map_err(|e| {
             gst::error!(CAT, imp = self, "Failed to create encoder: {e}");

@@ -19,23 +19,24 @@ mod imp;
 pub(crate) enum CompressionLevel {
     #[enum_value(name = "Default: Use the default compression level.", nick = "default")]
     Default,
+    #[enum_value(name = "Fastest: Use the fastest compression level.", nick = "fastest")]
+    Fastest,
     #[enum_value(name = "Fast: A fast compression algorithm.", nick = "fast")]
     Fast,
     #[enum_value(
-        name = "Best: Uses the algorithm with the best results.",
-        nick = "best"
+        name = "Balanced: Uses the algorithm with balanced results.",
+        nick = "balanced"
     )]
-    Best,
-    #[enum_value(name = "Huffman: Huffman compression.", nick = "huffman")]
-    Huffman,
-    #[enum_value(name = "Rle: Rle compression.", nick = "rle")]
-    Rle,
+    Balanced,
+    #[enum_value(name = "High: Use the highest compression level.", nick = "high")]
+    High,
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
-#[enum_type(name = "GstRsPngFilterType")]
-pub(crate) enum FilterType {
+#[enum_type(name = "GstRsPngFilter")]
+#[allow(clippy::enum_variant_names)]
+pub(crate) enum Filter {
     #[enum_value(
         name = "NoFilter: No filtering applied to the output.",
         nick = "nofilter"
@@ -55,29 +56,35 @@ pub(crate) enum FilterType {
         nick = "paeth"
     )]
     Paeth,
+    #[enum_value(
+        name = "Adaptive: Uses heuristics to select the best filter for every row.",
+        nick = "Adaptive"
+    )]
+    Adaptive,
 }
 
 impl From<CompressionLevel> for png::Compression {
     #[allow(deprecated)]
     fn from(value: CompressionLevel) -> Self {
         match value {
-            CompressionLevel::Default => png::Compression::Default,
+            CompressionLevel::Default => png::Compression::default(),
+            CompressionLevel::Fastest => png::Compression::Fastest,
             CompressionLevel::Fast => png::Compression::Fast,
-            CompressionLevel::Best => png::Compression::Best,
-            CompressionLevel::Huffman => png::Compression::Huffman,
-            CompressionLevel::Rle => png::Compression::Rle,
+            CompressionLevel::Balanced => png::Compression::Balanced,
+            CompressionLevel::High => png::Compression::High,
         }
     }
 }
 
-impl From<FilterType> for png::FilterType {
-    fn from(value: FilterType) -> Self {
+impl From<Filter> for png::Filter {
+    fn from(value: Filter) -> Self {
         match value {
-            FilterType::NoFilter => png::FilterType::NoFilter,
-            FilterType::Sub => png::FilterType::Sub,
-            FilterType::Up => png::FilterType::Up,
-            FilterType::Avg => png::FilterType::Avg,
-            FilterType::Paeth => png::FilterType::Paeth,
+            Filter::NoFilter => png::Filter::NoFilter,
+            Filter::Sub => png::Filter::Sub,
+            Filter::Up => png::Filter::Up,
+            Filter::Avg => png::Filter::Avg,
+            Filter::Paeth => png::Filter::Paeth,
+            Filter::Adaptive => png::Filter::Adaptive,
         }
     }
 }
@@ -90,7 +97,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "doc")]
     CompressionLevel::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     #[cfg(feature = "doc")]
-    FilterType::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    Filter::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
 
     gst::Element::register(
         Some(plugin),

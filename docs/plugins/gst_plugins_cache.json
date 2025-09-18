@@ -11054,10 +11054,10 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "nofilter (0)",
+                        "default": "Adaptive (5)",
                         "mutable": "ready",
                         "readable": true,
-                        "type": "GstRsPngFilterType",
+                        "type": "GstRsPngFilter",
                         "writable": true
                     }
                 },
@@ -11076,28 +11076,28 @@
                         "value": "0"
                     },
                     {
-                        "desc": "Fast: A fast compression algorithm.",
-                        "name": "fast",
+                        "desc": "Fastest: Use the fastest compression level.",
+                        "name": "fastest",
                         "value": "1"
                     },
                     {
-                        "desc": "Best: Uses the algorithm with the best results.",
-                        "name": "best",
+                        "desc": "Fast: A fast compression algorithm.",
+                        "name": "fast",
                         "value": "2"
                     },
                     {
-                        "desc": "Huffman: Huffman compression.",
-                        "name": "huffman",
+                        "desc": "Balanced: Uses the algorithm with balanced results.",
+                        "name": "balanced",
                         "value": "3"
                     },
                     {
-                        "desc": "Rle: Rle compression.",
-                        "name": "rle",
+                        "desc": "High: Use the highest compression level.",
+                        "name": "high",
                         "value": "4"
                     }
                 ]
             },
-            "GstRsPngFilterType": {
+            "GstRsPngFilter": {
                 "kind": "enum",
                 "values": [
                     {
@@ -11124,6 +11124,11 @@
                         "desc": "Paeth: The Paeth filter computes a simple linear function of the three neighboring pixels.",
                         "name": "paeth",
                         "value": "4"
+                    },
+                    {
+                        "desc": "Adaptive: Uses heuristics to select the best filter for every row.",
+                        "name": "Adaptive",
+                        "value": "5"
                     }
                 ]
             }
