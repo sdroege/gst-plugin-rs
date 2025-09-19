@@ -156,7 +156,7 @@ impl BaseParseImpl for CdgParse {
 
             data.iter()
                 .enumerate()
-                .find(|(_, byte)| (*byte & CDG_MASK == CDG_COMMAND))
+                .find(|(_, byte)| *byte & CDG_MASK == CDG_COMMAND)
                 .map(|(i, _)| i)
                 .unwrap_or_else(|| input.size()) // skip the whole buffer
                 as u32

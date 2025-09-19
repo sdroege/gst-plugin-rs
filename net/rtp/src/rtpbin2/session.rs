@@ -843,7 +843,7 @@ impl Session {
                                 (dur_since_last_rtp.as_nanos() as u64).mul_div_round(
                                     clock_rate as u64,
                                     gst::ClockTime::SECOND.nseconds(),
-                                ).map(|v| ((v & 0xffff_ffff) as u32))
+                                ).map(|v| (v & 0xffff_ffff) as u32)
                             })
                             .unwrap_or(0)
                     })
