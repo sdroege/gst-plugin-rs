@@ -88,8 +88,6 @@ enum MappedFrame {
         fds: [i32; 4],
         offsets: [usize; 4],
         strides: [usize; 4],
-        width: u32,
-        height: u32,
         orientation: Orientation,
     },
 }
@@ -371,6 +369,14 @@ fn videoinfo_to_color_state(info: &gst_video::VideoInfo) -> Option<gdk::ColorSta
     }
 }
 
+fn cropped_size_from_info(info: &gst_video::VideoInfo) -> (u32, u32) {
+    let w_sub = 1 << info.format_info().w_sub()[(info.n_components() as usize) - 1];
+    let h_sub = 1 << info.format_info().h_sub()[(info.n_components() as usize) - 1];
+    let cropped_width = info.width() - (info.width() % w_sub);
+    let cropped_height = info.height() - (info.width() % h_sub);
+    (cropped_width, cropped_height)
+}
+
 fn video_frame_to_memory_texture(
     frame: gst_video::VideoFrame<gst_video::video_frame::Readable>,
     cached_textures: &mut HashMap<TextureCacheId, gdk::Texture>,
@@ -387,8 +393,7 @@ fn video_frame_to_memory_texture(
     }
 
     let format = video_format_to_memory_format(frame.format());
-    let width = frame.width();
-    let height = frame.height();
+    let (width, height) = cropped_size_from_info(frame.info());
 
     let texture = {
         #[cfg(feature = "gtk_v4_20")]
@@ -450,8 +455,7 @@ fn video_frame_to_gl_texture(
         return (texture.clone(), pixel_aspect_ratio);
     }
 
-    let width = frame.width();
-    let height = frame.height();
+    let (width, height) = cropped_size_from_info(frame.info());
 
     let sync_meta = frame.buffer().meta::<gst_gl::GLSyncMeta>().unwrap();
 
@@ -570,8 +574,6 @@ fn video_frame_to_dmabuf_texture(
     fds: &[i32; 4],
     offsets: &[usize; 4],
     strides: &[usize; 4],
-    width: u32,
-    height: u32,
 ) -> Result<(gdk::Texture, f64), glib::Error> {
     let pixel_aspect_ratio = (info.par().numer() as f64) / (info.par().denom() as f64);
 
@@ -580,6 +582,7 @@ fn video_frame_to_dmabuf_texture(
         return Ok((texture.clone(), pixel_aspect_ratio));
     }
 
+    let (width, height) = cropped_size_from_info(&info.to_video_info().ok().unwrap());
     let mut builder = gdk::DmabufTextureBuilder::new()
         .set_display(&gdk::Display::default().unwrap())
         .set_fourcc(info.fourcc())
@@ -667,8 +670,6 @@ impl Frame {
                 fds,
                 offsets,
                 strides,
-                width,
-                height,
                 ..
             } => video_frame_to_dmabuf_texture(
                 buffer,
@@ -679,8 +680,6 @@ impl Frame {
                 &fds,
                 &offsets,
                 &strides,
-                width,
-                height,
             )?,
         };
 
@@ -792,8 +791,6 @@ impl Frame {
                         fds,
                         offsets,
                         strides,
-                        width: vmeta.width(),
-                        height: vmeta.height(),
                         orientation,
                     });
                 }
