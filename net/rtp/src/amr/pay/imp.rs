@@ -633,7 +633,7 @@ impl RtpAmrPay {
                     payload_header.toc_entries.push(TocEntry {
                         last: false,
                         frame_type,
-                        frame_quality_indicator: false,
+                        frame_quality_indicator: true,
                     });
                     frame_payloads.push(frame_data);
                     end_id = buffer.id;
