@@ -103,6 +103,14 @@ impl State {
             context: None,
         }
     }
+
+    /// Check if the essential encoding parameters (width, height, format) have changed
+    /// compared to the current state. Returns true if a reset is needed.
+    pub fn needs_reset(&self, new_video_info: &gst_video::VideoInfo) -> bool {
+        self.video_info.width() != new_video_info.width()
+            || self.video_info.height() != new_video_info.height()
+            || self.video_info.format() != new_video_info.format()
+    }
     pub fn reset(&mut self, settings: Settings) {
         self.cache.clear();
         self.gif_pts = None;
@@ -262,17 +270,35 @@ impl VideoEncoderImpl for GifEnc {
         &self,
         state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
-        self.flush_encoder()
-            .map_err(|_| gst::loggable_error!(CAT, "Failed to drain"))?;
-
         let video_info = state.info();
         gst::debug!(CAT, imp = self, "Setting format {:?}", video_info);
 
-        {
-            let mut state = State::new(video_info.clone());
+        // Check if we need to reset the encoder based on essential parameters
+        let needs_reset = self
+            .state
+            .borrow()
+            .as_ref()
+            .is_none_or(|current_state| current_state.needs_reset(video_info));
+
+        if needs_reset {
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Essential format parameters changed, flushing and resetting encoder"
+            );
+            self.flush_encoder()
+                .map_err(|_| gst::loggable_error!(CAT, "Failed to drain"))?;
+
+            let mut new_state = State::new(video_info.clone());
             let settings = self.settings.lock().unwrap();
-            state.reset(*settings);
-            *self.state.borrow_mut() = Some(state);
+            new_state.reset(*settings);
+            *self.state.borrow_mut() = Some(new_state);
+        } else {
+            gst::debug!(CAT, imp = self, "Only non-essential parameters changed (colorimetry, framerate, etc.), keeping encoder state");
+            // Update the video_info in the existing state without resetting the encoder
+            if let Some(ref mut current_state) = *self.state.borrow_mut() {
+                current_state.video_info = video_info.clone();
+            }
         }
 
         let instance = self.obj();
@@ -405,7 +431,7 @@ impl GifEnc {
     fn flush_encoder(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::debug!(CAT, imp = self, "Flushing");
 
-        let trailer_buffer = self.state.borrow_mut().as_mut().map(|state| {
+        let trailer_buffer = self.state.borrow_mut().as_mut().and_then(|state| {
             // Drop encoder to flush and take flushed data (gif trailer)
             state.context = None;
             let buffer = state.cache.consume();
@@ -419,9 +445,19 @@ impl GifEnc {
             }
 
             // Initialize the encoder again, to be ready for a new round without format change
+            let last_actual_pts = state.last_actual_pts;
             state.reset(*settings);
-            // return the constructed buffer containing the gif trailer
-            trailer_buffer
+            if last_actual_pts.is_some() {
+                // return the constructed buffer containing the gif trailer
+                Some(trailer_buffer)
+            } else {
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "No actual frames encoded, skipping trailer"
+                );
+                None
+            }
         });
         if let Some(trailer_buffer) = trailer_buffer {
             // manually push GIF trailer to the encoder's src pad
