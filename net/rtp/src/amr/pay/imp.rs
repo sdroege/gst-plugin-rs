@@ -606,7 +606,7 @@ impl RtpAmrPay {
                 };
 
                 for frame in iter.skip(buffer.offset) {
-                    let (frame_type, frame_data) = frame.unwrap();
+                    let (frame_type, frame_quality_indicator, frame_data) = frame.unwrap();
                     gst::trace!(
                         CAT,
                         imp = self,
@@ -633,7 +633,7 @@ impl RtpAmrPay {
                     payload_header.toc_entries.push(TocEntry {
                         last: false,
                         frame_type,
-                        frame_quality_indicator: true,
+                        frame_quality_indicator,
                     });
                     frame_payloads.push(frame_data);
                     end_id = buffer.id;
@@ -819,7 +819,7 @@ struct AmrIter<'a> {
 }
 
 impl<'a> Iterator for AmrIter<'a> {
-    type Item = Result<(u8, &'a [u8]), anyhow::Error>;
+    type Item = Result<(u8, bool, &'a [u8]), anyhow::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.data.is_empty() {
@@ -833,6 +833,7 @@ impl<'a> Iterator for AmrIter<'a> {
         };
 
         let frame_type = (self.data[0] & 0b0111_1000) >> 3;
+        let frame_quality_indicator = (self.data[0] & 0b0000_0100) != 0;
         if !self.wide_band && (9..=14).contains(&frame_type) {
             self.data = &[];
             return Some(Err(anyhow!("Invalid AMR frame type {frame_type}")));
@@ -845,7 +846,7 @@ impl<'a> Iterator for AmrIter<'a> {
         // Empty frames
         if frame_type > 10 {
             self.data = &self.data[1..];
-            return Some(Ok((frame_type, &[])));
+            return Some(Ok((frame_type, frame_quality_indicator, &[])));
         }
 
         let frame_size = *frame_sizes
@@ -859,6 +860,6 @@ impl<'a> Iterator for AmrIter<'a> {
         let res_data = &self.data[1..][..frame_size];
         self.data = &self.data[(frame_size + 1)..];
 
-        Some(Ok((frame_type, res_data)))
+        Some(Ok((frame_type, frame_quality_indicator, res_data)))
     }
 }
