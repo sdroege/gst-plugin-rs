@@ -81,21 +81,6 @@ fn main() {
             .build()
             .unwrap();
 
-        let queue = gst::ElementFactory::make("ts-queue")
-            .name(format!("queue-src-{i}").as_str())
-            .property("context", &ctx_name)
-            .property("context-wait", args.wait)
-            .property("max-size-buffers", 10u32)
-            .property("max-size-bytes", 0u32)
-            .property("max-size-time", 0u64)
-            .build()
-            .unwrap();
-
-        let convert = gst::ElementFactory::make("audioconvert")
-            .name(format!("convert-{i}").as_str())
-            .build()
-            .unwrap();
-
         let pay = gst::ElementFactory::make("rtpL16pay")
             .name(format!("pay-{i}").as_str())
             .build()
@@ -104,6 +89,19 @@ fn main() {
         let dropper = gst::ElementFactory::make("identity")
             .name(format!("dropper-{i}").as_str())
             .property("drop-probability", DROP_PROBABILITY)
+            .build()
+            .unwrap();
+
+        let queue = gst::ElementFactory::make("ts-queue")
+            .name(format!("queue-src-{i}").as_str())
+            .property("context", &ctx_name)
+            .property("context-wait", args.wait)
+            .property("max-size-buffers", 0u32)
+            .property("max-size-bytes", 0u32)
+            .property(
+                "max-size-time",
+                gst::ClockTime::from_mseconds(args.wait as u64),
+            )
             .build()
             .unwrap();
 
@@ -133,7 +131,7 @@ fn main() {
                 .property("max-size-bytes", 0u32)
                 .property(
                     "max-size-time",
-                    (20u64 + RTPRECV_LATENCY_MS as u64).mseconds(),
+                    (args.wait as u64 + RTPRECV_LATENCY_MS as u64).mseconds(),
                 )
                 .build()
                 .unwrap();
@@ -179,7 +177,7 @@ fn main() {
             depay.sync_state_with_parent().unwrap();
         });
 
-        let elements = &[&src, &queue, &convert, &pay, &dropper, &rtprecv];
+        let elements = &[&src, &pay, &dropper, &queue, &rtprecv];
         pipeline.add_many(elements).unwrap();
         gst::Element::link_many(elements).unwrap();
     }
@@ -270,4 +268,8 @@ fn main() {
     gst::info!(CAT, "Shutting down");
     pipeline.set_state(gst::State::Null).unwrap();
     gst::info!(CAT, "Shutting down took {:.2?}", stop.elapsed());
+
+    unsafe {
+        gst::deinit();
+    }
 }
