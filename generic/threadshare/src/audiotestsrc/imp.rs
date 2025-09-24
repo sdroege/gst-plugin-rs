@@ -108,15 +108,22 @@ impl PadSrcHandler for AudioTestSrcPadHandler {
             };
 
             let settings = elem.settings.lock().unwrap();
-            // timers can be up to 1/2 x context-wait late
-            let context_wait = gst::ClockTime::try_from(settings.context_wait).unwrap();
-            let latency = gst::ClockTime::SECOND
+            // `delay_for_at_least` timers can be up to 'context-wait' late
+            // See comment in `AudioTestSrcTask::try_next`
+            let context_wait =
+                gst::ClockTime::from_nseconds(settings.context_wait.as_nanos() as u64);
+            let min = gst::ClockTime::SECOND
                 .mul_div_floor(settings.samples_per_buffer as u64, rate as u64)
                 .unwrap()
-                + context_wait / 2;
+                + context_wait;
 
-            gst::debug!(CAT, imp = elem, "Returning latency {latency}");
-            q.set(settings.is_live, latency, gst::ClockTime::NONE);
+            gst::debug!(
+                CAT,
+                imp = elem,
+                "Returning latency: live {}, min {min}, max None",
+                settings.is_live
+            );
+            q.set(settings.is_live, min, gst::ClockTime::NONE);
 
             return true;
         }
@@ -229,6 +236,8 @@ impl AudioTestSrcTask {
         let imp = self.elem.imp();
         gst::debug!(CAT, imp = imp, "Configuring for caps {caps}");
 
+        let old_rate = self.rate as u64;
+
         {
             let caps = caps.make_mut();
             let s = caps.structure_mut(0).ok_or_else(|| {
@@ -237,15 +246,8 @@ impl AudioTestSrcTask {
                 err
             })?;
 
-            let old_rate = self.rate as u64;
             s.fixate_field_nearest_int("rate", DEFAULT_RATE as i32);
             self.rate = s.get::<i32>("rate").unwrap() as u32;
-
-            if self.rate != old_rate as u32 {
-                self.elem.call_async(|elem| {
-                    let _ = elem.post_message(gst::message::Latency::new());
-                });
-            }
 
             self.step = 2.0 * std::f64::consts::PI * self.freq / (self.rate as f64);
 
@@ -287,7 +289,12 @@ impl AudioTestSrcTask {
 
         imp.src_pad.push_event(gst::event::Caps::new(&caps)).await;
 
-        *imp.caps.lock().unwrap() = Some(caps);
+        let is_first_caps = imp.caps.lock().unwrap().replace(caps).is_none();
+        if is_first_caps || self.rate != old_rate as u32 {
+            self.elem.call_async(|elem| {
+                let _ = elem.post_message(gst::message::Latency::builder().src(elem).build());
+            });
+        }
 
         Ok(())
     }
@@ -440,6 +447,11 @@ impl TaskImpl for AudioTestSrcTask {
             };
 
             // Wait for all samples to fit in last time slice
+            // We don't use `delay_for` here because buffers could be pushed
+            // 1/2 'context-wait' earlier than the deadline, which would not
+            // reflect the behaviour of actual source elements: once the buffer
+            // is captured, there can be a `context-wait` delay before the
+            // source element gets scheduled.
             timer::delay_for_at_least(delay.into()).await;
         } else {
             // Let the scheduler share time with other tasks

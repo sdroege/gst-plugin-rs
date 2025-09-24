@@ -16866,7 +16866,7 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "false",
+                        "default": "true",
                         "mutable": "ready",
                         "readable": true,
                         "type": "gboolean",
