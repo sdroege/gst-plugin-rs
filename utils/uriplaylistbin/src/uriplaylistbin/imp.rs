@@ -356,9 +356,9 @@ impl ObjectImpl for UriPlaylistBin {
 impl GstObjectImpl for UriPlaylistBin {}
 
 impl BinImpl for UriPlaylistBin {
-    fn handle_message(&self, msg: gst::Message) {
+    fn handle_message(&self, mut msg: gst::Message) {
         match msg.view() {
-            gst::MessageView::Error(err) => {
+            gst::MessageView::Error(_) => {
                 let item = {
                     let state_guard = self.state.lock().unwrap();
                     let state = state_guard.as_ref().unwrap();
@@ -372,22 +372,11 @@ impl BinImpl for UriPlaylistBin {
 
                 if let Some(item) = item {
                     // add the URI of the failed item
-                    let txt = format!(
-                        "Error when processing item #{} ({}): {}",
-                        item.index(),
-                        item.uri(),
-                        err.error()
-                    );
-                    let mut details = err
-                        .details()
-                        .map_or(gst::Structure::new_empty("details"), |s| s.to_owned());
+                    let msg_ref = msg.make_mut();
+                    let details = msg_ref.details_mut();
                     details.set("uri", item.uri());
-
-                    let msg = gst::message::Error::builder(gst::LibraryError::Failed, &txt)
-                        .details(details)
-                        .build();
-
-                    self.parent_handle_message(msg)
+                    details.set("index", item.index() as u64);
+                    self.parent_handle_message(msg);
                 } else {
                     self.parent_handle_message(msg)
                 }
