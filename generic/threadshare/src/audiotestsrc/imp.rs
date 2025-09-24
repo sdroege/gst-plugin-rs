@@ -13,7 +13,6 @@ use gst::subclass::prelude::*;
 
 use std::sync::LazyLock;
 
-use std::mem::size_of;
 use std::sync::Mutex;
 use std::time::Duration;
 #[cfg(feature = "tuning")]
@@ -33,6 +32,7 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: Duration = Duration::ZERO;
 const DEFAULT_SAMPLES_PER_BUFFER: u32 = 1024;
+const DEFAULT_FORMAT: gst_audio::AudioFormat = gst_audio::AUDIO_FORMAT_S16;
 const DEFAULT_RATE: u32 = 44_100;
 const DEFAULT_CHANNELS: usize = 1;
 const DEFAULT_FREQ: u32 = 440;
@@ -138,14 +138,13 @@ struct AudioTestSrcTask {
     segment: gst::FormattedSegment<gst::format::Time>,
     need_initial_events: bool,
 
+    info: gst_audio::AudioInfo,
+
     volume: f64,
     mute: bool,
     freq: f64,
-    rate: u32,
-    channels: usize,
     is_live: bool,
     samples_per_buffer: u32,
-    bytes_per_buffer: usize,
     buffer_duration: gst::ClockTime,
     sample_offset: u64,
     sample_stop: Option<u64>,
@@ -169,15 +168,18 @@ impl AudioTestSrcTask {
             segment: gst::FormattedSegment::<gst::format::Time>::new(),
             need_initial_events: true,
 
+            info: gst_audio::AudioInfo::builder(
+                DEFAULT_FORMAT,
+                DEFAULT_RATE,
+                DEFAULT_CHANNELS as u32,
+            )
+            .build()
+            .unwrap(),
+
             volume: DEFAULT_VOLUME,
             mute: DEFAULT_MUTE,
             freq: DEFAULT_FREQ as f64,
-            rate: DEFAULT_RATE,
-            channels: DEFAULT_CHANNELS,
             is_live: DEFAULT_IS_LIVE,
-            bytes_per_buffer: (DEFAULT_SAMPLES_PER_BUFFER as usize)
-                * DEFAULT_CHANNELS
-                * size_of::<i16>(),
             samples_per_buffer: DEFAULT_SAMPLES_PER_BUFFER,
             buffer_duration: gst::ClockTime::SECOND
                 .mul_div_floor(DEFAULT_SAMPLES_PER_BUFFER as u64, DEFAULT_RATE as u64)
@@ -234,10 +236,8 @@ impl AudioTestSrcTask {
         use std::ops::Rem;
 
         let imp = self.elem.imp();
-        gst::debug!(CAT, imp = imp, "Configuring for caps {caps}");
 
-        let old_rate = self.rate as u64;
-
+        caps.truncate();
         {
             let caps = caps.make_mut();
             let s = caps.structure_mut(0).ok_or_else(|| {
@@ -247,50 +247,49 @@ impl AudioTestSrcTask {
             })?;
 
             s.fixate_field_nearest_int("rate", DEFAULT_RATE as i32);
-            self.rate = s.get::<i32>("rate").unwrap() as u32;
-
-            self.step = 2.0 * std::f64::consts::PI * self.freq / (self.rate as f64);
-
             s.fixate_field_nearest_int("channels", DEFAULT_CHANNELS as i32);
-            self.channels = s.get::<i32>("channels").unwrap() as usize;
+        }
 
-            if self.channels > 2 {
-                s.set(
-                    "channel-mask",
-                    gst::Bitmask::from(gst_audio::AudioChannelPosition::fallback_mask(
-                        self.channels as u32,
-                    )),
-                );
-            }
+        let info = gst_audio::AudioInfo::from_caps(&caps).map_err(|_| {
+            let err = gst::error_msg!(
+                gst::CoreError::Negotiation,
+                ["Failed to build `AudioInfo` from caps {}", caps]
+            );
+            gst::error!(CAT, imp = imp, "{err}");
+            err
+        })?;
+
+        gst::debug!(CAT, imp = imp, "Configuring for caps {caps}");
+
+        let old_rate = self.info.rate() as u64;
+        self.info = info;
+
+        {
+            self.step = 2.0 * std::f64::consts::PI * self.freq / (self.info.rate() as f64);
 
             // Update sample offset and accumulator based on the previous values and the
             // sample rate change, if any
             let old_sample_offset = self.sample_offset;
             let sample_offset = old_sample_offset
-                .mul_div_floor(self.rate as u64, old_rate)
+                .mul_div_floor(self.info.rate() as u64, old_rate)
                 .unwrap();
 
             let old_sample_stop = self.sample_stop;
-            self.sample_stop =
-                old_sample_stop.map(|v| v.mul_div_floor(self.rate as u64, old_rate).unwrap());
+            self.sample_stop = old_sample_stop
+                .map(|v| v.mul_div_floor(self.info.rate() as u64, old_rate).unwrap());
 
             self.accumulator = (sample_offset as f64).rem(self.step);
 
             self.buffer_duration = gst::ClockTime::SECOND
-                .mul_div_floor(self.samples_per_buffer as u64, self.rate as u64)
+                .mul_div_floor(self.samples_per_buffer as u64, self.info.rate() as u64)
                 .unwrap();
-
-            self.bytes_per_buffer =
-                (self.samples_per_buffer as usize) * self.channels * size_of::<i16>();
         }
 
-        caps.fixate();
-        gst::debug!(CAT, imp = imp, "fixated to {caps:?}");
-
         imp.src_pad.push_event(gst::event::Caps::new(&caps)).await;
+        *imp.caps.lock().unwrap() = Some(caps.clone());
 
         let is_first_caps = imp.caps.lock().unwrap().replace(caps).is_none();
-        if is_first_caps || self.rate != old_rate as u32 {
+        if is_first_caps || self.info.rate() != old_rate as u32 {
             self.elem.call_async(|elem| {
                 let _ = elem.post_message(gst::message::Latency::builder().src(elem).build());
             });
@@ -378,12 +377,6 @@ impl TaskImpl for AudioTestSrcTask {
     }
 
     async fn try_next(&mut self) -> Result<gst::Buffer, gst::FlowError> {
-        let Ok(mut buffer) = gst::Buffer::with_size(self.bytes_per_buffer) else {
-            gst::error!(CAT, obj = self.elem, "Failed to create buffer");
-            return Err(gst::FlowError::Flushing);
-        };
-        let buffer_mut = buffer.get_mut().unwrap();
-
         let n_samples = if let Some(sample_stop) = self.sample_stop {
             if sample_stop <= self.sample_offset {
                 gst::log!(CAT, obj = self.elem, "At EOS");
@@ -395,13 +388,20 @@ impl TaskImpl for AudioTestSrcTask {
             self.samples_per_buffer as u64
         };
 
+        let Ok(mut buffer) = gst::Buffer::with_size(n_samples as usize * self.info.bpf() as usize)
+        else {
+            gst::error!(CAT, obj = self.elem, "Failed to create buffer");
+            return Err(gst::FlowError::Flushing);
+        };
+        let buffer_mut = buffer.get_mut().unwrap();
+
         let pts = self
             .sample_offset
-            .mul_div_floor(*gst::ClockTime::SECOND, self.rate as u64)
+            .mul_div_floor(*gst::ClockTime::SECOND, self.info.rate() as u64)
             .map(gst::ClockTime::from_nseconds)
             .unwrap();
         let next_pts = (self.sample_offset + n_samples)
-            .mul_div_floor(*gst::ClockTime::SECOND, self.rate as u64)
+            .mul_div_floor(*gst::ClockTime::SECOND, self.info.rate() as u64)
             .map(gst::ClockTime::from_nseconds)
             .unwrap();
         buffer_mut.set_pts(pts);
@@ -410,7 +410,7 @@ impl TaskImpl for AudioTestSrcTask {
         {
             let mut mapped = buffer_mut.map_writable().unwrap();
             let data = mapped.as_mut_slice_of::<i16>().unwrap();
-            for chunk in data.chunks_exact_mut(self.channels) {
+            for chunk in data.chunks_exact_mut(self.info.channels() as usize) {
                 let value = if self.mute {
                     0
                 } else {
