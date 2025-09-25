@@ -12,11 +12,8 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use std::sync::LazyLock;
-
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Weak};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, LazyLock, Mutex, MutexGuard, Weak};
 use std::time::Duration;
 
 use crate::runtime::prelude::*;
@@ -96,8 +93,9 @@ struct ProxyContextInner {
     dataqueue: Option<DataQueue>,
     last_res: Result<gst::FlowSuccess, gst::FlowError>,
     pending_queue: Option<PendingQueue>,
-    have_sink: bool,
-    have_src: bool,
+    upstream_latency: Option<gst::ClockTime>,
+    sink: Option<super::ProxySink>,
+    src: Option<super::ProxySrc>,
 }
 
 impl Drop for ProxyContextInner {
@@ -108,19 +106,18 @@ impl Drop for ProxyContextInner {
 }
 
 #[derive(Debug)]
-struct ProxyContext {
+struct ProxyContextSink {
     shared: Arc<Mutex<ProxyContextInner>>,
-    as_sink: bool,
     name: String,
 }
 
-impl ProxyContext {
+impl ProxyContextSink {
     #[inline]
     fn lock_shared(&self) -> MutexGuard<'_, ProxyContextInner> {
         self.shared.lock().unwrap()
     }
 
-    fn get(name: &str, as_sink: bool) -> Option<Self> {
+    fn add(name: &str, sink: &super::ProxySink) -> Option<Self> {
         let mut proxy_ctxs = PROXY_CONTEXTS.lock().unwrap();
 
         let mut proxy_ctx = None;
@@ -128,27 +125,14 @@ impl ProxyContext {
             if let Some(shared) = shared_weak.upgrade() {
                 {
                     let shared = shared.lock().unwrap();
-                    if (shared.have_sink && as_sink) || (shared.have_src && !as_sink) {
+                    if shared.sink.is_some() {
                         return None;
                     }
                 }
 
-                proxy_ctx = Some({
-                    let proxy_ctx = ProxyContext {
-                        shared,
-                        as_sink,
-                        name: name.into(),
-                    };
-                    {
-                        let mut shared = proxy_ctx.lock_shared();
-                        if as_sink {
-                            shared.have_sink = true;
-                        } else {
-                            shared.have_src = true;
-                        }
-                    }
-
-                    proxy_ctx
+                proxy_ctx = Some(ProxyContextSink {
+                    shared,
+                    name: name.into(),
                 });
             }
         }
@@ -159,15 +143,15 @@ impl ProxyContext {
                 dataqueue: None,
                 last_res: Err(gst::FlowError::Flushing),
                 pending_queue: None,
-                have_sink: as_sink,
-                have_src: !as_sink,
+                upstream_latency: None,
+                sink: Some(sink.clone()),
+                src: None,
             }));
 
             proxy_ctxs.insert(name.into(), Arc::downgrade(&shared));
 
-            proxy_ctx = Some(ProxyContext {
+            proxy_ctx = Some(ProxyContextSink {
                 shared,
-                as_sink,
                 name: name.into(),
             });
         }
@@ -176,18 +160,74 @@ impl ProxyContext {
     }
 }
 
-impl Drop for ProxyContext {
+impl Drop for ProxyContextSink {
     fn drop(&mut self) {
         let mut shared_ctx = self.lock_shared();
-        if self.as_sink {
-            assert!(shared_ctx.have_sink);
-            shared_ctx.have_sink = false;
-            let _ = shared_ctx.pending_queue.take();
-        } else {
-            assert!(shared_ctx.have_src);
-            shared_ctx.have_src = false;
-            let _ = shared_ctx.dataqueue.take();
+        shared_ctx.sink = None;
+        let _ = shared_ctx.pending_queue.take();
+    }
+}
+
+#[derive(Debug)]
+struct ProxyContextSrc {
+    shared: Arc<Mutex<ProxyContextInner>>,
+    name: String,
+}
+
+impl ProxyContextSrc {
+    #[inline]
+    fn lock_shared(&self) -> MutexGuard<'_, ProxyContextInner> {
+        self.shared.lock().unwrap()
+    }
+
+    fn add(name: &str, src: &super::ProxySrc) -> Option<Self> {
+        let mut proxy_ctxs = PROXY_CONTEXTS.lock().unwrap();
+
+        let mut proxy_ctx = None;
+        if let Some(shared_weak) = proxy_ctxs.get(name) {
+            if let Some(shared) = shared_weak.upgrade() {
+                {
+                    let shared = shared.lock().unwrap();
+                    if shared.src.is_some() {
+                        return None;
+                    }
+                }
+
+                proxy_ctx = Some(ProxyContextSrc {
+                    shared,
+                    name: name.into(),
+                });
+            }
         }
+
+        if proxy_ctx.is_none() {
+            let shared = Arc::new(Mutex::new(ProxyContextInner {
+                name: name.into(),
+                dataqueue: None,
+                last_res: Err(gst::FlowError::Flushing),
+                pending_queue: None,
+                upstream_latency: None,
+                sink: None,
+                src: Some(src.clone()),
+            }));
+
+            proxy_ctxs.insert(name.into(), Arc::downgrade(&shared));
+
+            proxy_ctx = Some(ProxyContextSrc {
+                shared,
+                name: name.into(),
+            });
+        }
+
+        proxy_ctx
+    }
+}
+
+impl Drop for ProxyContextSrc {
+    fn drop(&mut self) {
+        let mut shared_ctx = self.lock_shared();
+        shared_ctx.src = None;
+        let _ = shared_ctx.dataqueue.take();
     }
 }
 
@@ -278,7 +318,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
 #[derive(Debug)]
 pub struct ProxySink {
     sink_pad: PadSink,
-    proxy_ctx: Mutex<Option<ProxyContext>>,
+    proxy_ctx: Mutex<Option<ProxyContextSink>>,
     settings: Mutex<SettingsSink>,
 }
 
@@ -291,6 +331,18 @@ static SINK_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 });
 
 impl ProxySink {
+    fn push(&self, dataqueue: &DataQueue, item: DataQueueItem) -> Result<(), DataQueueItem> {
+        if dataqueue
+            .push(self.obj().upcast_ref(), item)?
+            .is_first_buffer()
+        {
+            let elem = self.obj();
+            let _ = elem.post_message(gst::message::Latency::builder().src(&*elem).build());
+        }
+
+        Ok(())
+    }
+
     async fn schedule_pending_queue(&self) {
         loop {
             let more_queue_space_receiver = {
@@ -309,7 +361,7 @@ impl ProxySink {
                     if let Some(ref dataqueue) = dataqueue {
                         let mut failed_item = None;
                         while let Some(item) = pending_queue.items.pop_front() {
-                            if let Err(item) = dataqueue.push(item) {
+                            if let Err(item) = self.push(dataqueue, item) {
                                 failed_item = Some(item);
                                 break;
                             }
@@ -361,12 +413,12 @@ impl ProxySink {
                 } = *shared_ctx;
 
                 match (pending_queue, dataqueue) {
-                    (None, Some(ref dataqueue)) => dataqueue.push(item),
+                    (None, Some(ref dataqueue)) => self.push(dataqueue, item),
                     (Some(ref mut pending_queue), Some(ref dataqueue)) => {
                         if !pending_queue.scheduled {
                             let mut failed_item = None;
                             while let Some(item) = pending_queue.items.pop_front() {
-                                if let Err(item) = dataqueue.push(item) {
+                                if let Err(item) = self.push(dataqueue, item) {
                                     failed_item = Some(item);
                                     break;
                                 }
@@ -377,7 +429,7 @@ impl ProxySink {
 
                                 Err(item)
                             } else {
-                                dataqueue.push(item)
+                                self.push(dataqueue, item)
                             }
                         } else {
                             Err(item)
@@ -458,7 +510,7 @@ impl ProxySink {
 
         let proxy_context = self.settings.lock().unwrap().proxy_context.to_string();
 
-        let proxy_ctx = ProxyContext::get(&proxy_context, true).ok_or_else(|| {
+        let proxy_ctx = ProxyContextSink::add(&proxy_context, &self.obj()).ok_or_else(|| {
             gst::error_msg!(
                 gst::ResourceError::OpenRead,
                 ["Failed to create or get ProxyContext"]
@@ -591,6 +643,27 @@ impl ElementImpl for ProxySink {
         Some(&*ELEMENT_METADATA)
     }
 
+    fn send_event(&self, event: gst::Event) -> bool {
+        gst::log!(SINK_CAT, imp = self, "Got {event:?}");
+
+        if let gst::EventView::Latency(lat_evt) = event.view() {
+            let latency = lat_evt.latency();
+
+            let proxy_ctx = self.proxy_ctx.lock().unwrap();
+            let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
+            shared_ctx.upstream_latency = Some(latency);
+
+            if let Some(src) = shared_ctx.src.as_ref() {
+                gst::log!(SINK_CAT, imp = self, "Setting upstream latency {latency}");
+                src.imp().set_upstream_latency(latency);
+            } else {
+                gst::info!(SINK_CAT, imp = self, "No sources to set upstream latency");
+            }
+        }
+
+        self.sink_pad.gst_pad().push_event(event)
+    }
+
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::new_any();
@@ -707,13 +780,44 @@ impl PadSrcHandler for ProxySrcPadHandler {
         }
     }
 
-    fn src_query(self, pad: &gst::Pad, _proxysrc: &ProxySrc, query: &mut gst::QueryRef) -> bool {
+    fn src_query(self, pad: &gst::Pad, proxysrc: &ProxySrc, query: &mut gst::QueryRef) -> bool {
         gst::log!(SRC_CAT, obj = pad, "Handling {:?}", query);
 
         use gst::QueryViewMut;
         let ret = match query.view_mut() {
             QueryViewMut::Latency(q) => {
-                q.set(true, gst::ClockTime::ZERO, gst::ClockTime::NONE);
+                let Some(mut min) = *proxysrc.upstream_latency.lock().unwrap() else {
+                    gst::debug!(
+                        SRC_CAT,
+                        obj = pad,
+                        "Upstream latency not available yet, can't handle {query:?}"
+                    );
+                    return false;
+                };
+
+                let upstream_ctx = proxysrc
+                    .dataqueue
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .and_then(|dq| dq.upstream_context());
+                let is_same_ts_ctx = upstream_ctx == *proxysrc.ts_ctx.lock().unwrap();
+
+                let settings = proxysrc.settings.lock().unwrap();
+                if !is_same_ts_ctx {
+                    min += gst::ClockTime::from_nseconds(settings.context_wait.as_nanos() as u64);
+                }
+                // TODO also use max-size-buffers & CAPS when applicable
+                let max = settings.max_size_time;
+                drop(settings);
+
+                gst::debug!(
+                    SRC_CAT,
+                    obj = pad,
+                    "Returning latency: is live true, min {min}, max {max}"
+                );
+                q.set(true, min, max);
+
                 true
             }
             QueryViewMut::Scheduling(q) => {
@@ -760,12 +864,38 @@ impl ProxySrcTask {
         ProxySrcTask { element, dataqueue }
     }
 
-    async fn push_item(&self, item: DataQueueItem) -> Result<(), gst::FlowError> {
+    /// Tries to get the upstream latency.
+    ///
+    /// This is needed when a `ts-proxysrc` joins the `proxy-context` after
+    /// the matching `ts-proxysink` has already started streaming.
+    async fn maybe_get_upstream_latency(&self) -> Result<(), gst::FlowError> {
+        let proxysrc = self.element.imp();
+
+        if proxysrc.upstream_latency.lock().unwrap().is_some() {
+            return Ok(());
+        }
+
+        gst::log!(SRC_CAT, imp = proxysrc, "Getting upstream latency");
+
+        let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
+        let shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
+
+        if let Some(latency) = shared_ctx.upstream_latency {
+            proxysrc.set_upstream_latency_priv(latency);
+        } else {
+            gst::log!(SRC_CAT, imp = proxysrc, "Upstream latency is still unknown");
+        }
+
+        Ok(())
+    }
+
+    async fn push_item(&mut self, item: DataQueueItem) -> Result<(), gst::FlowError> {
         let proxysrc = self.element.imp();
 
         {
             let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
             let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
+
             if let Some(pending_queue) = shared_ctx.pending_queue.as_mut() {
                 pending_queue.notify_more_queue_space();
             }
@@ -773,16 +903,25 @@ impl ProxySrcTask {
 
         match item {
             DataQueueItem::Buffer(buffer) => {
+                self.maybe_get_upstream_latency().await?;
                 gst::log!(SRC_CAT, obj = self.element, "Forwarding {:?}", buffer);
                 proxysrc.src_pad.push(buffer).await.map(drop)
             }
             DataQueueItem::BufferList(list) => {
+                self.maybe_get_upstream_latency().await?;
                 gst::log!(SRC_CAT, obj = self.element, "Forwarding {:?}", list);
                 proxysrc.src_pad.push_list(list).await.map(drop)
             }
             DataQueueItem::Event(event) => {
                 gst::log!(SRC_CAT, obj = self.element, "Forwarding {:?}", event);
+
+                let is_eos = event.type_() == gst::EventType::Eos;
                 proxysrc.src_pad.push_event(event).await;
+
+                if is_eos {
+                    return Err(gst::FlowError::Eos);
+                }
+
                 Ok(())
             }
         }
@@ -900,8 +1039,10 @@ impl TaskImpl for ProxySrcTask {
 pub struct ProxySrc {
     src_pad: PadSrc,
     task: Task,
-    proxy_ctx: Mutex<Option<ProxyContext>>,
+    proxy_ctx: Mutex<Option<ProxyContextSrc>>,
+    ts_ctx: Mutex<Option<Context>>,
     dataqueue: Mutex<Option<DataQueue>>,
+    upstream_latency: Mutex<Option<gst::ClockTime>>,
     settings: Mutex<SettingsSrc>,
 }
 
@@ -914,17 +1055,53 @@ static SRC_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 });
 
 impl ProxySrc {
+    // Sets the upstream latency without blocking the caller.
+    pub fn set_upstream_latency(&self, up_latency: gst::ClockTime) {
+        if let Some(ref ts_ctx) = *self.ts_ctx.lock().unwrap() {
+            let obj = self.obj().clone();
+
+            gst::log!(SRC_CAT, imp = self, "Setting upstream latency async");
+            ts_ctx.spawn(async move {
+                obj.imp().set_upstream_latency_priv(up_latency);
+            });
+        } else {
+            gst::debug!(SRC_CAT, imp = self, "Not ready to handle upstream latency");
+        }
+    }
+
+    // Sets the upstream latency blocking the caller until it's handled.
+    fn set_upstream_latency_priv(&self, new_latency: gst::ClockTime) {
+        {
+            let mut cur_upstream_latency = self.upstream_latency.lock().unwrap();
+            if let Some(cur_upstream_latency) = *cur_upstream_latency {
+                if cur_upstream_latency == new_latency {
+                    return;
+                }
+            }
+            *cur_upstream_latency = Some(new_latency);
+        }
+
+        gst::debug!(
+            SRC_CAT,
+            imp = self,
+            "Got new upstream latency {new_latency}"
+        );
+
+        self.post_message(gst::message::Latency::builder().src(&*self.obj()).build());
+    }
+
     fn prepare(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(SRC_CAT, imp = self, "Preparing");
 
         let settings = self.settings.lock().unwrap().clone();
 
-        let proxy_ctx = ProxyContext::get(&settings.proxy_context, false).ok_or_else(|| {
-            gst::error_msg!(
-                gst::ResourceError::OpenRead,
-                ["Failed to create get shared_state"]
-            )
-        })?;
+        let proxy_ctx =
+            ProxyContextSrc::add(&settings.proxy_context, &self.obj()).ok_or_else(|| {
+                gst::error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to create get shared_state"]
+                )
+            })?;
 
         let ts_ctx = Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
             gst::error_msg!(
@@ -932,26 +1109,13 @@ impl ProxySrc {
                 ["Failed to acquire Context: {}", err]
             )
         })?;
+        *self.ts_ctx.lock().unwrap() = Some(ts_ctx.clone());
 
-        let dataqueue = DataQueue::new(
-            &self.obj().clone().upcast(),
-            self.src_pad.gst_pad(),
-            if settings.max_size_buffers == 0 {
-                None
-            } else {
-                Some(settings.max_size_buffers)
-            },
-            if settings.max_size_bytes == 0 {
-                None
-            } else {
-                Some(settings.max_size_bytes)
-            },
-            if settings.max_size_time.is_zero() {
-                None
-            } else {
-                Some(settings.max_size_time)
-            },
-        );
+        let dataqueue = DataQueue::builder(self.obj().upcast_ref(), self.src_pad.gst_pad())
+            .max_size_buffers(settings.max_size_buffers)
+            .max_size_bytes(settings.max_size_bytes)
+            .max_size_time(settings.max_size_time)
+            .build();
 
         {
             let mut shared_ctx = proxy_ctx.lock_shared();
@@ -990,6 +1154,7 @@ impl ProxySrc {
                 let imp = elem.imp();
                 *imp.dataqueue.lock().unwrap() = None;
                 *imp.proxy_ctx.lock().unwrap() = None;
+                *imp.ts_ctx.lock().unwrap() = None;
 
                 gst::debug!(SRC_CAT, obj = elem, "Unprepared");
             });
@@ -1032,7 +1197,9 @@ impl ObjectSubclass for ProxySrc {
             ),
             task: Task::default(),
             proxy_ctx: Mutex::new(None),
+            ts_ctx: Mutex::new(None),
             dataqueue: Mutex::new(None),
+            upstream_latency: Mutex::new(None),
             settings: Mutex::new(SettingsSrc::default()),
         }
     }
