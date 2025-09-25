@@ -282,7 +282,12 @@ if __name__ == '__main__':
             cargo_cmd.extend(['--example', e])
 
     def run(cargo_cmd, env):
-        print(cargo_cmd, env, file=logfile)
+        env_vars = []
+        for key, value in sorted(env.items()):
+            env_vars.append(f"\n{key}={shlex.quote(value)} \\")
+
+        full_command = ' '.join(env_vars + ['\n'] + [shlex_join([str(c) for c in cargo_cmd])])
+        print(f"Running: {full_command}", file=logfile)
         try:
             subprocess.run(cargo_cmd, env=env, cwd=opts.src_dir, check=True)
         except subprocess.SubprocessError:
