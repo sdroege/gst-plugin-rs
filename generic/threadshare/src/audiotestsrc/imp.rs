@@ -38,7 +38,7 @@ const DEFAULT_CHANNELS: usize = 1;
 const DEFAULT_FREQ: u32 = 440;
 const DEFAULT_VOLUME: f64 = 0.8;
 const DEFAULT_MUTE: bool = false;
-const DEFAULT_IS_LIVE: bool = false;
+const DEFAULT_IS_LIVE: bool = true;
 const DEFAULT_NUM_BUFFERS: i32 = -1;
 
 #[cfg(feature = "tuning")]
