@@ -25,7 +25,9 @@ use std::sync::LazyLock;
 
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::Mutex as StdMutex;
+use std::sync::Mutex;
+
+use crate::runtime::Context;
 
 static DATA_QUEUE_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -69,16 +71,33 @@ pub enum DataQueueState {
     Stopped,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PushedStatus {
+    FirstBuffer,
+    GotBuffers,
+    #[default]
+    PendingBuffers,
+}
+
+impl PushedStatus {
+    pub fn is_first_buffer(self) -> bool {
+        matches!(self, PushedStatus::FirstBuffer)
+    }
+}
+
 #[derive(Clone, Debug)]
-pub struct DataQueue(Arc<StdMutex<DataQueueInner>>);
+pub struct DataQueue(Arc<Mutex<DataQueueInner>>);
 
 #[derive(Debug)]
 struct DataQueueInner {
     element: gst::Element,
+    upstream_ctx: Option<Context>,
     src_pad: gst::Pad,
 
     state: DataQueueState,
     queue: VecDeque<DataQueueItem>,
+
+    pushed_status: PushedStatus,
 
     cur_level_buffers: u32,
     cur_level_bytes: u32,
@@ -99,30 +118,16 @@ impl DataQueueInner {
 }
 
 impl DataQueue {
-    pub fn new(
-        element: &gst::Element,
-        src_pad: &gst::Pad,
-        max_size_buffers: Option<u32>,
-        max_size_bytes: Option<u32>,
-        max_size_time: impl Into<Option<gst::ClockTime>>,
-    ) -> DataQueue {
-        DataQueue(Arc::new(StdMutex::new(DataQueueInner {
-            element: element.clone(),
-            src_pad: src_pad.clone(),
-            state: DataQueueState::Stopped,
-            queue: VecDeque::new(),
-            cur_level_buffers: 0,
-            cur_level_bytes: 0,
-            cur_level_time: gst::ClockTime::ZERO,
-            max_size_buffers,
-            max_size_bytes,
-            max_size_time: max_size_time.into(),
-            pending_handle: None,
-        })))
+    pub fn builder(element: &gst::Element, src_pad: &gst::Pad) -> DataQueueBuilder {
+        DataQueueBuilder::new(element, src_pad)
     }
 
     pub fn state(&self) -> DataQueueState {
         self.0.lock().unwrap().state
+    }
+
+    pub fn upstream_context(&self) -> Option<Context> {
+        self.0.lock().unwrap().upstream_ctx.clone()
     }
 
     pub fn cur_level_buffers(&self) -> u32 {
@@ -184,6 +189,8 @@ impl DataQueue {
             }
         }
 
+        inner.pushed_status = PushedStatus::default();
+
         inner.cur_level_buffers = 0;
         inner.cur_level_bytes = 0;
         inner.cur_level_time = gst::ClockTime::ZERO;
@@ -191,26 +198,24 @@ impl DataQueue {
         gst::debug!(DATA_QUEUE_CAT, obj = inner.element, "Data queue cleared");
     }
 
-    pub fn push(&self, item: DataQueueItem) -> Result<(), DataQueueItem> {
+    pub fn push(
+        &self,
+        obj: &gst::glib::Object,
+        item: DataQueueItem,
+    ) -> Result<PushedStatus, DataQueueItem> {
         let mut inner = self.0.lock().unwrap();
 
         if inner.state == DataQueueState::Stopped {
             gst::debug!(
                 DATA_QUEUE_CAT,
-                obj = inner.element,
-                "Rejecting item {:?} in state {:?}",
-                item,
+                obj = obj,
+                "Rejecting item {item:?} in state {:?}",
                 inner.state
             );
             return Err(item);
         }
 
-        gst::debug!(
-            DATA_QUEUE_CAT,
-            obj = inner.element,
-            "Pushing item {:?}",
-            item
-        );
+        gst::debug!(DATA_QUEUE_CAT, obj = obj, "Pushing item {item:?}");
 
         let (count, bytes) = item.size();
         let queue_ts = inner.queue.iter().find_map(|i| i.timestamp());
@@ -220,9 +225,8 @@ impl DataQueue {
             if max <= inner.cur_level_buffers {
                 gst::debug!(
                     DATA_QUEUE_CAT,
-                    obj = inner.element,
-                    "Queue is full (buffers): {} <= {}",
-                    max,
+                    obj = obj,
+                    "Queue is full (buffers): {max} <= {}",
                     inner.cur_level_buffers
                 );
                 return Err(item);
@@ -233,9 +237,8 @@ impl DataQueue {
             if max <= inner.cur_level_bytes {
                 gst::debug!(
                     DATA_QUEUE_CAT,
-                    obj = inner.element,
-                    "Queue is full (bytes): {} <= {}",
-                    max,
+                    obj = obj,
+                    "Queue is full (bytes): {max} <= {}",
                     inner.cur_level_bytes
                 );
                 return Err(item);
@@ -253,10 +256,9 @@ impl DataQueue {
             if inner.max_size_time.opt_le(level).unwrap_or(false) {
                 gst::debug!(
                     DATA_QUEUE_CAT,
-                    obj = inner.element,
-                    "Queue is full (time): {} <= {}",
+                    obj = obj,
+                    "Queue is full (time): {} <= {level}",
                     inner.max_size_time.display(),
-                    level
                 );
                 return Err(item);
             }
@@ -266,6 +268,18 @@ impl DataQueue {
             gst::ClockTime::ZERO
         };
 
+        use PushedStatus::*;
+        match inner.pushed_status {
+            GotBuffers => (),
+            FirstBuffer => inner.pushed_status = GotBuffers,
+            PendingBuffers => {
+                if let DataQueueItem::Buffer(_) | DataQueueItem::BufferList(_) = item {
+                    inner.pushed_status = PushedStatus::FirstBuffer;
+                    inner.upstream_ctx = Context::current();
+                }
+            }
+        }
+
         inner.queue.push_back(item);
         inner.cur_level_buffers += count;
         inner.cur_level_bytes += bytes;
@@ -273,7 +287,7 @@ impl DataQueue {
 
         inner.wake();
 
-        Ok(())
+        Ok(inner.pushed_status)
     }
 
     // TODO: implement as a Stream now that we use a StdMutex
@@ -316,5 +330,47 @@ impl DataQueue {
 
             let _ = pending_fut.await;
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct DataQueueBuilder(DataQueueInner);
+
+impl DataQueueBuilder {
+    fn new(element: &gst::Element, src_pad: &gst::Pad) -> DataQueueBuilder {
+        DataQueueBuilder(DataQueueInner {
+            element: element.clone(),
+            upstream_ctx: None,
+            src_pad: src_pad.clone(),
+            state: DataQueueState::Stopped,
+            queue: VecDeque::new(),
+            pushed_status: PushedStatus::default(),
+            cur_level_buffers: 0,
+            cur_level_bytes: 0,
+            cur_level_time: gst::ClockTime::ZERO,
+            max_size_buffers: None,
+            max_size_bytes: None,
+            max_size_time: None,
+            pending_handle: None,
+        })
+    }
+
+    pub fn max_size_buffers(mut self, max_size_buffers: u32) -> Self {
+        self.0.max_size_buffers = (max_size_buffers > 0).then_some(max_size_buffers);
+        self
+    }
+
+    pub fn max_size_bytes(mut self, max_size_bytes: u32) -> Self {
+        self.0.max_size_bytes = (max_size_bytes > 0).then_some(max_size_bytes);
+        self
+    }
+
+    pub fn max_size_time(mut self, max_size_time: gst::ClockTime) -> Self {
+        self.0.max_size_time = (!max_size_time.is_zero()).then_some(max_size_time);
+        self
+    }
+
+    pub fn build(self) -> DataQueue {
+        DataQueue(Arc::new(Mutex::new(self.0)))
     }
 }

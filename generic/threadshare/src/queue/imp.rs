@@ -215,29 +215,69 @@ impl PadSrcHandler for QueuePadSrcHandler {
     }
 
     fn src_query(self, pad: &gst::Pad, imp: &Queue, query: &mut gst::QueryRef) -> bool {
-        gst::log!(CAT, obj = pad, "Handling {:?}", query);
+        gst::log!(CAT, obj = pad, "Handling {query:?}");
 
-        if let gst::QueryViewMut::Scheduling(q) = query.view_mut() {
-            let mut new_query = gst::query::Scheduling::new();
-            let res = imp.sink_pad.gst_pad().peer_query(&mut new_query);
-            if !res {
-                return res;
+        use gst::QueryViewMut::*;
+        match query.view_mut() {
+            Latency(q) => {
+                let mut new_query = gst::query::Latency::new();
+                let res = imp.sink_pad.gst_pad().peer_query(&mut new_query);
+                if !res {
+                    return res;
+                }
+
+                gst::log!(CAT, obj = pad, "Upstream returned {new_query:?}");
+
+                let (is_live, mut min, max) = new_query.result();
+
+                let upstream_ctx = imp
+                    .dataqueue
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .and_then(|dq| dq.upstream_context());
+                let is_same_ts_ctx = upstream_ctx == *imp.ts_ctx.lock().unwrap();
+
+                let settings = imp.settings.lock().unwrap();
+                if !is_same_ts_ctx {
+                    min += gst::ClockTime::from_nseconds(settings.context_wait.as_nanos() as u64);
+                }
+                // TODO also use max-size-buffers & CAPS when applicable
+                let max = max.unwrap_or(gst::ClockTime::ZERO) + settings.max_size_time;
+                drop(settings);
+
+                gst::debug!(
+                    CAT,
+                    obj = pad,
+                    "Returning latency: is live {is_live}, min {min}, max {max}"
+                );
+                q.set(is_live, min, gst::ClockTime::NONE);
+
+                return true;
             }
+            Scheduling(q) => {
+                let mut new_query = gst::query::Scheduling::new();
+                let res = imp.sink_pad.gst_pad().peer_query(&mut new_query);
+                if !res {
+                    return res;
+                }
 
-            gst::log!(CAT, obj = pad, "Upstream returned {:?}", new_query);
+                gst::log!(CAT, obj = pad, "Upstream returned {new_query:?}");
 
-            let (flags, min, max, align) = new_query.result();
-            q.set(flags, min, max, align);
-            q.add_scheduling_modes(
-                new_query
-                    .scheduling_modes()
-                    .filter(|m| m != &gst::PadMode::Pull),
-            );
-            gst::log!(CAT, obj = pad, "Returning {:?}", q.query_mut());
-            return true;
+                let (flags, min, max, align) = new_query.result();
+                q.set(flags, min, max, align);
+                q.add_scheduling_modes(
+                    new_query
+                        .scheduling_modes()
+                        .filter(|m| m != &gst::PadMode::Pull),
+                );
+                gst::log!(CAT, obj = pad, "Returning {:?}", q.query_mut());
+                return true;
+            }
+            _ => (),
         }
 
-        gst::log!(CAT, obj = pad, "Forwarding {:?}", query);
+        gst::log!(CAT, obj = pad, "Forwarding {query:?}");
         imp.sink_pad.gst_pad().peer_query(query)
     }
 }
@@ -380,6 +420,7 @@ impl TaskImpl for QueueTask {
 pub struct Queue {
     sink_pad: PadSink,
     src_pad: PadSrc,
+    ts_ctx: Mutex<Option<Context>>,
     task: Task,
     dataqueue: Mutex<Option<DataQueue>>,
     pending_queue: Mutex<Option<PendingQueue>>,
@@ -396,6 +437,18 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 });
 
 impl Queue {
+    fn push(&self, dataqueue: &DataQueue, item: DataQueueItem) -> Result<(), DataQueueItem> {
+        if dataqueue
+            .push(self.obj().upcast_ref(), item)?
+            .is_first_buffer()
+        {
+            let elem = self.obj();
+            let _ = elem.post_message(gst::message::Latency::builder().src(&*elem).build());
+        }
+
+        Ok(())
+    }
+
     /* Try transferring all the items from the pending queue to the DataQueue, then
      * the current item. Errors out if the DataQueue was full, or the pending queue
      * is already scheduled, in which case the current item should be added to the
@@ -407,7 +460,7 @@ impl Queue {
         item: DataQueueItem,
     ) -> Result<(), DataQueueItem> {
         match pending_queue {
-            None => dataqueue.push(item),
+            None => self.push(dataqueue, item),
             Some(PendingQueue {
                 scheduled: false,
                 ref mut items,
@@ -415,7 +468,7 @@ impl Queue {
             }) => {
                 let mut failed_item = None;
                 while let Some(item) = items.pop_front() {
-                    if let Err(item) = dataqueue.push(item) {
+                    if let Err(item) = self.push(dataqueue, item) {
                         failed_item = Some(item);
                     }
                 }
@@ -425,7 +478,7 @@ impl Queue {
 
                     Err(item)
                 } else {
-                    dataqueue.push(item)
+                    self.push(dataqueue, item)
                 }
             }
             _ => Err(item),
@@ -449,7 +502,7 @@ impl Queue {
                 if let Some(pending_queue) = pending_queue_grd.as_mut() {
                     let mut failed_item = None;
                     while let Some(item) = pending_queue.items.pop_front() {
-                        if let Err(item) = dataqueue.as_ref().unwrap().push(item) {
+                        if let Err(item) = self.push(dataqueue.as_ref().unwrap(), item) {
                             failed_item = Some(item);
                         }
                     }
@@ -552,25 +605,11 @@ impl Queue {
 
         let settings = self.settings.lock().unwrap().clone();
 
-        let dataqueue = DataQueue::new(
-            &self.obj().clone().upcast(),
-            self.src_pad.gst_pad(),
-            if settings.max_size_buffers == 0 {
-                None
-            } else {
-                Some(settings.max_size_buffers)
-            },
-            if settings.max_size_bytes == 0 {
-                None
-            } else {
-                Some(settings.max_size_bytes)
-            },
-            if settings.max_size_time.is_zero() {
-                None
-            } else {
-                Some(settings.max_size_time)
-            },
-        );
+        let dataqueue = DataQueue::builder(self.obj().upcast_ref(), self.src_pad.gst_pad())
+            .max_size_buffers(settings.max_size_buffers)
+            .max_size_bytes(settings.max_size_bytes)
+            .max_size_time(settings.max_size_time)
+            .build();
 
         let context =
             Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
@@ -580,6 +619,7 @@ impl Queue {
                 )
             })?;
 
+        *self.ts_ctx.lock().unwrap() = Some(context.clone());
         *self.dataqueue.lock().unwrap() = Some(dataqueue.clone());
 
         self.task
@@ -600,6 +640,7 @@ impl Queue {
                 let imp = elem.imp();
                 *imp.dataqueue.lock().unwrap() = None;
                 *imp.pending_queue.lock().unwrap() = None;
+                *imp.ts_ctx.lock().unwrap() = None;
 
                 *imp.last_res.lock().unwrap() = Ok(gst::FlowSuccess::Ok);
 
@@ -646,6 +687,7 @@ impl ObjectSubclass for Queue {
                 gst::Pad::from_template(&klass.pad_template("src").unwrap()),
                 QueuePadSrcHandler,
             ),
+            ts_ctx: Mutex::new(None),
             task: Task::default(),
             dataqueue: Mutex::new(None),
             pending_queue: Mutex::new(None),

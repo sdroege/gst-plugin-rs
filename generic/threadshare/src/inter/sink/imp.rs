@@ -6,7 +6,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use gio::glib::ControlFlow;
 /**
  * SECTION:element-ts-intersink
  * @see_also: ts-intersrc, ts-proxysink, ts-proxysrc, intersink, intersrc
@@ -33,6 +32,7 @@ use gio::glib::ControlFlow;
  * Since: plugins-rs-0.14.0
  */
 use gst::glib;
+use gst::glib::ControlFlow;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
@@ -265,7 +265,7 @@ impl InterSink {
                 return Err(gst::FlowError::Flushing);
             }
 
-            if dq.push(item.clone()).is_err() {
+            if dq.push(self.obj().upcast_ref(), item.clone()).is_err() {
                 gst::debug!(CAT, imp = self, "Failed to enqueue item: {item:?}");
             }
         }

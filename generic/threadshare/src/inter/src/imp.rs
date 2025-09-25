@@ -276,9 +276,7 @@ impl PadSrcHandler for InterSrcPadHandler {
         use gst::QueryViewMut;
         let ret = match query.view_mut() {
             QueryViewMut::Latency(q) => {
-                let (_, q_min, q_max) = q.result();
-
-                let Some(upstream_latency) = *imp.our_latency.lock().unwrap() else {
+                let Some(mut min) = *imp.upstream_latency.lock().unwrap() else {
                     gst::debug!(
                         CAT,
                         obj = pad,
@@ -287,15 +285,28 @@ impl PadSrcHandler for InterSrcPadHandler {
                     return false;
                 };
 
-                let max_time = imp.settings.lock().unwrap().max_size_time;
-                let max = if max_time > gst::ClockTime::ZERO {
-                    // TODO also use max-size-buffers & CAPS when applicable
-                    Some(q_max.unwrap_or(gst::ClockTime::ZERO) + max_time)
-                } else {
-                    q_max
-                };
+                let upstream_ctx = imp
+                    .dataqueue
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .and_then(|dq| dq.upstream_context());
+                let is_same_ts_ctx = upstream_ctx == *imp.ts_ctx.lock().unwrap();
 
-                q.set(true, q_min + upstream_latency, max);
+                let settings = imp.settings.lock().unwrap();
+                if !is_same_ts_ctx {
+                    min += gst::ClockTime::from_nseconds(settings.context_wait.as_nanos() as u64);
+                }
+                // TODO also use max-size-buffers & CAPS when applicable
+                let max = settings.max_size_time;
+                drop(settings);
+
+                gst::debug!(
+                    CAT,
+                    obj = pad,
+                    "Returning latency: is live true, min {min}, max {max}"
+                );
+                q.set(true, min, max);
 
                 true
             }
@@ -355,7 +366,7 @@ impl InterSrcTask {
     async fn maybe_get_upstream_latency(&self) -> Result<(), gst::FlowError> {
         let imp = self.elem.imp();
 
-        if imp.our_latency.lock().unwrap().is_some() {
+        if imp.upstream_latency.lock().unwrap().is_some() {
             return Ok(());
         }
 
@@ -511,7 +522,7 @@ pub struct InterSrc {
     src_ctx: Mutex<Option<InterContextSrc>>,
     ts_ctx: Mutex<Option<Context>>,
     dataqueue: Mutex<Option<DataQueue>>,
-    our_latency: Mutex<Option<gst::ClockTime>>,
+    upstream_latency: Mutex<Option<gst::ClockTime>>,
     settings: Mutex<Settings>,
 }
 
@@ -590,7 +601,7 @@ impl InterSrc {
         // Remove the InterContextSrc from the InterContext
         drop(self.src_ctx.lock().unwrap().take());
 
-        *self.our_latency.lock().unwrap() = None;
+        *self.upstream_latency.lock().unwrap() = None;
 
         let dataqueue = self
             .dataqueue
@@ -640,27 +651,18 @@ impl InterSrc {
     }
 
     // Sets the upstream latency blocking the caller until it's handled.
-    fn set_upstream_latency_priv(&self, up_latency: gst::ClockTime) {
-        let new_latency = up_latency
-            + gst::ClockTime::from_mseconds(
-                self.settings.lock().unwrap().context_wait.as_millis() as u64
-            );
-
+    fn set_upstream_latency_priv(&self, new_latency: gst::ClockTime) {
         {
-            let mut our_latency = self.our_latency.lock().unwrap();
-            if let Some(our_latency) = *our_latency {
-                if our_latency == new_latency {
+            let mut cur_upstream_latency = self.upstream_latency.lock().unwrap();
+            if let Some(cur_upstream_latency) = *cur_upstream_latency {
+                if cur_upstream_latency == new_latency {
                     return;
                 }
             }
-            *our_latency = Some(new_latency);
+            *cur_upstream_latency = Some(new_latency);
         }
 
-        gst::debug!(
-            CAT,
-            imp = self,
-            "Got new upstream latency {up_latency} => will report {new_latency}"
-        );
+        gst::debug!(CAT, imp = self, "Got new upstream latency {new_latency}");
 
         self.post_message(gst::message::Latency::builder().src(&*self.obj()).build());
     }
@@ -678,25 +680,11 @@ impl InterSrc {
         })?;
         *self.ts_ctx.lock().unwrap() = Some(ts_ctx.clone());
 
-        let dataqueue = DataQueue::new(
-            &self.obj().clone().upcast(),
-            self.srcpad.gst_pad(),
-            if settings.max_size_buffers == 0 {
-                None
-            } else {
-                Some(settings.max_size_buffers)
-            },
-            if settings.max_size_bytes == 0 {
-                None
-            } else {
-                Some(settings.max_size_bytes)
-            },
-            if settings.max_size_time.is_zero() {
-                None
-            } else {
-                Some(settings.max_size_time)
-            },
-        );
+        let dataqueue = DataQueue::builder(self.obj().upcast_ref(), self.srcpad.gst_pad())
+            .max_size_buffers(settings.max_size_buffers)
+            .max_size_bytes(settings.max_size_bytes)
+            .max_size_time(settings.max_size_time)
+            .build();
         *self.dataqueue.lock().unwrap() = Some(dataqueue.clone());
 
         let inter_ctx_name = self.settings.lock().unwrap().inter_context.to_string();
@@ -735,7 +723,7 @@ impl InterSrc {
         self.task
             .stop()
             .block_on_or_add_subtask_then(self.obj(), |elem, res| {
-                *elem.imp().our_latency.lock().unwrap() = gst::ClockTime::NONE;
+                *elem.imp().upstream_latency.lock().unwrap() = gst::ClockTime::NONE;
 
                 if res.is_ok() {
                     gst::debug!(CAT, obj = elem, "Stopped");
@@ -810,7 +798,7 @@ impl ObjectSubclass for InterSrc {
             src_ctx: Mutex::new(None),
             ts_ctx: Mutex::new(None),
             dataqueue: Mutex::new(None),
-            our_latency: Mutex::new(gst::ClockTime::NONE),
+            upstream_latency: Mutex::new(gst::ClockTime::NONE),
             settings: Mutex::new(Settings::default()),
         }
     }
