@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
 import glob
+import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -28,6 +30,7 @@ PARSER.add_argument('--exe-suffix')
 PARSER.add_argument('--depfile', type=P)
 PARSER.add_argument('--target-dir', type=P, default=None)
 PARSER.add_argument('--disable-doc', action='store_true', default=False)
+PARSER.add_argument('--build-tests', action='store_true', default=False)
 
 
 def shlex_join(args):
@@ -89,10 +92,112 @@ def generate_depfile_for(fpath, build_start_time, logfile=None):
     return depfile_content
 
 
+# Copied from gst-env.py
+# libdir is expanded from option of the same name listed in the `meson
+# introspect --buildoptions` output.
+SHAREDLIB_REG = re.compile(r'\.so|\.dylib|\.dll')
+GSTPLUGIN_FILEPATH_REG_TEMPLATE = r'.*/{libdir}/gstreamer-1.0/[^/]+$'
+GSTPLUGIN_FILEPATH_REG = None
+
+
+def listify(o):
+    if isinstance(o, str):
+        return [o]
+    if isinstance(o, list):
+        return o
+    raise AssertionError('Object {!r} must be a string or a list'.format(o))
+
+
+def get_target_install_filename(target, filename):
+    '''
+    Checks whether this file is one of the files installed by the target
+    '''
+    basename = os.path.basename(filename)
+    if "install_filename" not in target:
+        return None
+
+    for install_filename in listify(target['install_filename']):
+        if install_filename.endswith(basename):
+            return install_filename
+    return None
+
+
+def is_library_target_and_not_plugin(target, filename):
+    '''
+    Don't add plugins to PATH/LD_LIBRARY_PATH because:
+    1. We don't need to
+    2. It causes us to exceed the PATH length limit on Windows and Wine
+    '''
+    if target['type'] != 'shared library':
+        return False
+
+    # Check if this output of that target is a shared library
+    if not SHAREDLIB_REG.search(filename):
+        return False
+
+    # Check if it's installed to the gstreamer plugin location
+    install_filename = get_target_install_filename(target, filename)
+    if not install_filename:
+        return False
+    global GSTPLUGIN_FILEPATH_REG
+    if GSTPLUGIN_FILEPATH_REG is None:
+        GSTPLUGIN_FILEPATH_REG = re.compile(GSTPLUGIN_FILEPATH_REG_TEMPLATE)
+    if GSTPLUGIN_FILEPATH_REG.search(install_filename.replace('\\', '/')):
+        return False
+    return True
+
+
+def setup_library_paths_for_tests(env, builddir, logfile=None):
+    '''Setup library paths for test execution using the same logic as gst-env.py'''
+    # Determine library path environment variable based on platform
+    if os.name == 'nt':
+        lib_path_envvar = 'PATH'
+    elif sys.platform == 'darwin':
+        lib_path_envvar = 'DYLD_LIBRARY_PATH'
+    else:
+        lib_path_envvar = 'LD_LIBRARY_PATH'
+
+    if lib_path_envvar is None:
+        return
+
+    intro_targets_path = P(builddir) / 'meson-info' / 'intro-targets.json'
+    if not intro_targets_path.exists():
+        print(f'Warning: {intro_targets_path} does not exist', file=logfile)
+        return
+
+    try:
+        with open(intro_targets_path, 'r') as f:
+            targets = json.load(f)
+
+        paths = set()
+        for target in targets:
+            for filename in target.get('filename', []):
+                root = os.path.dirname(filename)
+                if is_library_target_and_not_plugin(target, filename):
+                    lib_path = os.path.join(builddir, root)
+                    paths.add(lib_path)
+                    print(f'  Added library path: {lib_path}', file=logfile)
+                else:
+                    print(f'  Skipped non-library target: {filename}',
+                          file=logfile)
+
+        # Prepend all paths to the environment variable
+        existing_path = env.get(lib_path_envvar, '')
+        if paths:
+            new_paths = list(paths)
+            if existing_path:
+                new_paths.append(existing_path)
+            env[lib_path_envvar] = os.pathsep.join(new_paths)
+            print(f'Set {lib_path_envvar} for tests', file=logfile)
+
+    except (json.JSONDecodeError, OSError) as e:
+        print(f'Error setting up library paths: {e}', file=logfile)
+
+
 if __name__ == '__main__':
     opts = PARSER.parse_args()
     logdir = opts.root_dir / 'meson-logs'
-    logfile_path = logdir / f"{opts.depfile.name.replace('.dep', '')}-cargo-wrapper.log"
+    logfile_path = logdir / f"{opts.depfile.name.replace('.dep', '') if opts.depfile else opts.command}-cargo-wrapper.log"
     logfile = open(logfile_path, mode='w', buffering=1, encoding='utf-8')
 
     print(opts, file=logfile)
@@ -134,11 +239,23 @@ if __name__ == '__main__':
             cargo_cmd += ['cbuild']
             if not opts.disable_doc:
                 features += ['doc']
+
+        # Build tests if requested
+        if opts.build_tests and not (opts.bin or opts.examples):
+            cargo_cmd.append('--tests')
+
         if opts.target == 'release':
             cargo_cmd.append('--release')
     elif opts.command == 'test':
-        # cargo test
-        cargo_cmd = ['cargo', 'ctest', '--no-fail-fast', '--color=always']
+        # Set up library paths for test execution
+        setup_library_paths_for_tests(env, opts.root_dir, logfile)
+
+        # Check if cargo-nextest is available
+        nextest_path = shutil.which('cargo-nextest')
+        if nextest_path is not None:
+            cargo_cmd = ['cargo', 'nextest', 'run', '--no-fail-fast', '--no-capture']
+        else:
+            cargo_cmd = ['cargo', 'test', '--no-fail-fast', '--color=always']
     else:
         print('Unknown command:', opts.command, file=logfile)
         sys.exit(1)
@@ -152,7 +269,7 @@ if __name__ == '__main__':
     if opts.bin:
         cargo_cmd.extend(['--bin', opts.bin.name])
     else:
-        if not opts.examples:
+        if not opts.examples and not opts.command == 'test':
             cargo_cmd.extend([
                 '--prefix',
                 opts.prefix,

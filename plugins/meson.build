@@ -22,7 +22,7 @@ if output.length() > 0
       '--depfile', '@DEPFILE@',
       '--lib-suffixes', library_suffixes,
       '--target-dir', meson.current_build_dir() / '..' / 'target',
-    ] + feature_args + extra_args)
+    ] + feature_args + extra_args + (get_option('tests').allowed() ? ['--build-tests'] : []))
   plugins = []
   foreach plugin: rs_plugins.to_list()
     if not plugin.full_path().endswith('.pc')

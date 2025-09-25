@@ -760,18 +760,20 @@ if get_option('examples').allowed() and examples.length() > 0
 endif
 
 if get_option('tests').allowed()
-  test('tests',
-    cargo_wrapper,
-    env: extra_env,
-    args: ['test',
-      meson.current_build_dir(),
-      meson.current_source_dir(),
-      meson.global_build_root(),
-      target,
-      get_option('prefix'),
-      get_option('libdir'),
-      '--packages', packages],
-    timeout: 600)
+  foreach package: packages
+    test(package.replace('gst-plugin-', ''),
+      cargo_wrapper,
+      env: extra_env,
+      args: ['test',
+        meson.current_build_dir(),
+        meson.current_source_dir(),
+        meson.global_build_root(),
+        target,
+        get_option('prefix'),
+        get_option('libdir'),
+        '--packages', package],
+      timeout: 600)
+  endforeach
 endif
 
 summary({
