@@ -3394,6 +3394,7 @@ dependencies = [
  "gstreamer-net",
  "gstreamer-rtp",
  "libc",
+ "num-traits",
  "pin-project-lite",
  "pkg-config",
  "polling",
