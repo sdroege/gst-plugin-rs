@@ -34,7 +34,7 @@
  * // An upstream pipeline producing a 1 second Opus encoded audio stream
  * let pipe_up = gst::parse::launch(
  *     "
- *         ts-audiotestsrc is-live=true num-buffers=50 volume=0.02 context=ts-group-1 context-wait=20
+ *         ts-audiotestsrc num-buffers=50 volume=0.02 context=ts-group-1 context-wait=20
  *         ! opusenc
  *         ! ts-intersink inter-context=my-inter-ctx
  *     ",
