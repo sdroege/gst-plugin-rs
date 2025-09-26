@@ -633,6 +633,11 @@ mod imp_sink {
             Some(&*ELEMENT_METADATA)
         }
 
+        fn send_event(&self, event: gst::Event) -> bool {
+            gst::log!(SINK_CAT, imp = self, "Got {event:?}");
+            self.sink_pad.gst_pad().push_event(event)
+        }
+
         fn pad_templates() -> &'static [gst::PadTemplate] {
             static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
                 let caps = gst::Caps::new_any();

@@ -825,7 +825,7 @@ impl PadSrcHandler for ProxySrcPadHandler {
                 gst::debug!(
                     SRC_CAT,
                     obj = pad,
-                    "Returning latency: is live true, min {min}, max {max}"
+                    "Returning latency: live true, min {min}, max {max}"
                 );
                 q.set(true, min, max);
 
