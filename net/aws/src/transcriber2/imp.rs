@@ -416,8 +416,15 @@ impl Transcriber {
 
         gst::debug!(CAT, imp = self, "starting source pad task");
 
-        self.ensure_connection()
-            .map_err(|err| gst::loggable_error!(CAT, "Failed to start pad task: {err}"))?;
+        self.ensure_connection().map_err(|err| {
+            gst::element_imp_error!(
+                self,
+                gst::StreamError::Failed,
+                ["Streaming failed: {}", err]
+            );
+
+            gst::loggable_error!(CAT, "Failed to start pad task: {err}")
+        })?;
 
         let this_weak = self.downgrade();
         let res = self.srcpad.start_task(move || loop {

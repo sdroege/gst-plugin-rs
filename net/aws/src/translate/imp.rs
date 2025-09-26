@@ -594,6 +594,12 @@ impl Translate {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         self.ensure_connection().map_err(|err| {
             gst::error!(CAT, "Failed to connect to AWS: {err:?}");
+            gst::element_imp_error!(
+                self,
+                gst::StreamError::Failed,
+                ["Streaming failed: {}", err]
+            );
+
             gst::FlowError::Error
         })?;
 
@@ -623,6 +629,12 @@ impl Translate {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         self.ensure_connection().map_err(|err| {
             gst::error!(CAT, "Failed to connect to AWS: {err:?}");
+            gst::element_imp_error!(
+                self,
+                gst::StreamError::Failed,
+                ["Streaming failed: {}", err]
+            );
+
             gst::FlowError::Error
         })?;
 
