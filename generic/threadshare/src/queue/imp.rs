@@ -238,7 +238,7 @@ impl PadSrcHandler for QueuePadSrcHandler {
                 gst::debug!(
                     CAT,
                     obj = pad,
-                    "Returning latency: is live {is_live}, min {min}, max {max}"
+                    "Returning latency: live {is_live}, min {min}, max {max}"
                 );
                 q.set(is_live, min, gst::ClockTime::NONE);
 
