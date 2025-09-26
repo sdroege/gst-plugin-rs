@@ -75,7 +75,6 @@ fn main() {
 
         let src = gst::ElementFactory::make("ts-audiotestsrc")
             .name(format!("src-{i}").as_str())
-            .property("is-live", true)
             .property("context", &ctx_name)
             .property("context-wait", args.wait)
             .property_if("num-buffers", args.num_buffers, i == 0)
@@ -243,7 +242,7 @@ fn main() {
                     break;
                 }
                 Latency(msg) => {
-                    gst::info!(
+                    gst::log!(
                         CAT,
                         "Latency requirements have changed for element {}",
                         msg.src()

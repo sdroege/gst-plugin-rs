@@ -176,7 +176,7 @@ fn main() {
                     break;
                 }
                 Latency(msg) => {
-                    gst::info!(
+                    gst::log!(
                         CAT,
                         "Latency requirements have changed for element {}",
                         msg.src()

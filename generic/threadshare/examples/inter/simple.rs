@@ -13,7 +13,7 @@ fn main() {
 
     let pipe_up = gst::parse::launch(
         "pipeline. (name=upstream
-         ts-audiotestsrc is-live=true num-buffers=2000 volume=0.02 context=ts-group-1 context-wait=20
+         ts-audiotestsrc num-buffers=2000 volume=0.02 context=ts-group-1 context-wait=20
          ! opusenc
          ! ts-intersink inter-context=my-inter-ctx
          )",
