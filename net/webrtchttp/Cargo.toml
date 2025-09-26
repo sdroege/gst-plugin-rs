@@ -14,7 +14,7 @@ rust-version.workspace = true
 gst.workspace = true
 gst-webrtc = { workspace = true, features = ["v1_18"] }
 gst-sdp.workspace = true
-reqwest = { version = "0.12", default-features = false, features = ["charset", "http2", "system-proxy", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["charset", "http2", "system-proxy", "rustls-tls", "rustls-tls-native-roots"] }
 rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
 parse_link_header = {version = "0.4", features = ["url"]}
 tokio = { version = "1.20.1", default-features = false, features = ["time", "rt-multi-thread"] }
