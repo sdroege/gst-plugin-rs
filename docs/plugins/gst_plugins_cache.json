@@ -16938,7 +16938,7 @@
                 "klass": "Source/Test",
                 "pad-templates": {
                     "src": {
-                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: S16LE\n",
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: { S16LE, S16BE, U16LE, U16BE, S32LE, S32BE, U32LE, U32BE, F32LE, F32BE, F64LE, F64BE, S8, U8 }\n",
                         "direction": "src",
                         "presence": "always"
                     }
