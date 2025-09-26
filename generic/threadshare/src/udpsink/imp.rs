@@ -698,6 +698,7 @@ impl UdpSinkPadHandlerInner {
 
         if let Ok(Some(delay)) = running_time.opt_checked_sub(now) {
             gst::trace!(CAT, obj = elem, "sync: waiting {delay}");
+            // Up to 1/2 context-wait delay. See also `UdpSink::query()`.
             runtime::timer::delay_for(delay.into()).await;
         }
     }
@@ -1361,14 +1362,68 @@ impl ElementImpl for UdpSink {
     }
 
     fn send_event(&self, event: gst::Event) -> bool {
+        gst::log!(CAT, imp = self, "Got {event:?}");
+
         match event.view() {
             EventView::Latency(ev) => {
-                let latency = Some(ev.latency());
-                self.sink_pad_handler.set_latency(latency);
+                if self.settings.lock().unwrap().sync {
+                    // The element syncs on the clock so it needs the pipeline's
+                    // consolidated latency to sync buffers in-sync with other branches.
+                    self.sink_pad_handler.set_latency(Some(ev.latency()));
+                }
+                // otherwise, we need the branch latency as returned by `query()`
                 self.sink_pad.gst_pad().push_event(event)
             }
             EventView::Step(..) => false,
             _ => self.sink_pad.gst_pad().push_event(event),
         }
+    }
+
+    fn query(&self, query: &mut gst::QueryRef) -> bool {
+        gst::log!(CAT, imp = self, "Got {query:?}");
+
+        if query.type_() == gst::QueryType::Latency {
+            if !self.sink_pad.gst_pad().query(query) {
+                gst::error!(CAT, imp = self, "Failed to query upstream latency");
+                return false;
+            }
+            gst::log!(CAT, imp = self, "Upstream returned {query:?}");
+
+            let gst::QueryViewMut::Latency(q) = query.view_mut() else {
+                unreachable!();
+            };
+            let (sync, context_wait) = {
+                let settings = self.settings.lock().unwrap();
+                (settings.sync, settings.context_wait)
+            };
+
+            let (_, mut min, max) = q.result();
+            if sync {
+                // Element uses `delay_for` for sync (see `UdpSinkPadHandlerInner::sync`)
+                // which adds up to 1/2 context-wait delay
+                min += gst::ClockTime::from_nseconds(context_wait.as_nanos() as u64 / 2);
+
+                // The element syncs on the clock so it needs the pipelines's
+                // consolidated latency which is captured by `send_event()`.
+            } else {
+                // The element doesn't sync on the clock so the latency it sees is the branch latency.
+                // (not used as of this writting but added here for consistancy)
+                self.sink_pad_handler.set_latency(Some(min));
+            }
+
+            gst::log!(
+                CAT,
+                imp = self,
+                "Returning latency: live {sync}, min {min}, max {max:?}"
+            );
+            q.set(sync, min, max);
+
+            return true;
+        }
+
+        let res = self.sink_pad.gst_pad().query(query);
+        gst::log!(CAT, imp = self, "Upstream returned {query:?}");
+
+        res
     }
 }
