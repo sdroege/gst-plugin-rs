@@ -1119,10 +1119,7 @@ impl<Task: TaskImpl> StateMachine<Task> {
                                 (origin, TaskState::Paused)
                             }
                             TaskState::Flushing => (origin, TaskState::PausedFlushing),
-                            TaskState::Error => {
-                                triggering_evt.send_err_ack();
-                                continue;
-                            }
+                            TaskState::Error => (TaskState::Error, TaskState::Error),
                             state => {
                                 task_inner.skip_triggering_evt(triggering_evt);
                                 gst::trace!(
@@ -1149,18 +1146,15 @@ impl<Task: TaskImpl> StateMachine<Task> {
                     }
                 }
                 Trigger::Stop => {
-                    let origin = {
+                    let (origin, target) = {
                         let mut task_inner = task_inner.lock().unwrap();
                         let origin = task_inner.state;
                         match origin {
                             TaskState::Started
                             | TaskState::Paused
                             | TaskState::PausedFlushing
-                            | TaskState::Flushing => origin,
-                            TaskState::Error => {
-                                triggering_evt.send_err_ack();
-                                continue;
-                            }
+                            | TaskState::Flushing => (origin, TaskState::Stopped),
+                            TaskState::Error => (TaskState::Error, TaskState::Error),
                             state => {
                                 task_inner.skip_triggering_evt(triggering_evt);
                                 gst::trace!(
@@ -1178,8 +1172,8 @@ impl<Task: TaskImpl> StateMachine<Task> {
                         task_inner
                             .lock()
                             .unwrap()
-                            .switch_to_state(TaskState::Stopped, triggering_evt);
-                        gst::trace!(RUNTIME_CAT, obj = self.task_impl.obj(), "Task loop Stopped");
+                            .switch_to_state(target, triggering_evt);
+                        gst::trace!(RUNTIME_CAT, obj = self.task_impl.obj(), "Task {target:?}");
                     }
                 }
                 Trigger::FlushStart => {
@@ -1189,10 +1183,7 @@ impl<Task: TaskImpl> StateMachine<Task> {
                         match origin {
                             TaskState::Started => (origin, TaskState::Flushing),
                             TaskState::Paused => (origin, TaskState::PausedFlushing),
-                            TaskState::Error => {
-                                triggering_evt.send_err_ack();
-                                continue;
-                            }
+                            TaskState::Error => (TaskState::Error, TaskState::Error),
                             state => {
                                 task_inner.skip_triggering_evt(triggering_evt);
                                 gst::trace!(
