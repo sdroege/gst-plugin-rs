@@ -30,15 +30,15 @@
 use gst::subclass::prelude::*;
 use gst::{glib, prelude::*};
 
+use crate::RUNTIME;
 use futures::future::{abortable, AbortHandle};
 use reqwest::Response;
 use reqwest::{
     header::{HeaderMap, HeaderValue},
     Client,
 };
-use tokio::runtime;
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{LazyLock, Mutex};
 
 use anyhow::{anyhow, Error};
@@ -72,14 +72,6 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
-static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
-    runtime::Builder::new_multi_thread()
-        .enable_all()
-        .worker_threads(1)
-        .build()
-        .unwrap()
-});
-
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(2);
 const DEFAULT_OVERFLOW: Overflow = Overflow::Clip;
 const DEFAULT_API_KEY: Option<&str> = None;
@@ -89,6 +81,7 @@ const DEFAULT_LANGUAGE_CODE: Option<&str> = None;
 const DEFAULT_RETRY_WITH_SPEED: bool = true;
 const DEFAULT_MAX_PREVIOUS_REQUESTS: u32 = 0;
 const DEFAULT_MAX_OVERFLOW: gst::ClockTime = gst::ClockTime::from_seconds(0);
+const DEFAULT_USE_VOICE_ID_EVENTS: bool = true;
 
 #[derive(Debug, Clone)]
 pub(super) struct Settings {
@@ -101,6 +94,7 @@ pub(super) struct Settings {
     retry_with_speed: bool,
     max_overflow: gst::ClockTime,
     max_previous_requests: u32,
+    use_voice_id_events: bool,
 }
 
 impl Default for Settings {
@@ -115,6 +109,7 @@ impl Default for Settings {
             retry_with_speed: DEFAULT_RETRY_WITH_SPEED,
             max_overflow: DEFAULT_MAX_OVERFLOW,
             max_previous_requests: DEFAULT_MAX_PREVIOUS_REQUESTS,
+            use_voice_id_events: DEFAULT_USE_VOICE_ID_EVENTS,
         }
     }
 }
@@ -129,6 +124,8 @@ struct State {
     upstream_latency: Option<(bool, gst::ClockTime, Option<gst::ClockTime>)>,
     #[cfg(feature = "signalsmith_stretch")]
     stretch: Option<Stretch>,
+    current_speaker: Option<String>,
+    speaker_map: HashMap<String, String>,
 }
 
 impl Default for State {
@@ -142,6 +139,8 @@ impl Default for State {
             upstream_latency: None,
             #[cfg(feature = "signalsmith_stretch")]
             stretch: None,
+            current_speaker: None,
+            speaker_map: HashMap::default(),
         }
     }
 }
@@ -330,6 +329,49 @@ impl Synthesizer {
                     true
                 }
             }
+            CustomDownstreamOob(c) => {
+                let Some(s) = c.structure() else {
+                    return gst::Pad::event_default(pad, Some(&*self.obj()), event);
+                };
+
+                if s.name().as_str() == "elevenlabs/speaker-voice" {
+                    let Ok(speaker) = s.get::<String>("speaker") else {
+                        return gst::Pad::event_default(pad, Some(&*self.obj()), event);
+                    };
+                    let Ok(voice_id) = s.get::<String>("voice-id") else {
+                        return gst::Pad::event_default(pad, Some(&*self.obj()), event);
+                    };
+
+                    gst::log!(
+                        CAT,
+                        imp = self,
+                        "storing voice id {voice_id} for speaker {speaker}"
+                    );
+
+                    self.state
+                        .lock()
+                        .unwrap()
+                        .speaker_map
+                        .insert(speaker, voice_id);
+                }
+
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
+            }
+            CustomDownstream(c) => {
+                let Some(s) = c.structure() else {
+                    return gst::Pad::event_default(pad, Some(&*self.obj()), event);
+                };
+
+                if s.name().as_str() == "rstranscribe/speaker-change" {
+                    let Ok(speaker) = s.get::<String>("speaker") else {
+                        return gst::Pad::event_default(pad, Some(&*self.obj()), event);
+                    };
+
+                    self.state.lock().unwrap().current_speaker = Some(speaker);
+                }
+
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
+            }
             _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
@@ -341,12 +383,13 @@ impl Synthesizer {
         input_duration: gst::ClockTime,
     ) -> Result<Option<gst::Buffer>, Error> {
         let (
-            voice_id,
+            default_voice_id,
             model_id,
             language_code,
             retry_with_speed,
             our_latency,
             max_previous_requests,
+            use_voice_id_events,
         ) = {
             let settings = self.settings.lock().unwrap();
 
@@ -357,16 +400,27 @@ impl Synthesizer {
                 settings.retry_with_speed,
                 settings.latency,
                 settings.max_previous_requests,
+                settings.use_voice_id_events,
             )
         };
 
         let upstream_latency = self.upstream_latency();
 
-        let (client, previous_request_ids, out_info, out_segment) = {
+        let (client, previous_request_ids, out_info, out_segment, voice_id) = {
             let state = self.state.lock().unwrap();
 
             let Some(client) = state.client.as_ref().cloned() else {
                 return Ok(None);
+            };
+
+            let voice_id = if use_voice_id_events {
+                state
+                    .current_speaker
+                    .as_ref()
+                    .and_then(|speaker| state.speaker_map.get(speaker).cloned())
+                    .unwrap_or(default_voice_id.clone())
+            } else {
+                default_voice_id.clone()
             };
 
             (
@@ -375,6 +429,7 @@ impl Synthesizer {
                 gst_audio::AudioInfo::from_caps(state.outcaps.as_ref().expect("negotiated"))
                     .unwrap(),
                 state.out_segment.clone(),
+                voice_id,
             )
         };
 
@@ -1034,6 +1089,11 @@ impl ObjectImpl for Synthesizer {
                     .maximum(3)
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("use-voice-id-events")
+                    .nick("Use Voice-id Events")
+                    .blurb("Use received elevenlabs/speaker-voice events to pick the current voice")
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -1090,6 +1150,10 @@ impl ObjectImpl for Synthesizer {
                 let mut settings = self.settings.lock().unwrap();
                 settings.max_previous_requests = value.get::<u32>().expect("type checked upstream");
             }
+            "use-voice-id-events" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.use_voice_id_events = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -1131,6 +1195,10 @@ impl ObjectImpl for Synthesizer {
             "max-previous-requests" => {
                 let settings = self.settings.lock().unwrap();
                 settings.max_previous_requests.to_value()
+            }
+            "use-voice-id-events" => {
+                let settings = self.settings.lock().unwrap();
+                settings.use_voice_id_events.to_value()
             }
             _ => unimplemented!(),
         }

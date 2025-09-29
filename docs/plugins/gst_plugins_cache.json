@@ -3038,6 +3038,18 @@
                         "type": "gboolean",
                         "writable": true
                     },
+                    "use-voice-id-events": {
+                        "blurb": "Use received elevenlabs/speaker-voice events to pick the current voice",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "voice-id": {
                         "blurb": "ElevenLabs Voice ID, see https://elevenlabs.io/app/voice-library",
                         "conditionally-available": false,
@@ -3045,6 +3057,83 @@
                         "construct-only": false,
                         "controllable": false,
                         "default": "9BWtsMINqrJLrRacOk9x",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
+            "elevenlabsvoicecloner": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "ElevenLabs Voice Cloner",
+                "hierarchy": [
+                    "GstElevenLabsCloner",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Audio",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: S16LE\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: S16LE\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "api-key": {
+                        "blurb": "ElevenLabs API Key",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "remove-background-noise": {
+                        "blurb": "Whether to ask elevenlabs to remove background noise",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "segment-duration": {
+                        "blurb": "Amount of milliseconds to store before creating / updating voice",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "10000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "speaker": {
+                        "blurb": "Optional speaker name. When set the element will treat all audio as uttered by a single speaker and will not use rstranscribe/new-item events for diarization.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
                         "mutable": "ready",
                         "readable": true,
                         "type": "gchararray",

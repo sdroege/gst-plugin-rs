@@ -322,9 +322,21 @@ impl Transcriber {
                 ));
             }
 
-            state.last_speaker = item.speaker;
-
             let punctuated_word = item.punctuated_word.as_ref().expect("punctuation enabled");
+
+            output.push(TranscriptOutput::Event(
+                gst::event::CustomUpstream::builder(
+                    gst::Structure::builder("rstranscribe/new-item")
+                        .field("speaker", item.speaker.map(|n| n.to_string()))
+                        .field("content", punctuated_word)
+                        .field("running-time", rtime)
+                        .field("duration", duration)
+                        .build(),
+                )
+                .build(),
+            ));
+
+            state.last_speaker = item.speaker;
 
             gst::debug!(
                 CAT,
@@ -495,7 +507,11 @@ impl Transcriber {
                     TranscriptOutput::Event(event) => {
                         gst::debug!(CAT, imp = this, "pushing event {event:?}");
 
-                        this.srcpad.push_event(event);
+                        if event.is_downstream() {
+                            this.srcpad.push_event(event);
+                        } else {
+                            this.sinkpad.push_event(event);
+                        }
                     }
                 }
             }

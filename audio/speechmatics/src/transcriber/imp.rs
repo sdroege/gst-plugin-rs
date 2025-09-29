@@ -358,12 +358,30 @@ impl TranscriberSrcPad {
                         accumulator_inner.end_time
                     );
 
+                    let new_speaker = accumulator_inner.speaker.clone();
+                    let text = accumulator_inner.text.clone();
+                    let start_time = accumulator_inner.start_time;
+                    let end_time = accumulator_inner.end_time;
+
                     if current_speaker != accumulator_inner.speaker {
-                        let new_speaker = accumulator_inner.speaker.clone();
-                        state.push_speaker(new_speaker);
+                        state.push_speaker(new_speaker.clone());
                     }
+                    let running_time = state.out_segment.to_running_time(start_time).unwrap();
 
                     let buf = state.accumulator.take().unwrap().into();
+
+                    state.push_event(
+                        gst::event::CustomUpstream::builder(
+                            gst::Structure::builder("rstranscribe/new-item")
+                                .field("speaker", new_speaker.as_ref().map(|n| n.to_string()))
+                                .field("content", text)
+                                .field("running-time", running_time)
+                                .field("duration", end_time - start_time)
+                                .build(),
+                        )
+                        .build(),
+                    );
+
                     state.push_buffer(buf);
                 }
             }
@@ -449,7 +467,11 @@ impl TranscriberSrcPad {
                     }
                 }
                 TranscriberOutput::Event(event) => {
-                    let _ = self.obj().push_event(event);
+                    if event.is_downstream() {
+                        self.obj().push_event(event);
+                    } else {
+                        transcriber.imp().sinkpad.push_event(event);
+                    }
                 }
             }
         }
@@ -561,12 +583,31 @@ impl TranscriberSrcPad {
                             accumulator_inner.speaker
                         );
 
+                        let new_speaker = accumulator_inner.speaker.clone();
+                        let text = accumulator_inner.text.clone();
+                        let start_time = accumulator_inner.start_time;
+                        let end_time = accumulator_inner.end_time;
+
                         if state.current_speaker != accumulator_inner.speaker {
-                            let new_speaker = accumulator_inner.speaker.clone();
-                            state.push_speaker(new_speaker);
+                            state.push_speaker(new_speaker.clone());
                         }
 
                         let buffer = state.accumulator.take().unwrap().into();
+
+                        state.push_event(
+                            gst::event::CustomUpstream::builder(
+                                gst::Structure::builder("rstranscribe/new-item")
+                                    .field("speaker", new_speaker.as_ref().map(|n| n.to_string()))
+                                    .field("content", text)
+                                    .field(
+                                        "running-time",
+                                        state.out_segment.to_running_time(start_time).unwrap(),
+                                    )
+                                    .field("duration", end_time - start_time)
+                                    .build(),
+                            )
+                            .build(),
+                        );
 
                         state.push_buffer(buffer);
                         state.accumulator = Some(ItemAccumulator {
@@ -601,6 +642,24 @@ impl TranscriberSrcPad {
                     if state.current_speaker != alternative.speaker {
                         state.push_speaker(alternative.speaker.clone());
                     }
+
+                    state.push_event(
+                        gst::event::CustomUpstream::builder(
+                            gst::Structure::builder("rstranscribe/new-item")
+                                .field(
+                                    "speaker",
+                                    alternative.speaker.as_ref().map(|n| n.to_string()),
+                                )
+                                .field("content", &text)
+                                .field(
+                                    "running-time",
+                                    state.out_segment.to_running_time(start_time).unwrap(),
+                                )
+                                .field("duration", end_time - start_time)
+                                .build(),
+                        )
+                        .build(),
+                    );
 
                     let mut buf = gst::Buffer::from_slice(text.into_bytes());
 

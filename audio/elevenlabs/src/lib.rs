@@ -8,17 +8,29 @@
 #![allow(clippy::non_send_fields_in_send_ty, unused_doc_comments)]
 #![recursion_limit = "128"]
 
+use gst::glib;
 /**
  * plugin-elevenlabs:
  *
  * Since: plugins-rs-0.14.0
  */
-use gst::glib;
+use std::sync::LazyLock;
+use tokio::runtime;
 
+static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
+    runtime::Builder::new_multi_thread()
+        .enable_all()
+        .worker_threads(1)
+        .build()
+        .unwrap()
+});
+
+mod cloner;
 mod synthesizer;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     synthesizer::register(plugin)?;
+    cloner::register(plugin)?;
 
     Ok(())
 }
