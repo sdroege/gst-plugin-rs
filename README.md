@@ -111,18 +111,32 @@ You will find the following plugins in this repository:
 
     - `closedcaption`: Plugin to deal with closed caption streams
       - `ccdetect`: Detects if a stream contains active Closed Captions.
+      - `cctost2038anc`: Convert closed captions to ST-2038 ANC.
+      - `cdpserviceinject`: Add or update service description data in a CDP.
       - `cea608overlay`: Overlay CEA-608 / EIA-608 closed captions over a
         video stream.
+      - `cea608tocea708`: Upconvert a CEA-608 / EIA-608 caption stream to the equivalant
+        CEA-708 caption stream.
       - `cea608tojson`: Convert CEA-608 / EIA-608 closed captions to a JSON
         stream.
       - `cea608tott`: Convert CEA-608 / EIA-608 closed captions to timed text.
+      - `cea708mux`: Mux multiple CTA-708 / CEA-708 services together.
+      - `cea708overlay`: Overlay CTA-708 / CEA-708 closed captions over a video
+        stream.
       - `jsontovtt`: Convert JSON to timed text.
       - `mccenc`: Convert CEA-608 / EIA-608 and CEA-708 / EIA-708 closed captions to the MCC format.
       - `mccparse`: Parse CEA-608 / EIA-608 and CEA-708 / EIA-708 closed captions from the MCC format.
       - `sccenc`: Convert CEA-608 / EIA-608 closed captions to the MCC format.
       - `sccparse`: Parse CEA-608 / EIA-608 closed captions from the MCC format.
+      - `st2038ancdemux`: Split individual ancillary streams from a ST-2038
+        stream.
+      - `st2038ancmux`: Mux togehter multiple ancillary ST-2038 streams.
+      - `st2038tocc`: Convert an ancillary ST-2038 stream into closed captions.
       - `transcriberbin`: Convenience bin around transcriber elements like `aws_transcriber`.
+      - `translationbin`: Convenience bin around transcriber and translation
+        elements.
       - `tttocea608`: Convert timed text to CEA-608 / EIA-608 closed captions.
+      - `tttocea708`: Convert timed text to CTA-708 / CEA-708 closed captions.
       - `tttojson`: Convert timed text to JSON.
 
     - `dav1d`: AV1 decoder based on the [dav1d](https://code.videolan.org/videolan/dav1d) library.
