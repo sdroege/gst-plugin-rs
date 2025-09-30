@@ -84,3 +84,5 @@ option('examples', type: 'feature', value: 'disabled', yield: true,
        description: 'Build examples')
 option('tests', type : 'feature', value : 'auto', yield : true,
        description : 'Build and enable unit tests')
+option('auto_plugin_features', type: 'feature', value: 'auto',
+       description: 'Override value of all auto plugin features')
