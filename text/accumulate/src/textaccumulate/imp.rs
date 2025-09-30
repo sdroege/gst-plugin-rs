@@ -60,6 +60,7 @@ struct Item {
     pts: gst::ClockTime,
     rtime: gst::ClockTime,
     duration: gst::ClockTime,
+    buffer: Option<gst::Buffer>,
 }
 
 #[derive(Debug)]
@@ -98,12 +99,14 @@ impl Input {
         pts: gst::ClockTime,
         rtime: gst::ClockTime,
         duration: gst::ClockTime,
+        buffer: Option<gst::Buffer>,
     ) {
         self.items.push_back(Item {
             content,
             pts,
             rtime,
             duration,
+            buffer,
         });
     }
 
@@ -138,6 +141,7 @@ impl Input {
                     pts: item.pts + item.duration,
                     rtime: item.rtime + item.duration,
                     duration: original_duration - item.duration,
+                    buffer: item.buffer.as_ref().cloned(),
                 };
 
                 ret.push(item);
@@ -625,6 +629,10 @@ impl Accumulate {
                 let buf_mut = buf.get_mut().unwrap();
                 buf_mut.set_pts(item.pts);
                 buf_mut.set_duration(item.duration);
+
+                if let Some(original_buffer) = item.buffer {
+                    let _ = original_buffer.copy_into(buf_mut, gst::BufferCopyFlags::META, ..);
+                }
             }
             bufferlist_mut.add(buf);
 
@@ -905,6 +913,7 @@ impl Accumulate {
                 pts,
                 rtime,
                 buffer.duration().unwrap_or(gst::ClockTime::ZERO),
+                Some(buffer.clone()),
             );
         }
 
@@ -1282,6 +1291,7 @@ mod tests {
             gst::ClockTime::from_nseconds(0),
             gst::ClockTime::from_nseconds(0),
             gst::ClockTime::from_nseconds(1),
+            None,
         );
 
         input.push(
@@ -1289,6 +1299,7 @@ mod tests {
             gst::ClockTime::from_nseconds(2),
             gst::ClockTime::from_nseconds(2),
             gst::ClockTime::from_nseconds(1),
+            None,
         );
 
         input.push(
@@ -1296,6 +1307,7 @@ mod tests {
             gst::ClockTime::from_nseconds(10),
             gst::ClockTime::from_nseconds(20),
             gst::ClockTime::from_nseconds(0),
+            None,
         );
 
         assert!(!input.is_empty());
@@ -1316,12 +1328,14 @@ mod tests {
             gst::ClockTime::from_nseconds(0),
             gst::ClockTime::from_nseconds(0),
             gst::ClockTime::from_nseconds(1),
+            None,
         );
         input.push(
             "2".into(),
             gst::ClockTime::from_nseconds(2),
             gst::ClockTime::from_nseconds(2),
             gst::ClockTime::from_nseconds(1),
+            None,
         );
 
         let upstream_min = gst::ClockTime::from_nseconds(5);
@@ -1363,6 +1377,7 @@ mod tests {
             gst::ClockTime::from_nseconds(0),
             gst::ClockTime::from_nseconds(0),
             gst::ClockTime::from_nseconds(1),
+            None,
         );
 
         input.push(
@@ -1370,6 +1385,7 @@ mod tests {
             gst::ClockTime::from_nseconds(2),
             gst::ClockTime::from_nseconds(2),
             gst::ClockTime::from_nseconds(1),
+            None,
         );
 
         input.push(
@@ -1377,6 +1393,7 @@ mod tests {
             gst::ClockTime::from_nseconds(5),
             gst::ClockTime::from_nseconds(5),
             gst::ClockTime::from_nseconds(1),
+            None,
         );
 
         let upstream_min = gst::ClockTime::from_nseconds(5);
@@ -1418,12 +1435,14 @@ mod tests {
             gst::ClockTime::from_nseconds(0),
             gst::ClockTime::from_nseconds(0),
             gst::ClockTime::from_nseconds(1),
+            None,
         );
         input.push(
             "2".into(),
             gst::ClockTime::from_nseconds(2),
             gst::ClockTime::from_nseconds(2),
             gst::ClockTime::from_nseconds(1),
+            None,
         );
 
         let upstream_min = gst::ClockTime::from_nseconds(5);
@@ -1466,6 +1485,7 @@ mod tests {
                 gst::ClockTime::from_seconds(pts_seconds),
                 gst::ClockTime::from_seconds(pts_seconds),
                 gst::ClockTime::from_seconds(1),
+                None,
             );
 
             if let Some(next_sentence) = input.next_sentence() {
@@ -1483,6 +1503,7 @@ mod tests {
                 gst::ClockTime::from_seconds(pts_seconds),
                 gst::ClockTime::from_seconds(pts_seconds),
                 gst::ClockTime::from_seconds(1),
+                None,
             );
 
             if let Some(next_sentence) = input.next_sentence() {
