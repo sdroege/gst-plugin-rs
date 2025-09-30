@@ -57,59 +57,6 @@ glib_req = '>=2.62'
 gst_req = '>=1.20.0'
 depends = []
 
-deps = [
-  # name, subproject name, subproject dep, library object
-  ['gstreamer-1.0', 'gstreamer', 'gst_dep', 'libgst'],
-  ['gstreamer-app-1.0', 'gst-plugins-base', 'app_dep', 'gstapp'],
-  ['gstreamer-audio-1.0', 'gst-plugins-base', 'audio_dep', 'gstaudio'],
-  ['gstreamer-base-1.0', 'gstreamer', 'gst_base_dep', 'gst_base'],
-  ['gstreamer-video-1.0', 'gst-plugins-base', 'video_dep', 'gstvideo'],
-]
-
-webrtc_option = get_option('webrtc')
-rtp_option = get_option('rtp').enable_if(webrtc_option.enabled(), error_message: 'webrtc option needs rtp')
-
-rtsp_option = get_option('rtsp')
-
-if get_option('threadshare').allowed() \
-  or get_option('onvif').allowed() \
-  or get_option('raptorq').allowed() \
-  or rtp_option.allowed() \
-  or webrtc_option.allowed()
-  deps += [['gstreamer-rtp-1.0', 'gst-plugins-base', 'rtp_dep', 'gst_rtp']]
-endif
-if get_option('webrtc').allowed() \
-  or get_option('webrtchttp').allowed()
-  deps += [['gstreamer-webrtc-1.0', 'gst-plugins-bad', 'gstwebrtc_dep', 'gstwebrtc']]
-  deps += [['gstreamer-sdp-1.0', 'gst-plugins-base', 'sdp_dep', 'gstsdp']]
-endif
-if get_option('tests').allowed()
-  deps += [['gstreamer-check-1.0', 'gstreamer', 'gst_check_dep', 'gst_check']]
-endif
-if get_option('gtk4').allowed()
-  deps += [['gstreamer-gl-1.0', 'gst-plugins-base', 'gstgl_dep', 'gstgl', get_option('gtk4')]]
-endif
-if get_option('threadshare').allowed() or get_option('rtsp').allowed()
-  deps += [['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net']]
-endif
-if get_option('analytics').allowed()
-  deps += [['gstreamer-analytics-1.0', 'gst-plugins-bad', 'gstanalytics_dep', 'gstanalytics']]
-endif
-
-glib_dep = dependency('glib-2.0', version: glib_req)
-deps_cache += {'glib-2.0': glib_dep}
-
-foreach d: deps
-  dep = dependency(d[0], version: gst_req,
-    fallback : [d[1], d[2]], required: d.get(4, true))
-  set_variable(d[2], dep)
-  deps_cache += {d[0]: dep}
-  if dep.type_name() == 'internal'
-    lib = subproject(d[1]).get_variable(d[3])
-    depends += lib
-  endif
-endforeach
-
 # kept in the same order as the `members` list in Cargo.toml
 plugins = {
   'analytics': {
@@ -122,12 +69,14 @@ plugins = {
   },
   'claxon': {'library': 'libgstclaxon'},
   # csound has a non-trivial external dependency, see below
+  'csound': {},
   'lewton': {'library': 'libgstlewton'},
   'spotify': {'library': 'libgstspotify'},
 
   'file': {'library': 'libgstrsfile'},
   'originalbuffer': {'library': 'libgstoriginalbuffer'},
   # sodium can have an external dependency, see below
+  'sodium': {},
   'threadshare': {
     'library': 'libgstthreadshare',
     'examples': [
@@ -178,6 +127,10 @@ plugins = {
   'regex': {'library': 'libgstregex'},
   'textwrap': {'library': 'libgsttextwrap'},
 
+  'fallbackswitch': { }, # fallbackswitch can have gtk4 examples, see below
+  'livesync': { },     # livesync can have gtk4 examples, see below
+  'togglerecord': { }, # togglerecord can have gtk4 examples, see below
+
   'tracers': {'library': 'libgstrstracers'},
   'uriplaylistbin': {
     'library': 'libgsturiplaylistbin',
@@ -207,7 +160,8 @@ plugins = {
     'library': 'libgstgif',
     'examples': ['testvideosrc2gif'],
   },
-  # gtk4 is added below
+  # gtk4 is re added below
+  'gtk4': {},
   'hsv': {'library': 'libgsthsv'},
   'png': {
     'library': 'libgstrspng',
@@ -226,15 +180,78 @@ plugins = {
       'quic_roq',
     ],
   },
+  'skia': {}, # skia can have external dependencies, see below
   'speechmatics': {'library': 'libgstspeechmatics'},
   'vvdec': {
     'library': 'libgstvvdec',
     'extra-deps': {'libvvdec': ['>= 3.0']}
   },
+  'webp': {}, # webp has external dependencies, see below
 }
 
+# Convert auto options to use auto_plugin_features for plugin-related options
+# so that we can change the auto behavior in one place
+auto_plugin_features = get_option('auto_plugin_features')
+foreach option_name: plugins.keys()
+  opt = get_option(option_name)
+  if opt.auto()
+    opt = auto_plugin_features
+  endif
+  set_variable(f'@option_name@_option', opt)
+endforeach
+
+rtp_option = rtp_option.enable_if(webrtc_option.enabled(), error_message: 'webrtc option needs rtp')
+
+deps = [
+  # name, subproject name, subproject dep, library object
+  ['gstreamer-1.0', 'gstreamer', 'gst_dep', 'libgst'],
+  ['gstreamer-app-1.0', 'gst-plugins-base', 'app_dep', 'gstapp'],
+  ['gstreamer-audio-1.0', 'gst-plugins-base', 'audio_dep', 'gstaudio'],
+  ['gstreamer-base-1.0', 'gstreamer', 'gst_base_dep', 'gst_base'],
+  ['gstreamer-video-1.0', 'gst-plugins-base', 'video_dep', 'gstvideo'],
+]
+
+if threadshare_option.allowed() \
+  or onvif_option.allowed() \
+  or raptorq_option.allowed() \
+  or rtp_option.allowed() \
+  or webrtc_option.allowed()
+  deps += [['gstreamer-rtp-1.0', 'gst-plugins-base', 'rtp_dep', 'gst_rtp']]
+endif
+if webrtc_option.allowed() \
+  or webrtchttp_option.allowed()
+  deps += [['gstreamer-webrtc-1.0', 'gst-plugins-bad', 'gstwebrtc_dep', 'gstwebrtc']]
+  deps += [['gstreamer-sdp-1.0', 'gst-plugins-base', 'sdp_dep', 'gstsdp']]
+endif
+if get_option('tests').allowed()
+  deps += [['gstreamer-check-1.0', 'gstreamer', 'gst_check_dep', 'gst_check']]
+endif
+if gtk4_option.allowed()
+  deps += [['gstreamer-gl-1.0', 'gst-plugins-base', 'gstgl_dep', 'gstgl', gtk4_option]]
+endif
+if threadshare_option.allowed() or rtsp_option.allowed()
+  deps += [['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net']]
+endif
+if analytics_option.allowed()
+  deps += [['gstreamer-analytics-1.0', 'gst-plugins-bad', 'gstanalytics_dep', 'gstanalytics']]
+endif
+
+glib_dep = dependency('glib-2.0', version: glib_req)
+deps_cache += {'glib-2.0': glib_dep}
+
+foreach d: deps
+  dep = dependency(d[0], version: gst_req,
+    fallback : [d[1], d[2]], required: d.get(4, true))
+  set_variable(d[2], dep)
+  deps_cache += {d[0]: dep}
+  if dep.type_name() == 'internal'
+    lib = subproject(d[1]).get_variable(d[3])
+    depends += lib
+  endif
+endforeach
+
 # The splitter/combiner requires 1.28+
-if get_option('analytics').allowed()
+if analytics_option.allowed()
   gst_analytics_dep = deps_cache['gstreamer-analytics-1.0']
   if gst_analytics_dep.found() and gst_analytics_dep.version().version_compare('>= 1.28')
     plugins_analytics = plugins['analytics']
@@ -260,15 +277,14 @@ if host_system not in ['windows', 'darwin']
   }}
 endif
 
-sodium_opt = get_option('sodium')
-if sodium_opt.allowed()
+if sodium_option.allowed()
   sodium_plugin = {'sodium': {
     'library': 'libgstsodium',
     'examples': ['generate-keys', 'encrypt-example', 'decrypt-example'],
     'features': ['serde', 'serde_json', 'clap'],
   }}
   if get_option('sodium-source') == 'system'
-    sodium_dep = dependency('libsodium', required: sodium_opt.enabled())
+    sodium_dep = dependency('libsodium', required: sodium_option.enabled())
     extra_env += {'SODIUM_USE_PKG_CONFIG': '1'}
     if sodium_dep.found()
       plugins += sodium_plugin
@@ -279,7 +295,6 @@ if sodium_opt.allowed()
 endif
 
 cc = meson.get_compiler('c')
-csound_option = get_option('csound')
 if csound_option.allowed()
   # if csound isn't distributed with pkg-config then user needs to define CSOUND_LIB_DIR with its location
 
@@ -299,7 +314,7 @@ if csound_option.allowed()
   endif
 endif
 
-if get_option('gtk4').allowed()
+if gtk4_option.allowed()
   gtk4_features = []
   gl_winsys = gstgl_dep.get_variable('gl_winsys').split()
   gl_platforms = gstgl_dep.get_variable('gl_platforms').split()
@@ -320,7 +335,7 @@ if get_option('gtk4').allowed()
   endif
 
   gst_allocators_dep = dependency('gstreamer-allocators-1.0', version: '>=1.24', required: false)
-  gtk_dep = dependency('gtk4', version: '>=4.6', required: get_option('gtk4'))
+  gtk_dep = dependency('gtk4', version: '>=4.6', required: gtk4_option)
   if gtk_dep.found()
     if host_system == 'linux' and gtk_dep.version().version_compare('>=4.14') and \
         gst_allocators_dep.found() and 'waylandegl' in gtk4_features
@@ -368,7 +383,7 @@ else
   }
 endif
 
-if get_option('skia').allowed()
+if skia_option.allowed()
   # Add harfbuzz and freetype dependencies for skia plugin on Linux
   if host_system == 'linux'
     skia_extra_deps = {'harfbuzz': [], 'freetype2': [], 'fontconfig': []}
@@ -415,7 +430,6 @@ feature_deps = {}
 # List of dependencies that are actually enabled
 required_feature_deps = []
 
-
 glib_versions = ['2.74','2.72','2.70','2.68','2.66','2.64','2.62','2.60','2.58']
 foreach glib_version : glib_versions
   if glib_dep.version().version_compare(f'>=@glib_version@')
@@ -425,7 +439,7 @@ foreach glib_version : glib_versions
   endif
 endforeach
 
-if get_option('gtk4').allowed() and gtk_dep.found()
+if gtk4_option.allowed() and gtk_dep.found()
   gtk4_versions = ['4.20','4.18','4.16','4.14','4.12','4.10']
   foreach gtk4_version : gtk4_versions
     if gtk_dep.version().version_compare(f'>=@gtk4_version@')
@@ -444,7 +458,7 @@ foreach line : p.stdout().split('\n')
   endif
 endforeach
 
-if get_option('rav1e').allowed()
+if rav1e_option.allowed()
   nasm = find_program('nasm', required: false)
   if nasm.found()
     features += 'gst-plugin-rav1e/asm'
@@ -464,13 +478,17 @@ endif
 plugins_install_dir = get_option('libdir') / 'gstreamer-1.0'
 pkgconfig_install_dir = plugins_install_dir / 'pkgconfig'
 disable_pc_generation = get_option('default_library') == 'shared'
-auto_plugin_features = get_option('auto_plugin_features')
 
 foreach plugin_name, details: plugins
-  plugin_opt = get_variable(f'@plugin_name@_option', get_option(plugin_name))
-  if plugin_opt.auto()
-    plugin_opt = auto_plugin_features
+  if details == {}
+    # Some plugins (e.g., csound, sodium, gtk4, fallbackswitch, livesync, togglerecord)
+    # are initially defined with empty {} and only get their full details added later
+    # if their external dependencies (like gtk4, csound library, etc.) are found.
+    # Skip plugins that haven't been filled in yet.
+    continue
   endif
+
+  plugin_opt = get_variable(f'@plugin_name@_option')
   if not plugin_opt.allowed()
     debug(f'@plugin_name@ is disabled')
     continue
@@ -709,7 +727,7 @@ endforeach
 
 subdir('docs')
 
-if get_option('webrtc').allowed()
+if webrtc_option.allowed()
   custom_target('gst-webrtc-signalling-server',
     build_by_default: true,
     output: 'gst-webrtc-signalling-server' + exe_suffix,
