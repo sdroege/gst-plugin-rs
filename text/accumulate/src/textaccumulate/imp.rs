@@ -504,7 +504,7 @@ impl Accumulate {
                         }
                     }
                     "rstranscribe/speaker-change" => {
-                        if self.settings.lock().unwrap().drain_on_final_transcripts {
+                        if self.settings.lock().unwrap().drain_on_speaker_change {
                             gst::log!(CAT, imp = self, "speaker change, draining");
                             true
                         } else {
