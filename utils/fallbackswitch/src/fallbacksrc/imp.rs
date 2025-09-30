@@ -29,6 +29,13 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
+static DEFAULT_RAW_CAPS: LazyLock<gst::Caps> = LazyLock::new(|| {
+    let mut raw_caps = gst::Caps::new_empty();
+    raw_caps.merge(gst::Caps::builder("audio/x-raw").any_features().build());
+    raw_caps.merge(gst::Caps::builder("video/x-raw").any_features().build());
+    raw_caps
+});
+
 #[derive(Debug, Clone)]
 struct Stats {
     num_retry: u64,
@@ -84,6 +91,8 @@ struct Settings {
     buffer_duration: i64,
     immediate_fallback: bool,
     manual_unblock: bool,
+    video_caps: gst::Caps,
+    audio_caps: gst::Caps,
     fallback_video_caps: gst::Caps,
     fallback_audio_caps: gst::Caps,
 
@@ -93,6 +102,9 @@ struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
+        let audio_caps = gst::Caps::builder("audio/x-raw").any_features().build();
+        let video_caps = gst::Caps::builder("video/x-raw").any_features().build();
+
         Settings {
             uri: None,
             source: None,
@@ -105,6 +117,8 @@ impl Default for Settings {
             buffer_duration: -1,
             immediate_fallback: false,
             manual_unblock: false,
+            video_caps,
+            audio_caps,
             fallback_video_caps: gst::Caps::new_any(),
             fallback_audio_caps: gst::Caps::new_any(),
 
@@ -256,6 +270,9 @@ struct State {
 
     // Used to check if we handled any stream select events after posting our collection
     selection_seqnum: gst::Seqnum,
+
+    // Caps on which to stop decoding on `uridecodebin3`
+    source_caps: gst::Caps,
 }
 
 impl State {
@@ -404,6 +421,16 @@ impl ObjectImpl for FallbackSrc {
                 glib::ParamSpecBoxed::builder::<gst::Caps>("fallback-audio-caps")
                     .nick("Fallback Audio Caps")
                     .blurb("Raw audio caps for fallback stream")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoxed::builder::<gst::Caps>("video-caps")
+                    .nick("Video Caps")
+                    .blurb("Video caps on which to stop decoding")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoxed::builder::<gst::Caps>("audio-caps")
+                    .nick("Audio Caps")
+                    .blurb("Audio caps on which to stop decoding")
                     .mutable_ready()
                     .build(),
             ]
@@ -600,6 +627,30 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.fallback_audio_caps = new_value;
             }
+            "video-caps" => {
+                let mut settings = self.settings.lock();
+                let new_value = value.get::<gst::Caps>().expect("type checked upstream");
+                gst::info!(
+                    CAT,
+                    imp = self,
+                    "Changing video caps from {:?} to {:?}",
+                    settings.video_caps,
+                    new_value,
+                );
+                settings.video_caps = new_value;
+            }
+            "audio-caps" => {
+                let mut settings = self.settings.lock();
+                let new_value = value.get::<gst::Caps>().expect("type checked upstream");
+                gst::info!(
+                    CAT,
+                    imp = self,
+                    "Changing audio caps from {:?} to {:?}",
+                    settings.audio_caps,
+                    new_value,
+                );
+                settings.audio_caps = new_value;
+            }
             _ => unimplemented!(),
         }
     }
@@ -716,6 +767,14 @@ impl ObjectImpl for FallbackSrc {
             "fallback-audio-caps" => {
                 let settings = self.settings.lock();
                 settings.fallback_audio_caps.to_value()
+            }
+            "video-caps" => {
+                let settings = self.settings.lock();
+                settings.video_caps.to_value()
+            }
+            "audio-caps" => {
+                let settings = self.settings.lock();
+                settings.audio_caps.to_value()
             }
             _ => unimplemented!(),
         }
@@ -1108,7 +1167,12 @@ impl FallbackSrc {
         bin
     }
 
-    fn create_main_input(&self, source: &Source, buffer_duration: i64) -> SourceBin {
+    fn create_main_input(
+        &self,
+        source: &Source,
+        buffer_duration: i64,
+        source_caps: gst::Caps,
+    ) -> SourceBin {
         let bin = gst::Bin::default();
 
         let source = match source {
@@ -1122,6 +1186,7 @@ impl FallbackSrc {
                     .property("uri", uri)
                     .property("use-buffering", true)
                     .property("buffer-duration", buffer_duration)
+                    .property("caps", source_caps)
                     .build()
                     .expect("No uridecodebin3 found");
 
@@ -1188,6 +1253,7 @@ impl FallbackSrc {
         &self,
         fallback_uri: Option<&str>,
         buffer_duration: i64,
+        source_caps: gst::Caps,
     ) -> Option<SourceBin> {
         let source: gst::Element = match fallback_uri {
             Some(uri) => {
@@ -1196,6 +1262,7 @@ impl FallbackSrc {
                     .property("uri", uri)
                     .property("use-buffering", true)
                     .property("buffer-duration", buffer_duration)
+                    .property("caps", source_caps)
                     .build()
                     .expect("No uridecodebin3 found");
 
@@ -1270,6 +1337,7 @@ impl FallbackSrc {
         &self,
         state: &mut State,
         stream_type: gst::StreamType,
+        stream_caps: gst::Caps,
         is_persistent: bool,
     ) -> Stream {
         let (stream_id, caps) = match stream_type {
@@ -1277,14 +1345,14 @@ impl FallbackSrc {
                 state.num_audio += 1;
                 (
                     format!("{}/audio/{}", state.stream_id_prefix, state.num_audio - 1),
-                    gst::Caps::builder("audio/x-raw").any_features().build(),
+                    stream_caps,
                 )
             }
             gst::StreamType::VIDEO => {
                 state.num_video += 1;
                 (
                     format!("{}/video/{}", state.stream_id_prefix, state.num_video - 1),
-                    gst::Caps::builder("video/x-raw").any_features().build(),
+                    stream_caps,
                 )
             }
             _ => unreachable!(),
@@ -1506,15 +1574,29 @@ impl FallbackSrc {
 
         let fallback_uri = &settings.fallback_uri;
 
+        let mut source_caps = gst::Caps::new_empty();
+        source_caps.merge(settings.audio_caps.clone());
+        source_caps.merge(settings.video_caps.clone());
+
         // Create main input
-        let source = self.create_main_input(&configured_source, settings.buffer_duration);
+        let source = self.create_main_input(
+            &configured_source,
+            settings.buffer_duration,
+            source_caps.clone(),
+        );
 
         // Create fallback input
-        let fallback_source =
-            self.create_fallback_input(fallback_uri.as_deref(), settings.buffer_duration);
+        let fallback_source = self.create_fallback_input(
+            fallback_uri.as_deref(),
+            settings.buffer_duration,
+            source_caps.clone(),
+        );
 
         let flow_combiner = gst_base::UniqueFlowCombiner::new();
         let manually_blocked = settings.manual_unblock;
+
+        let audio_caps = settings.audio_caps.clone();
+        let video_caps = settings.video_caps.clone();
 
         let mut state = State {
             source,
@@ -1536,14 +1618,15 @@ impl FallbackSrc {
             group_id: gst::GroupId::next(),
             seqnum: gst::Seqnum::next(),
             selection_seqnum: gst::Seqnum::next(),
+            source_caps,
         };
 
         // Always propose at least 1 video and 1 audio stream by default
         // (will just do fallback/dummy if main source doesn't provide either of those)
         // See post_initial_collection() which is called in ReadyToPaused
-        let stream = self.create_stream(&mut state, gst::StreamType::AUDIO, true);
+        let stream = self.create_stream(&mut state, gst::StreamType::AUDIO, audio_caps, true);
         state.streams.push(stream);
-        let stream = self.create_stream(&mut state, gst::StreamType::VIDEO, true);
+        let stream = self.create_stream(&mut state, gst::StreamType::VIDEO, video_caps, true);
         state.streams.push(stream);
 
         *state_guard = Some(state);
@@ -1954,8 +2037,9 @@ impl FallbackSrc {
         &self,
         filter_caps: &gst::Caps,
         fallback_source: bool,
+        is_passthrough: bool,
     ) -> gst::Element {
-        if !fallback_source || filter_caps.is_any() {
+        if !fallback_source || filter_caps.is_any() || is_passthrough {
             return gst::ElementFactory::make("identity")
                 .build()
                 .expect("No identity found");
@@ -1999,8 +2083,9 @@ impl FallbackSrc {
         &self,
         filter_caps: &gst::Caps,
         fallback_source: bool,
+        is_passthrough: bool,
     ) -> gst::Element {
-        if !fallback_source || filter_caps.is_any() {
+        if !fallback_source || filter_caps.is_any() || is_passthrough {
             return gst::ElementFactory::make("identity")
                 .build()
                 .expect("No identity found");
@@ -2078,6 +2163,7 @@ impl FallbackSrc {
         is_fallback: bool,
     ) -> Result<(), gst::ErrorMessage> {
         let mut is_image = false;
+        let is_passthrough = !state.source_caps.can_intersect(&DEFAULT_RAW_CAPS);
 
         if let Some(ev) = pad.sticky_event::<gst::event::StreamStart>(0) {
             let stream = ev.stream();
@@ -2215,9 +2301,9 @@ impl FallbackSrc {
         let converters = if is_image {
             self.create_image_converts(filter_caps, is_fallback)
         } else if is_video {
-            self.create_video_converts(filter_caps, is_fallback)
+            self.create_video_converts(filter_caps, is_fallback, is_passthrough)
         } else {
-            self.create_audio_converts(filter_caps, is_fallback)
+            self.create_audio_converts(filter_caps, is_fallback, is_passthrough)
         };
 
         let queue = gst::ElementFactory::make("queue")
@@ -2871,7 +2957,7 @@ impl FallbackSrc {
             return;
         }
 
-        gst::log!(
+        gst::trace!(
             CAT,
             imp = self,
             "Got buffering {}% (fallback: {})",
@@ -3278,7 +3364,13 @@ impl FallbackSrc {
                     suitable_stream.gst_stream.stream_id().unwrap()
                 );
             } else {
-                let mut new_stream = self.create_stream(state, stream.stream_type(), false);
+                let stream_caps = match stream.stream_type() {
+                    gst::StreamType::AUDIO => state.settings.audio_caps.clone(),
+                    gst::StreamType::VIDEO => state.settings.video_caps.clone(),
+                    _ => unreachable!(),
+                };
+                let mut new_stream =
+                    self.create_stream(state, stream.stream_type(), stream_caps, false);
                 new_stream.main_id = Some(stream.stream_id().unwrap());
 
                 gst::debug!(
@@ -4115,6 +4207,7 @@ impl FallbackSrc {
                                 let mut source = imp.create_main_input(
                                     &state.configured_source,
                                     state.settings.buffer_duration,
+                                    state.source_caps.clone(),
                                 );
 
                                 source.running = state.source.running;

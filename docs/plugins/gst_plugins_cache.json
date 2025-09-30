@@ -3214,6 +3214,18 @@
                     }
                 },
                 "properties": {
+                    "audio-caps": {
+                        "blurb": "Audio caps on which to stop decoding",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "audio/x-raw(ANY)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstCaps",
+                        "writable": true
+                    },
                     "buffer-duration": {
                         "blurb": "Buffer duration when buffering streams (-1 default value)",
                         "conditionally-available": false,
@@ -3425,6 +3437,18 @@
                         "mutable": "ready",
                         "readable": true,
                         "type": "gchararray",
+                        "writable": true
+                    },
+                    "video-caps": {
+                        "blurb": "Video caps on which to stop decoding",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "video/x-raw(ANY)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstCaps",
                         "writable": true
                     }
                 },
