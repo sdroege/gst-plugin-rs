@@ -464,9 +464,13 @@ endif
 plugins_install_dir = get_option('libdir') / 'gstreamer-1.0'
 pkgconfig_install_dir = plugins_install_dir / 'pkgconfig'
 disable_pc_generation = get_option('default_library') == 'shared'
+auto_plugin_features = get_option('auto_plugin_features')
 
 foreach plugin_name, details: plugins
   plugin_opt = get_variable(f'@plugin_name@_option', get_option(plugin_name))
+  if plugin_opt.auto()
+    plugin_opt = auto_plugin_features
+  endif
   if not plugin_opt.allowed()
     debug(f'@plugin_name@ is disabled')
     continue
