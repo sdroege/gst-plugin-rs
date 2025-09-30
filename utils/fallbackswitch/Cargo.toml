@@ -22,6 +22,8 @@ rand = "0.9"
 [dev-dependencies]
 gst-app.workspace = true
 gst-check.workspace = true
+clap = { version = "4", features = ["derive"] }
+futures = "0.3"
 
 [lib]
 name = "gstfallbackswitch"
@@ -33,6 +35,9 @@ name = "gtk-fallbackswitch"
 path = "examples/gtk_fallbackswitch.rs"
 required-features = ["gtk", "gio", "gst-plugin-gtk4"]
 
+[[example]]
+name = "fallbacksrc"
+path = "examples/fallbacksrc.rs"
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true
