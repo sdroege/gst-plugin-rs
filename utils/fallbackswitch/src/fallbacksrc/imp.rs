@@ -1654,14 +1654,17 @@ impl FallbackSrc {
         if let Source::Element(ref source) = state.configured_source {
             // Explicitly remove the source element from the CustomSource so that we can
             // later create a new CustomSource and add it again there.
-            if source.has_as_parent(&state.source.bin) {
+            let parent = if source.has_as_parent(&state.source.bin) {
+                Some(&state.source.bin)
+            } else if source.has_as_parent(&state.source.source) {
+                Some(state.source.source.downcast_ref::<gst::Bin>().unwrap())
+            } else {
+                None
+            };
+
+            if let Some(parent) = parent {
                 let _ = source.set_state(gst::State::Null);
-                let _ = state
-                    .source
-                    .bin
-                    .downcast_ref::<gst::Bin>()
-                    .unwrap()
-                    .remove(source);
+                let _ = parent.remove(source);
             }
         }
 
