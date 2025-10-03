@@ -123,8 +123,12 @@ impl UdpSinkPadHandler {
         socket_v6: Option<Async<UdpSocket>>,
         settings: &Settings,
     ) -> Result<(), gst::ErrorMessage> {
-        futures::executor::block_on(async move {
-            let mut inner = self.0.lock().await;
+        let this = self.clone();
+        let elem = imp.obj().clone();
+        let settings = settings.clone();
+
+        block_on_or_add_subtask(async move {
+            let mut inner = this.0.lock().await;
 
             inner.sync = settings.sync;
             inner.socket_conf = settings.socket_conf;
@@ -134,9 +138,8 @@ impl UdpSinkPadHandler {
             if let Some(multicast_iface) = &settings.multicast_iface {
                 gst::debug!(
                     CAT,
-                    imp = imp,
-                    "searching for interface: {}",
-                    multicast_iface
+                    obj = elem,
+                    "searching for interface: {multicast_iface}",
                 );
 
                 // The 'InterfaceFilter::name' only checks for the 'name' field , it does not check
@@ -148,7 +151,7 @@ impl UdpSinkPadHandler {
                 let ifaces = getifaddrs::getifaddrs().map_err(|err| {
                     gst::error_msg!(
                         gst::ResourceError::OpenRead,
-                        ["Failed to find interface {}: {}", multicast_iface, err]
+                        ["Failed to find interface {multicast_iface}: {err}"]
                     )
                 })?;
 
@@ -158,7 +161,7 @@ impl UdpSinkPadHandler {
                     if &i.name == multicast_iface {
                         gst::debug!(
                             CAT,
-                            imp = imp,
+                            obj = elem,
                             "Found interface: {}, version: {ip_ver}",
                             i.name,
                         );
@@ -168,14 +171,14 @@ impl UdpSinkPadHandler {
                         if &i.description == multicast_iface {
                             gst::debug!(
                                 CAT,
-                                imp = imp,
+                                obj = elem,
                                 "Found interface: {}, version: {ip_ver}",
                                 i.description,
                             );
                             return true;
                         }
 
-                        gst::trace!(CAT, imp = imp, "skipping interface {}", i.name);
+                        gst::trace!(CAT, obj = elem, "skipping interface {}", i.name);
                         false
                     }
                 });
@@ -189,11 +192,13 @@ impl UdpSinkPadHandler {
 
             Ok(())
         })
+        .unwrap_or(Ok(()))
     }
 
     fn unprepare(&self) {
-        futures::executor::block_on(async move {
-            let mut inner = self.0.lock().await;
+        let this = self.clone();
+        block_on_or_add_subtask(async move {
+            let mut inner = this.0.lock().await;
 
             for addr in inner.clients.iter() {
                 let _ = inner.unconfigure_client(addr);
@@ -201,91 +206,98 @@ impl UdpSinkPadHandler {
 
             inner.socket = None;
             inner.socket_v6 = None;
-        })
+        });
     }
 
     fn start(&self) {
-        futures::executor::block_on(async move {
-            self.0.lock().await.is_flushing = false;
-        })
+        let this = self.clone();
+        block_on_or_add_subtask(async move {
+            this.0.lock().await.is_flushing = false;
+        });
     }
 
     fn stop(&self) {
-        futures::executor::block_on(async move {
-            self.0.lock().await.is_flushing = true;
-        })
-    }
-
-    fn set_sync(&self, sync: bool) {
-        futures::executor::block_on(async move {
-            self.0.lock().await.sync = sync;
-        })
+        let this = self.clone();
+        block_on_or_add_subtask(async move {
+            this.0.lock().await.is_flushing = true;
+        });
     }
 
     fn set_latency(&self, latency: Option<gst::ClockTime>) {
-        futures::executor::block_on(async move {
-            self.0.lock().await.latency = latency;
-        })
+        let this = self.clone();
+        block_on_or_add_subtask(async move {
+            this.0.lock().await.latency = latency;
+        });
+    }
+
+    fn set_sync(&self, sync: bool) {
+        let this = self.clone();
+        block_on_or_add_subtask(async move {
+            this.0.lock().await.sync = sync;
+        });
     }
 
     fn set_socket_conf(&self, socket_conf: SocketConf) {
-        futures::executor::block_on(async move {
-            self.0.lock().await.socket_conf = socket_conf;
-        })
-    }
-
-    fn clients(&self) -> BTreeSet<SocketAddr> {
-        futures::executor::block_on(async move { self.0.lock().await.clients.clone() })
+        let this = self.clone();
+        block_on_or_add_subtask(async move {
+            this.0.lock().await.socket_conf = socket_conf;
+        });
     }
 
     fn add_client(&self, imp: &UdpSink, addr: SocketAddr) {
-        futures::executor::block_on(async move {
-            let mut inner = self.0.lock().await;
+        let this = self.clone();
+        let elem = imp.obj().clone();
+        block_on_or_add_subtask(async move {
+            let mut inner = this.0.lock().await;
             if inner.clients.contains(&addr) {
-                gst::warning!(CAT, imp = imp, "Not adding client {addr:?} again");
+                gst::warning!(CAT, obj = elem, "Not adding client {addr:?} again");
                 return;
             }
 
             match inner.configure_client(&addr) {
                 Ok(()) => {
-                    gst::info!(CAT, imp = imp, "Added client {addr:?}");
+                    gst::info!(CAT, obj = elem, "Added client {addr:?}");
                     inner.clients.insert(addr);
                 }
                 Err(err) => {
-                    gst::error!(CAT, imp = imp, "Failed to add client {addr:?}: {err}");
-                    imp.obj().post_error_message(err);
+                    gst::error!(CAT, obj = elem, "Failed to add client {addr:?}: {err}");
+                    elem.post_error_message(err);
                 }
             }
-        })
+        });
     }
 
     fn remove_client(&self, imp: &UdpSink, addr: SocketAddr) {
-        futures::executor::block_on(async move {
-            let mut inner = self.0.lock().await;
+        let this = self.clone();
+        let elem = imp.obj().clone();
+        block_on_or_add_subtask(async move {
+            let mut inner = this.0.lock().await;
             if inner.clients.take(&addr).is_none() {
-                gst::warning!(CAT, imp = imp, "Not removing unknown client {addr:?}");
+                gst::warning!(CAT, obj = elem, "Not removing unknown client {addr:?}");
                 return;
             }
 
             match inner.unconfigure_client(&addr) {
                 Ok(()) => {
-                    gst::info!(CAT, imp = imp, "Removed client {addr:?}");
+                    gst::info!(CAT, obj = elem, "Removed client {addr:?}");
                 }
                 Err(err) => {
-                    gst::error!(CAT, imp = imp, "Failed to remove client {addr:?}: {err}");
-                    imp.obj().post_error_message(err);
+                    gst::error!(CAT, obj = elem, "Failed to remove client {addr:?}: {err}");
+                    elem.post_error_message(err);
                 }
             }
-        })
+        });
     }
 
     fn replace_clients(&self, imp: &UdpSink, mut new_clients: BTreeSet<SocketAddr>) {
-        futures::executor::block_on(async move {
-            let mut inner = self.0.lock().await;
+        let this = self.clone();
+        let elem = imp.obj().clone();
+        block_on_or_add_subtask(async move {
+            let mut inner = this.0.lock().await;
             if new_clients.is_empty() {
-                gst::info!(CAT, imp = imp, "Clearing clients");
+                gst::info!(CAT, obj = elem, "Clearing clients");
             } else {
-                gst::info!(CAT, imp = imp, "Replacing clients");
+                gst::info!(CAT, obj = elem, "Replacing clients");
             }
 
             let old_clients = std::mem::take(&mut inner.clients);
@@ -297,19 +309,19 @@ impl UdpSinkPadHandler {
                     // client is already configured
                     inner.clients.insert(*addr);
                 } else if let Err(err) = inner.unconfigure_client(addr) {
-                    gst::error!(CAT, imp = imp, "Failed to remove client {addr:?}: {err}");
+                    gst::error!(CAT, obj = elem, "Failed to remove client {addr:?}: {err}");
                     res = Err(err);
                 } else {
-                    gst::info!(CAT, imp = imp, "Removed client {addr:?}");
+                    gst::info!(CAT, obj = elem, "Removed client {addr:?}");
                 }
             }
 
             for addr in new_clients.into_iter() {
                 if let Err(err) = inner.configure_client(&addr) {
-                    gst::error!(CAT, imp = imp, "Failed to add client {addr:?}: {err}");
+                    gst::error!(CAT, obj = elem, "Failed to add client {addr:?}: {err}");
                     res = Err(err);
                 } else {
-                    gst::info!(CAT, imp = imp, "Added client {addr:?}");
+                    gst::info!(CAT, obj = elem, "Added client {addr:?}");
                     inner.clients.insert(addr);
                 }
             }
@@ -319,9 +331,9 @@ impl UdpSinkPadHandler {
             // - or, should we consider the preparation failed when the first client
             //   configuration fails? (previously)
             if let Err(err) = res {
-                imp.obj().post_error_message(err);
+                elem.post_error_message(err);
             }
-        })
+        });
     }
 }
 
@@ -1278,7 +1290,9 @@ impl ObjectImpl for UdpSink {
             "ttl-mc" => settings.socket_conf.ttl_mc.to_value(),
             "qos-dscp" => settings.qos_dscp.to_value(),
             "clients" => {
-                let clients = self.sink_pad_handler.clients();
+                let clients = futures::executor::block_on(async {
+                    self.sink_pad_handler.0.lock().await.clients.clone()
+                });
                 let clients: Vec<String> = clients.iter().map(ToString::to_string).collect();
 
                 clients.join(",").to_value()
