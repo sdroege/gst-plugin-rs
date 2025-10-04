@@ -1396,11 +1396,12 @@ impl ElementImpl for UdpSink {
     fn query(&self, query: &mut gst::QueryRef) -> bool {
         gst::log!(CAT, imp = self, "Got {query:?}");
 
+        if !Self::parent_query(self, query) {
+            gst::debug!(CAT, imp = self, "Upstream didn't process {query:?}");
+            return false;
+        }
+
         if query.type_() == gst::QueryType::Latency {
-            if !self.sink_pad.gst_pad().query(query) {
-                gst::error!(CAT, imp = self, "Failed to query upstream latency");
-                return false;
-            }
             gst::log!(CAT, imp = self, "Upstream returned {query:?}");
 
             let gst::QueryViewMut::Latency(q) = query.view_mut() else {
@@ -1431,13 +1432,8 @@ impl ElementImpl for UdpSink {
                 "Returning latency: live {sync}, min {min}, max {max:?}"
             );
             q.set(sync, min, max);
-
-            return true;
         }
 
-        let res = self.sink_pad.gst_pad().query(query);
-        gst::log!(CAT, imp = self, "Upstream returned {query:?}");
-
-        res
+        true
     }
 }
