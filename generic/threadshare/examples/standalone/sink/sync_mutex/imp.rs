@@ -284,6 +284,41 @@ impl ElementImpl for DirectSink {
         self.sink_pad.gst_pad().push_event(event)
     }
 
+    fn query(&self, query: &mut gst::QueryRef) -> bool {
+        let is_main_elem = self.settings.lock().unwrap().is_main_elem;
+        debug_or_trace!(CAT, is_main_elem, imp = self, "Got {query:?}");
+
+        if !Self::parent_query(self, query) {
+            debug_or_trace!(
+                CAT,
+                is_main_elem,
+                imp = self,
+                "Upstream didn't process {query:?}"
+            );
+            return false;
+        }
+
+        if query.type_() == gst::QueryType::Latency {
+            debug_or_trace!(CAT, is_main_elem, imp = self, "Upstream returned {query:?}");
+
+            let gst::QueryViewMut::Latency(q) = query.view_mut() else {
+                unreachable!();
+            };
+
+            let (_, min, max) = q.result();
+
+            debug_or_trace!(
+                CAT,
+                is_main_elem,
+                imp = self,
+                "Returning latency: live false, min {min}, max {max:?}"
+            );
+            q.set(false, min, max);
+        }
+
+        true
+    }
+
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::new_any();
