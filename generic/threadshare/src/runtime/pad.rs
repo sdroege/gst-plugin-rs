@@ -235,12 +235,19 @@ impl PadSrcInner {
         gst::log!(RUNTIME_CAT, obj = self.gst_pad, "Pushing {:?}", list);
 
         let success = self.gst_pad.push_list(list).inspect_err(|&err| {
-            gst::error!(
-                RUNTIME_CAT,
-                obj = self.gst_pad,
-                "Failed to push BufferList to PadSrc: {:?}",
-                err,
-            );
+            if err == gst::FlowError::Flushing {
+                gst::debug!(
+                    RUNTIME_CAT,
+                    obj = self.gst_pad,
+                    "Failed to push BufferList to PadSrc: Flushing"
+                );
+            } else {
+                gst::error!(
+                    RUNTIME_CAT,
+                    obj = self.gst_pad,
+                    "Failed to push BufferList to PadSrc: {err:?}"
+                );
+            }
         })?;
 
         gst::log!(
