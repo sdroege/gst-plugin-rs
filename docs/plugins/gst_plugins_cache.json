@@ -3240,6 +3240,30 @@
                         "type": "gint64",
                         "writable": true
                     },
+                    "dummy-audio-caps": {
+                        "blurb": "Raw audio caps for dummy audio stream",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "ANY",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstCaps",
+                        "writable": true
+                    },
+                    "dummy-video-caps": {
+                        "blurb": "Raw video caps for dummy video stream",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "ANY",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstCaps",
+                        "writable": true
+                    },
                     "enable-audio": {
                         "blurb": "Enable the audio stream, this will output silence if there's no audio in the configured URI",
                         "conditionally-available": false,
@@ -3265,7 +3289,7 @@
                         "writable": true
                     },
                     "fallback-audio-caps": {
-                        "blurb": "Raw audio caps for fallback stream",
+                        "blurb": "Raw audio caps for fallback stream (DEPRECATED)",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -3289,7 +3313,7 @@
                         "writable": true
                     },
                     "fallback-video-caps": {
-                        "blurb": "Raw video caps for fallback stream",
+                        "blurb": "Raw video caps for fallback stream (DEPRECATED)",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,

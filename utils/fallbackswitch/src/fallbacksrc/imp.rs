@@ -93,8 +93,8 @@ struct Settings {
     manual_unblock: bool,
     video_caps: gst::Caps,
     audio_caps: gst::Caps,
-    fallback_video_caps: gst::Caps,
-    fallback_audio_caps: gst::Caps,
+    dummy_video_caps: gst::Caps,
+    dummy_audio_caps: gst::Caps,
 
     enable_audio: bool,
     enable_video: bool,
@@ -119,8 +119,8 @@ impl Default for Settings {
             manual_unblock: false,
             video_caps,
             audio_caps,
-            fallback_video_caps: gst::Caps::new_any(),
-            fallback_audio_caps: gst::Caps::new_any(),
+            dummy_video_caps: gst::Caps::new_any(),
+            dummy_audio_caps: gst::Caps::new_any(),
 
             enable_audio: true,
             enable_video: true,
@@ -415,12 +415,14 @@ impl ObjectImpl for FallbackSrc {
                     .build(),
                 glib::ParamSpecBoxed::builder::<gst::Caps>("fallback-video-caps")
                     .nick("Fallback Video Caps")
-                    .blurb("Raw video caps for fallback stream")
+                    .blurb("Raw video caps for fallback stream (DEPRECATED)")
+                    .deprecated()
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecBoxed::builder::<gst::Caps>("fallback-audio-caps")
                     .nick("Fallback Audio Caps")
-                    .blurb("Raw audio caps for fallback stream")
+                    .blurb("Raw audio caps for fallback stream (DEPRECATED)")
+                    .deprecated()
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecBoxed::builder::<gst::Caps>("video-caps")
@@ -431,6 +433,16 @@ impl ObjectImpl for FallbackSrc {
                 glib::ParamSpecBoxed::builder::<gst::Caps>("audio-caps")
                     .nick("Audio Caps")
                     .blurb("Audio caps on which to stop decoding")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoxed::builder::<gst::Caps>("dummy-video-caps")
+                    .nick("Dummy Video Caps")
+                    .blurb("Raw video caps for dummy video stream")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoxed::builder::<gst::Caps>("dummy-audio-caps")
+                    .nick("Dummy Audio Caps")
+                    .blurb("Raw audio caps for dummy audio stream")
                     .mutable_ready()
                     .build(),
             ]
@@ -597,7 +609,7 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.manual_unblock = new_value;
             }
-            "fallback-video-caps" => {
+            "dummy-video-caps" | "fallback-video-caps" => {
                 let mut settings = self.settings.lock();
                 let new_value = value
                     .get::<Option<gst::Caps>>()
@@ -607,12 +619,12 @@ impl ObjectImpl for FallbackSrc {
                     CAT,
                     imp = self,
                     "Changing fallback video caps from {} to {}",
-                    settings.fallback_video_caps,
+                    settings.dummy_video_caps,
                     new_value,
                 );
-                settings.fallback_video_caps = new_value;
+                settings.dummy_video_caps = new_value;
             }
-            "fallback-audio-caps" => {
+            "dummy-audio-caps" | "fallback-audio-caps" => {
                 let mut settings = self.settings.lock();
                 let new_value = value
                     .get::<Option<gst::Caps>>()
@@ -622,10 +634,10 @@ impl ObjectImpl for FallbackSrc {
                     CAT,
                     imp = self,
                     "Changing fallback audio caps from {} to {}",
-                    settings.fallback_audio_caps,
+                    settings.dummy_audio_caps,
                     new_value,
                 );
-                settings.fallback_audio_caps = new_value;
+                settings.dummy_audio_caps = new_value;
             }
             "video-caps" => {
                 let mut settings = self.settings.lock();
@@ -760,13 +772,13 @@ impl ObjectImpl for FallbackSrc {
                 let settings = self.settings.lock();
                 settings.manual_unblock.to_value()
             }
-            "fallback-video-caps" => {
+            "dummy-video-caps" | "fallback-video-caps" => {
                 let settings = self.settings.lock();
-                settings.fallback_video_caps.to_value()
+                settings.dummy_video_caps.to_value()
             }
-            "fallback-audio-caps" => {
+            "dummy-audio-caps" | "fallback-audio-caps" => {
                 let settings = self.settings.lock();
-                settings.fallback_audio_caps.to_value()
+                settings.dummy_audio_caps.to_value()
             }
             "video-caps" => {
                 let settings = self.settings.lock();
@@ -3694,10 +3706,10 @@ impl FallbackSrc {
                     .gst_stream
                     .stream_type()
                     .contains(gst::StreamType::AUDIO);
-                let fallback_caps = if is_audio {
-                    state.settings.fallback_audio_caps.clone()
+                let dummy_caps = if is_audio {
+                    state.settings.dummy_audio_caps.clone()
                 } else {
-                    state.settings.fallback_video_caps.clone()
+                    state.settings.dummy_video_caps.clone()
                 };
 
                 let number = if is_audio {
@@ -3715,7 +3727,7 @@ impl FallbackSrc {
                     is_audio,
                     number,
                     state.settings.immediate_fallback,
-                    &fallback_caps,
+                    &dummy_caps,
                     state.seqnum,
                     state.group_id,
                 );
