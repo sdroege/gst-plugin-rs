@@ -937,7 +937,8 @@ impl SignallableImpl for Signaller {
             canceller.abort();
         }
 
-        if let Some(connection) = self.connection.lock().unwrap().take() {
+        let connection = self.connection.lock().unwrap().take();
+        if let Some(connection) = connection {
             block_on(connection.signal_task).unwrap();
             block_on(Self::close_signal_client(&connection.signal_client));
         }
