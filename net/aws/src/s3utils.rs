@@ -141,13 +141,17 @@ pub fn timeout_config(request_timeout: Duration) -> TimeoutConfig {
 
 pub fn wait_config(
     canceller_mutex: &Mutex<Canceller>,
-    region: Region,
+    region: Option<Region>,
     timeout_config: TimeoutConfig,
     credentials: Option<Credentials>,
 ) -> Result<SdkConfig, WaitError<ByteStreamError>> {
-    let region_provider = RegionProviderChain::first_try(region)
-        .or_default_provider()
-        .or_else(Region::new(DEFAULT_S3_REGION));
+    let region_provider = if let Some(region) = region {
+        RegionProviderChain::first_try(region)
+            .or_default_provider()
+            .or_else(Region::new(DEFAULT_S3_REGION))
+    } else {
+        RegionProviderChain::default_provider()
+    };
     let config_future = match credentials {
         Some(cred) => aws_config::defaults(*AWS_BEHAVIOR_VERSION)
             .timeout_config(timeout_config)

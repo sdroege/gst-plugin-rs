@@ -171,6 +171,7 @@ impl Default for Settings {
 #[derive(Default)]
 pub struct S3PutObjectSink {
     url: Mutex<Option<GstS3Url>>,
+    s3_uri: Mutex<Option<GstS3Uri>>,
     settings: Mutex<Settings>,
     state: Mutex<State>,
     canceller: Mutex<s3utils::Canceller>,
@@ -223,18 +224,21 @@ impl S3PutObjectSink {
             unreachable!("Element should be started");
         }
 
-        let s3url = {
-            let url = self.url.lock().unwrap();
-            match *url {
-                Some(ref url) => url.clone(),
-                None => {
-                    return Err(gst::error_msg!(
-                        gst::ResourceError::Settings,
-                        ["Cannot start without a URL being set"]
-                    ));
-                }
-            }
-        };
+        let s3url = self.url.lock().unwrap();
+        let s3uri = self.s3_uri.lock().unwrap();
+        if s3url.is_none() && s3uri.is_none() {
+            return Err(gst::error_msg!(
+                gst::ResourceError::Settings,
+                ["Cannot start without a URL or S3 compatible URI being set"]
+            ));
+        }
+        let region = s3url
+            .as_ref()
+            .map(|u| u.region.clone())
+            .or_else(|| s3uri.as_ref()?.region.clone().map(Region::new));
+        let use_arn_region = s3uri.as_ref().is_some_and(|uri| uri.region.is_some());
+        drop(s3url);
+        drop(s3uri);
 
         let timeout_config = s3utils::timeout_config(settings.request_timeout);
 
@@ -252,23 +256,24 @@ impl S3PutObjectSink {
             _ => None,
         };
 
-        let sdk_config =
-            s3utils::wait_config(&self.canceller, s3url.region.clone(), timeout_config, cred)
-                .map_err(|err| match err {
-                    WaitError::FutureError(err) => gst::error_msg!(
-                        gst::ResourceError::OpenWrite,
-                        ["Failed to create SDK config: {}", err]
-                    ),
-                    WaitError::Cancelled => {
-                        gst::error_msg!(
-                            gst::LibraryError::Failed,
-                            ["SDK config request interrupted during start"]
-                        )
-                    }
-                })?;
+        let sdk_config = s3utils::wait_config(&self.canceller, region, timeout_config, cred)
+            .map_err(|err| match err {
+                WaitError::FutureError(err) => gst::error_msg!(
+                    gst::ResourceError::OpenWrite,
+                    ["Failed to create SDK config: {}", err]
+                ),
+                WaitError::Cancelled => {
+                    gst::error_msg!(
+                        gst::LibraryError::Failed,
+                        ["SDK config request interrupted during start"]
+                    )
+                }
+            })?;
 
         let config_builder = config::Builder::from(&sdk_config)
-            .force_path_style(settings.force_path_style)
+            .use_arn_region(use_arn_region)
+            // Force path style cannot be used with ARN.
+            .force_path_style(settings.force_path_style && !use_arn_region)
             .retry_config(RetryConfig::standard().with_max_attempts(settings.retry_attempts));
 
         let config = if let Some(ref uri) = settings.endpoint_uri {
@@ -311,8 +316,42 @@ impl S3PutObjectSink {
             }
             Err(_) => Err(glib::Error::new(
                 gst::URIError::BadUri,
-                "Could not parse URI",
+                "Could not parse S3 URI",
             )),
+        }
+    }
+
+    fn set_s3_uri(self: &S3PutObjectSink, uri_str: Option<&str>) -> Result<(), glib::Error> {
+        let state = self.state.lock().unwrap();
+
+        if let State::Started { .. } = *state {
+            return Err(glib::Error::new(
+                gst::URIError::BadState,
+                "Cannot set S3 URI on a started s3src",
+            ));
+        }
+
+        let mut s3_uri = self.s3_uri.lock().unwrap();
+
+        if uri_str.is_none() {
+            *s3_uri = None;
+            return Ok(());
+        }
+
+        let uri_str = uri_str.unwrap();
+        match parse_s3_uri(uri_str) {
+            Ok(s3uri) => {
+                gst::info!(CAT, imp = self, "S3 URI: {s3uri:?}");
+                *s3_uri = Some(s3uri);
+                Ok(())
+            }
+            Err(e) => {
+                gst::error!(CAT, imp = self, "Failed to parse S3 URI: {e}");
+                Err(glib::Error::new(
+                    gst::URIError::BadUri,
+                    "Could not parse S3 URI",
+                ))
+            }
         }
     }
 
@@ -363,7 +402,6 @@ impl S3PutObjectSink {
         &self,
         started_state: &mut Started,
     ) -> Result<Option<PutObjectFluentBuilder>, gst::FlowError> {
-        let url = self.url.lock().unwrap();
         let settings = self.settings.lock().unwrap();
 
         if started_state.buffer.is_empty() {
@@ -376,11 +414,10 @@ impl S3PutObjectSink {
             &started_state.buffer,
         ));
 
-        let bucket = Some(url.as_ref().unwrap().bucket.to_owned());
+        let (bucket, object, new_file) = self.get_bucket_and_key();
 
-        let object = url.as_ref().unwrap().object.to_owned();
-        let key = if object.contains("%0") {
-            match sprintf::sprintf!(&object, started_state.index) {
+        let key = if new_file {
+            match sprintf::sprintf!(&object.unwrap().clone(), started_state.index) {
                 Ok(k) => {
                     /* Equivalent to opening a new file */
                     started_state.index += 1;
@@ -398,7 +435,7 @@ impl S3PutObjectSink {
                 }
             }
         } else {
-            Some(object)
+            object
         };
         let metadata = settings.to_metadata(self);
         let client = &started_state.client;
@@ -522,6 +559,29 @@ impl S3PutObjectSink {
         }
 
         self.accumulate_buffer(buffer, started_state)
+    }
+
+    fn get_bucket_and_key(&self) -> (Option<String>, Option<String>, bool) {
+        let url = self.url.lock().unwrap().clone();
+        let s3_uri = self.s3_uri.lock().unwrap().clone();
+
+        if let Some(s3_uri) = s3_uri {
+            return (
+                Some(s3_uri.bucket.clone()),
+                Some(s3_uri.key.clone()),
+                s3_uri.key.contains("%0"),
+            );
+        }
+
+        if let Some(url) = url {
+            return (
+                Some(url.bucket.clone()),
+                Some(url.object.clone()),
+                url.object.contains("%0"),
+            );
+        }
+
+        unreachable!()
     }
 }
 
@@ -649,6 +709,10 @@ impl ObjectImpl for S3PutObjectSink {
                     .blurb("Minimum distance between keyframes to start a new file")
                     .default_value(DEFAULT_MIN_KEYFRAME_DISTANCE.into())
                     .build(),
+                glib::ParamSpecString::builder("s3-uri")
+                    .nick("S3 URI")
+                    .blurb("The S3 compatible URI or S3 Access Point URI to use")
+                    .build(),
             ]
         });
 
@@ -771,6 +835,9 @@ impl ObjectImpl for S3PutObjectSink {
                     .get::<gst::ClockTime>()
                     .expect("type checked upstream");
             }
+            "s3-uri" => {
+                let _ = self.set_s3_uri(value.get().expect("type checked upstream"));
+            }
             _ => unimplemented!(),
         }
     }
@@ -810,6 +877,15 @@ impl ObjectImpl for S3PutObjectSink {
             "force-path-style" => settings.force_path_style.to_value(),
             "min-keyframe-distance" => settings.min_keyframe_distance.to_value(),
             "next-file" => settings.next_file.to_value(),
+            "s3-uri" => {
+                let s3_uri = self.s3_uri.lock().unwrap();
+                let uri = match *s3_uri {
+                    Some(ref uri) => uri.to_string(),
+                    None => "".to_string(),
+                };
+
+                uri.to_value()
+            }
             _ => unimplemented!(),
         }
     }

@@ -58,16 +58,26 @@ struct Started {
     upload_id: String,
     part_number: i64,
     completed_parts: Vec<CompletedPart>,
+    bucket: String,
+    key: String,
 }
 
 impl Started {
-    pub fn new(client: Client, buffer: Vec<u8>, upload_id: String) -> Started {
+    pub fn new(
+        client: Client,
+        buffer: Vec<u8>,
+        upload_id: String,
+        bucket: String,
+        key: String,
+    ) -> Started {
         Started {
             client,
             buffer,
             upload_id,
             part_number: 0,
             completed_parts: Vec::new(),
+            bucket,
+            key,
         }
     }
 
@@ -182,6 +192,7 @@ impl Default for Settings {
 #[derive(Default)]
 pub struct S3Sink {
     url: Mutex<Option<GstS3Url>>,
+    s3_uri: Mutex<Option<GstS3Uri>>,
     settings: Mutex<Settings>,
     state: Mutex<State>,
     canceller: Mutex<s3utils::Canceller>,
@@ -291,7 +302,6 @@ impl S3Sink {
     }
 
     fn create_upload_part_request(&self) -> Result<UploadPartFluentBuilder, gst::ErrorMessage> {
-        let url = self.url.lock().unwrap();
         let settings = self.settings.lock().unwrap();
         let mut state = self.state.lock().unwrap();
         let state = match *state {
@@ -309,17 +319,14 @@ impl S3Sink {
             &mut state.buffer,
             Vec::with_capacity(settings.buffer_size as usize),
         )));
-
-        let bucket = Some(url.as_ref().unwrap().bucket.to_owned());
-        let key = Some(url.as_ref().unwrap().object.to_owned());
         let upload_id = Some(state.upload_id.to_owned());
 
         let client = &state.client;
         let upload_part = client
             .upload_part()
             .set_body(body)
-            .set_bucket(bucket)
-            .set_key(key)
+            .set_bucket(Some(state.bucket.clone()))
+            .set_key(Some(state.key.clone()))
             .set_upload_id(upload_id)
             .set_part_number(Some(part_number as i32));
 
@@ -338,18 +345,15 @@ impl S3Sink {
 
         let completed_upload = CompletedMultipartUpload::builder().set_parts(parts).build();
 
-        let url = self.url.lock().unwrap();
         let client = &started_state.client;
 
-        let bucket = Some(url.as_ref().unwrap().bucket.to_owned());
-        let key = Some(url.as_ref().unwrap().object.to_owned());
         let upload_id = Some(started_state.upload_id.to_owned());
         let multipart_upload = Some(completed_upload);
 
         client
             .complete_multipart_upload()
-            .set_bucket(bucket)
-            .set_key(key)
+            .set_bucket(Some(started_state.bucket.clone()))
+            .set_key(Some(started_state.key.clone()))
             .set_upload_id(upload_id)
             .set_multipart_upload(multipart_upload)
     }
@@ -357,11 +361,9 @@ impl S3Sink {
     fn create_create_multipart_upload_request(
         &self,
         client: &Client,
-        url: &GstS3Url,
         settings: &Settings,
     ) -> CreateMultipartUploadFluentBuilder {
-        let bucket = Some(url.bucket.clone());
-        let key = Some(url.object.clone());
+        let (bucket, key) = self.get_bucket_and_key();
         let cache_control = settings.cache_control.clone();
         let content_type = settings.content_type.clone();
         let content_disposition = settings.content_disposition.clone();
@@ -371,8 +373,8 @@ impl S3Sink {
 
         client
             .create_multipart_upload()
-            .set_bucket(bucket)
-            .set_key(key)
+            .set_bucket(Some(bucket))
+            .set_key(Some(key))
             .set_cache_control(cache_control)
             .set_content_type(content_type)
             .set_content_disposition(content_disposition)
@@ -384,17 +386,13 @@ impl S3Sink {
     fn create_abort_multipart_upload_request(
         &self,
         client: &Client,
-        url: &GstS3Url,
         started_state: &Started,
     ) -> AbortMultipartUploadFluentBuilder {
-        let bucket = Some(url.bucket.clone());
-        let key = Some(url.object.clone());
-
         client
             .abort_multipart_upload()
-            .set_bucket(bucket)
+            .set_bucket(Some(started_state.bucket.clone()))
             .set_expected_bucket_owner(None)
-            .set_key(key)
+            .set_key(Some(started_state.key.clone()))
             .set_request_payer(None)
             .set_upload_id(Some(started_state.upload_id.to_owned()))
     }
@@ -403,16 +401,8 @@ impl S3Sink {
         &self,
         started_state: &Started,
     ) -> Result<(), gst::ErrorMessage> {
-        let s3url = {
-            let url = self.url.lock().unwrap();
-            match *url {
-                Some(ref url) => url.clone(),
-                None => unreachable!("Element should be started"),
-            }
-        };
-
         let client = &started_state.client;
-        let abort_req = self.create_abort_multipart_upload_request(client, &s3url, started_state);
+        let abort_req = self.create_abort_multipart_upload_request(client, started_state);
         let abort_req_future = abort_req.send();
 
         s3utils::wait(&self.abort_multipart_canceller, abort_req_future)
@@ -492,18 +482,21 @@ impl S3Sink {
             unreachable!("Element should be started");
         }
 
-        let s3url = {
-            let url = self.url.lock().unwrap();
-            match *url {
-                Some(ref url) => url.clone(),
-                None => {
-                    return Err(gst::error_msg!(
-                        gst::ResourceError::Settings,
-                        ["Cannot start without a URL being set"]
-                    ));
-                }
-            }
-        };
+        let s3url = self.url.lock().unwrap();
+        let s3uri = self.s3_uri.lock().unwrap();
+        if s3url.is_none() && s3uri.is_none() {
+            return Err(gst::error_msg!(
+                gst::ResourceError::Settings,
+                ["Cannot start without a URL or S3 compatible URI being set"]
+            ));
+        }
+        let region = s3url
+            .as_ref()
+            .map(|u| u.region.clone())
+            .or_else(|| s3uri.as_ref()?.region.clone().map(Region::new));
+        let use_arn_region = s3uri.as_ref().is_some_and(|uri| uri.region.is_some());
+        drop(s3url);
+        drop(s3uri);
 
         let timeout_config = s3utils::timeout_config(settings.request_timeout);
 
@@ -521,23 +514,24 @@ impl S3Sink {
             _ => None,
         };
 
-        let sdk_config =
-            s3utils::wait_config(&self.canceller, s3url.region.clone(), timeout_config, cred)
-                .map_err(|err| match err {
-                    WaitError::FutureError(err) => gst::error_msg!(
-                        gst::ResourceError::OpenWrite,
-                        ["Failed to create SDK config: {err}"]
-                    ),
-                    WaitError::Cancelled => {
-                        gst::error_msg!(
-                            gst::LibraryError::Failed,
-                            ["SDK config request interrupted during start"]
-                        )
-                    }
-                })?;
+        let sdk_config = s3utils::wait_config(&self.canceller, region, timeout_config, cred)
+            .map_err(|err| match err {
+                WaitError::FutureError(err) => gst::error_msg!(
+                    gst::ResourceError::OpenWrite,
+                    ["Failed to create SDK config: {err}"]
+                ),
+                WaitError::Cancelled => {
+                    gst::error_msg!(
+                        gst::LibraryError::Failed,
+                        ["SDK config request interrupted during start"]
+                    )
+                }
+            })?;
 
         let config_builder = config::Builder::from(&sdk_config)
-            .force_path_style(settings.force_path_style)
+            .use_arn_region(use_arn_region)
+            // Force path style cannot be used with ARN.
+            .force_path_style(settings.force_path_style && !use_arn_region)
             .retry_config(RetryConfig::standard().with_max_attempts(settings.retry_attempts));
 
         let config = if let Some(ref uri) = settings.endpoint_uri {
@@ -548,8 +542,7 @@ impl S3Sink {
 
         let client = Client::from_conf(config);
 
-        let create_multipart_req =
-            self.create_create_multipart_upload_request(&client, &s3url, &settings);
+        let create_multipart_req = self.create_create_multipart_upload_request(&client, &settings);
         let create_multipart_req_future = create_multipart_req.send();
 
         let response = s3utils::wait(&self.canceller, create_multipart_req_future).map_err(
@@ -574,10 +567,14 @@ impl S3Sink {
             )
         })?;
 
+        let (bucket, key) = self.get_bucket_and_key();
+
         *state = State::Started(Started::new(
             client,
             Vec::with_capacity(settings.buffer_size as usize),
             upload_id,
+            bucket,
+            key,
         ));
 
         Ok(())
@@ -643,9 +640,58 @@ impl S3Sink {
             }
             Err(_) => Err(glib::Error::new(
                 gst::URIError::BadUri,
-                "Could not parse URI",
+                "Could not parse S3 URI",
             )),
         }
+    }
+
+    fn set_s3_uri(self: &S3Sink, uri_str: Option<&str>) -> Result<(), glib::Error> {
+        let state = self.state.lock().unwrap();
+
+        if let State::Started { .. } = *state {
+            return Err(glib::Error::new(
+                gst::URIError::BadState,
+                "Cannot set S3 URI on a started s3src",
+            ));
+        }
+
+        let mut s3_uri = self.s3_uri.lock().unwrap();
+
+        if uri_str.is_none() {
+            *s3_uri = None;
+            return Ok(());
+        }
+
+        let uri_str = uri_str.unwrap();
+        match parse_s3_uri(uri_str) {
+            Ok(s3uri) => {
+                gst::info!(CAT, imp = self, "S3 URI: {s3uri:?}");
+                *s3_uri = Some(s3uri);
+                Ok(())
+            }
+            Err(e) => {
+                gst::error!(CAT, imp = self, "Failed to parse S3 URI: {e}");
+                Err(glib::Error::new(
+                    gst::URIError::BadUri,
+                    "Could not parse S3 URI",
+                ))
+            }
+        }
+    }
+
+    fn get_bucket_and_key(&self) -> (String, String) {
+        let url = self.url.lock().unwrap().clone();
+        let s3_uri = self.s3_uri.lock().unwrap().clone();
+
+        if let Some(s3_uri) = s3_uri {
+            return (s3_uri.bucket.clone(), s3_uri.key.clone());
+        }
+
+        if let Some(url) = url {
+            return (url.bucket.clone(), url.object.clone());
+        }
+
+        unreachable!()
     }
 }
 
@@ -793,6 +839,10 @@ impl ObjectImpl for S3Sink {
                     .blurb("Force client to use path-style addressing for buckets")
                     .default_value(DEFAULT_FORCE_PATH_STYLE)
                     .build(),
+                glib::ParamSpecString::builder("s3-uri")
+                    .nick("S3 URI")
+                    .blurb("The S3 compatible URI or S3 Access Point URI to use")
+                    .build(),
             ]
         });
 
@@ -924,6 +974,9 @@ impl ObjectImpl for S3Sink {
             "force-path-style" => {
                 settings.force_path_style = value.get::<bool>().expect("type checked upstream");
             }
+            "s3-uri" => {
+                let _ = self.set_s3_uri(value.get().expect("type checked upstream"));
+            }
             _ => unimplemented!(),
         }
     }
@@ -969,6 +1022,15 @@ impl ObjectImpl for S3Sink {
             "content-encoding" => settings.content_encoding.to_value(),
             "content-language" => settings.content_language.to_value(),
             "force-path-style" => settings.force_path_style.to_value(),
+            "s3-uri" => {
+                let s3_uri = self.s3_uri.lock().unwrap();
+                let uri = match *s3_uri {
+                    Some(ref uri) => uri.to_string(),
+                    None => "".to_string(),
+                };
+
+                uri.to_value()
+            }
             _ => unimplemented!(),
         }
     }

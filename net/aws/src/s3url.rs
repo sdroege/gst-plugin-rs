@@ -6,6 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use crate::s3arn::parse_arn;
 use aws_sdk_s3::config::Region;
 use percent_encoding::{percent_decode, percent_encode, AsciiSet, CONTROLS};
 use url::Url;
@@ -119,4 +120,102 @@ pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
         object,
         version,
     })
+}
+
+// S3 compliant URI or access point/Amazon Resource Name.
+#[derive(Clone, Debug)]
+pub struct GstS3Uri {
+    pub bucket: String,
+    pub key: String,
+    pub region: Option<String>,
+}
+
+impl std::fmt::Display for GstS3Uri {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "s3://{}/{}", self.bucket, self.key)
+    }
+}
+
+pub fn parse_s3_uri(uri_str: &str) -> Result<GstS3Uri, String> {
+    /*
+     * S3 URI can have multiple forms.
+     *
+     * When not using an access point, these can be follows
+     * - s3://s3gstreamer/upload.mp4
+     *
+     * When using an access point, these can be follows
+     * - s3://arn:aws:s3:us-west-2:123456789012:accesspoint/myaccesspoint/mykey
+     *
+     * Both of the above are also how AWS Console displays the URI.
+     *
+     * To summarise, based on the below link which lists different resource types,
+     * https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazons3.html#amazons3-resources-for-iam-policies
+     *
+     * we only support the `accesspoint` resource type here. This is also
+     * determined by what `set_bucket` in AWS SDK can actually accept in
+     * the context of S3 and when considering an URI.
+     */
+    if uri_str.starts_with("s3://arn:") {
+        let uri_str = uri_str.strip_prefix("s3://").unwrap();
+
+        match parse_arn(uri_str) {
+            Ok(arn) => {
+                if arn.partition() != "aws" || arn.service() != "s3" {
+                    return Err("Invalid partition or service".to_string());
+                }
+
+                if arn.resource_id().is_empty() {
+                    return Err("No resource found".to_string());
+                }
+
+                if arn.region().is_empty() || arn.account_id().is_empty() {
+                    return Err("Missing region or account id".to_string());
+                }
+
+                // `set_bucket` in AWS SDK needs the bucket to be the
+                // complete ARN without key and not just resource_id
+                // as parsed above.
+                let bucket = uri_str
+                    .rfind('/')
+                    .map(|pos| &uri_str[..pos])
+                    .map(|arn| arn.to_string());
+                let key = arn.resource_id().last();
+
+                if let (Some(bucket), Some(key)) = (bucket, key) {
+                    let region = (!arn.region().is_empty()).then(|| arn.region().to_string());
+
+                    return Ok(GstS3Uri {
+                        bucket: bucket.to_string(),
+                        key: key.to_string(),
+                        region,
+                    });
+                }
+
+                return Err("No bucket or key found in resource".to_string());
+            }
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+
+    // S3 Uri represents the location of a S3 object, prefix, or bucket.
+    if uri_str.starts_with("s3://") {
+        let without_prefix = uri_str.strip_prefix("s3://").unwrap();
+
+        if let Some(pos) = without_prefix.find('/') {
+            let bucket = without_prefix[..pos].to_string();
+            let key = without_prefix[pos + 1..].to_string();
+
+            if bucket.is_empty() {
+                return Err("Bucket name cannot be empty".into());
+            }
+
+            return Ok(GstS3Uri {
+                bucket,
+                key,
+                region: None,
+            });
+        }
+    }
+
+    Err("Failed to parse S3 URI".to_owned())
 }

@@ -390,7 +390,7 @@ impl S3HlsSink {
 
             let sdk_config = s3utils::wait_config(
                 &self.canceller,
-                settings.s3_region.clone(),
+                Some(settings.s3_region.clone()),
                 timeout_config,
                 cred,
             )

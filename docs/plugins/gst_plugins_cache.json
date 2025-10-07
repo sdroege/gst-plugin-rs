@@ -626,6 +626,18 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "s3-uri": {
+                        "blurb": "The S3 compatible URI or S3 Access Point URI to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "secret-access-key": {
                         "blurb": "AWS Secret Access Key",
                         "conditionally-available": false,
@@ -928,6 +940,18 @@
                         "type": "gint64",
                         "writable": true
                     },
+                    "s3-uri": {
+                        "blurb": "The S3 compatible URI or S3 Access Point URI to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "secret-access-key": {
                         "blurb": "AWS Secret Access Key",
                         "conditionally-available": false,
@@ -1095,6 +1119,18 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "gint64",
+                        "writable": true
+                    },
+                    "s3-uri": {
+                        "blurb": "The S3 compatible URI or S3 Access Point URI to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
                         "writable": true
                     },
                     "secret-access-key": {

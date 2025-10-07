@@ -12,7 +12,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use aws_sdk_s3::{
-    config::{self, retry::RetryConfig, Credentials},
+    config::{self, retry::RetryConfig, Credentials, Region},
     Client,
 };
 
@@ -38,9 +38,11 @@ enum StreamingState {
     #[default]
     Stopped,
     Started {
-        url: GstS3Url,
         client: Client,
         size: Option<u64>,
+        bucket: String,
+        key: String,
+        version: Option<String>,
     },
 }
 
@@ -53,6 +55,7 @@ struct Settings {
     request_timeout: Duration,
     endpoint_uri: Option<String>,
     force_path_style: bool,
+    s3_uri: Option<GstS3Uri>,
 }
 
 impl Default for Settings {
@@ -67,6 +70,7 @@ impl Default for Settings {
             request_timeout: duration,
             endpoint_uri: None,
             force_path_style: DEFAULT_FORCE_PATH_STYLE,
+            s3_uri: None,
         }
     }
 }
@@ -87,8 +91,10 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 });
 
 impl S3Src {
-    fn connect(self: &S3Src, url: &GstS3Url) -> Result<Client, gst::ErrorMessage> {
+    fn connect(self: &S3Src) -> Result<Client, gst::ErrorMessage> {
         let settings = self.settings.lock().unwrap();
+        let s3url = settings.url.clone();
+        let s3uri = settings.s3_uri.clone();
         let timeout_config = s3utils::timeout_config(settings.request_timeout);
 
         let cred = match (
@@ -105,23 +111,29 @@ impl S3Src {
             _ => None,
         };
 
-        let sdk_config =
-            s3utils::wait_config(&self.canceller, url.region.clone(), timeout_config, cred)
-                .map_err(|err| match err {
-                    WaitError::FutureError(err) => gst::error_msg!(
-                        gst::ResourceError::OpenWrite,
-                        ["Failed to create SDK config: {}", err]
-                    ),
-                    WaitError::Cancelled => {
-                        gst::error_msg!(
-                            gst::LibraryError::Failed,
-                            ["SDK config request interrupted during start"]
-                        )
-                    }
-                })?;
+        let region = s3url
+            .as_ref()
+            .map(|u| u.region.clone())
+            .or_else(|| s3uri.as_ref()?.region.clone().map(Region::new));
+        let use_arn_region = s3uri.as_ref().is_some_and(|uri| uri.region.is_some());
+        let sdk_config = s3utils::wait_config(&self.canceller, region, timeout_config, cred)
+            .map_err(|err| match err {
+                WaitError::FutureError(err) => gst::error_msg!(
+                    gst::ResourceError::OpenWrite,
+                    ["Failed to create SDK config: {}", err]
+                ),
+                WaitError::Cancelled => {
+                    gst::error_msg!(
+                        gst::LibraryError::Failed,
+                        ["SDK config request interrupted during start"]
+                    )
+                }
+            })?;
 
         let config_builder = config::Builder::from(&sdk_config)
-            .force_path_style(settings.force_path_style)
+            .use_arn_region(use_arn_region)
+            // Force path style cannot be used with ARN.
+            .force_path_style(settings.force_path_style && !use_arn_region)
             .retry_config(RetryConfig::standard().with_max_attempts(settings.retry_attempts));
 
         let config = if let Some(ref uri) = settings.endpoint_uri {
@@ -163,16 +175,47 @@ impl S3Src {
         }
     }
 
-    fn head(
-        self: &S3Src,
-        client: &Client,
-        url: &GstS3Url,
-    ) -> Result<Option<u64>, gst::ErrorMessage> {
+    fn set_s3_uri(self: &S3Src, uri_str: Option<&str>) -> Result<(), glib::Error> {
+        let state = self.state.lock().unwrap();
+
+        if let StreamingState::Started { .. } = *state {
+            return Err(glib::Error::new(
+                gst::URIError::BadState,
+                "Cannot set S3 URI on a started s3src",
+            ));
+        }
+
+        let mut settings = self.settings.lock().unwrap();
+
+        if uri_str.is_none() {
+            settings.s3_uri = None;
+            return Ok(());
+        }
+
+        let uri_str = uri_str.unwrap();
+        match parse_s3_uri(uri_str) {
+            Ok(s3uri) => {
+                gst::info!(CAT, imp = self, "S3 URI: {s3uri:?}");
+                settings.s3_uri = Some(s3uri);
+                Ok(())
+            }
+            Err(e) => {
+                gst::error!(CAT, imp = self, "Failed to parse S3 URI: {e}");
+                Err(glib::Error::new(
+                    gst::URIError::BadUri,
+                    "Could not parse S3 URI",
+                ))
+            }
+        }
+    }
+
+    fn head(self: &S3Src, client: &Client) -> Result<Option<u64>, gst::ErrorMessage> {
+        let (bucket, key, version) = self.get_bucket_and_key();
         let head_object = client
             .head_object()
-            .set_bucket(Some(url.bucket.clone()))
-            .set_key(Some(url.object.clone()))
-            .set_version_id(url.version.clone());
+            .set_bucket(Some(bucket))
+            .set_key(Some(key))
+            .set_version_id(version);
         let head_object_future = head_object.send();
 
         let output =
@@ -203,12 +246,14 @@ impl S3Src {
     fn get(self: &S3Src, offset: u64, length: u64) -> Result<Bytes, Option<gst::ErrorMessage>> {
         let state = self.state.lock().unwrap();
 
-        let (url, client) = match *state {
+        let (client, bucket, key, version) = match *state {
             StreamingState::Started {
-                ref url,
                 ref client,
+                ref bucket,
+                ref key,
+                ref version,
                 ..
-            } => (url, client),
+            } => (client, bucket, key, version),
             StreamingState::Stopped => {
                 return Err(Some(gst::error_msg!(
                     gst::LibraryError::Failed,
@@ -219,10 +264,10 @@ impl S3Src {
 
         let get_object = client
             .get_object()
-            .set_bucket(Some(url.bucket.clone()))
-            .set_key(Some(url.object.clone()))
+            .set_bucket(Some(bucket.clone()))
+            .set_key(Some(key.clone()))
             .set_range(Some(format!("bytes={}-{}", offset, offset + length - 1)))
-            .set_version_id(url.version.clone());
+            .set_version_id(version.clone());
 
         gst::debug!(
             CAT,
@@ -252,6 +297,23 @@ impl S3Src {
             )),
             WaitError::Cancelled => None,
         })
+    }
+
+    fn get_bucket_and_key(&self) -> (String, String, Option<String>) {
+        let settings = self.settings.lock().unwrap();
+        let url = settings.url.clone();
+        let s3_uri = settings.s3_uri.clone();
+        drop(settings);
+
+        if let Some(s3_uri) = s3_uri {
+            return (s3_uri.bucket.clone(), s3_uri.key.clone(), None);
+        }
+
+        if let Some(url) = url {
+            return (url.bucket.clone(), url.object.clone(), url.version.clone());
+        }
+
+        unreachable!()
     }
 }
 
@@ -315,6 +377,10 @@ impl ObjectImpl for S3Src {
                     .blurb("Force client to use path-style addressing for buckets")
                     .default_value(DEFAULT_FORCE_PATH_STYLE)
                     .build(),
+                glib::ParamSpecString::builder("s3-uri")
+                    .nick("S3 URI")
+                    .blurb("The S3 compatible URI or S3 Access Point URI to use")
+                    .build(),
             ]
         });
 
@@ -367,6 +433,10 @@ impl ObjectImpl for S3Src {
             "force-path-style" => {
                 settings.force_path_style = value.get::<bool>().expect("type checked upstream");
             }
+            "s3-uri" => {
+                drop(settings);
+                let _ = self.set_s3_uri(value.get().expect("type checked upstream"));
+            }
             _ => unimplemented!(),
         }
     }
@@ -394,6 +464,14 @@ impl ObjectImpl for S3Src {
             "retry-attempts" => settings.retry_attempts.to_value(),
             "endpoint-uri" => settings.endpoint_uri.to_value(),
             "force-path-style" => settings.force_path_style.to_value(),
+            "s3-uri" => {
+                let uri = match settings.s3_uri {
+                    Some(ref uri) => uri.to_string(),
+                    None => "".to_string(),
+                };
+
+                uri.to_value()
+            }
             _ => unimplemented!(),
         }
     }
@@ -481,24 +559,24 @@ impl BaseSrcImpl for S3Src {
         }
 
         let settings = self.settings.lock().unwrap();
-        let s3url = match settings.url {
-            Some(ref url) => url.clone(),
-            None => {
-                return Err(gst::error_msg!(
-                    gst::ResourceError::Settings,
-                    ["Cannot start without a URL being set"]
-                ));
-            }
-        };
+        if settings.url.is_none() && settings.s3_uri.is_none() {
+            return Err(gst::error_msg!(
+                gst::ResourceError::Settings,
+                ["Cannot start without a URL or S3 compatible URI being set"]
+            ));
+        }
         drop(settings);
 
-        if let Ok(s3client) = self.connect(&s3url) {
-            let size = self.head(&s3client, &s3url)?;
+        if let Ok(s3client) = self.connect() {
+            let size = self.head(&s3client)?;
+            let (bucket, key, version) = self.get_bucket_and_key();
 
             *state = StreamingState::Started {
-                url: s3url,
                 client: s3client,
                 size,
+                bucket,
+                key,
+                version,
             };
 
             Ok(())

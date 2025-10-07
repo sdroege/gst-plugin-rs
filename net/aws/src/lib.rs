@@ -15,6 +15,7 @@
 use gst::glib;
 
 mod polly;
+mod s3arn;
 mod s3hlssink;
 mod s3sink;
 mod s3src;
