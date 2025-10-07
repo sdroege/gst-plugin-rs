@@ -48,37 +48,29 @@ impl PadSinkHandlerInner {
 
         debug_or_trace!(CAT, self.is_main_elem, obj = elem, "Received {buffer:?}");
 
-        let ts = self
-            .segment
-            .as_ref()
-            .expect("Buffer without Time Segment")
-            .to_running_time(buffer.dts_or_pts().expect("Buffer without ts"))
-            .unwrap();
+        if self.is_main_elem {
+            let ts = self
+                .segment
+                .as_ref()
+                .expect("Buffer without Time Segment")
+                .to_running_time(buffer.dts_or_pts().expect("Buffer without ts"))
+                .unwrap();
 
-        if let Some(last_ts) = self.last_ts {
-            let rt = elem.current_running_time().unwrap();
-            let lateness = rt.nseconds() as i64 - ts.nseconds() as i64;
-            let interval = ts.nseconds() as i64 - last_ts.nseconds() as i64;
+            if let Some(last_ts) = self.last_ts {
+                let rt = elem.current_running_time().unwrap();
+                let lateness = rt.nseconds() as i64 - ts.nseconds() as i64;
+                let interval = ts.nseconds() as i64 - last_ts.nseconds() as i64;
 
-            if let Some(stats) = self.stats.as_mut() {
-                stats.add_buffer(lateness, interval);
+                if let Some(stats) = self.stats.as_mut() {
+                    stats.add_buffer(lateness, interval);
+                }
+
+                gst::debug!(CAT, obj = elem, "o lateness {lateness:.2?}");
+                gst::debug!(CAT, obj = elem, "o interval {interval:.2?}",);
             }
 
-            debug_or_trace!(
-                CAT,
-                self.is_main_elem,
-                obj = elem,
-                "o lateness {lateness:.2?}"
-            );
-            debug_or_trace!(
-                CAT,
-                self.is_main_elem,
-                obj = elem,
-                "o interval {interval:.2?}",
-            );
+            self.last_ts = Some(ts);
         }
-
-        self.last_ts = Some(ts);
 
         log_or_trace!(CAT, self.is_main_elem, obj = elem, "Buffer processed");
 
@@ -100,6 +92,21 @@ impl PadSinkHandler for AsyncPadSinkHandler {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         if self.0.lock().await.handle_buffer(&elem, buffer).is_err() {
             return Err(gst::FlowError::Flushing);
+        }
+
+        Ok(gst::FlowSuccess::Ok)
+    }
+
+    async fn sink_chain_list(
+        self,
+        _pad: gst::Pad,
+        elem: <Self::ElementImpl as ObjectSubclass>::Type,
+        buffer_list: gst::BufferList,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        for buffer in buffer_list.iter_owned() {
+            if self.0.lock().await.handle_buffer(&elem, buffer).is_err() {
+                return Err(gst::FlowError::Flushing);
+            }
         }
 
         Ok(gst::FlowSuccess::Ok)
