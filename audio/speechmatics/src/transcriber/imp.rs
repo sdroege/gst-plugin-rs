@@ -13,17 +13,16 @@ use std::default::Default;
 
 use async_tungstenite::tungstenite::error::Error as WsError;
 use async_tungstenite::{tokio::connect_async, tungstenite::Message};
-use futures::channel::mpsc;
 use futures::future::{abortable, AbortHandle};
 use futures::prelude::*;
 use http::Request;
 use tokio::runtime;
+use tokio::sync::mpsc;
 use url::Url;
 
 use std::collections::{BTreeSet, VecDeque};
 use std::pin::Pin;
-use std::sync::Mutex;
-use std::time::Duration;
+use std::sync::{Condvar, Mutex, MutexGuard};
 
 use atomic_refcell::AtomicRefCell;
 
@@ -202,7 +201,6 @@ const DEFAULT_MASK_PROFANITIES: bool = false;
 const DEFAULT_DIARIZATION: SpeechmaticsTranscriberDiarization =
     SpeechmaticsTranscriberDiarization::None;
 const DEFAULT_MAX_SPEAKERS: u32 = 50;
-const GRANULARITY_MS: u32 = 100;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -266,16 +264,17 @@ impl From<ItemAccumulator> for gst::Buffer {
 
 struct State {
     connected: bool,
+    draining: bool,
+    first_buffer_pts: Option<gst::ClockTime>,
     recv_abort_handle: Option<AbortHandle>,
     send_abort_handle: Option<AbortHandle>,
     in_segment: gst::FormattedSegment<gst::ClockTime>,
     seq_no: u64,
     additional_vocabulary: Vec<Vocable>,
-    discont_offset: gst::ClockTime,
-    last_chained_buffer_rtime: Option<gst::ClockTime>,
     pad_serial: u32,
     srcpads: BTreeSet<super::TranscriberSrcPad>,
-    start_time: Option<gst::ClockTime>,
+    observed_max_delay: gst::ClockTime,
+    upstream_is_live: Option<bool>,
 }
 
 impl State {}
@@ -284,16 +283,17 @@ impl Default for State {
     fn default() -> Self {
         Self {
             connected: false,
+            draining: false,
+            first_buffer_pts: gst::ClockTime::NONE,
             recv_abort_handle: None,
             send_abort_handle: None,
             in_segment: gst::FormattedSegment::new(),
             seq_no: 0,
             additional_vocabulary: vec![],
-            discont_offset: gst::ClockTime::ZERO,
-            last_chained_buffer_rtime: gst::ClockTime::NONE,
             pad_serial: 0,
             srcpads: BTreeSet::new(),
-            start_time: None,
+            observed_max_delay: gst::ClockTime::ZERO,
+            upstream_is_live: None,
         }
     }
 }
@@ -304,239 +304,28 @@ pub struct Transcriber {
     sinkpad: gst::Pad,
     settings: Mutex<Settings>,
     state: Mutex<State>,
+    state_cond: Condvar,
     ws_sink: AtomicRefCell<Option<WsSink>>,
 }
 
 impl TranscriberSrcPad {
-    fn set_unsynced_pad(&self, pad: &gst::Pad) {
-        self.state.lock().unwrap().unsynced_pad = Some(pad.clone());
-    }
+    fn enqueue_translation(
+        &self,
+        translation: &Translation,
+        now: Option<gst::ClockTime>,
+        first_pts: gst::ClockTime,
+    ) {
+        let mut state = self.state.lock().unwrap();
 
-    fn take_unsynced_pad(&self) -> Option<gst::Pad> {
-        self.state.lock().unwrap().unsynced_pad.take()
-    }
-
-    fn dequeue(&self) -> bool {
-        let Some(parent) = self.obj().parent() else {
-            return true;
-        };
-
-        let transcriber = parent
-            .downcast::<super::Transcriber>()
-            .expect("parent is transcriber");
-
-        let Some((start_time, now)) = transcriber.imp().get_start_time_and_now() else {
-            // Wait for the clock to be available
-            return true;
-        };
-
-        let latency = gst::ClockTime::from_mseconds(
-            transcriber.imp().settings.lock().unwrap().latency_ms as u64,
-        );
-
-        /* First, check our pending buffers */
-        let mut items = vec![];
-
-        let granularity = gst::ClockTime::from_mseconds(GRANULARITY_MS as u64);
-
-        let (latency, now, mut last_position, send_eos, seqnum) = {
-            let mut state = self.state.lock().unwrap();
-
-            let current_speaker = state.current_speaker.clone();
-
-            if let Some(ref mut accumulator_inner) = state.accumulator {
-                if now.saturating_sub(accumulator_inner.start_time + start_time) + granularity
-                    > latency
-                {
-                    gst::log!(CAT, "Finally draining accumulator");
-                    gst::debug!(
-                        CAT,
-                        imp = self,
-                        "Item is ready: \"{:?}\", start_time: {}, end_time: {}",
-                        accumulator_inner.text,
-                        accumulator_inner.start_time,
-                        accumulator_inner.end_time
-                    );
-
-                    let new_speaker = accumulator_inner.speaker.clone();
-                    let text = accumulator_inner.text.clone();
-                    let start_time = accumulator_inner.start_time;
-                    let end_time = accumulator_inner.end_time;
-
-                    if current_speaker != accumulator_inner.speaker {
-                        state.push_speaker(new_speaker.clone());
-                    }
-                    let running_time = state.out_segment.to_running_time(start_time).unwrap();
-
-                    let buf = state.accumulator.take().unwrap().into();
-
-                    state.push_event(
-                        gst::event::CustomUpstream::builder(
-                            gst::Structure::builder("rstranscribe/new-item")
-                                .field("speaker", new_speaker.as_ref().map(|n| n.to_string()))
-                                .field("content", text)
-                                .field("running-time", running_time)
-                                .field("duration", end_time - start_time)
-                                .build(),
-                        )
-                        .build(),
-                    );
-
-                    state.push_buffer(buf);
-                }
-            }
-
-            let send_eos =
-                state.send_eos && state.output_items.is_empty() && state.accumulator.is_none();
-
-            while let Some(item) = state.output_items.pop_front() {
-                match item {
-                    TranscriberOutput::Buffer(mut buf) => {
-                        let buf_mut = buf.make_mut();
-                        let mut pts = buf_mut.pts().unwrap() + start_time;
-                        let mut duration = buf_mut.duration().unwrap();
-                        if let Some(position) = state.out_segment.position() {
-                            if pts < position {
-                                gst::debug!(
-                                    CAT,
-                                    imp = self,
-                                    "Adjusting item timing({:?} < {:?})",
-                                    pts,
-                                    position,
-                                );
-                                duration = duration.saturating_sub(position - pts);
-                                pts = position;
-                            }
-                        }
-
-                        buf_mut.set_pts(pts);
-                        buf_mut.set_duration(duration);
-                        items.push(TranscriberOutput::Buffer(buf));
-                    }
-                    _ => items.push(item),
-                }
-            }
-
-            (
-                latency,
-                now,
-                state.out_segment.position(),
-                send_eos,
-                state.seqnum,
-            )
-        };
-
-        /* We're EOS, we can pause and exit early */
-        if send_eos {
-            let _ = self.pause_task();
-
-            return self
-                .obj()
-                .push_event(gst::event::Eos::builder().seqnum(seqnum).build());
-        }
-
-        for item in items.drain(..) {
-            match item {
-                TranscriberOutput::Buffer(buf) => {
-                    let pts = buf.pts().unwrap();
-
-                    if let Some(last_position) = last_position {
-                        if pts > last_position {
-                            let gap_event = gst::event::Gap::builder(last_position)
-                                .duration(pts - last_position)
-                                .seqnum(seqnum)
-                                .build();
-                            gst::log!(CAT, "Pushing gap:    {} -> {}", last_position, pts);
-                            if !self.obj().push_event(gap_event) {
-                                return false;
-                            }
-                        }
-                    }
-
-                    let pts_end = if let Some(duration) = buf.duration() {
-                        pts + duration
-                    } else {
-                        pts
-                    };
-                    last_position = Some(pts_end);
-
-                    gst::debug!(CAT, imp = self, "Pushing buffer: {} -> {}", pts, pts_end,);
-
-                    if self.obj().push(buf).is_err() {
-                        return false;
-                    }
-                }
-                TranscriberOutput::Event(event) => {
-                    if event.is_downstream() {
-                        self.obj().push_event(event);
-                    } else {
-                        transcriber.imp().sinkpad.push_event(event);
-                    }
-                }
-            }
-        }
-
-        /* next, push a gap if we're lagging behind the target position */
-
-        if let Some(last_position_) = last_position {
-            if now >= last_position_ && now - last_position_ + granularity > latency {
-                // Invent caps/segment events if none were produced yet
-                let mut events = vec![];
-
-                let state_guard = self.state.lock().unwrap();
-                if !self.obj().has_current_caps() {
-                    let caps = gst::Caps::builder("text/x-raw")
-                        .field("format", "utf8")
-                        .build();
-                    events.push(
-                        gst::event::Caps::builder(&caps)
-                            .seqnum(state_guard.seqnum)
-                            .build(),
-                    );
-                }
-
-                drop(state_guard);
-
-                for event in events {
-                    gst::debug!(CAT, imp = self, "Pushing event {event:?}");
-                    self.obj().push_event(event);
-                }
-
-                let duration = now - last_position_ + granularity - latency;
-
-                let gap_event = gst::event::Gap::builder(last_position_)
-                    .duration(duration)
-                    .seqnum(seqnum)
-                    .build();
-                gst::log!(
-                    CAT,
-                    "Pushing gap:    {} -> {}",
-                    last_position_,
-                    last_position_ + duration
-                );
-                last_position = Some(last_position_ + duration);
-                if !self.obj().push_event(gap_event) {
-                    return false;
-                }
-            }
-
-            self.state
-                .lock()
-                .unwrap()
-                .out_segment
-                .set_position(last_position);
-        }
-
-        true
-    }
-
-    fn enqueue_translation(&self, state: &mut TranscriberSrcPadState, translation: &Translation) {
         gst::log!(CAT, "Enqueuing {:?}", translation);
+
         for item in &translation.results {
             let start_time =
-                gst::ClockTime::from_nseconds((item.start_time as f64 * 1_000_000_000.0) as u64);
+                gst::ClockTime::from_nseconds((item.start_time as f64 * 1_000_000_000.0) as u64)
+                    + first_pts;
             let end_time =
-                gst::ClockTime::from_nseconds((item.end_time as f64 * 1_000_000_000.0) as u64);
+                gst::ClockTime::from_nseconds((item.end_time as f64 * 1_000_000_000.0) as u64)
+                    + first_pts;
 
             let mut buf = gst::Buffer::from_mut_slice(item.content.clone().into_bytes());
 
@@ -546,26 +335,78 @@ impl TranscriberSrcPad {
                 buf.set_duration(end_time - start_time);
             }
 
-            state.push_buffer(buf);
+            state.push_buffer(now, buf);
         }
+    }
+
+    fn drain_accumulator(
+        &self,
+        state: &mut TranscriberSrcPadState,
+        now: Option<gst::ClockTime>,
+        accumulator: ItemAccumulator,
+    ) {
+        gst::debug!(
+            CAT,
+            imp = self,
+            "Item is ready: \"{}\", start_time: {}, end_time: {}, speaker: {:?}",
+            accumulator.text,
+            accumulator.start_time,
+            accumulator.end_time,
+            accumulator.speaker
+        );
+
+        let new_speaker = accumulator.speaker.clone();
+        let text = accumulator.text.clone();
+        let start_time = accumulator.start_time;
+        let end_time = accumulator.end_time;
+
+        if state.current_speaker != accumulator.speaker {
+            state.push_speaker(new_speaker.clone());
+        }
+
+        let buffer = accumulator.into();
+
+        state.push_event(
+            gst::event::CustomUpstream::builder(
+                gst::Structure::builder("rstranscribe/new-item")
+                    .field("speaker", new_speaker.as_ref().map(|n| n.to_string()))
+                    .field("content", text)
+                    .field(
+                        "running-time",
+                        state.out_segment.to_running_time(start_time).unwrap(),
+                    )
+                    .field("duration", end_time - start_time)
+                    .build(),
+            )
+            .build(),
+        );
+
+        state.push_buffer(now, buffer);
     }
 
     fn enqueue_transcript(
         &self,
-        state: &mut TranscriberSrcPadState,
         transcript: &Transcript,
+        now: Option<gst::ClockTime>,
+        first_pts: gst::ClockTime,
         join_punctuation: bool,
     ) {
         gst::log!(CAT, "Enqueuing {:?}", transcript);
+
+        let mut state = self.state.lock().unwrap();
+
+        let mut accumulator: Option<ItemAccumulator> = None;
+
         for item in &transcript.results {
             if let Some(alternative) = item.alternatives.first() {
                 let start_time = gst::ClockTime::from_nseconds(
                     (item.start_time as f64 * 1_000_000_000.0) as u64,
-                );
+                ) + first_pts;
                 let end_time =
-                    gst::ClockTime::from_nseconds((item.end_time as f64 * 1_000_000_000.0) as u64);
+                    gst::ClockTime::from_nseconds((item.end_time as f64 * 1_000_000_000.0) as u64)
+                        + first_pts;
 
-                if let Some(ref mut accumulator_inner) = state.accumulator {
+                if let Some(ref mut accumulator_inner) = accumulator {
                     if item.type_ == "punctuation" {
                         accumulator_inner.text.push_str(&alternative.content);
                         accumulator_inner.end_time = end_time;
@@ -573,44 +414,9 @@ impl TranscriberSrcPad {
                             .items
                             .push(serde_json::to_string(&item).unwrap());
                     } else {
-                        gst::debug!(
-                            CAT,
-                            imp = self,
-                            "Item is ready: \"{}\", start_time: {}, end_time: {}, speaker: {:?}",
-                            accumulator_inner.text,
-                            accumulator_inner.start_time,
-                            accumulator_inner.end_time,
-                            accumulator_inner.speaker
-                        );
+                        self.drain_accumulator(&mut state, now, accumulator.take().unwrap());
 
-                        let new_speaker = accumulator_inner.speaker.clone();
-                        let text = accumulator_inner.text.clone();
-                        let start_time = accumulator_inner.start_time;
-                        let end_time = accumulator_inner.end_time;
-
-                        if state.current_speaker != accumulator_inner.speaker {
-                            state.push_speaker(new_speaker.clone());
-                        }
-
-                        let buffer = state.accumulator.take().unwrap().into();
-
-                        state.push_event(
-                            gst::event::CustomUpstream::builder(
-                                gst::Structure::builder("rstranscribe/new-item")
-                                    .field("speaker", new_speaker.as_ref().map(|n| n.to_string()))
-                                    .field("content", text)
-                                    .field(
-                                        "running-time",
-                                        state.out_segment.to_running_time(start_time).unwrap(),
-                                    )
-                                    .field("duration", end_time - start_time)
-                                    .build(),
-                            )
-                            .build(),
-                        );
-
-                        state.push_buffer(buffer);
-                        state.accumulator = Some(ItemAccumulator {
+                        accumulator = Some(ItemAccumulator {
                             text: alternative.content.clone(),
                             start_time,
                             end_time,
@@ -619,7 +425,7 @@ impl TranscriberSrcPad {
                         });
                     }
                 } else if join_punctuation {
-                    state.accumulator = Some(ItemAccumulator {
+                    accumulator = Some(ItemAccumulator {
                         text: alternative.content.clone(),
                         start_time,
                         end_time,
@@ -643,6 +449,8 @@ impl TranscriberSrcPad {
                         state.push_speaker(alternative.speaker.clone());
                     }
 
+                    let running_time = state.out_segment.to_running_time(start_time).unwrap();
+
                     state.push_event(
                         gst::event::CustomUpstream::builder(
                             gst::Structure::builder("rstranscribe/new-item")
@@ -651,10 +459,7 @@ impl TranscriberSrcPad {
                                     alternative.speaker.as_ref().map(|n| n.to_string()),
                                 )
                                 .field("content", &text)
-                                .field(
-                                    "running-time",
-                                    state.out_segment.to_running_time(start_time).unwrap(),
-                                )
+                                .field("running-time", running_time)
                                 .field("duration", end_time - start_time)
                                 .build(),
                         )
@@ -673,15 +478,36 @@ impl TranscriberSrcPad {
                         }
                     }
 
-                    state.push_buffer(buf);
+                    state.push_buffer(now, buf);
                 }
             }
         }
+
+        if let Some(accumulator) = accumulator.take() {
+            self.drain_accumulator(&mut state, now, accumulator);
+        }
+
+        let start_time = gst::ClockTime::from_nseconds(
+            (transcript.metadata.start_time as f64 * 1_000_000_000.0) as u64,
+        ) + first_pts;
+
+        let end_time = gst::ClockTime::from_nseconds(
+            (transcript.metadata.end_time as f64 * 1_000_000_000.0) as u64,
+        ) + first_pts;
+
+        state.advance_position(start_time, end_time);
     }
 
-    fn loop_fn(&self, receiver: &mut mpsc::Receiver<Message>) -> Result<(), gst::ErrorMessage> {
+    fn enqueue_eos(&self) {
+        self.state.lock().unwrap().push_eos();
+    }
+
+    fn loop_fn(
+        &self,
+        receiver: &mut mpsc::UnboundedReceiver<TranscriberOutput>,
+    ) -> Result<(), gst::ErrorMessage> {
         let future = async move {
-            let msg = match receiver.next().await {
+            let msg = match receiver.recv().await {
                 Some(msg) => msg,
                 /* Sender was closed */
                 None => {
@@ -690,281 +516,101 @@ impl TranscriberSrcPad {
                 }
             };
 
-            let language_code = self.settings.lock().unwrap().language_code.clone();
+            let Some(parent) = self.obj().parent() else {
+                return Ok(());
+            };
+
+            let transcriber = parent
+                .downcast::<super::Transcriber>()
+                .expect("parent is transcriber");
+
+            let (last_position, seqnum) = {
+                let state = self.state.lock().unwrap();
+
+                (state.out_segment.position(), state.seqnum)
+            };
 
             match msg {
-                Message::Text(text) => {
-                    let mut json: serde_json::Value = serde_json::from_str(&text).unwrap();
-                    let message_type = {
-                        let obj = json.as_object_mut().expect("object");
-                        let Some(message_type) = obj.remove("message") else {
-                            return Err(gst::error_msg!(
-                                gst::StreamError::Failed,
-                                ["Missing message field in object: {}", text]
-                            ));
-                        };
-                        if let serde_json::Value::String(s) = message_type {
-                            s
-                        } else {
-                            panic!("message field not a string");
+                TranscriberOutput::Buffer(buf) => {
+                    let pts = buf.pts().unwrap();
+
+                    if let Some(last_position) = last_position {
+                        if pts > last_position {
+                            let gap_event = gst::event::Gap::builder(last_position)
+                                .duration(pts - last_position)
+                                .seqnum(seqnum)
+                                .build();
+                            gst::log!(CAT, "Pushing gap:    {} -> {}", last_position, pts);
+                            if !self.obj().push_event(gap_event) {
+                                return Err(gst::error_msg!(
+                                    gst::StreamError::Failed,
+                                    ["failed to push gap"]
+                                ));
+                            }
                         }
+                    }
+
+                    let pts_end = if let Some(duration) = buf.duration() {
+                        pts + duration
+                    } else {
+                        pts
                     };
 
-                    match message_type.as_str() {
-                        "AddTranslation" => {
-                            let Some(parent) = self.obj().parent() else {
-                                return Ok(());
-                            };
-
-                            let transcriber = parent
-                                .downcast::<super::Transcriber>()
-                                .expect("parent is transcriber");
-
-                            let Some(language_code) = language_code else {
-                                return Ok(());
-                            };
-
-                            let mut translation: Translation = serde_json::from_value(json)
-                                .map_err(|err| {
-                                    gst::error_msg!(
-                                        gst::StreamError::Failed,
-                                        ["Unexpected message: {} ({})", text, err]
-                                    )
-                                })?;
-
-                            if translation.language != language_code {
-                                return Ok(());
-                            }
-
-                            gst::info!(CAT, imp = self, "Parsed translation {:?}", translation);
-
-                            let s = gst::Structure::builder("speechmatics/raw")
-                                .field("translation", &*text)
-                                .field("arrival-time", transcriber.current_running_time())
-                                .field("language-code", &language_code)
-                                .build();
-
-                            gst::trace!(
-                                CAT,
-                                obj = transcriber,
-                                "received translation event, posting message"
-                            );
-
-                            let _ = transcriber.post_message(
-                                gst::message::Element::builder(s).src(&transcriber).build(),
-                            );
-
-                            let unsynced_pad = self.state.lock().unwrap().unsynced_pad.clone();
-
-                            if let Some(unsynced_pad) = unsynced_pad {
-                                if unsynced_pad.last_flow_result().is_ok() {
-                                    let now = transcriber.current_running_time().unwrap();
-                                    let mut buf = gst::Buffer::from_slice(text);
-                                    {
-                                        let buf_mut = buf.get_mut().unwrap();
-
-                                        buf_mut.set_pts(now);
-                                    }
-
-                                    gst::log!(
-                                        CAT,
-                                        obj = unsynced_pad,
-                                        "Pushing original transcript with timestamp {now}",
-                                    );
-
-                                    let _ = unsynced_pad.push(buf);
-                                }
-                            }
-
-                            let lateness = (transcriber.imp().settings.lock().unwrap().lateness_ms
-                                as f64
-                                / 1_000.) as f32;
-                            let discont_offset =
-                                (transcriber
-                                    .imp()
-                                    .state
-                                    .lock()
-                                    .unwrap()
-                                    .discont_offset
-                                    .nseconds() as f64
-                                    / 1_000_000_000.0) as f32;
-
-                            gst::info!(
-                                CAT,
-                                imp = self,
-                                "Introducing {} lateness and adding discont offset {}",
-                                lateness,
-                                discont_offset
-                            );
-
-                            for item in translation.results.iter_mut() {
-                                item.start_time += lateness + discont_offset;
-                                item.end_time += lateness + discont_offset;
-                            }
-
-                            if !translation.results.is_empty() {
-                                let mut state = self.state.lock().unwrap();
-                                self.enqueue_translation(&mut state, &translation);
-                            }
-                        }
-                        "AddTranscript" | "AddPartialTranscript" => {
-                            /* This pad outputs translations */
-                            if language_code.is_some() {
-                                return Ok(());
-                            }
-                            let Some(parent) = self.obj().parent() else {
-                                return Ok(());
-                            };
-
-                            let transcriber = parent
-                                .downcast::<super::Transcriber>()
-                                .expect("parent is transcriber");
-
-                            let is_partial = message_type == "AddPartialTranscript";
-                            let mut transcript: Transcript =
-                                serde_json::from_value(json).map_err(|err| {
-                                    gst::error_msg!(
-                                        gst::StreamError::Failed,
-                                        ["Unexpected message: {} ({})", text, err]
-                                    )
-                                })?;
-
-                            gst::info!(
-                                CAT,
-                                imp = self,
-                                "Parsed {} transcript {:?}",
-                                if is_partial { "partial" } else { "final" },
-                                transcript
-                            );
-
-                            let s = gst::Structure::builder("speechmatics/raw")
-                                .field("transcript", &*text)
-                                .field("arrival-time", transcriber.current_running_time())
-                                .field(
-                                    "language-code",
-                                    &transcriber
-                                        .imp()
-                                        .settings
-                                        .lock()
-                                        .as_ref()
-                                        .unwrap()
-                                        .language_code,
-                                )
-                                .build();
-
-                            gst::trace!(
-                                CAT,
-                                obj = transcriber,
-                                "received transcript event, posting message"
-                            );
-
-                            let _ = transcriber.post_message(
-                                gst::message::Element::builder(s).src(&transcriber).build(),
-                            );
-
-                            let unsynced_pad = self.state.lock().unwrap().unsynced_pad.clone();
-
-                            if let Some(unsynced_pad) = unsynced_pad {
-                                if unsynced_pad.last_flow_result().is_ok() {
-                                    let now = transcriber.current_running_time().unwrap();
-                                    let mut buf = gst::Buffer::from_slice(text);
-                                    {
-                                        let buf_mut = buf.get_mut().unwrap();
-
-                                        buf_mut.set_pts(now);
-                                    }
-
-                                    gst::log!(
-                                        CAT,
-                                        obj = unsynced_pad,
-                                        "Pushing original transcript with timestamp {now}",
-                                    );
-
-                                    let _ = unsynced_pad.push(buf);
-                                }
-                            }
-
-                            let (lateness, join_punctuation, mask_profanities) = {
-                                let settings = transcriber.imp().settings.lock().unwrap();
-                                (
-                                    (settings.lateness_ms as f64 / 1_000.) as f32,
-                                    settings.join_punctuation,
-                                    settings.mask_profanities,
-                                )
-                            };
-
-                            let discont_offset =
-                                (transcriber
-                                    .imp()
-                                    .state
-                                    .lock()
-                                    .unwrap()
-                                    .discont_offset
-                                    .nseconds() as f64
-                                    / 1_000_000_000.0) as f32;
-
-                            gst::info!(
-                                CAT,
-                                imp = self,
-                                "Introducing {} lateness and adding discont offset {}",
-                                lateness,
-                                discont_offset
-                            );
-
-                            transcript.metadata.start_time += lateness + discont_offset;
-                            transcript.metadata.end_time += lateness + discont_offset;
-
-                            for item in transcript.results.iter_mut() {
-                                item.start_time += lateness + discont_offset;
-                                item.end_time += lateness + discont_offset;
-
-                                if mask_profanities {
-                                    for alternative in item.alternatives.iter_mut() {
-                                        if alternative.tags.contains(&Tag::Profanity) {
-                                            alternative.content =
-                                                std::iter::repeat_n("*", alternative.content.len())
-                                                    .collect();
-                                        }
-                                    }
-                                }
-                            }
-
-                            if !transcript.results.is_empty() {
-                                let mut state = self.state.lock().unwrap();
-                                self.enqueue_transcript(&mut state, &transcript, join_punctuation);
-                            }
-                        }
-                        "EndOfTranscript" => {
-                            let mut state = self.state.lock().unwrap();
-                            state.send_eos = true;
-                        }
-                        _ => (),
+                    gst::debug!(CAT, imp = self, "Pushing buffer: {} -> {}", pts, pts_end,);
+                    if let Err(err) = self.obj().push(buf) {
+                        return Err(gst::error_msg!(
+                            gst::StreamError::Failed,
+                            ["failed to push buffer: {err:?}"]
+                        ));
                     }
 
                     Ok(())
                 }
-                _ => Ok(()),
-            }
-        };
-
-        /* Wrap in a timeout so we can push gaps regularly */
-        let future = async move {
-            match tokio::time::timeout(Duration::from_millis(GRANULARITY_MS.into()), future).await {
-                Err(_) => {
-                    if !self.dequeue() {
-                        gst::info!(CAT, imp = self, "Failed to push gap event, pausing");
-
-                        let _ = self.pause_task();
+                TranscriberOutput::Position(position) => {
+                    if let Some(last_position) = last_position {
+                        if position > last_position {
+                            let gap_event = gst::event::Gap::builder(last_position)
+                                .duration(position - last_position)
+                                .seqnum(seqnum)
+                                .build();
+                            gst::log!(CAT, "Pushing gap:    {} -> {}", last_position, position);
+                            if !self.obj().push_event(gap_event) {
+                                return Err(gst::error_msg!(
+                                    gst::StreamError::Failed,
+                                    ["failed to push gap"]
+                                ));
+                            }
+                        }
                     }
+
                     Ok(())
                 }
-                Ok(res) => {
-                    if !self.dequeue() {
-                        gst::info!(CAT, imp = self, "Failed to push gap event, pausing");
-
-                        let _ = self.pause_task();
+                TranscriberOutput::Event(event) => {
+                    if event.is_downstream() {
+                        self.obj().push_event(event);
+                    } else {
+                        transcriber.imp().sinkpad.push_event(event);
                     }
-                    res
+
+                    Ok(())
+                }
+                TranscriberOutput::Eos => {
+                    let _ = self.pause_task();
+
+                    let draining = transcriber.imp().state.lock().unwrap().draining;
+
+                    if !draining
+                        && !self
+                            .obj()
+                            .push_event(gst::event::Eos::builder().seqnum(seqnum).build())
+                    {
+                        return Err(gst::error_msg!(
+                            gst::StreamError::Failed,
+                            ["failed to push EOS"]
+                        ));
+                    }
+
+                    Ok(())
                 }
             }
         };
@@ -982,7 +628,7 @@ impl TranscriberSrcPad {
 
         let this_weak = self.downgrade();
         let pad_weak = self.obj().downgrade();
-        let (sender, mut receiver) = mpsc::channel(1);
+        let (sender, mut receiver) = mpsc::unbounded_channel();
 
         state.sender = Some(sender);
         drop(state);
@@ -1001,6 +647,7 @@ impl TranscriberSrcPad {
                     .parent()
                     .and_downcast::<gst::Element>()
                     .expect("has parent");
+                gst::error!(CAT, imp = this, "Streaming failed: {}", err);
                 gst::element_error!(
                     parent,
                     gst::StreamError::Failed,
@@ -1018,7 +665,17 @@ impl TranscriberSrcPad {
     fn pause_task(&self) -> Result<(), glib::BoolError> {
         self.state.lock().unwrap().sender = None;
 
-        self.obj().pause_task()
+        let res = self.obj().pause_task();
+
+        if let Some(parent) = self.obj().parent() {
+            let transcriber = parent
+                .downcast::<super::Transcriber>()
+                .expect("parent is transcriber");
+
+            transcriber.imp().state_cond.notify_one();
+        };
+
+        res
     }
 
     fn stop_task(&self) -> Result<(), glib::BoolError> {
@@ -1029,6 +686,62 @@ impl TranscriberSrcPad {
 }
 
 impl Transcriber {
+    fn upstream_is_live(&self) -> Option<bool> {
+        if let Some(live) = self.state.lock().unwrap().upstream_is_live {
+            return Some(live);
+        }
+
+        let mut peer_query = gst::query::Latency::new();
+
+        let ret = self.sinkpad.peer_query(&mut peer_query);
+
+        if ret {
+            let (live, _, _) = peer_query.result();
+            gst::info!(CAT, imp = self, "queried upstream liveness: {live}");
+
+            self.state.lock().unwrap().upstream_is_live = Some(live);
+
+            Some(live)
+        } else {
+            gst::trace!(CAT, imp = self, "could not query upstream liveness");
+
+            None
+        }
+    }
+
+    fn drain<'a>(
+        &'a self,
+        mut state: MutexGuard<'a, State>,
+    ) -> Result<MutexGuard<'a, State>, gst::FlowError> {
+        if !state.connected {
+            return Ok(state);
+        }
+
+        let srcpads = state.srcpads.clone();
+
+        state.draining = true;
+
+        drop(state);
+
+        self.handle_buffer(None)?;
+
+        state = self.state.lock().unwrap();
+
+        gst::info!(CAT, "draining");
+
+        while !srcpads
+            .iter()
+            .all(|pad| pad.task_state() != gst::TaskState::Started)
+            && state.draining
+        {
+            state = self.state_cond.wait(state).unwrap();
+        }
+
+        gst::info!(CAT, "all source pads joined");
+
+        Ok(self.disconnect(state))
+    }
+
     fn src_activatemode(
         &self,
         pad: &super::TranscriberSrcPad,
@@ -1052,26 +765,17 @@ impl Transcriber {
                 let ret = self.sinkpad.peer_query(&mut peer_query);
 
                 if ret {
-                    let (_, min, _) = peer_query.result();
+                    let (live, min, _) = peer_query.result();
                     let our_latency = gst::ClockTime::from_mseconds(
                         self.settings.lock().unwrap().latency_ms as u64,
                     );
-                    q.set(true, our_latency + min, gst::ClockTime::NONE);
+                    if live {
+                        q.set(true, min + our_latency, gst::ClockTime::NONE);
+                    } else {
+                        q.set(live, min, gst::ClockTime::NONE);
+                    }
                 }
                 ret
-            }
-            gst::QueryViewMut::Position(ref mut q) => {
-                if q.format() == gst::Format::Time {
-                    let sstate = pad.imp().state.lock().unwrap();
-                    q.set(
-                        sstate
-                            .out_segment
-                            .to_stream_time(sstate.out_segment.position()),
-                    );
-                    true
-                } else {
-                    false
-                }
             }
             _ => gst::Pad::query_default(pad, Some(&*self.obj()), query),
         }
@@ -1081,7 +785,7 @@ impl Transcriber {
         gst::debug!(CAT, obj = pad, "Handling event {:?}", event);
 
         match event.view() {
-            gst::EventView::Eos(_) => match self.handle_buffer(pad, None) {
+            gst::EventView::Eos(_) => match self.handle_buffer(None) {
                 Err(err) => {
                     gst::error!(CAT, "Failed to send EOS: {}", err);
                     false
@@ -1090,42 +794,27 @@ impl Transcriber {
             },
             gst::EventView::FlushStart(_) => {
                 gst::info!(CAT, imp = self, "Received flush start, disconnecting");
-                match self.disconnect() {
-                    Err(err) => {
-                        self.post_error_message(err);
-                        false
-                    }
-                    Ok(_) => {
-                        let mut ret = gst::Pad::event_default(pad, Some(&*self.obj()), event);
 
-                        let mut state = self.state.lock().unwrap();
-                        for srcpad in &state.srcpads {
-                            if let Err(err) = srcpad.imp().stop_task() {
-                                gst::error!(CAT, imp = self, "Failed to stop srcpad task: {}", err);
-                                ret = false;
-                            }
-                        }
-                        state.start_time = None;
+                let mut ret = gst::Pad::event_default(pad, Some(&*self.obj()), event);
 
-                        ret
+                drop(self.disconnect(self.state.lock().unwrap()));
+
+                let state = self.state.lock().unwrap();
+                for srcpad in &state.srcpads {
+                    if let Err(err) = srcpad.imp().stop_task() {
+                        gst::error!(CAT, imp = self, "Failed to stop srcpad task: {}", err);
+                        ret = false;
                     }
                 }
+
+                self.state_cond.notify_one();
+
+                ret
             }
             gst::EventView::FlushStop(_) => {
                 gst::info!(CAT, imp = self, "Received flush stop, restarting task");
 
-                if gst::Pad::event_default(pad, Some(&*self.obj()), event) {
-                    let state = self.state.lock().unwrap();
-                    for srcpad in &state.srcpads {
-                        if let Err(err) = srcpad.imp().start_task() {
-                            gst::error!(CAT, imp = self, "Failed to start srcpad task: {}", err);
-                            return false;
-                        }
-                    }
-                    true
-                } else {
-                    false
-                }
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             gst::EventView::Segment(e) => {
                 let segment = match e.segment().clone().downcast::<gst::ClockTime>() {
@@ -1140,33 +829,53 @@ impl Transcriber {
                     Ok(segment) => segment,
                 };
 
-                let srcpads = {
-                    let mut state = self.state.lock().unwrap();
-                    state.in_segment = segment.clone();
-                    state.srcpads.clone()
-                };
+                let mut state = self.state.lock().unwrap();
+
+                // If segment changes in any other way than the position
+                // we'll have to drain first.
+                let mut compare_segment = segment.clone();
+                compare_segment.set_position(state.in_segment.position());
+                if state.in_segment != compare_segment {
+                    // Do drain
+                    state = match self.drain(state) {
+                        Err(err) => {
+                            gst::error!(CAT, imp = self, "Failed to drain: {err}");
+                            gst::element_imp_error!(
+                                self,
+                                gst::StreamError::Failed,
+                                ["Failed to drain: {err}"]
+                            );
+                            return false;
+                        }
+                        Ok(state) => state,
+                    };
+                }
+
+                gst::info!(CAT, imp = self, "input segment is now {:?}", segment);
+
+                state.in_segment = segment.clone();
+                let srcpads = state.srcpads.clone();
+
+                drop(state);
+
+                let lateness =
+                    gst::ClockTime::from_mseconds(self.settings.lock().unwrap().lateness_ms as u64);
+
+                let mut segment_to_push = segment.clone();
+                segment_to_push.set_base(segment.base().unwrap_or(gst::ClockTime::ZERO) + lateness);
 
                 for srcpad in &srcpads {
-                    let (unsynced_pad, out_segment, seqnum) = {
+                    let seqnum = {
                         let mut sstate = srcpad.imp().state.lock().unwrap();
-                        sstate.out_segment.set_time(segment.time());
-                        sstate.out_segment.set_position(gst::ClockTime::ZERO);
+                        sstate.out_segment = segment.clone();
                         sstate.seqnum = e.seqnum();
-                        (
-                            sstate.unsynced_pad.clone(),
-                            sstate.out_segment.clone(),
-                            sstate.seqnum,
-                        )
+                        sstate.seqnum
                     };
 
-                    let out_event = gst::event::Segment::builder(&out_segment)
+                    let out_event = gst::event::Segment::builder(&segment_to_push)
                         .seqnum(seqnum)
                         .build();
                     srcpad.push_event(out_event.clone());
-
-                    if let Some(unsynced_pad) = unsynced_pad {
-                        unsynced_pad.push_event(out_event);
-                    }
                 }
 
                 true
@@ -1182,46 +891,34 @@ impl Transcriber {
                         gst::error!(CAT, obj = srcpad, "Failed to push stream start event");
                         return false;
                     }
-
-                    let unsynced_pad = srcpad.imp().state.lock().unwrap().unsynced_pad.clone();
-
-                    if let Some(pad) = unsynced_pad {
-                        let sev = gst::event::StreamStart::builder("unsynced-transcription")
-                            .seqnum(e.seqnum())
-                            .build();
-                        if !pad.push_event(sev) {
-                            gst::error!(CAT, obj = pad, "Failed to push stream start event");
-                            return false;
-                        }
-                    }
-
-                    if let Err(err) = srcpad.imp().start_task() {
-                        gst::error!(CAT, imp = self, "Failed to start srcpad task: {}", err);
-                        return false;
-                    }
                 }
                 true
             }
-            gst::EventView::Caps(_) => {
+            gst::EventView::Caps(e) => {
+                if let Some(old_caps) = self.sinkpad.current_caps() {
+                    if old_caps != *e.caps() {
+                        if let Err(err) = self.drain(self.state.lock().unwrap()) {
+                            gst::error!(CAT, imp = self, "Failed to drain: {err}");
+                            gst::element_imp_error!(
+                                self,
+                                gst::StreamError::Failed,
+                                ["Failed to drain: {err}"]
+                            );
+                            return false;
+                        };
+                    }
+                }
+
                 let srcpads = self.state.lock().unwrap().srcpads.clone();
 
                 for srcpad in &srcpads {
-                    let (unsynced_pad, seqnum) = {
-                        let sstate = srcpad.imp().state.lock().unwrap();
-                        (sstate.unsynced_pad.clone(), sstate.seqnum)
-                    };
+                    let seqnum = srcpad.imp().state.lock().unwrap().seqnum;
 
                     let caps = gst::Caps::builder("text/x-raw")
                         .field("format", "utf8")
                         .build();
                     let out_event = gst::event::Caps::builder(&caps).seqnum(seqnum).build();
                     srcpad.push_event(out_event);
-
-                    if let Some(unsynced_pad) = unsynced_pad {
-                        let caps = gst::Caps::builder("application/x-json").build();
-                        let out_event = gst::event::Caps::builder(&caps).seqnum(seqnum).build();
-                        unsynced_pad.push_event(out_event);
-                    }
                 }
 
                 true
@@ -1230,44 +927,8 @@ impl Transcriber {
         }
     }
 
-    async fn sync_and_send(
-        &self,
-        buffer: Option<gst::Buffer>,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let mut delay = None;
+    async fn send(&self, buffer: Option<gst::Buffer>) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut n_chunks = 0;
-
-        {
-            let mut state = self.state.lock().unwrap();
-
-            if let Some(ref buffer) = buffer {
-                let running_time = state
-                    .in_segment
-                    .to_running_time(buffer.pts().expect("Checked in sink_chain()"));
-                let now = self.obj().current_running_time().unwrap();
-
-                if let Some(running_time) = running_time {
-                    delay = running_time.checked_sub(now);
-
-                    if buffer.flags().contains(gst::BufferFlags::DISCONT) {
-                        for srcpad in &state.srcpads {
-                            let mut sstate = srcpad.imp().state.lock().unwrap();
-                            sstate.discont = true;
-                        }
-                        if let Some(last_chained_buffer_rtime) = state.last_chained_buffer_rtime {
-                            state.discont_offset +=
-                                running_time.saturating_sub(last_chained_buffer_rtime);
-                        }
-                    }
-
-                    state.last_chained_buffer_rtime = Some(running_time);
-                }
-            }
-        }
-
-        if let Some(delay) = delay {
-            tokio::time::sleep(Duration::from_nanos(delay.nseconds())).await;
-        }
 
         if let Some(ws_sink) = self.ws_sink.borrow_mut().as_mut() {
             if let Some(buffer) = buffer {
@@ -1303,10 +964,52 @@ impl Transcriber {
 
     fn handle_buffer(
         &self,
-        _pad: &gst::Pad,
         buffer: Option<gst::Buffer>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::trace!(CAT, imp = self, "Handling {:?}", buffer);
+
+        let now = self.obj().current_running_time();
+
+        if let Some(ref buffer) = buffer {
+            let mut state = self.state.lock().unwrap();
+
+            if buffer.flags().contains(gst::BufferFlags::DISCONT) {
+                state = match self.drain(state) {
+                    Err(err) => {
+                        gst::error!(CAT, imp = self, "Failed to drain: {err}");
+                        gst::element_imp_error!(
+                            self,
+                            gst::StreamError::Failed,
+                            ["Failed to drain: {err}"]
+                        );
+                        return Err(err);
+                    }
+                    Ok(state) => state,
+                };
+            }
+
+            let pts = buffer.pts().expect("Checked in sink_chain()");
+
+            if state.first_buffer_pts.is_none() {
+                state.first_buffer_pts = Some(pts);
+                for srcpad in &state.srcpads {
+                    let mut sstate = srcpad.imp().state.lock().unwrap();
+                    sstate.out_segment.set_position(pts);
+                }
+            }
+
+            if let Some(now) = now {
+                for srcpad in &state.srcpads {
+                    srcpad
+                        .imp()
+                        .state
+                        .lock()
+                        .unwrap()
+                        .input_times
+                        .push_back((pts, now));
+                }
+            }
+        }
 
         self.ensure_connection().map_err(|err| {
             // No need to worry too much here, we didn't have a session to
@@ -1322,7 +1025,7 @@ impl Transcriber {
             gst::FlowError::Error
         })?;
 
-        let (future, abort_handle) = abortable(self.sync_and_send(buffer));
+        let (future, abort_handle) = abortable(self.send(buffer));
 
         self.state.lock().unwrap().send_abort_handle = Some(abort_handle);
 
@@ -1336,7 +1039,7 @@ impl Transcriber {
 
     fn sink_chain(
         &self,
-        pad: &gst::Pad,
+        _pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         if buffer.pts().is_none() {
@@ -1344,7 +1047,202 @@ impl Transcriber {
             return Err(gst::FlowError::Error);
         }
 
-        self.handle_buffer(pad, Some(buffer))
+        self.handle_buffer(Some(buffer))
+    }
+
+    fn dispatch_message(&self, msg: Message) -> Result<(), gst::ErrorMessage> {
+        let upstream_is_live = self.upstream_is_live();
+
+        match msg {
+            Message::Text(text) => {
+                let mut json: serde_json::Value = serde_json::from_str(&text).unwrap();
+                let message_type = {
+                    let obj = json.as_object_mut().expect("object");
+                    let Some(message_type) = obj.remove("message") else {
+                        return Err(gst::error_msg!(
+                            gst::StreamError::Failed,
+                            ["Missing message field in object: {}", text]
+                        ));
+                    };
+                    if let serde_json::Value::String(s) = message_type {
+                        s
+                    } else {
+                        panic!("message field not a string");
+                    }
+                };
+
+                let now = self.obj().current_running_time();
+
+                let (transcriber_language_code, join_punctuation, mask_profanities) = {
+                    let settings = self.settings.lock().unwrap();
+                    (
+                        settings.language_code.clone(),
+                        settings.join_punctuation,
+                        settings.mask_profanities,
+                    )
+                };
+
+                let first_pts = self.state.lock().unwrap().first_buffer_pts.unwrap();
+
+                match message_type.as_str() {
+                    "AddTranslation" => {
+                        let translation: Translation =
+                            serde_json::from_value(json).map_err(|err| {
+                                gst::error_msg!(
+                                    gst::StreamError::Failed,
+                                    ["Unexpected message: {} ({})", text, err]
+                                )
+                            })?;
+
+                        gst::log!(CAT, imp = self, "Parsed translation {:?}", translation);
+
+                        let s = gst::Structure::builder("speechmatics/raw")
+                            .field("translation", &*text)
+                            .field("arrival-time", now)
+                            .field("language-code", &translation.language)
+                            .build();
+
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "received translation event, posting message"
+                        );
+
+                        let _ = self.obj().post_message(
+                            gst::message::Element::builder(s).src(&*self.obj()).build(),
+                        );
+
+                        for srcpad in &self.state.lock().unwrap().srcpads {
+                            if Some(&translation.language)
+                                != srcpad.imp().settings.lock().unwrap().language_code.as_ref()
+                            {
+                                continue;
+                            }
+
+                            srcpad
+                                .imp()
+                                .enqueue_translation(&translation, now, first_pts);
+                        }
+                    }
+                    "AddTranscript" | "AddPartialTranscript" => {
+                        let mut transcript: Transcript =
+                            serde_json::from_value(json).map_err(|err| {
+                                gst::error_msg!(
+                                    gst::StreamError::Failed,
+                                    ["Unexpected message: {} ({})", text, err]
+                                )
+                            })?;
+
+                        gst::log!(CAT, imp = self, "Parsed transcript {:?}", transcript);
+
+                        for item in transcript.results.iter_mut() {
+                            if mask_profanities {
+                                for alternative in item.alternatives.iter_mut() {
+                                    if alternative.tags.contains(&Tag::Profanity) {
+                                        alternative.content =
+                                            std::iter::repeat_n("*", alternative.content.len())
+                                                .collect();
+                                    }
+                                }
+                            }
+                        }
+
+                        let s = gst::Structure::builder("speechmatics/raw")
+                            .field("transcript", &*text)
+                            .field("arrival-time", now)
+                            .field("language-code", transcriber_language_code)
+                            .build();
+
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "received transcript event, posting message"
+                        );
+
+                        let _ = self.obj().post_message(
+                            gst::message::Element::builder(s).src(&*self.obj()).build(),
+                        );
+
+                        for srcpad in &self.state.lock().unwrap().srcpads {
+                            if srcpad
+                                .imp()
+                                .settings
+                                .lock()
+                                .unwrap()
+                                .language_code
+                                .is_some()
+                            {
+                                continue;
+                            }
+
+                            srcpad.imp().enqueue_transcript(
+                                &transcript,
+                                now,
+                                first_pts,
+                                join_punctuation,
+                            );
+                        }
+                    }
+                    "EndOfTranscript" => {
+                        for srcpad in &self.state.lock().unwrap().srcpads {
+                            srcpad.imp().enqueue_eos();
+                        }
+                    }
+                    _ => (),
+                }
+
+                let (lateness, latency) = {
+                    let settings = self.settings.lock().unwrap();
+
+                    (
+                        gst::ClockTime::from_mseconds(settings.lateness_ms as u64),
+                        gst::ClockTime::from_mseconds(settings.latency_ms as u64),
+                    )
+                };
+
+                let max_srcpad_delay = self
+                    .state
+                    .lock()
+                    .unwrap()
+                    .srcpads
+                    .iter()
+                    .map(|pad| pad.imp().state.lock().unwrap().observed_max_delay)
+                    .max();
+                if let Some(max_srcpad_delay) = max_srcpad_delay {
+                    let mut do_notify = false;
+                    let mut state = self.state.lock().unwrap();
+
+                    if state.observed_max_delay < max_srcpad_delay {
+                        gst::log!(CAT, imp = self, "new max delay {max_srcpad_delay}");
+                        state.observed_max_delay = max_srcpad_delay;
+                        do_notify = true;
+                    }
+
+                    drop(state);
+
+                    if do_notify {
+                        self.obj().notify("max-observed-delay");
+                        if max_srcpad_delay > latency + lateness {
+                            let details =
+                                gst::Structure::builder("speechmaticstranscriber/excessive-delay")
+                                    .field("new-observed-max-delay", max_srcpad_delay)
+                                    .build();
+                            if upstream_is_live == Some(true) {
+                                gst::element_warning!(
+                                    self.obj(),
+                                    gst::CoreError::Clock,
+                                    ["Maximum observed delay {} exceeds configured lateness + latency", max_srcpad_delay],
+                                    details: details
+                                );
+                            }
+                        }
+                    }
+                }
+
+                Ok(())
+            }
+            _ => Ok(()),
+        }
     }
 
     fn ensure_connection(&self) -> Result<(), gst::ErrorMessage> {
@@ -1407,25 +1305,15 @@ impl Transcriber {
 
         let (mut ws_sink, mut ws_stream) = ws.split();
 
-        let late_punctuation_factor = if settings.enable_late_punctuation_hack {
-            2
-        } else {
-            1
-        };
-
-        if settings.latency_ms + settings.lateness_ms < 2000 * late_punctuation_factor {
+        if settings.latency_ms + settings.lateness_ms < 700 {
             gst::error!(
                 CAT,
                 imp = self,
-                "latency + lateness must be above {} milliseconds",
-                2000 * late_punctuation_factor
+                "latency + lateness must be above 700 milliseconds",
             );
             return Err(gst::error_msg!(
                 gst::LibraryError::Settings,
-                [
-                    "latency + lateness must be above {} milliseconds",
-                    2000 * late_punctuation_factor
-                ]
+                ["latency + lateness must be above 700 milliseconds",]
             ));
         }
 
@@ -1442,10 +1330,7 @@ impl Transcriber {
         );
 
         let max_delay = if settings.max_delay_ms == 0 {
-            // Workaround for speechmatics sometimes outputting
-            // final punctuation in the next transcript
-            ((settings.latency_ms + settings.lateness_ms) as f32)
-                / (1_000. * late_punctuation_factor as f32)
+            ((settings.latency_ms + settings.lateness_ms) as f32) / 1000.
         } else {
             settings.max_delay_ms as f32 / 1000.
         };
@@ -1564,15 +1449,20 @@ impl Transcriber {
 
         *self.ws_sink.borrow_mut() = Some(Box::pin(ws_sink));
 
+        for srcpad in &state.srcpads {
+            if let Err(err) = srcpad.imp().start_task() {
+                gst::error!(CAT, imp = self, "Failed to start srcpad task: {}", err);
+                return Err(gst::error_msg!(
+                    gst::CoreError::Failed,
+                    ["Failed to start srcpad task: {err}"]
+                ));
+            }
+        }
+
         let this_weak = self.downgrade();
         let future = async move {
-            'outer: while let Some(this) = this_weak.upgrade() {
+            while let Some(this) = this_weak.upgrade() {
                 let Some(msg) = ws_stream.next().await else {
-                    let state = this.state.lock().unwrap();
-                    for srcpad in &state.srcpads {
-                        let mut sstate = srcpad.imp().state.lock().unwrap();
-                        sstate.send_eos = true;
-                    }
                     break;
                 };
 
@@ -1589,16 +1479,14 @@ impl Transcriber {
                     }
                 };
 
-                let srcpads = this.state.lock().unwrap().srcpads.clone();
-                for srcpad in srcpads {
-                    let mut sender = srcpad.imp().state.lock().unwrap().sender.clone();
-
-                    if let Some(sender) = sender.as_mut() {
-                        let msg = msg.clone();
-                        if sender.send(msg).await.is_err() {
-                            break 'outer;
-                        }
-                    }
+                if let Err(err) = this.dispatch_message(msg) {
+                    gst::error!(CAT, imp = this, "Failed to dispatch message: {}", err);
+                    gst::element_imp_error!(
+                        this,
+                        gst::StreamError::Failed,
+                        ["Failed to dispatch message: {}", err]
+                    );
+                    break;
                 }
             }
         };
@@ -1616,9 +1504,7 @@ impl Transcriber {
         Ok(())
     }
 
-    fn disconnect(&self) -> Result<(), gst::ErrorMessage> {
-        let mut state = self.state.lock().unwrap();
-
+    fn disconnect<'a>(&'a self, mut state: MutexGuard<'a, State>) -> MutexGuard<'a, State> {
         gst::info!(CAT, imp = self, "Unpreparing");
 
         if let Some(abort_handle) = state.recv_abort_handle.take() {
@@ -1629,7 +1515,13 @@ impl Transcriber {
             abort_handle.abort();
         }
 
-        let _ = self.sinkpad.stream_lock();
+        state.draining = false;
+
+        drop(state);
+
+        self.state_cond.notify_one();
+
+        let _lock = self.sinkpad.stream_lock();
 
         if let Some(mut ws_sink) = self.ws_sink.borrow_mut().take() {
             RUNTIME.block_on(async {
@@ -1637,16 +1529,22 @@ impl Transcriber {
             });
         }
 
+        let mut state = self.state.lock().unwrap();
+
         let srcpads = state.srcpads.clone();
 
         *state = State::default();
 
+        drop(state);
+
         for srcpad in &srcpads {
+            let _ = srcpad.stop_task();
+
             let mut sstate = srcpad.imp().state.lock().unwrap();
-            let unsynced_pad = sstate.unsynced_pad.take();
             *sstate = TranscriberSrcPadState::default();
-            sstate.unsynced_pad = unsynced_pad;
         }
+
+        let mut state = self.state.lock().unwrap();
 
         state.srcpads = srcpads;
 
@@ -1657,27 +1555,7 @@ impl Transcriber {
             state.connected
         );
 
-        Ok(())
-    }
-
-    fn get_start_time_and_now(&self) -> Option<(gst::ClockTime, gst::ClockTime)> {
-        let now = self.obj().current_running_time()?;
-
-        let mut state = self.state.lock().unwrap();
-
-        if !state.connected {
-            return None;
-        }
-
-        if state.start_time.is_none() {
-            state.start_time = Some(now);
-            for pad in state.srcpads.iter() {
-                let mut sstate = pad.imp().state.lock().unwrap();
-                sstate.out_segment.set_position(now);
-            }
-        }
-
-        Some((state.start_time.unwrap(), now))
+        state
     }
 }
 
@@ -1741,6 +1619,7 @@ impl ObjectSubclass for Transcriber {
             sinkpad,
             settings,
             state: Default::default(),
+            state_cond: Condvar::new(),
             ws_sink: Default::default(),
         }
     }
@@ -1802,8 +1681,7 @@ impl ObjectImpl for Transcriber {
                 glib::ParamSpecBoolean::builder("enable-late-punctuation-hack")
                     .nick("Enable late punctuation hack")
                     .blurb(
-                        "Pass a reduced max-delay to speechmatics to make sure we \
-                        always get punctuation in time for joining it with the preceding word.",
+                        "deprecated: speechmatics now appears to group punctuation reliably",
                     )
                     .default_value(DEFAULT_ENABLE_LATE_PUNCTUATION_HACK)
                     .mutable_ready()
@@ -1825,6 +1703,12 @@ impl ObjectImpl for Transcriber {
                     )
                     .default_value(DEFAULT_MASK_PROFANITIES)
                     .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("max-observed-delay")
+                    .nick("Maximum Observed Delay")
+                    .blurb("Maximum delay observed between the sending of an audio sample and the reception of an item")
+                    .default_value(0)
+                    .read_only()
                     .build(),
             ]
         });
@@ -1862,13 +1746,6 @@ impl ObjectImpl for Transcriber {
             .flags(gst::PadFlags::FIXED_CAPS)
             .build();
         obj.add_pad(&srcpad).unwrap();
-
-        let templ = obj.class().pad_template("unsynced_src").unwrap();
-        let unsynced_srcpad = gst::PadBuilder::<gst::Pad>::from_template(&templ)
-            .flags(gst::PadFlags::FIXED_CAPS)
-            .build();
-        obj.add_pad(&unsynced_srcpad).unwrap();
-        srcpad.imp().set_unsynced_pad(&unsynced_srcpad);
 
         self.state.lock().unwrap().srcpads.insert(srcpad);
 
@@ -2028,6 +1905,10 @@ impl ObjectImpl for Transcriber {
                 let settings = self.settings.lock().unwrap();
                 settings.mask_profanities.to_value()
             }
+            "max-observed-delay" => {
+                let state = self.state.lock().unwrap();
+                (state.observed_max_delay.mseconds() as u32).to_value()
+            }
             _ => unimplemented!(),
         }
     }
@@ -2068,21 +1949,6 @@ impl ElementImpl for Transcriber {
                 super::TranscriberSrcPad::static_type(),
             )
             .unwrap();
-            let src_caps = gst::Caps::builder("application/x-json").build();
-            let unsynced_src_pad_template = gst::PadTemplate::new(
-                "unsynced_src",
-                gst::PadDirection::Src,
-                gst::PadPresence::Always,
-                &src_caps,
-            )
-            .unwrap();
-            let unsynced_sometimes_src_pad_template = gst::PadTemplate::new(
-                "unsynced_translate_src_%u",
-                gst::PadDirection::Src,
-                gst::PadPresence::Sometimes,
-                &src_caps,
-            )
-            .unwrap();
 
             let sink_caps = gst_audio::AudioCapsBuilder::new()
                 .format(gst_audio::AUDIO_FORMAT_S16)
@@ -2097,13 +1963,7 @@ impl ElementImpl for Transcriber {
             )
             .unwrap();
 
-            vec![
-                src_pad_template,
-                req_src_pad_template,
-                sink_pad_template,
-                unsynced_src_pad_template,
-                unsynced_sometimes_src_pad_template,
-            ]
+            vec![src_pad_template, req_src_pad_template, sink_pad_template]
         });
 
         PAD_TEMPLATES.as_ref()
@@ -2141,17 +2001,6 @@ impl ElementImpl for Transcriber {
             .flags(gst::PadFlags::FIXED_CAPS)
             .build();
 
-        let templ = self
-            .obj()
-            .class()
-            .pad_template("unsynced_translate_src_%u")
-            .unwrap();
-        let unsynced_srcpad = gst::PadBuilder::<gst::Pad>::from_template(&templ)
-            .name(format!("unsynced_translate_src_{}", state.pad_serial).as_str())
-            .flags(gst::PadFlags::FIXED_CAPS)
-            .build();
-
-        pad.imp().set_unsynced_pad(&unsynced_srcpad);
         state.srcpads.insert(pad.clone());
 
         gst::info!(CAT, "New pad requested, {}", state.srcpads.len());
@@ -2160,10 +2009,8 @@ impl ElementImpl for Transcriber {
         drop(state);
 
         self.obj().add_pad(&pad).unwrap();
-        self.obj().add_pad(&unsynced_srcpad).unwrap();
 
         pad.set_active(true).unwrap();
-        unsynced_srcpad.set_active(true).unwrap();
 
         self.obj().child_added(&pad, &pad.name());
 
@@ -2175,14 +2022,8 @@ impl ElementImpl for Transcriber {
         self.obj().remove_pad(pad).unwrap();
         self.state.lock().unwrap().srcpads.remove(pad);
 
-        let transcribe_srcpad = pad.downcast_ref::<super::TranscriberSrcPad>().unwrap();
-
-        if let Some(unsynced_pad) = transcribe_srcpad.imp().take_unsynced_pad() {
-            unsynced_pad.set_active(false).unwrap();
-            self.obj().remove_pad(&unsynced_pad).unwrap();
-        }
-
         self.obj().child_removed(pad, &pad.name());
+
         let _ = self
             .obj()
             .post_message(gst::message::Latency::builder().src(&*self.obj()).build());
@@ -2194,30 +2035,13 @@ impl ElementImpl for Transcriber {
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst::info!(CAT, imp = self, "Changing state {:?}", transition);
 
+        let success = self.parent_change_state(transition)?;
+
         if transition == gst::StateChange::PausedToReady {
-            self.disconnect().map_err(|err| {
-                self.post_error_message(err);
-                gst::StateChangeError
-            })?;
-        }
-
-        let mut success = self.parent_change_state(transition)?;
-
-        match transition {
-            gst::StateChange::ReadyToPaused => {
-                success = gst::StateChangeSuccess::NoPreroll;
-            }
-            gst::StateChange::PlayingToPaused => {
-                success = gst::StateChangeSuccess::NoPreroll;
-            }
-            _ => (),
+            drop(self.disconnect(self.state.lock().unwrap()));
         }
 
         Ok(success)
-    }
-
-    fn provide_clock(&self) -> Option<gst::Clock> {
-        Some(gst::SystemClock::obtain())
     }
 }
 
@@ -2230,33 +2054,31 @@ struct TranscriberSrcPadSettings {
 enum TranscriberOutput {
     Buffer(gst::Buffer),
     Event(gst::Event),
+    Eos,
+    Position(gst::ClockTime),
 }
 
 #[derive(Debug)]
 struct TranscriberSrcPadState {
-    sender: Option<mpsc::Sender<Message>>,
-    accumulator: Option<ItemAccumulator>,
-    output_items: VecDeque<TranscriberOutput>,
+    sender: Option<mpsc::UnboundedSender<TranscriberOutput>>,
     discont: bool,
-    send_eos: bool,
     out_segment: gst::FormattedSegment<gst::ClockTime>,
     seqnum: gst::Seqnum,
-    unsynced_pad: Option<gst::Pad>,
     current_speaker: Option<String>,
+    input_times: VecDeque<(gst::ClockTime, gst::ClockTime)>,
+    observed_max_delay: gst::ClockTime,
 }
 
 impl Default for TranscriberSrcPadState {
     fn default() -> Self {
         Self {
             sender: None,
-            accumulator: None,
-            output_items: VecDeque::new(),
             discont: true,
-            send_eos: false,
             out_segment: gst::FormattedSegment::new(),
             seqnum: gst::Seqnum::next(),
-            unsynced_pad: None,
             current_speaker: None,
+            input_times: VecDeque::default(),
+            observed_max_delay: gst::ClockTime::ZERO,
         }
     }
 }
@@ -2268,18 +2090,64 @@ pub struct TranscriberSrcPad {
 }
 
 impl TranscriberSrcPadState {
-    fn push_buffer(&mut self, mut buf: gst::Buffer) {
+    fn trim_input_times(&mut self, pts: gst::ClockTime) -> Option<gst::ClockTime> {
+        let mut iter = self.input_times.iter().peekable();
+
+        let mut pos = 0;
+
+        let input_running_time = loop {
+            let Some(current) = iter.next() else {
+                break None;
+            };
+
+            if let Some(next_input_time) = iter.peek() {
+                if next_input_time.0 > pts {
+                    break Some(current.1);
+                }
+            } else {
+                break Some(current.1);
+            }
+
+            pos += 1;
+        };
+
+        self.input_times = self.input_times.split_off(pos);
+
+        input_running_time
+    }
+
+    fn push_buffer(&mut self, now: Option<gst::ClockTime>, mut buf: gst::Buffer) {
         if self.discont {
             let buf = buf.make_mut();
             buf.set_flags(gst::BufferFlags::DISCONT);
             self.discont = false;
         }
 
-        self.output_items.push_back(TranscriberOutput::Buffer(buf));
+        if let Some(input_running_time) = self.trim_input_times(buf.pts().unwrap()) {
+            if let Some(now) = now {
+                let item_delay = now.saturating_sub(input_running_time);
+
+                self.observed_max_delay = self.observed_max_delay.max(item_delay);
+            }
+        }
+
+        if let Some(ref mut sender) = self.sender {
+            let _ = sender.send(TranscriberOutput::Buffer(buf));
+        }
+    }
+
+    fn advance_position(&mut self, start_time: gst::ClockTime, end_time: gst::ClockTime) {
+        self.trim_input_times(start_time);
+
+        if let Some(ref mut sender) = self.sender {
+            let _ = sender.send(TranscriberOutput::Position(end_time));
+        }
     }
 
     fn push_event(&mut self, event: gst::Event) {
-        self.output_items.push_back(TranscriberOutput::Event(event));
+        if let Some(ref mut sender) = self.sender {
+            let _ = sender.send(TranscriberOutput::Event(event));
+        }
     }
 
     fn push_speaker(&mut self, speaker: Option<String>) {
@@ -2293,6 +2161,12 @@ impl TranscriberSrcPadState {
         self.current_speaker = speaker;
 
         self.push_event(event);
+    }
+
+    fn push_eos(&mut self) {
+        if let Some(ref mut sender) = self.sender {
+            let _ = sender.send(TranscriberOutput::Eos);
+        }
     }
 }
 
@@ -2343,14 +2217,6 @@ impl ObjectImpl for TranscriberSrcPad {
                     );
                     let ev = gst::event::Tag::builder(tl).build();
                     let _ = self.obj().store_sticky_event(&ev);
-
-                    if let Some(pad) = self.state.lock().unwrap().unsynced_pad.as_ref() {
-                        // Make sure our tags do not get overwritten
-                        let sev =
-                            gst::event::StreamStart::builder("unsynced-transcription").build();
-                        let _ = pad.store_sticky_event(&sev);
-                        let _ = pad.store_sticky_event(&ev);
-                    }
                 }
             }
             _ => unimplemented!(),

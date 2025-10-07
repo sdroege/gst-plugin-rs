@@ -16386,7 +16386,7 @@
                         "writable": true
                     },
                     "enable-late-punctuation-hack": {
-                        "blurb": "Pass a reduced max-delay to speechmatics to make sure we always get punctuation in time for joining it with the preceding word.",
+                        "blurb": "deprecated: speechmatics now appears to group punctuation reliably",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -16474,6 +16474,20 @@
                         "readable": true,
                         "type": "guint",
                         "writable": true
+                    },
+                    "max-observed-delay": {
+                        "blurb": "Maximum delay observed between the sending of an audio sample and the reception of an item",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": false
                     },
                     "max-speakers": {
                         "blurb": "The maximum number of speakers that may be detected with diarization=speaker",
