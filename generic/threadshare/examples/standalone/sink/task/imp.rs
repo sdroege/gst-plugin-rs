@@ -48,6 +48,21 @@ impl PadSinkHandler for TaskPadSinkHandler {
             .await
     }
 
+    async fn sink_chain_list(
+        self,
+        _pad: gst::Pad,
+        elem: <Self::ElementImpl as ObjectSubclass>::Type,
+        buffer_list: gst::BufferList,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        for buffer in buffer_list.iter_owned() {
+            elem.imp()
+                .hand_item_to_task(StreamItem::Buffer(buffer))
+                .await?;
+        }
+
+        Ok(gst::FlowSuccess::Ok)
+    }
+
     async fn sink_event_serialized(
         self,
         pad: gst::Pad,
@@ -202,37 +217,29 @@ impl TaskImpl for TaskSinkTask {
 
         match item {
             StreamItem::Buffer(buffer) => {
-                let ts = buffer
-                    .dts_or_pts()
-                    .expect("Buffer without ts")
-                    // FIXME do proper segment to running time
-                    .checked_sub(self.segment_start.expect("Buffer without Time Segment"))
-                    .expect("dts before Segment start");
+                if self.is_main_elem {
+                    let ts = buffer
+                        .dts_or_pts()
+                        .expect("Buffer without ts")
+                        // FIXME do proper segment to running time
+                        .checked_sub(self.segment_start.expect("Buffer without Time Segment"))
+                        .expect("dts before Segment start");
 
-                if let Some(last_ts) = self.last_ts {
-                    let rt = self.elem.current_running_time().unwrap();
-                    let lateness: Duration = (rt - ts).into();
-                    let interval: Duration = (ts - last_ts).into();
+                    if let Some(last_ts) = self.last_ts {
+                        let rt = self.elem.current_running_time().unwrap();
+                        let lateness: Duration = (rt - ts).into();
+                        let interval: Duration = (ts - last_ts).into();
 
-                    if let Some(stats) = self.stats.as_mut() {
-                        stats.add_buffer(lateness, interval);
+                        if let Some(stats) = self.stats.as_mut() {
+                            stats.add_buffer(lateness, interval);
+                        }
+
+                        gst::debug!(CAT, obj = self.elem, "o lateness {lateness:.2?}",);
+                        gst::debug!(CAT, obj = self.elem, "o interval {interval:.2?}",);
                     }
 
-                    debug_or_trace!(
-                        CAT,
-                        self.is_main_elem,
-                        obj = self.elem,
-                        "o lateness {lateness:.2?}",
-                    );
-                    debug_or_trace!(
-                        CAT,
-                        self.is_main_elem,
-                        obj = self.elem,
-                        "o interval {interval:.2?}",
-                    );
+                    self.last_ts = Some(ts);
                 }
-
-                self.last_ts = Some(ts);
 
                 log_or_trace!(CAT, self.is_main_elem, obj = self.elem, "Buffer processed");
             }
