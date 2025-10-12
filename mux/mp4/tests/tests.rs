@@ -840,12 +840,12 @@ fn check_stbl_sanity(stbl: &mp4_atom::Stbl, expected_config: &ExpectedConfigurat
     // TODO: check consistency between sample sizes and chunk / sample offsets
 }
 
-fn check_saio_sanity(maybe_saio: &Option<mp4_atom::Saio>, expected_config: &ExpectedConfiguration) {
+fn check_saio_sanity(siaos: &[mp4_atom::Saio], expected_config: &ExpectedConfiguration) {
     if expected_config.num_tai_timestamps == 0 {
-        assert!(maybe_saio.is_none());
+        assert!(siaos.is_empty());
     } else {
-        assert!(maybe_saio.is_some());
-        let saio = maybe_saio.as_ref().unwrap();
+        assert_eq!(siaos.len(), 1);
+        let saio = &siaos[0];
         assert!(saio.aux_info.is_some());
         assert_eq!(
             saio.aux_info.as_ref().unwrap().aux_info_type,
@@ -866,12 +866,12 @@ fn check_saio_sanity(maybe_saio: &Option<mp4_atom::Saio>, expected_config: &Expe
     }
 }
 
-fn check_saiz_sanity(maybe_saiz: &Option<mp4_atom::Saiz>, expected_config: &ExpectedConfiguration) {
+fn check_saiz_sanity(saizs: &[mp4_atom::Saiz], expected_config: &ExpectedConfiguration) {
     if expected_config.num_tai_timestamps == 0 {
-        assert!(maybe_saiz.is_none());
+        assert!(saizs.is_empty());
     } else {
-        assert!(maybe_saiz.is_some());
-        let saiz = maybe_saiz.as_ref().unwrap();
+        assert_eq!(saizs.len(), 1);
+        let saiz = &saizs[0];
         assert!(saiz.aux_info.is_some());
         assert_eq!(
             saiz.aux_info.as_ref().unwrap().aux_info_type,
@@ -970,6 +970,15 @@ fn check_stsd_sanity(stsd: &mp4_atom::Stsd, expected_config: &ExpectedConfigurat
         }
         mp4_atom::Codec::Unknown(four_cc) => {
             todo!("Unsupported codec type: {:?}", four_cc);
+        }
+        mp4_atom::Codec::Flac(_flac) => {
+            // TODO: check FLAC codec
+        }
+        mp4_atom::Codec::Ac3(_ac3) => {
+            // TODO: check AC-3 codec
+        }
+        mp4_atom::Codec::Eac3(_eac3) => {
+            // TODO: check EAC-3 codec
         }
     }
 }
@@ -1248,8 +1257,8 @@ fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
                 mp4_atom::Moov::KIND => {
                     let moov = mp4_atom::Moov::read_atom(&header, &mut input).unwrap();
                     let stbl = &moov.trak.first().unwrap().mdia.minf.stbl;
-                    let saio = stbl.saio.as_ref().unwrap();
-                    let saiz = stbl.saiz.as_ref().unwrap();
+                    let saio = stbl.saio.first().unwrap();
+                    let saiz = stbl.saiz.first().unwrap();
                     if let Some(ref mdat_data) = mdat_data {
                         assert_eq!(
                             saio.aux_info.as_ref().unwrap().aux_info_type,
