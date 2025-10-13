@@ -4,3 +4,6 @@ pub mod common;
 
 pub mod depay;
 pub mod pay;
+
+#[cfg(test)]
+mod tests;
