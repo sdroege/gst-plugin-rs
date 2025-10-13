@@ -13,11 +13,11 @@
 use gst::subclass::prelude::*;
 use gst::{glib, prelude::*};
 
-use std::collections::VecDeque;
-use std::sync::mpsc::RecvTimeoutError;
-use std::sync::Mutex;
+use std::sync::{Condvar, Mutex, MutexGuard};
 
 use std::sync::LazyLock;
+
+use std::collections::VecDeque;
 
 use tokio::runtime;
 
@@ -64,6 +64,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             latency: DEFAULT_LATENCY,
+            // FIXME: use base
             lateness: DEFAULT_LATENESS,
             interim_strategy: DEFAULT_INTERIM_STRATEGY,
             interim_timing_threshold: DEFAULT_INTERIM_TIMING_THRESHOLD,
@@ -77,33 +78,31 @@ impl Default for Settings {
 struct State {
     // (live, min, max)
     upstream_latency: Option<(bool, gst::ClockTime, Option<gst::ClockTime>)>,
-    pending_discont: bool,
-    last_input_rtime: Option<gst::ClockTime>,
+    first_buffer_pts: Option<gst::ClockTime>,
+    discont: bool,
     client: Option<Deepgram>,
-    disconts: VecDeque<(gst::ClockTime, gst::ClockTime)>,
-    discont_accumulator: gst::ClockTime,
     in_segment: Option<gst::FormattedSegment<gst::ClockTime>>,
     audio_tx: Option<mpsc::Sender<gst::Buffer>>,
-    result_tx: Option<std::sync::mpsc::Sender<StreamResponse>>,
+    result_tx: Option<std::sync::mpsc::Sender<TranscriptOutput>>,
     receive_handle: Option<tokio::task::JoinHandle<()>>,
     interim_index: usize,
     interim_start_time: Option<gst::ClockTime>,
     seqnum: gst::Seqnum,
-    task_started: bool,
     last_result: Option<StreamResponse>,
     last_speaker: Option<i32>,
+    draining: bool,
     audio_info: Option<gst_audio::AudioInfo>,
+    input_times: VecDeque<(gst::ClockTime, gst::ClockTime)>,
+    observed_max_delay: gst::ClockTime,
 }
 
 impl Default for State {
     fn default() -> Self {
         Self {
             upstream_latency: None,
-            pending_discont: true,
-            last_input_rtime: None,
+            first_buffer_pts: None,
+            discont: true,
             client: None,
-            disconts: VecDeque::new(),
-            discont_accumulator: gst::ClockTime::ZERO,
             in_segment: None,
             audio_tx: None,
             result_tx: None,
@@ -111,10 +110,12 @@ impl Default for State {
             interim_index: 0,
             interim_start_time: None,
             seqnum: gst::Seqnum::next(),
-            task_started: false,
             last_result: None,
             last_speaker: None,
+            draining: false,
             audio_info: None,
+            input_times: VecDeque::default(),
+            observed_max_delay: gst::ClockTime::ZERO,
         }
     }
 }
@@ -124,6 +125,7 @@ pub struct Transcriber {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
     state: Mutex<State>,
+    state_cond: Condvar,
     settings: Mutex<Settings>,
 }
 
@@ -131,9 +133,40 @@ pub struct Transcriber {
 enum TranscriptOutput {
     Event(gst::Event),
     Item(gst::Buffer),
+    Eos,
 }
 
 impl Transcriber {
+    fn trim_input_times(
+        &self,
+        input_times: &mut VecDeque<(gst::ClockTime, gst::ClockTime)>,
+        pts: gst::ClockTime,
+    ) -> Option<gst::ClockTime> {
+        let mut iter = input_times.iter().peekable();
+
+        let mut pos = 0;
+
+        let input_running_time = loop {
+            let Some(current) = iter.next() else {
+                break None;
+            };
+
+            if let Some(next_input_time) = iter.peek() {
+                if next_input_time.0 > pts {
+                    break Some(current.1);
+                }
+            } else {
+                break Some(current.1);
+            }
+
+            pos += 1;
+        };
+
+        input_times.drain(..pos);
+
+        input_running_time
+    }
+
     fn upstream_latency(&self) -> Option<(bool, gst::ClockTime, Option<gst::ClockTime>)> {
         if let Some(latency) = self.state.lock().unwrap().upstream_latency {
             return Some(latency);
@@ -161,28 +194,77 @@ impl Transcriber {
         }
     }
 
-    fn dequeue_result(
-        &self,
-        state: &mut State,
-        result: &StreamResponse,
-        now: Option<gst::ClockTime>,
-        settings: &Settings,
-        upstream_min_latency: gst::ClockTime,
-    ) -> (Vec<TranscriptOutput>, bool) {
-        let mut output: Vec<TranscriptOutput> = vec![];
-
-        let StreamResponse::TranscriptResponse {
-            is_final,
-            channel,
-            speech_final,
-            ..
-        } = result
-        else {
-            unreachable!();
+    fn drain<'a>(
+        &'a self,
+        mut state: MutexGuard<'a, State>,
+    ) -> Result<MutexGuard<'a, State>, gst::FlowError> {
+        let Some(mut audio_tx) = state.audio_tx.take() else {
+            gst::debug!(CAT, imp = self, "Flushing");
+            return Err(gst::FlowError::Flushing);
         };
 
-        let Some(alternative) = channel.alternatives.first() else {
-            return (output, *is_final);
+        state.draining = true;
+
+        drop(state);
+
+        let _ = RUNTIME
+            .block_on(audio_tx.send(gst::Buffer::new()))
+            .map_err(|err| {
+                gst::element_imp_error!(
+                    self,
+                    gst::StreamError::Failed,
+                    ["Streaming failed: {err}"]
+                );
+                gst::FlowError::Error
+            });
+
+        let mut state = self.state.lock().unwrap();
+
+        while (self.srcpad.task_state() == gst::TaskState::Started) && state.draining {
+            state = self.state_cond.wait(state).unwrap();
+        }
+
+        Ok(self.disconnect(state))
+    }
+
+    fn process_result(
+        &self,
+        result: &StreamResponse,
+    ) -> Result<bool, std::sync::mpsc::SendError<TranscriptOutput>> {
+        let now = self.obj().current_running_time();
+        let upstream_latency = self.upstream_latency();
+
+        let mut state_guard = self.state.lock().unwrap();
+        let state: &mut State = &mut state_guard;
+        let settings = self.settings.lock().unwrap();
+
+        let upstream_min_latency = upstream_latency
+            .map(|upstream_latency| upstream_latency.1)
+            .unwrap_or(gst::ClockTime::MAX);
+        let upstream_is_live = upstream_latency
+            .map(|upstream_latency| upstream_latency.0)
+            .unwrap_or(false);
+
+        let Some(ref result_tx) = state.result_tx else {
+            return Ok(true);
+        };
+
+        let (is_final, channel, speech_final, start, duration) = match result {
+            StreamResponse::TranscriptResponse {
+                start,
+                duration,
+                is_final,
+                speech_final,
+                channel,
+                ..
+            } => (is_final, channel, speech_final, start, duration),
+            StreamResponse::TerminalResponse { .. } => {
+                result_tx.send(TranscriptOutput::Eos)?;
+                return Ok(true);
+            }
+            _ => {
+                return Ok(true);
+            }
         };
 
         let in_segment = state
@@ -190,191 +272,162 @@ impl Transcriber {
             .as_mut()
             .expect("segment received before result");
 
-        for (idx, item) in alternative.words.iter().enumerate() {
-            let dg_start_time: gst::ClockTime = ((item.start * 1_000_000_000.0) as u64).nseconds();
-            let dg_end_time: gst::ClockTime = ((item.end * 1_000_000_000.0) as u64).nseconds();
+        let mut do_notify_delay = false;
 
-            match settings.interim_strategy {
-                DeepgramInterimStrategy::Timing => {
-                    if let Some(interim_start_time) = state.interim_start_time {
-                        if dg_start_time <= interim_start_time + settings.interim_timing_threshold {
+        if let Some(alternative) = channel.alternatives.first() {
+            for (idx, item) in alternative.words.iter().enumerate() {
+                let dg_start_time: gst::ClockTime =
+                    ((item.start * 1_000_000_000.0) as u64).nseconds();
+                let dg_end_time: gst::ClockTime = ((item.end * 1_000_000_000.0) as u64).nseconds();
+
+                let pts = dg_start_time + state.first_buffer_pts.unwrap();
+
+                match settings.interim_strategy {
+                    DeepgramInterimStrategy::Timing => {
+                        if let Some(interim_start_time) = state.interim_start_time {
+                            if dg_start_time
+                                <= interim_start_time + settings.interim_timing_threshold
+                            {
+                                continue;
+                            }
+                        }
+                    }
+                    DeepgramInterimStrategy::Index => {
+                        if idx < state.interim_index {
                             continue;
                         }
                     }
+                    _ => (),
                 }
-                DeepgramInterimStrategy::Index => {
-                    if idx < state.interim_index {
-                        continue;
+
+                let rtime = in_segment.to_running_time(pts).unwrap();
+
+                if !is_final {
+                    let Some(now) = now else {
+                        return Ok(*is_final);
+                    };
+
+                    if rtime + settings.latency + upstream_min_latency > now + GRANULARITY {
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "interim item {item:?} still has time to stabilize, {} + {} + {} > {} + {}",
+                            rtime,
+                            settings.latency,
+                            upstream_min_latency,
+                            now,
+                            GRANULARITY
+                        );
+                        break;
                     }
-                }
-                _ => (),
-            }
 
-            let rtime = dg_start_time + state.discont_accumulator + settings.lateness;
-
-            if !is_final {
-                let Some(now) = now else {
-                    return (output, *is_final);
-                };
-
-                if rtime + settings.latency + upstream_min_latency > now + GRANULARITY {
-                    gst::trace!(
-                        CAT,
-                        imp = self,
-                        "interim item {item:?} still has time to stabilize, {} + {} + {} > {} + {}",
-                        rtime,
-                        settings.latency,
-                        upstream_min_latency,
-                        now,
-                        GRANULARITY
-                    );
-                    break;
-                }
-
-                gst::log!(CAT, imp = self, "interim {item:?} needs to be output now");
-            } else {
-                gst::log!(CAT, imp = self, "{item:?} is final");
-            }
-
-            let mut flags: gst::BufferFlags = gst::BufferFlags::empty();
-
-            while let Some((discont_rtime, pts)) = state.disconts.pop_front() {
-                gst::trace!(
-                    CAT,
-                    imp = self,
-                    "checking if next discont is reached: {discont_rtime} {pts}"
-                );
-
-                if dg_start_time >= discont_rtime {
-                    flags.set(gst::BufferFlags::DISCONT, true);
-
-                    let base_rtime = in_segment.to_running_time(pts).unwrap();
-
-                    state.discont_accumulator += base_rtime - discont_rtime;
-
-                    gst::info!(
-                        CAT,
-                        imp = self,
-                        "next discont is reached: \
-                             discontinuity running time: {discont_rtime} \
-                             discontinuity pts: {pts}, \
-                             new base running time: {base_rtime}\
-                             discont accumulator is now {}",
-                        state.discont_accumulator
-                    );
+                    gst::log!(CAT, imp = self, "interim {item:?} needs to be output now");
                 } else {
-                    gst::trace!(CAT, imp = self, "next discont not reached yet");
-                    state.disconts.push_front((discont_rtime, pts));
-                    break;
+                    gst::log!(CAT, imp = self, "{item:?} is final");
                 }
-            }
 
-            let Some(mut pts) = in_segment.position_from_running_time(rtime) else {
-                gst::warning!(
-                    CAT,
-                    imp = self,
-                    "received item with running time outside of segment ({})",
-                    rtime
-                );
-                continue;
-            };
+                let duration = dg_end_time.saturating_sub(dg_start_time);
 
-            let duration = dg_end_time.saturating_sub(dg_start_time);
-
-            if let Some(position) = in_segment.position() {
-                match pts.cmp(&position) {
-                    std::cmp::Ordering::Greater => {
+                if let Some(position) = in_segment.position() {
+                    if pts.cmp(&position) == std::cmp::Ordering::Greater {
                         gst::log!(
                             CAT,
                             imp = self,
                             "position lagging, queuing gap \
-                                with pts {position} and duration {}",
+                            with pts {position} and duration {}",
                             pts - position
                         );
-                        output.push(TranscriptOutput::Event(
+                        result_tx.send(TranscriptOutput::Event(
                             gst::event::Gap::builder(position)
                                 .duration(pts - position)
                                 .seqnum(state.seqnum)
                                 .build(),
-                        ));
+                        ))?;
                     }
-                    std::cmp::Ordering::Less => {
-                        gst::debug!(
-                            CAT,
-                            imp = self,
-                            "Item stabilized too late, adjusting timestamp ({pts} -> {position}), \
-                                consider increasing latency"
-                        );
-                        pts = position;
-                    }
-                    _ => (),
                 }
-            }
 
-            if item.speaker != state.last_speaker {
-                output.push(TranscriptOutput::Event(
-                    gst::event::CustomDownstream::builder(
-                        gst::Structure::builder("rstranscribe/speaker-change")
+                if item.speaker != state.last_speaker {
+                    result_tx.send(TranscriptOutput::Event(
+                        gst::event::CustomDownstream::builder(
+                            gst::Structure::builder("rstranscribe/speaker-change")
+                                .field("speaker", item.speaker.map(|n| n.to_string()))
+                                .build(),
+                        )
+                        .build(),
+                    ))?;
+                }
+
+                let punctuated_word = item.punctuated_word.as_ref().expect("punctuation enabled");
+
+                result_tx.send(TranscriptOutput::Event(
+                    gst::event::CustomUpstream::builder(
+                        gst::Structure::builder("rstranscribe/new-item")
                             .field("speaker", item.speaker.map(|n| n.to_string()))
+                            .field("content", punctuated_word)
+                            .field("running-time", rtime)
+                            .field("duration", duration)
                             .build(),
                     )
                     .build(),
-                ));
-            }
+                ))?;
 
-            let punctuated_word = item.punctuated_word.as_ref().expect("punctuation enabled");
+                state.last_speaker = item.speaker;
 
-            output.push(TranscriptOutput::Event(
-                gst::event::CustomUpstream::builder(
-                    gst::Structure::builder("rstranscribe/new-item")
-                        .field("speaker", item.speaker.map(|n| n.to_string()))
-                        .field("content", punctuated_word)
-                        .field("running-time", rtime)
-                        .field("duration", duration)
-                        .build(),
-                )
-                .build(),
-            ));
-
-            state.last_speaker = item.speaker;
-
-            gst::debug!(
-                CAT,
-                imp = self,
-                "queuing item {} with pts {pts} \
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "queuing item {} with pts {pts} \
                     and duration {duration}",
-                punctuated_word,
-            );
+                    punctuated_word,
+                );
 
-            in_segment.set_position(Some(pts + duration));
+                in_segment.set_position(Some(pts + duration));
 
-            let mut buf = gst::Buffer::from_mut_slice(punctuated_word.clone().into_bytes());
-            {
-                let buf_mut = buf.get_mut().unwrap();
-                buf_mut.set_pts(pts);
-                buf_mut.set_duration(duration);
+                let mut buf = gst::Buffer::from_mut_slice(punctuated_word.clone().into_bytes());
+                {
+                    let buf_mut = buf.get_mut().unwrap();
+                    buf_mut.set_pts(pts);
+                    buf_mut.set_duration(duration);
+
+                    if state.discont {
+                        buf_mut.set_flags(gst::BufferFlags::DISCONT);
+                        state.discont = false;
+                    }
+                }
+
+                result_tx.send(TranscriptOutput::Item(buf))?;
+
+                if let Some(input_running_time) = self.trim_input_times(&mut state.input_times, pts)
+                {
+                    if let Some(now) = now {
+                        let item_delay = now.saturating_sub(input_running_time);
+
+                        if item_delay > state.observed_max_delay {
+                            state.observed_max_delay = item_delay;
+                            do_notify_delay = true;
+                        }
+                    }
+                }
+
+                state.interim_index = idx;
+                state.interim_start_time = Some(dg_start_time);
+
+                gst::trace!(
+                    CAT,
+                    imp = self,
+                    "partial index is now {}",
+                    state.interim_index
+                );
             }
-
-            output.push(TranscriptOutput::Item(buf));
-
-            state.interim_index = idx;
-            state.interim_start_time = Some(dg_start_time);
-
-            gst::trace!(
-                CAT,
-                imp = self,
-                "partial index is now {}",
-                state.interim_index
-            );
         }
 
         if *speech_final {
-            output.push(TranscriptOutput::Event(
+            result_tx.send(TranscriptOutput::Event(
                 gst::event::CustomDownstream::builder(
                     gst::Structure::builder("rstranscribe/final-transcript").build(),
                 )
                 .build(),
-            ));
+            ))?;
         }
 
         if *is_final {
@@ -382,85 +435,89 @@ impl Transcriber {
 
             state.interim_index = 0;
             state.interim_start_time = None;
-        }
 
-        (output, *is_final)
-    }
+            let transcript_start_time: gst::ClockTime =
+                ((start * 1_000_000_000.0) as u64).nseconds();
+            let transcript_duration: gst::ClockTime =
+                ((duration * 1_000_000_000.0) as u64).nseconds();
 
-    fn dequeue(&self, result: Option<&StreamResponse>) -> (Vec<TranscriptOutput>, bool) {
-        let now = self.obj().current_running_time();
-        let upstream_latency = self.upstream_latency();
+            let transcript_end_pts =
+                transcript_start_time + state.first_buffer_pts.unwrap() + transcript_duration;
 
-        let mut state = self.state.lock().unwrap();
-        let settings = self.settings.lock().unwrap();
-
-        let (mut output, is_final) = match result {
-            Some(result) => {
-                if let Some((_, upstream_min, _)) = upstream_latency {
-                    self.dequeue_result(&mut state, result, now, &settings, upstream_min)
-                } else {
-                    self.dequeue_result(&mut state, result, now, &settings, gst::ClockTime::ZERO)
-                }
-            }
-            None => (vec![], true),
-        };
-
-        if let Some(upstream_latency) = upstream_latency {
-            let (upstream_live, upstream_min, _) = upstream_latency;
-
-            // Don't push a gap before we've even received a first buffer,
-            // as we haven't set in_segment.position to a start time yet
-            if upstream_live && state.last_input_rtime.is_some() {
-                if let Some(now) = now {
-                    let seqnum = state.seqnum;
-                    let in_segment = state.in_segment.as_mut().unwrap();
-                    let position = in_segment.position().unwrap();
-                    let last_rtime = in_segment.to_running_time(position).unwrap();
-
-                    let deadline = last_rtime + settings.latency + upstream_min;
-
-                    gst::trace!(
+            if let Some(position) = in_segment.position() {
+                if transcript_end_pts.cmp(&position) == std::cmp::Ordering::Greater {
+                    gst::log!(
                         CAT,
                         imp = self,
-                        "upstream is live, deadline: {deadline} now: {now} \
-                        ({last_rtime} + {} + {upstream_min}",
-                        settings.latency
+                        "position lagging, queuing gap \
+                        with pts {position} and duration {}",
+                        transcript_end_pts - position
                     );
+                    result_tx.send(TranscriptOutput::Event(
+                        gst::event::Gap::builder(position)
+                            .duration(transcript_end_pts - position)
+                            .seqnum(state.seqnum)
+                            .build(),
+                    ))?;
+                }
+            }
 
-                    if deadline < now {
-                        let gap_duration = now - deadline;
+            in_segment.set_position(Some(transcript_end_pts));
+        }
 
-                        gst::log!(
-                            CAT,
-                            "deadline reached, queuing gap with pts {position} \
-                            and duration {gap_duration}"
-                        );
+        let observed_max_delay = state.observed_max_delay;
+        let (latency, lateness) = (settings.latency, settings.lateness);
 
-                        output.push(TranscriptOutput::Event(
-                            gst::event::Gap::builder(position)
-                                .duration(gap_duration)
-                                .seqnum(seqnum)
-                                .build(),
-                        ));
-                        in_segment.set_position(position + gap_duration);
-                    }
+        drop(state_guard);
+        drop(settings);
+
+        if do_notify_delay {
+            self.obj().notify("max-observed-delay");
+            if observed_max_delay > latency + lateness {
+                let details = gst::Structure::builder("deepgramtranscriber/excessive-delay")
+                    .field("new-observed-max-delay", observed_max_delay)
+                    .build();
+                if upstream_is_live {
+                    gst::element_warning!(
+                        self.obj(),
+                        gst::CoreError::Clock,
+                        ["Maximum observed delay {} exceeds configured lateness + latency", observed_max_delay],
+                        details: details
+                    );
                 }
             }
         }
 
-        (output, is_final)
+        Ok(*is_final)
     }
 
-    fn start_srcpad_task(&self) -> Result<(), gst::LoggableError> {
-        if self.state.lock().unwrap().task_started {
-            gst::debug!(CAT, imp = self, "Task started already");
-            return Ok(());
+    fn pause_srcpad_task(&self) {
+        gst::info!(CAT, imp = self, "no more results, pausing",);
+        let _ = self.srcpad.pause_task();
+
+        self.state_cond.notify_one();
+    }
+
+    fn do_eos(&self) {
+        let (seqnum, draining) = {
+            let state = self.state.lock().unwrap();
+            (state.seqnum, state.draining)
+        };
+
+        if !draining {
+            let _ = self
+                .srcpad
+                .push_event(gst::event::Eos::builder().seqnum(seqnum).build());
         }
 
+        self.pause_srcpad_task();
+    }
+
+    fn start_srcpad_task(&self, state: &mut State) -> Result<(), gst::LoggableError> {
         gst::debug!(CAT, imp = self, "starting source pad task");
 
-        let (result_tx, result_rx) = std::sync::mpsc::channel::<StreamResponse>();
-        self.state.lock().unwrap().result_tx = Some(result_tx);
+        let (result_tx, result_rx) = std::sync::mpsc::channel::<TranscriptOutput>();
+        state.result_tx = Some(result_tx);
 
         let this_weak = self.downgrade();
         let res = self.srcpad.start_task(move || loop {
@@ -468,62 +525,40 @@ impl Transcriber {
                 break;
             };
 
-            let result = match result_rx
-                .recv_timeout(std::time::Duration::from_millis(GRANULARITY.mseconds()))
-            {
-                Ok(result) => Some(result),
-                Err(RecvTimeoutError::Timeout) => this.state.lock().unwrap().last_result.take(),
-                Err(RecvTimeoutError::Disconnected) => {
-                    gst::info!(CAT, imp = this, "no more results, pushing EOS and pausing");
-                    let seqnum = this.state.lock().unwrap().seqnum;
-                    let _ = this
-                        .srcpad
-                        .push_event(gst::event::Eos::builder().seqnum(seqnum).build());
-                    let _ = this.srcpad.pause_task();
+            match result_rx.recv() {
+                Ok(TranscriptOutput::Item(buffer)) => {
+                    gst::debug!(CAT, imp = this, "pushing buffer {buffer:?}");
+
+                    if let Err(err) = this.srcpad.push(buffer) {
+                        if err != gst::FlowError::Flushing {
+                            gst::element_error!(
+                                this.obj(),
+                                gst::StreamError::Failed,
+                                ["Streaming failed: {}", err]
+                            );
+                        }
+                        this.pause_srcpad_task();
+                    }
+                }
+                Ok(TranscriptOutput::Event(event)) => {
+                    gst::debug!(CAT, imp = this, "pushing event {event:?}");
+
+                    if event.is_downstream() {
+                        this.srcpad.push_event(event);
+                    } else {
+                        this.sinkpad.push_event(event);
+                    }
+                }
+                Ok(TranscriptOutput::Eos) | Err(_) => {
+                    this.do_eos();
                     break;
                 }
-            };
-
-            gst::trace!(CAT, imp = this, "processing result {result:?}");
-
-            let (mut items, is_final) = this.dequeue(result.as_ref());
-
-            for item in items.drain(..) {
-                match item {
-                    TranscriptOutput::Item(buffer) => {
-                        gst::debug!(CAT, imp = this, "pushing buffer {buffer:?}");
-
-                        if let Err(err) = this.srcpad.push(buffer) {
-                            if err != gst::FlowError::Flushing {
-                                gst::element_error!(
-                                    this.obj(),
-                                    gst::StreamError::Failed,
-                                    ["Streaming failed: {}", err]
-                                );
-                            }
-                            let _ = this.srcpad.pause_task();
-                        }
-                    }
-                    TranscriptOutput::Event(event) => {
-                        gst::debug!(CAT, imp = this, "pushing event {event:?}");
-
-                        if event.is_downstream() {
-                            this.srcpad.push_event(event);
-                        } else {
-                            this.sinkpad.push_event(event);
-                        }
-                    }
-                }
             }
-
-            this.state.lock().unwrap().last_result = if is_final { None } else { result };
         });
 
         if res.is_err() {
             return Err(gst::loggable_error!(CAT, "Failed to start pad task"));
         }
-
-        self.state.lock().unwrap().task_started = true;
 
         gst::debug!(CAT, imp = self, "started source pad task");
 
@@ -536,80 +571,62 @@ impl Transcriber {
         use gst::EventView::*;
         match event.view() {
             StreamStart(_) => {
-                gst::info!(CAT, imp = self, "received stream start, connecting");
-
-                if let Err(err) = self.start_srcpad_task() {
-                    gst::error!(CAT, imp = self, "Failed to start srcpad task: {err}");
-                    return false;
-                }
-
                 self.state.lock().unwrap().seqnum = event.seqnum();
 
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             FlushStart(_) => {
-                gst::info!(CAT, imp = self, "received flush start, disconnecting");
+                gst::debug!(CAT, imp = self, "received flush start, disconnecting");
                 let ret = gst::Pad::event_default(pad, Some(&*self.obj()), event);
                 let _ = self.state.lock().unwrap().result_tx.take();
-                let _ = self.srcpad.pause_task();
-                self.disconnect(false);
+                self.pause_srcpad_task();
+                drop(self.disconnect(self.state.lock().unwrap()));
                 ret
             }
             Segment(e) => {
-                {
-                    let mut state = self.state.lock().unwrap();
-
-                    let mut segment = match e.segment().clone().downcast::<gst::ClockTime>() {
-                        Err(segment) => {
-                            gst::element_imp_error!(
-                                self,
-                                gst::StreamError::Format,
-                                ["Only Time segments supported, got {:?}", segment.format(),]
-                            );
-                            return false;
-                        }
-                        Ok(segment) => segment,
-                    };
-
-                    if let Some(old_in_segment) = state.in_segment.as_ref() {
-                        segment.set_position(old_in_segment.position());
-
-                        if *old_in_segment != segment {
-                            gst::element_imp_error!(
-                                self,
-                                gst::StreamError::Format,
-                                ["Multiple segments not supported"]
-                            );
-                            return false;
-                        } else {
-                            gst::debug!(CAT, imp = self, "ignoring duplicate segment");
-                            return true;
-                        }
+                let segment = match e.segment().clone().downcast::<gst::ClockTime>() {
+                    Err(segment) => {
+                        gst::element_imp_error!(
+                            self,
+                            gst::StreamError::Format,
+                            ["Only Time segments supported, got {:?}", segment.format(),]
+                        );
+                        return false;
                     }
+                    Ok(segment) => segment,
+                };
 
-                    segment.set_position(segment.start());
+                let mut state = self.state.lock().unwrap();
 
-                    gst::info!(CAT, imp = self, "using segment {segment:?}");
-
-                    state.in_segment = Some(segment);
+                if let Some(ref in_segment) = state.in_segment {
+                    // If segment changes in any other way than the position
+                    // we'll have to drain first.
+                    let mut compare_segment = segment.clone();
+                    compare_segment.set_position(in_segment.position());
+                    if *in_segment != compare_segment {
+                        // Do drain
+                        state = match self.drain(state) {
+                            Err(err) => {
+                                gst::error!(CAT, imp = self, "Failed to drain: {err}");
+                                gst::element_imp_error!(
+                                    self,
+                                    gst::StreamError::Failed,
+                                    ["Failed to drain: {err}"]
+                                );
+                                return false;
+                            }
+                            Ok(state) => state,
+                        };
+                    }
                 }
+
+                gst::info!(CAT, imp = self, "input segment is now {:?}", segment);
+
+                state.in_segment = Some(segment.clone());
 
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
-            Caps(e) => {
-                let in_caps = e.caps();
-
-                let Ok(audio_info) = gst_audio::AudioInfo::from_caps(in_caps) else {
-                    gst::element_imp_error!(
-                        self,
-                        gst::StreamError::Format,
-                        ["Failed to parse audio caps: {}", in_caps]
-                    );
-                    return false;
-                };
-
-                self.state.lock().unwrap().audio_info = Some(audio_info);
-
+            Caps(_) => {
                 let caps = self.srcpad.pad_template_caps();
 
                 let event = gst::event::Caps::builder(&caps)
@@ -619,7 +636,24 @@ impl Transcriber {
                 self.srcpad.push_event(event)
             }
             Eos(_) => {
-                self.state.lock().unwrap().audio_tx.take();
+                let Some(mut audio_tx) = self.state.lock().unwrap().audio_tx.take() else {
+                    gst::debug!(CAT, obj = pad, "Flushing");
+                    return true;
+                };
+
+                let _ = RUNTIME
+                    .block_on(audio_tx.send(gst::Buffer::new()))
+                    .map_err(|err| {
+                        gst::element_imp_error!(
+                            self,
+                            gst::StreamError::Failed,
+                            ["Streaming failed: {err}"]
+                        );
+                        gst::FlowError::Error
+                    });
+
+                self.state.lock().unwrap().audio_tx = Some(audio_tx);
+
                 true
             }
             _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
@@ -632,6 +666,8 @@ impl Transcriber {
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::trace!(CAT, obj = pad, "Handling {buffer:?}");
+
+        let now = self.obj().current_running_time();
 
         self.ensure_connection().map_err(|err| {
             gst::element_imp_error!(
@@ -651,7 +687,7 @@ impl Transcriber {
                     imp = self,
                     "buffer is discont, storing pending discont"
                 );
-                state.pending_discont = true;
+                state.discont = true;
             }
 
             let Some(segment) = state.in_segment.as_ref() else {
@@ -682,31 +718,12 @@ impl Transcriber {
                 return Ok(gst::FlowSuccess::Ok);
             };
 
-            let mut rtime = segment.to_running_time(pts).expect("buffer was clipped");
-
-            if state.pending_discont {
-                state.pending_discont = false;
-
-                let discont_rtime = state.last_input_rtime.unwrap_or(gst::ClockTime::ZERO);
-
-                gst::info!(
-                    CAT,
-                    imp = self,
-                    "storing discont with running time {discont_rtime} and pts {pts}"
-                );
-
-                state.disconts.push_back((discont_rtime, pts));
+            if state.first_buffer_pts.is_none() {
+                state.first_buffer_pts = Some(pts);
             }
-
-            rtime.opt_add_assign(buffer.duration());
-
-            gst::trace!(CAT, imp = self, "storing last input running time {rtime}");
-
-            if state.last_input_rtime.is_none() {
-                state.in_segment.as_mut().unwrap().set_position(Some(pts));
+            if let Some(now) = now {
+                state.input_times.push_back((pts, now));
             }
-
-            state.last_input_rtime = Some(rtime);
         }
 
         let Some(mut audio_tx) = self.state.lock().unwrap().audio_tx.take() else {
@@ -725,19 +742,25 @@ impl Transcriber {
     }
 
     fn ensure_connection(&self) -> Result<(), gst::ErrorMessage> {
-        let mut state = self.state.lock().unwrap();
-        if state.client.is_none() {
-            let Some((sample_rate, channels)) = state
-                .audio_info
-                .as_ref()
-                .map(|info| (info.rate(), info.channels()))
-            else {
-                return Err(gst::error_msg!(
-                    gst::CoreError::Failed,
-                    ["No caps set on sinkpad"]
-                ));
-            };
+        let Some(audio_info) = self
+            .sinkpad
+            .current_caps()
+            .and_then(|caps| gst_audio::AudioInfo::from_caps(&caps).ok())
+        else {
+            return Err(gst::error_msg!(
+                gst::CoreError::Failed,
+                ["No caps set on sinkpad"]
+            ));
+        };
 
+        let sample_rate = audio_info.rate();
+        let channels = audio_info.channels();
+
+        let mut state = self.state.lock().unwrap();
+
+        state.audio_info = Some(audio_info);
+
+        if state.client.is_none() {
             let (use_interim_results, diarize, api_key, language_code) = {
                 let settings = self.settings.lock().unwrap();
 
@@ -766,6 +789,14 @@ impl Transcriber {
 
             state.audio_tx = Some(audio_tx);
             state.client = Some(client.clone());
+
+            if let Err(err) = self.start_srcpad_task(&mut state) {
+                gst::error!(CAT, imp = self, "Failed to start srcpad task: {}", err);
+                return Err(gst::error_msg!(
+                    gst::CoreError::Failed,
+                    ["Failed to start srcpad task: {err}"]
+                ));
+            }
 
             let this_weak = self.downgrade();
             state.receive_handle = Some(RUNTIME.spawn(async move {
@@ -815,9 +846,14 @@ impl Transcriber {
                 };
 
                 loop {
-                    let result = match results.next().await {
-                        Some(Ok(result)) => result,
-                        Some(Err(err)) => {
+                    let result = match tokio::time::timeout(
+                        std::time::Duration::from_millis(GRANULARITY.mseconds()),
+                        results.next(),
+                    )
+                    .await
+                    {
+                        Ok(Some(Ok(result))) => result,
+                        Ok(Some(Err(err))) => {
                             let err = format!("Transcribe ws stream error: {err}",);
                             if let Some(this) = this_weak.upgrade() {
                                 gst::error!(CAT, imp = this, "{err}");
@@ -828,26 +864,43 @@ impl Transcriber {
                             };
                             break;
                         }
-                        None => {
+                        Ok(None) => {
                             if let Some(this) = this_weak.upgrade() {
                                 gst::debug!(CAT, imp = this, "Transcriber loop sending EOS");
                             }
                             break;
                         }
-                    };
+                        Err(_) => {
+                            let Some(this) = this_weak.upgrade() else {
+                                break;
+                            };
 
-                    let Some(result_tx) = this_weak
-                        .upgrade()
-                        .and_then(|this| this.state.lock().unwrap().result_tx.clone())
-                    else {
-                        break;
-                    };
+                            let last_result = this.state.lock().unwrap().last_result.take();
 
-                    if result_tx.send(result).is_err() {
-                        if let Some(this) = this_weak.upgrade() {
-                            gst::info!(CAT, imp = this, "Result tx closed");
+                            if let Some(last_result) = last_result {
+                                last_result
+                            } else {
+                                continue;
+                            }
                         }
+                    };
+
+                    let Some(this) = this_weak.upgrade() else {
                         break;
+                    };
+
+                    let is_final = match this.process_result(&result) {
+                        Err(_) => {
+                            gst::info!(CAT, imp = this, "Result tx closed");
+                            break;
+                        }
+                        Ok(is_final) => is_final,
+                    };
+
+                    if !is_final {
+                        this.state.lock().unwrap().last_result = Some(result);
+                    } else {
+                        this.state.lock().unwrap().last_result = None;
                     }
                 }
             }));
@@ -858,38 +911,23 @@ impl Transcriber {
         Ok(())
     }
 
-    fn prepare(&self) -> Result<(), gst::ErrorMessage> {
-        gst::debug!(CAT, imp = self, "Preparing");
-
-        gst::debug!(CAT, imp = self, "Prepared");
-
-        Ok(())
-    }
-
-    fn disconnect(&self, stop_task: bool) {
-        let mut state = self.state.lock().unwrap();
-
+    fn disconnect<'a>(&'a self, mut state: MutexGuard<'a, State>) -> MutexGuard<'a, State> {
         if let Some(handle) = state.receive_handle.take() {
             gst::info!(CAT, imp = self, "aborting result reception");
             handle.abort();
         }
 
-        let mut task_started = state.task_started;
+        *state = State::default();
 
-        // Make sure the task is fully stopped before resetting the state,
-        // in order not to break expectations such as in_segment being
-        // present while the task is still processing items
-        if stop_task {
-            drop(state);
-            let _ = self.srcpad.stop_task();
-            state = self.state.lock().unwrap();
-            task_started = false;
-        }
+        self.state_cond.notify_one();
 
-        *state = State {
-            task_started,
-            ..Default::default()
-        };
+        drop(state);
+
+        let _ = self.srcpad.stop_task();
+
+        gst::info!(CAT, imp = self, "disconnected");
+
+        self.state.lock().unwrap()
     }
 
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
@@ -958,6 +996,7 @@ impl ObjectSubclass for Transcriber {
             sinkpad,
             state: Default::default(),
             settings: Default::default(),
+            state_cond: Condvar::new(),
         }
     }
 }
@@ -1014,6 +1053,12 @@ impl ObjectImpl for Transcriber {
                     )
                     .default_value(Some(DEFAULT_INPUT_LANG_CODE))
                     .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("max-observed-delay")
+                    .nick("Maximum Observed Delay")
+                    .blurb("Maximum delay observed between the sending of an audio sample and the reception of an item")
+                    .default_value(0)
+                    .read_only()
                     .build(),
             ]
         });
@@ -1103,6 +1148,10 @@ impl ObjectImpl for Transcriber {
                 let settings = self.settings.lock().unwrap();
                 settings.language_code.to_value()
             }
+            "max-observed-delay" => {
+                let state = self.state.lock().unwrap();
+                (state.observed_max_delay.mseconds() as u32).to_value()
+            }
             _ => unimplemented!(),
         }
     }
@@ -1162,18 +1211,10 @@ impl ElementImpl for Transcriber {
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst::log!(CAT, imp = self, "Changing state {transition:?}");
 
-        match transition {
-            gst::StateChange::NullToReady => {
-                self.prepare().map_err(|err| {
-                    self.post_error_message(err);
-                    gst::StateChangeError
-                })?;
-            }
-            gst::StateChange::PausedToReady => {
-                let _ = self.state.lock().unwrap().result_tx.take();
-                self.disconnect(true);
-            }
-            _ => (),
+        if transition == gst::StateChange::PausedToReady {
+            let mut state = self.state.lock().unwrap();
+            let _ = state.result_tx.take();
+            drop(self.disconnect(state));
         }
 
         self.parent_change_state(transition)
