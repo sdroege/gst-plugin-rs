@@ -289,7 +289,8 @@ impl crate::basepay::RtpBasePay2Impl for RtpBaseAudioPay2 {
 
         let discont = state.audio_discont.process_input(
             &settings.audio_discont,
-            buffer.buffer().flags().contains(gst::BufferFlags::DISCONT),
+            buffer.buffer().flags().contains(gst::BufferFlags::DISCONT)
+                || buffer.buffer().flags().contains(gst::BufferFlags::RESYNC),
             clock_rate,
             pts,
             num_samples,
