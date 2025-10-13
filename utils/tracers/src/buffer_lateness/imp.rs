@@ -170,10 +170,10 @@ impl BufferLateness {
 
         let mut state = self.state.lock().unwrap();
         let path = file_path.map_or_else(|| state.settings.file.clone(), PathBuf::from);
-        let first_write = state.logs_written.contains(&path);
+        let should_append = state.logs_written.contains(&path);
 
         let mut file = match std::fs::OpenOptions::new()
-            .append(!first_write)
+            .append(should_append)
             .create(true)
             .open(path.clone())
         {
