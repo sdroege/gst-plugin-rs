@@ -8,6 +8,19 @@ The plugins build upon the [GStreamer Rust bindings](https://gitlab.freedesktop.
 Check the README.md of that repository also for details about how to set-up
 your development environment.
 
+## Releases and git tags
+
+Releases from this repository are done from the versioned release branches,
+i.e. `0.14` right now, and there's a tag for each release, e.g. `0.14.2`.
+Plugins that are ready for general usage are also published to [crates.io](https://crates.io).
+
+Distributors should make use of these versions.
+
+In addition there are `gstreamer-X.Y.Z` tags in this repository. These tags
+are for internal use by [cerbero](https://gitlab.freedesktop.org/gstreamer/cerbero) and are
+used for the binary releases published by the GStreamer project. These tags
+are not supposed to be used by distributors.
+
 ## Plugins
 
 You will find the following plugins in this repository:
