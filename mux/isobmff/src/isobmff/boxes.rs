@@ -116,23 +116,30 @@ pub(crate) fn create_mdat_header_non_frag(size: Option<u64>) -> Result<gst::Buff
     Ok(gst::Buffer::from_mut_slice(v))
 }
 
-// TODO: merge with frag equivalent
-/// Creates `moov` box
-pub(crate) fn create_moov_non_frag(
-    header: PresentationConfiguration,
+/// Creates `ftype` (if fragmented) and `moov` box
+pub(crate) fn create_moov(
+    cfg: PresentationConfiguration,
+    major_brand: Option<&[u8; 4]>,
+    compatible_brands: Option<Vec<&[u8; 4]>>,
 ) -> Result<gst::Buffer, Error> {
     let mut v = vec![];
 
-    write_box(&mut v, b"moov", |v| write_moov(v, &header))?;
+    if cfg.variant.is_fragmented() {
+        if let (Some(brand), Some(compatible_brands)) = (major_brand, compatible_brands) {
+            write_ftyp(&mut v, brand, 0u32, compatible_brands)?;
+        }
+    }
 
-    if header.variant == Variant::ONVIF {
-        write_onvif_metabox(header, &mut v)?;
+    write_box(&mut v, b"moov", |v| write_moov(v, &cfg))?;
+
+    if cfg.variant == Variant::ONVIF {
+        write_onvif_metabox(cfg, &mut v)?;
     }
 
     Ok(gst::Buffer::from_mut_slice(v))
 }
 
-pub(crate) fn write_moov(v: &mut Vec<u8>, cfg: &PresentationConfiguration) -> Result<(), Error> {
+fn write_moov(v: &mut Vec<u8>, cfg: &PresentationConfiguration) -> Result<(), Error> {
     use gst::glib;
 
     let base = glib::DateTime::from_utc(1904, 1, 1, 0, 0, 0.0)?;
@@ -227,6 +234,7 @@ fn write_mdia(
     write_full_box(v, b"mdhd", FULL_BOX_VERSION_1, FULL_BOX_FLAGS_NONE, |v| {
         write_mdhd(v, cfg, stream, creation_time)
     })?;
+
     write_full_box(v, b"hdlr", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
         write_hdlr_for_stream(v, stream)
     })?;
@@ -269,7 +277,9 @@ fn write_minf(
 
     write_box(v, b"dinf", write_dinf)?;
 
-    write_box(v, b"stbl", |v| write_stbl(v, stream, cfg.variant))?;
+    write_box(v, b"stbl", |v| {
+        write_stbl(v, stream, cfg.variant.is_fragmented())
+    })?;
 
     Ok(())
 }
@@ -277,17 +287,14 @@ fn write_minf(
 pub(crate) fn write_stbl(
     v: &mut Vec<u8>,
     stream: &TrackConfiguration,
-    variant: Variant,
+    is_fragmented: bool,
 ) -> Result<(), Error> {
     write_full_box(v, b"stsd", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
         write_stsd(v, stream)
     })?;
+
     write_full_box(v, b"stts", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-        if variant.is_fragmented() {
-            write_stts_frag(v)
-        } else {
-            write_stts_non_frag(v, stream)
-        }
+        write_stts(v, stream, is_fragmented)
     })?;
 
     // If there are any composition time offsets we need to write the ctts box. If any are negative
@@ -326,50 +333,35 @@ pub(crate) fn write_stbl(
 
     // If any sample is not a sync point, write the stss box
     if !stream.delta_frames.intra_only() {
-        if variant.is_fragmented() {
-            // For video write a sync sample box as indication that not all samples are sync samples
+        let should_write_stss = is_fragmented
+            || stream
+                .chunks
+                .iter()
+                .flat_map(|c| c.samples.iter())
+                .any(|b| !b.sync_point);
+
+        if should_write_stss {
             write_full_box(v, b"stss", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-                write_stss_frag(v)
-            })?
-        } else if stream
-            .chunks
-            .iter()
-            .flat_map(|c| c.samples.iter().map(|b| b.sync_point))
-            .any(|sync_point| !sync_point)
-        {
-            write_full_box(v, b"stss", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-                write_stss_non_frag(v, stream)
+                write_stss(v, stream, is_fragmented)
             })?;
         }
     }
 
     write_full_box(v, b"stsz", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-        if variant.is_fragmented() {
-            write_stsz_frag(v)
-        } else {
-            write_stsz_non_frag(v, stream)
-        }
+        write_stsz(v, stream, is_fragmented)
     })?;
 
     write_full_box(v, b"stsc", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-        if variant.is_fragmented() {
-            write_stsc_frag(v)
-        } else {
-            write_stsc_non_frag(v, stream)
-        }
+        write_stsc(v, stream, is_fragmented)
     })?;
 
-    if !variant.is_fragmented() && stream.chunks.last().unwrap().offset > u32::MAX as u64 {
+    if !is_fragmented && stream.chunks.last().unwrap().offset > u32::MAX as u64 {
         write_full_box(v, b"co64", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-            write_stco_non_frag(v, stream, true)
+            write_stco(v, stream, true, is_fragmented)
         })?;
     } else {
         write_full_box(v, b"stco", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-            if variant.is_fragmented() {
-                write_stco_frag(v)
-            } else {
-                write_stco_non_frag(v, stream, false)
-            }
+            write_stco(v, stream, false, is_fragmented)
         })?;
     }
 
@@ -383,60 +375,60 @@ pub(crate) fn write_stbl(
     Ok(())
 }
 
-// TODO: merge with non-frag version
-fn write_stts_frag(v: &mut Vec<u8>) -> Result<(), Error> {
-    // Entry count
-    v.extend(0u32.to_be_bytes());
+fn write_stts(
+    v: &mut Vec<u8>,
+    stream: &TrackConfiguration,
+    is_fragmented: bool,
+) -> Result<(), Error> {
+    if is_fragmented {
+        // Entry count
+        v.extend(0u32.to_be_bytes());
+    } else {
+        let timescale = stream.trak_timescale;
 
-    Ok(())
-}
+        let entry_count_position = v.len();
+        // Entry count, rewritten in the end
+        v.extend(0u32.to_be_bytes());
 
-// TODO: merge with frag version
-fn write_stts_non_frag(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error> {
-    let timescale = stream.trak_timescale;
+        let mut last_duration: Option<u32> = None;
+        let mut sample_count = 0u32;
+        let mut num_entries = 0u32;
+        for duration in stream
+            .chunks
+            .iter()
+            .flat_map(|c| c.samples.iter().map(|b| b.duration))
+        {
+            let duration = u32::try_from(
+                duration
+                    .nseconds()
+                    .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
+                    .context("too big sample duration")?,
+            )
+            .context("too big sample duration")?;
 
-    let entry_count_position = v.len();
-    // Entry count, rewritten in the end
-    v.extend(0u32.to_be_bytes());
+            if last_duration != Some(duration) {
+                if let Some(last_duration) = last_duration {
+                    v.extend(sample_count.to_be_bytes());
+                    v.extend(last_duration.to_be_bytes());
+                    num_entries += 1;
+                }
 
-    let mut last_duration: Option<u32> = None;
-    let mut sample_count = 0u32;
-    let mut num_entries = 0u32;
-    for duration in stream
-        .chunks
-        .iter()
-        .flat_map(|c| c.samples.iter().map(|b| b.duration))
-    {
-        let duration = u32::try_from(
-            duration
-                .nseconds()
-                .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
-                .context("too big sample duration")?,
-        )
-        .context("too big sample duration")?;
-
-        if last_duration != Some(duration) {
-            if let Some(last_duration) = last_duration {
-                v.extend(sample_count.to_be_bytes());
-                v.extend(last_duration.to_be_bytes());
-                num_entries += 1;
+                last_duration = Some(duration);
+                sample_count = 1;
+            } else {
+                sample_count += 1;
             }
-
-            last_duration = Some(duration);
-            sample_count = 1;
-        } else {
-            sample_count += 1;
         }
-    }
 
-    if let Some(last_duration) = last_duration {
-        v.extend(sample_count.to_be_bytes());
-        v.extend(last_duration.to_be_bytes());
-        num_entries += 1;
-    }
+        if let Some(last_duration) = last_duration {
+            v.extend(sample_count.to_be_bytes());
+            v.extend(last_duration.to_be_bytes());
+            num_entries += 1;
+        }
 
-    // Rewrite entry count
-    v[entry_count_position..][..4].copy_from_slice(&num_entries.to_be_bytes());
+        // Rewrite entry count
+        v[entry_count_position..][..4].copy_from_slice(&num_entries.to_be_bytes());
+    }
 
     Ok(())
 }
@@ -568,160 +560,157 @@ fn write_cslg(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error>
     Ok(())
 }
 
-// TODO: merge with frag version
-fn write_stss_non_frag(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error> {
-    let entry_count_position = v.len();
-    // Entry count, rewritten in the end
-    v.extend(0u32.to_be_bytes());
+fn write_stss(
+    v: &mut Vec<u8>,
+    stream: &TrackConfiguration,
+    is_fragmented: bool,
+) -> Result<(), Error> {
+    if is_fragmented {
+        // Entry count
+        v.extend(0u32.to_be_bytes());
+    } else {
+        let entry_count_position = v.len();
+        // Entry count, rewritten in the end
+        v.extend(0u32.to_be_bytes());
 
-    let mut num_entries = 0u32;
-    for (idx, _sync_point) in stream
-        .chunks
-        .iter()
-        .flat_map(|c| c.samples.iter().map(|b| b.sync_point))
-        .enumerate()
-        .filter(|(_idx, sync_point)| *sync_point)
-    {
-        v.extend((idx as u32 + 1).to_be_bytes());
-        num_entries += 1;
-    }
-
-    // Rewrite entry count
-    v[entry_count_position..][..4].copy_from_slice(&num_entries.to_be_bytes());
-
-    Ok(())
-}
-
-// TODO: merge with non-frag version
-fn write_stsz_frag(v: &mut Vec<u8>) -> Result<(), Error> {
-    // Sample size
-    v.extend(0u32.to_be_bytes());
-
-    // Sample count
-    v.extend(0u32.to_be_bytes());
-
-    Ok(())
-}
-
-// TODO: merge with frag version
-fn write_stsz_non_frag(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error> {
-    let first_sample_size = stream.chunks[0].samples[0].size;
-
-    if stream
-        .chunks
-        .iter()
-        .flat_map(|c| c.samples.iter().map(|b| b.size))
-        .all(|size| size == first_sample_size)
-    {
-        // Sample size
-        v.extend(first_sample_size.to_be_bytes());
-
-        // Sample count
-        let sample_count = stream
+        let mut num_entries = 0u32;
+        for (idx, _sync_point) in stream
             .chunks
             .iter()
-            .map(|c| c.samples.len() as u32)
-            .sum::<u32>();
-        v.extend(sample_count.to_be_bytes());
-    } else {
+            .flat_map(|c| c.samples.iter().map(|b| b.sync_point))
+            .enumerate()
+            .filter(|(_idx, sync_point)| *sync_point)
+        {
+            v.extend((idx as u32 + 1).to_be_bytes());
+            num_entries += 1;
+        }
+
+        // Rewrite entry count
+        v[entry_count_position..][..4].copy_from_slice(&num_entries.to_be_bytes());
+    }
+
+    Ok(())
+}
+
+fn write_stsz(
+    v: &mut Vec<u8>,
+    stream: &TrackConfiguration,
+    is_fragmented: bool,
+) -> Result<(), Error> {
+    if is_fragmented {
         // Sample size
         v.extend(0u32.to_be_bytes());
 
-        // Sample count, will be rewritten later
-        let sample_count_position = v.len();
-        let mut sample_count = 0u32;
+        // Sample count
         v.extend(0u32.to_be_bytes());
+    } else {
+        let first_sample_size = stream.chunks[0].samples[0].size;
 
-        for size in stream
+        if stream
             .chunks
             .iter()
             .flat_map(|c| c.samples.iter().map(|b| b.size))
+            .all(|size| size == first_sample_size)
         {
-            v.extend(size.to_be_bytes());
-            sample_count += 1;
-        }
+            // Sample size
+            v.extend(first_sample_size.to_be_bytes());
 
-        v[sample_count_position..][..4].copy_from_slice(&sample_count.to_be_bytes());
-    }
+            // Sample count
+            let sample_count = stream
+                .chunks
+                .iter()
+                .map(|c| c.samples.len() as u32)
+                .sum::<u32>();
+            v.extend(sample_count.to_be_bytes());
+        } else {
+            // Sample size
+            v.extend(0u32.to_be_bytes());
 
-    Ok(())
-}
+            // Sample count, will be rewritten later
+            let sample_count_position = v.len();
+            let mut sample_count = 0u32;
+            v.extend(0u32.to_be_bytes());
 
-// TODO: merge with non-frag version
-fn write_stsc_frag(v: &mut Vec<u8>) -> Result<(), Error> {
-    // Entry count
-    v.extend(0u32.to_be_bytes());
-
-    Ok(())
-}
-
-// TODO: merge with frag version
-fn write_stsc_non_frag(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error> {
-    let entry_count_position = v.len();
-    // Entry count, rewritten in the end
-    v.extend(0u32.to_be_bytes());
-
-    let mut num_entries = 0u32;
-    let mut first_chunk = 1u32;
-    let mut samples_per_chunk: Option<u32> = None;
-    for (idx, chunk) in stream.chunks.iter().enumerate() {
-        if samples_per_chunk != Some(chunk.samples.len() as u32) {
-            if let Some(samples_per_chunk) = samples_per_chunk {
-                v.extend(first_chunk.to_be_bytes());
-                v.extend(samples_per_chunk.to_be_bytes());
-                // sample description index
-                v.extend(1u32.to_be_bytes());
-                num_entries += 1;
+            for size in stream
+                .chunks
+                .iter()
+                .flat_map(|c| c.samples.iter().map(|b| b.size))
+            {
+                v.extend(size.to_be_bytes());
+                sample_count += 1;
             }
-            samples_per_chunk = Some(chunk.samples.len() as u32);
-            first_chunk = idx as u32 + 1;
+
+            v[sample_count_position..][..4].copy_from_slice(&sample_count.to_be_bytes());
         }
     }
 
-    if let Some(samples_per_chunk) = samples_per_chunk {
-        v.extend(first_chunk.to_be_bytes());
-        v.extend(samples_per_chunk.to_be_bytes());
-        // sample description index
-        v.extend(1u32.to_be_bytes());
-        num_entries += 1;
+    Ok(())
+}
+
+fn write_stsc(
+    v: &mut Vec<u8>,
+    stream: &TrackConfiguration,
+    is_fragmented: bool,
+) -> Result<(), Error> {
+    if is_fragmented {
+        // Entry count
+        v.extend(0u32.to_be_bytes());
+    } else {
+        let entry_count_position = v.len();
+        // Entry count, rewritten in the end
+        v.extend(0u32.to_be_bytes());
+
+        let mut num_entries = 0u32;
+        let mut first_chunk = 1u32;
+        let mut samples_per_chunk: Option<u32> = None;
+        for (idx, chunk) in stream.chunks.iter().enumerate() {
+            if samples_per_chunk != Some(chunk.samples.len() as u32) {
+                if let Some(samples_per_chunk) = samples_per_chunk {
+                    v.extend(first_chunk.to_be_bytes());
+                    v.extend(samples_per_chunk.to_be_bytes());
+                    // sample description index
+                    v.extend(1u32.to_be_bytes());
+                    num_entries += 1;
+                }
+                samples_per_chunk = Some(chunk.samples.len() as u32);
+                first_chunk = idx as u32 + 1;
+            }
+        }
+
+        if let Some(samples_per_chunk) = samples_per_chunk {
+            v.extend(first_chunk.to_be_bytes());
+            v.extend(samples_per_chunk.to_be_bytes());
+            // sample description index
+            v.extend(1u32.to_be_bytes());
+            num_entries += 1;
+        }
+
+        // Rewrite entry count
+        v[entry_count_position..][..4].copy_from_slice(&num_entries.to_be_bytes());
     }
 
-    // Rewrite entry count
-    v[entry_count_position..][..4].copy_from_slice(&num_entries.to_be_bytes());
-
     Ok(())
 }
 
-// TODO: merge with non-frag version
-fn write_stco_frag(v: &mut Vec<u8>) -> Result<(), Error> {
-    // Entry count
-    v.extend(0u32.to_be_bytes());
-
-    Ok(())
-}
-
-// TODO: merge with non-frag version
-fn write_stss_frag(v: &mut Vec<u8>) -> Result<(), Error> {
-    // Entry count
-    v.extend(0u32.to_be_bytes());
-
-    Ok(())
-}
-
-// TODO: merge with frag version
-fn write_stco_non_frag(
+fn write_stco(
     v: &mut Vec<u8>,
     stream: &TrackConfiguration,
     co64: bool,
+    is_fragmented: bool,
 ) -> Result<(), Error> {
-    // Entry count
-    v.extend((stream.chunks.len() as u32).to_be_bytes());
+    if is_fragmented {
+        // Entry count
+        v.extend(0u32.to_be_bytes());
+    } else {
+        // Entry count
+        v.extend((stream.chunks.len() as u32).to_be_bytes());
 
-    for chunk in &stream.chunks {
-        if co64 {
-            v.extend(chunk.offset.to_be_bytes());
-        } else {
-            v.extend(u32::try_from(chunk.offset).unwrap().to_be_bytes());
+        for chunk in &stream.chunks {
+            if co64 {
+                v.extend(chunk.offset.to_be_bytes());
+            } else {
+                v.extend(u32::try_from(chunk.offset).unwrap().to_be_bytes());
+            }
         }
     }
 

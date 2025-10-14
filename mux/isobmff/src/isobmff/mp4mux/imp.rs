@@ -14,7 +14,7 @@ use std::sync::Mutex;
 use crate::av1::obu::read_seq_header_obu_bytes;
 use crate::isobmff::boxes::create_ftyp;
 use crate::isobmff::boxes::create_mdat_header_non_frag;
-use crate::isobmff::boxes::create_moov_non_frag;
+use crate::isobmff::boxes::create_moov;
 use crate::isobmff::AuxiliaryInformation;
 use crate::isobmff::AuxiliaryInformationEntry;
 use crate::isobmff::Chunk;
@@ -2239,16 +2239,20 @@ impl AggregatorImpl for MP4Mux {
                 });
             }
 
-            let moov = create_moov_non_frag(PresentationConfiguration {
-                variant: self.obj().class().as_ref().variant,
-                movie_timescale: settings.movie_timescale,
-                tracks: streams,
-                // TODO: rework this
-                update: false,
-                write_mehd: false,
-                duration: None,
-                write_edts: false,
-            })
+            let moov = create_moov(
+                PresentationConfiguration {
+                    variant: self.obj().class().as_ref().variant,
+                    movie_timescale: settings.movie_timescale,
+                    tracks: streams,
+                    // TODO: rework this
+                    update: false,
+                    write_mehd: false,
+                    duration: None,
+                    write_edts: false,
+                },
+                None,
+                None,
+            )
             .map_err(|err| {
                 gst::error!(CAT, imp = self, "Failed to create moov box: {err}");
                 gst::FlowError::Error

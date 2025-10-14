@@ -8,8 +8,8 @@
 
 use crate::isobmff::{
     boxes::{
-        write_box, write_ftyp, write_full_box, write_moov, write_onvif_metabox,
-        FULL_BOX_FLAGS_NONE, FULL_BOX_VERSION_0, FULL_BOX_VERSION_1,
+        create_moov, write_box, write_full_box, FULL_BOX_FLAGS_NONE, FULL_BOX_VERSION_0,
+        FULL_BOX_VERSION_1,
     },
     caps_to_timescale, Buffer, FragmentHeaderConfiguration, FragmentHeaderStream, FragmentOffset,
     PresentationConfiguration, Variant,
@@ -303,22 +303,11 @@ fn brands_from_variant_and_caps<'a>(
     }
 }
 
-/// Creates `ftyp` and `moov` boxes
 pub(crate) fn create_fmp4_header(cfg: PresentationConfiguration) -> Result<gst::Buffer, Error> {
-    let mut v = vec![];
-
     let (brand, compatible_brands) =
         brands_from_variant_and_caps(cfg.variant, cfg.tracks.iter().map(|s| &s.caps));
 
-    write_ftyp(&mut v, brand, 0u32, compatible_brands)?;
-
-    write_box(&mut v, b"moov", |v| write_moov(v, &cfg))?;
-
-    if cfg.variant == Variant::FragmentedONVIF {
-        write_onvif_metabox(cfg, &mut v)?;
-    }
-
-    Ok(gst::Buffer::from_mut_slice(v))
+    create_moov(cfg, Some(brand), Some(compatible_brands))
 }
 
 pub(crate) fn write_mvex(v: &mut Vec<u8>, cfg: &PresentationConfiguration) -> Result<(), Error> {
