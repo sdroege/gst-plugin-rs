@@ -38,7 +38,7 @@ libc = "0.2"
 windows-sys = { version = ">=0.52, <=0.61", features = ["Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock"] }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-getifaddrs = "0.5"
+getifaddrs = "0.6"
 
 [dev-dependencies]
 gst-check.workspace = true
