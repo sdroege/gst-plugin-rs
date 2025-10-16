@@ -64,7 +64,6 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             latency: DEFAULT_LATENCY,
-            // FIXME: use base
             lateness: DEFAULT_LATENESS,
             interim_strategy: DEFAULT_INTERIM_STRATEGY,
             interim_timing_threshold: DEFAULT_INTERIM_TIMING_THRESHOLD,
@@ -82,6 +81,7 @@ struct State {
     discont: bool,
     client: Option<Deepgram>,
     in_segment: Option<gst::FormattedSegment<gst::ClockTime>>,
+    out_segment: Option<gst::FormattedSegment<gst::ClockTime>>,
     audio_tx: Option<mpsc::Sender<gst::Buffer>>,
     result_tx: Option<std::sync::mpsc::Sender<TranscriptOutput>>,
     receive_handle: Option<tokio::task::JoinHandle<()>>,
@@ -104,6 +104,7 @@ impl Default for State {
             discont: true,
             client: None,
             in_segment: None,
+            out_segment: None,
             audio_tx: None,
             result_tx: None,
             receive_handle: None,
@@ -267,8 +268,8 @@ impl Transcriber {
             }
         };
 
-        let in_segment = state
-            .in_segment
+        let out_segment = state
+            .out_segment
             .as_mut()
             .expect("segment received before result");
 
@@ -300,7 +301,7 @@ impl Transcriber {
                     _ => (),
                 }
 
-                let rtime = in_segment.to_running_time(pts).unwrap();
+                let rtime = out_segment.to_running_time(pts).unwrap();
 
                 if !is_final {
                     let Some(now) = now else {
@@ -328,7 +329,7 @@ impl Transcriber {
 
                 let duration = dg_end_time.saturating_sub(dg_start_time);
 
-                if let Some(position) = in_segment.position() {
+                if let Some(position) = out_segment.position() {
                     if pts.cmp(&position) == std::cmp::Ordering::Greater {
                         gst::log!(
                             CAT,
@@ -381,7 +382,7 @@ impl Transcriber {
                     punctuated_word,
                 );
 
-                in_segment.set_position(Some(pts + duration));
+                out_segment.set_position(Some(pts + duration));
 
                 let mut buf = gst::Buffer::from_mut_slice(punctuated_word.clone().into_bytes());
                 {
@@ -444,7 +445,7 @@ impl Transcriber {
             let transcript_end_pts =
                 transcript_start_time + state.first_buffer_pts.unwrap() + transcript_duration;
 
-            if let Some(position) = in_segment.position() {
+            if let Some(position) = out_segment.position() {
                 if transcript_end_pts.cmp(&position) == std::cmp::Ordering::Greater {
                     gst::log!(
                         CAT,
@@ -462,7 +463,7 @@ impl Transcriber {
                 }
             }
 
-            in_segment.set_position(Some(transcript_end_pts));
+            out_segment.set_position(Some(transcript_end_pts));
         }
 
         let observed_max_delay = state.observed_max_delay;
@@ -596,6 +597,8 @@ impl Transcriber {
                     Ok(segment) => segment,
                 };
 
+                let lateness = self.settings.lock().unwrap().lateness;
+
                 let mut state = self.state.lock().unwrap();
 
                 if let Some(ref in_segment) = state.in_segment {
@@ -624,7 +627,19 @@ impl Transcriber {
 
                 state.in_segment = Some(segment.clone());
 
-                gst::Pad::event_default(pad, Some(&*self.obj()), event)
+                let mut out_segment = segment.clone();
+
+                out_segment.set_base(segment.base().unwrap_or(gst::ClockTime::ZERO) + lateness);
+
+                state.out_segment = Some(out_segment.clone());
+
+                let out_event = gst::event::Segment::builder(&out_segment)
+                    .seqnum(state.seqnum)
+                    .build();
+
+                drop(state);
+
+                self.srcpad.push_event(out_event)
             }
             Caps(_) => {
                 let caps = self.srcpad.pad_template_caps();
