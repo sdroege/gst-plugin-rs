@@ -565,16 +565,18 @@ impl QueueLevels {
 
         let mut state = self.state.lock().unwrap();
         let path = file_path.map_or_else(|| state.settings.file.clone(), PathBuf::from);
-        let should_append = state.logs_written.contains(&path);
+        let first_write = !state.logs_written.contains(&path);
 
         let mut file = match std::fs::OpenOptions::new()
-            .append(should_append)
             .create(true)
-            .open(path.clone())
+            .write(true)
+            .truncate(first_write)
+            .append(!first_write)
+            .open(&path)
         {
             Ok(file) => file,
             Err(err) => {
-                gst::error!(CAT, imp = self, "Failed to create file: {err}");
+                gst::error!(CAT, imp = self, "Failed to open file: {err}");
                 return;
             }
         };
