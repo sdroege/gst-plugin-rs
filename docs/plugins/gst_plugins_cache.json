@@ -1470,6 +1470,20 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "max-observed-delay": {
+                        "blurb": "Maximum delay observed between the sending of an audio sample and the reception of an item",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": false
+                    },
                     "results-stability": {
                         "blurb": "Defines how fast results should stabilize",
                         "conditionally-available": false,

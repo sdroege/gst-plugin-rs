@@ -20,9 +20,9 @@ use aws_sdk_transcribestreaming::types as aws_types;
 use futures::channel::mpsc;
 use futures::prelude::*;
 
-use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::sync::{Condvar, Mutex, MutexGuard};
 
+use std::collections::VecDeque;
 use std::sync::LazyLock;
 
 use super::CAT;
@@ -81,36 +81,38 @@ impl Default for Settings {
 struct State {
     // (live, min, max)
     upstream_latency: Option<(bool, gst::ClockTime, Option<gst::ClockTime>)>,
-    pending_discont: bool,
-    last_input_rtime: Option<gst::ClockTime>,
-    disconts: VecDeque<(gst::ClockTime, gst::ClockTime)>,
-    discont_accumulator: gst::ClockTime,
+    discont: bool,
+    first_buffer_pts: Option<gst::ClockTime>,
     in_segment: Option<gst::FormattedSegment<gst::ClockTime>>,
+    out_segment: Option<gst::FormattedSegment<gst::ClockTime>>,
     client: Option<aws_sdk_transcribestreaming::Client>,
     audio_tx: Option<mpsc::Sender<gst::Buffer>>,
-    result_rx: Option<std::sync::mpsc::Receiver<aws_types::TranscriptEvent>>,
+    result_rx: Option<std::sync::mpsc::Receiver<TranscriptOutput>>,
     receive_handle: Option<tokio::task::JoinHandle<()>>,
     partial_index: usize,
     seqnum: gst::Seqnum,
-    task_started: bool,
+    draining: bool,
+    input_times: VecDeque<(gst::ClockTime, gst::ClockTime)>,
+    observed_max_delay: gst::ClockTime,
 }
 
 impl Default for State {
     fn default() -> Self {
         Self {
             upstream_latency: None,
-            pending_discont: true,
-            last_input_rtime: None,
-            disconts: VecDeque::new(),
-            discont_accumulator: gst::ClockTime::ZERO,
+            discont: true,
+            first_buffer_pts: None,
             in_segment: None,
+            out_segment: None,
             client: None,
             audio_tx: None,
             result_rx: None,
             receive_handle: None,
             partial_index: 0,
             seqnum: gst::Seqnum::next(),
-            task_started: false,
+            draining: false,
+            input_times: VecDeque::default(),
+            observed_max_delay: gst::ClockTime::ZERO,
         }
     }
 }
@@ -120,6 +122,7 @@ pub struct Transcriber {
     sinkpad: gst::Pad,
     settings: Mutex<Settings>,
     state: Mutex<State>,
+    state_cond: Condvar,
     pub(super) aws_config: Mutex<Option<aws_config::SdkConfig>>,
 }
 
@@ -127,6 +130,35 @@ pub struct Transcriber {
 enum TranscriptOutput {
     Event(gst::Event),
     Item(gst::Buffer),
+    Eos,
+}
+
+impl State {
+    fn trim_input_times(&mut self, pts: gst::ClockTime) -> Option<gst::ClockTime> {
+        let mut iter = self.input_times.iter().peekable();
+
+        let mut pos = 0;
+
+        let input_running_time = loop {
+            let Some(current) = iter.next() else {
+                break None;
+            };
+
+            if let Some(next_input_time) = iter.peek() {
+                if next_input_time.0 > pts {
+                    break Some(current.1);
+                }
+            } else {
+                break Some(current.1);
+            }
+
+            pos += 1;
+        };
+
+        self.input_times = self.input_times.split_off(pos);
+
+        input_running_time
+    }
 }
 
 impl Transcriber {
@@ -157,16 +189,58 @@ impl Transcriber {
         }
     }
 
-    fn dequeue(&self, transcript: &mut aws_types::Transcript) -> Vec<TranscriptOutput> {
+    fn drain<'a>(
+        &'a self,
+        mut state: MutexGuard<'a, State>,
+    ) -> Result<MutexGuard<'a, State>, gst::FlowError> {
+        let Some(mut audio_tx) = state.audio_tx.take() else {
+            gst::debug!(CAT, imp = self, "Flushing");
+            return Err(gst::FlowError::Flushing);
+        };
+
+        state.draining = true;
+
+        drop(state);
+
+        let _ = RUNTIME
+            .block_on(audio_tx.send(gst::Buffer::new()))
+            .map_err(|err| {
+                gst::element_imp_error!(
+                    self,
+                    gst::StreamError::Failed,
+                    ["Streaming failed: {err}"]
+                );
+                gst::FlowError::Error
+            });
+
+        let mut state = self.state.lock().unwrap();
+
+        while (self.srcpad.task_state() == gst::TaskState::Started) && state.draining {
+            state = self.state_cond.wait(state).unwrap();
+        }
+
+        Ok(self.disconnect(state))
+    }
+
+    fn dequeue(
+        &self,
+        transcript: &mut aws_types::Transcript,
+        result_tx: &std::sync::mpsc::Sender<TranscriptOutput>,
+    ) -> Result<(), std::sync::mpsc::SendError<TranscriptOutput>> {
+        let upstream_latency = self.upstream_latency();
+        let upstream_is_live = upstream_latency
+            .map(|upstream_latency| upstream_latency.0)
+            .unwrap_or(false);
+        let now = self.obj().current_running_time();
+
         let (latency, lateness) = {
             let settings = self.settings.lock().unwrap();
             (settings.latency, settings.lateness)
         };
-        let now = self.obj().current_running_time();
-        let upstream_latency = self.upstream_latency();
 
         let mut state = self.state.lock().unwrap();
-        let mut output: Vec<TranscriptOutput> = vec![];
+
+        let mut do_notify_delay = false;
 
         if let Some(result) = transcript
             .results
@@ -191,7 +265,7 @@ impl Transcriber {
                         state.partial_index = 0;
                     }
 
-                    return output;
+                    return Ok(());
                 }
 
                 gst::trace!(
@@ -213,88 +287,25 @@ impl Transcriber {
                         let aws_end_time: gst::ClockTime =
                             ((item.end_time * 1_000_000_000.0) as u64).nseconds();
 
-                        let mut flags: gst::BufferFlags = gst::BufferFlags::empty();
-
-                        while let Some((discont_rtime, pts)) = state.disconts.pop_front() {
-                            gst::trace!(
-                                CAT,
-                                imp = self,
-                                "checking if next discont is reached: {discont_rtime} {pts}"
-                            );
-
-                            if aws_start_time >= discont_rtime {
-                                flags.set(gst::BufferFlags::DISCONT, true);
-
-                                let base_rtime = state
-                                    .in_segment
-                                    .as_ref()
-                                    .unwrap()
-                                    .to_running_time(pts)
-                                    .unwrap();
-
-                                state.discont_accumulator +=
-                                    base_rtime.saturating_sub(discont_rtime);
-
-                                gst::info!(
-                                    CAT,
-                                    imp = self,
-                                    "next discont is reached: \
-                                         discontinuity running time: {discont_rtime} \
-                                         discontinuity pts: {pts}, \
-                                         new base running time: {base_rtime}\
-                                         discont accumulator is now {}",
-                                    state.discont_accumulator
-                                );
-                            } else {
-                                gst::trace!(CAT, imp = self, "next discont not reached yet");
-                                state.disconts.push_front((discont_rtime, pts));
-                                break;
-                            }
-                        }
-
-                        let rtime = aws_start_time + state.discont_accumulator + lateness;
-
-                        let Some(mut pts) = state
-                            .in_segment
-                            .as_ref()
-                            .unwrap()
-                            .position_from_running_time(rtime)
-                        else {
-                            gst::warning!(
-                                CAT,
-                                imp = self,
-                                "received item with running time outside of segment ({})",
-                                rtime
-                            );
-                            continue;
-                        };
+                        let pts = aws_start_time + state.first_buffer_pts.unwrap();
 
                         let duration = aws_end_time.saturating_sub(aws_start_time);
 
-                        if let Some(position) = state.in_segment.as_ref().unwrap().position() {
-                            match pts.cmp(&position) {
-                                std::cmp::Ordering::Greater => {
-                                    gst::log!(
-                                        CAT,
-                                        imp = self,
-                                        "position lagging, queuing gap \
-                                            with pts {position} and duration {}",
-                                        pts - position
-                                    );
-                                    output.push(TranscriptOutput::Event(
-                                        gst::event::Gap::builder(position)
-                                            .duration(pts - position)
-                                            .seqnum(state.seqnum)
-                                            .build(),
-                                    ));
-                                }
-                                std::cmp::Ordering::Less => {
-                                    gst::warning!(CAT, imp = self,
-                                            "Item stabilized too late, adjusting timestamp ({pts} -> {position}), \
-                                            consider increasing latency");
-                                    pts = position;
-                                }
-                                _ => (),
+                        if let Some(position) = state.out_segment.as_ref().unwrap().position() {
+                            if pts.cmp(&position) == std::cmp::Ordering::Greater {
+                                gst::log!(
+                                    CAT,
+                                    imp = self,
+                                    "position lagging, queuing gap \
+                                        with pts {position} and duration {}",
+                                    pts - position
+                                );
+                                result_tx.send(TranscriptOutput::Event(
+                                    gst::event::Gap::builder(position)
+                                        .duration(pts - position)
+                                        .seqnum(state.seqnum)
+                                        .build(),
+                                ))?;
                             }
                         }
 
@@ -306,7 +317,7 @@ impl Transcriber {
                         );
 
                         state
-                            .in_segment
+                            .out_segment
                             .as_mut()
                             .unwrap()
                             .set_position(Some(pts + duration));
@@ -333,9 +344,24 @@ impl Transcriber {
                                 m.mut_structure()
                                     .set("item", serde_json::to_string(&i).expect("serializable"));
                             }
+                            if state.discont {
+                                buf_mut.set_flags(gst::BufferFlags::DISCONT);
+                                state.discont = false;
+                            }
                         }
 
-                        output.push(TranscriptOutput::Item(buf));
+                        result_tx.send(TranscriptOutput::Item(buf))?;
+
+                        if let Some(input_running_time) = state.trim_input_times(pts) {
+                            if let Some(now) = now {
+                                let item_delay = now.saturating_sub(input_running_time);
+
+                                if item_delay > state.observed_max_delay {
+                                    state.observed_max_delay = item_delay;
+                                    do_notify_delay = true;
+                                }
+                            }
+                        }
                     }
 
                     state.partial_index += 1;
@@ -351,80 +377,104 @@ impl Transcriber {
                 if !result.is_partial {
                     gst::log!(CAT, imp = self, "result was final, partial index reset");
 
-                    output.push(TranscriptOutput::Event(
+                    result_tx.send(TranscriptOutput::Event(
                         gst::event::CustomDownstream::builder(
                             gst::Structure::builder("rstranscribe/final-transcript").build(),
                         )
                         .build(),
-                    ));
+                    ))?;
 
                     state.partial_index = 0;
                 }
             }
         }
 
+        // This logic is unfortunately needed because AWS doesn't send timing indications
+        // for empty results, we still need the position to progress somehow
         if let Some(upstream_latency) = upstream_latency {
             let (upstream_live, upstream_min, _) = upstream_latency;
-
             // Don't push a gap before we've even received a first buffer,
-            // as we haven't set in_segment.position to a start time yet
-            if upstream_live && state.last_input_rtime.is_some() {
+            // as we haven't set out_segment.position to a start time yet
+            if upstream_live && state.first_buffer_pts.is_some() {
                 if let Some(now) = now {
                     let seqnum = state.seqnum;
-                    let in_segment = state.in_segment.as_mut().unwrap();
-                    let position = in_segment.position().unwrap();
-                    let last_rtime = in_segment.to_running_time(position).unwrap();
-
+                    let out_segment = state.out_segment.as_mut().unwrap();
+                    let position = out_segment.position().unwrap();
+                    let last_rtime = out_segment.to_running_time(position).unwrap();
                     let deadline = last_rtime + latency + upstream_min;
-
                     gst::trace!(
                         CAT,
                         imp = self,
                         "upstream is live, deadline: {deadline} now: {now} \
                         ({last_rtime} + {latency} + {upstream_min}"
                     );
-
                     if deadline < now {
                         let gap_duration = now - deadline;
-
                         gst::log!(
                             CAT,
                             "deadline reached, queuing gap with pts {position} \
                             and duration {gap_duration}"
                         );
-
-                        output.push(TranscriptOutput::Event(
+                        result_tx.send(TranscriptOutput::Event(
                             gst::event::Gap::builder(position)
                                 .duration(gap_duration)
                                 .seqnum(seqnum)
                                 .build(),
-                        ));
-                        in_segment.set_position(position + gap_duration);
+                        ))?;
+                        out_segment.set_position(position + gap_duration);
                     }
                 }
             }
         }
 
-        output
+        let observed_max_delay = state.observed_max_delay;
+
+        drop(state);
+
+        if do_notify_delay {
+            self.obj().notify("max-observed-delay");
+            if observed_max_delay > latency + lateness {
+                let details = gst::Structure::builder("deepgramtranscriber/excessive-delay")
+                    .field("new-observed-max-delay", observed_max_delay)
+                    .build();
+                if upstream_is_live {
+                    gst::element_warning!(
+                        self.obj(),
+                        gst::CoreError::Clock,
+                        ["Maximum observed delay {} exceeds configured lateness + latency", observed_max_delay],
+                        details: details
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn pause_srcpad_task(&self) {
+        gst::info!(CAT, imp = self, "no more results, pausing",);
+        let _ = self.srcpad.pause_task();
+
+        self.state_cond.notify_one();
+    }
+
+    fn do_eos(&self) {
+        let (seqnum, draining) = {
+            let state = self.state.lock().unwrap();
+            (state.seqnum, state.draining)
+        };
+
+        if !draining {
+            let _ = self
+                .srcpad
+                .push_event(gst::event::Eos::builder().seqnum(seqnum).build());
+        }
+
+        self.pause_srcpad_task();
     }
 
     fn start_srcpad_task(&self) -> Result<(), gst::LoggableError> {
-        if self.state.lock().unwrap().task_started {
-            gst::debug!(CAT, imp = self, "Task started already");
-            return Ok(());
-        }
-
         gst::debug!(CAT, imp = self, "starting source pad task");
-
-        self.ensure_connection().map_err(|err| {
-            gst::element_imp_error!(
-                self,
-                gst::StreamError::Failed,
-                ["Streaming failed: {}", err]
-            );
-
-            gst::loggable_error!(CAT, "Failed to start pad task: {err}")
-        })?;
 
         let this_weak = self.downgrade();
         let res = self.srcpad.start_task(move || loop {
@@ -434,92 +484,43 @@ impl Transcriber {
 
             let Some(result_rx) = this.state.lock().unwrap().result_rx.take() else {
                 gst::debug!(CAT, imp = this, "no more result channel, pausing");
-                let _ = this.srcpad.pause_task();
+                this.pause_srcpad_task();
                 break;
             };
 
-            let Ok(mut transcript_evt) = result_rx.recv() else {
-                gst::info!(CAT, imp = this, "no more results, pushing EOS and pausing");
-                let seqnum = this.state.lock().unwrap().seqnum;
-                let _ = this
-                    .srcpad
-                    .push_event(gst::event::Eos::builder().seqnum(seqnum).build());
-                let _ = this.srcpad.pause_task();
-                break;
-            };
+            match result_rx.recv() {
+                Ok(TranscriptOutput::Item(buffer)) => {
+                    gst::debug!(CAT, imp = this, "pushing buffer {buffer:?}");
 
-            gst::trace!(
-                CAT,
-                imp = this,
-                "processing transcript event {transcript_evt:?}"
-            );
-
-            this.state.lock().unwrap().result_rx = Some(result_rx);
-
-            let Some(ref mut transcript) = transcript_evt.transcript else {
-                gst::trace!(
-                    CAT,
-                    imp = this,
-                    "transcript event does not contain a transcript"
-                );
-                continue;
-            };
-
-            let t = TranscriptDef {
-                results: transcript.results.clone(),
-            };
-
-            let serialized = serde_json::to_string(&t).expect("serializable");
-
-            let s = gst::Structure::builder("awstranscribe/raw")
-                .field("transcript", serialized)
-                .field("arrival-time", this.obj().current_running_time())
-                .field(
-                    "language-code",
-                    &this.settings.lock().as_ref().unwrap().language_code,
-                )
-                .build();
-
-            gst::trace!(
-                CAT,
-                imp = this,
-                "serialized transcript event, posting message"
-            );
-
-            let _ = this
-                .obj()
-                .post_message(gst::message::Element::builder(s).src(&*this.obj()).build());
-
-            for item in this.dequeue(transcript).drain(..) {
-                match item {
-                    TranscriptOutput::Item(buffer) => {
-                        gst::debug!(CAT, imp = this, "pushing buffer {buffer:?}");
-
-                        if let Err(err) = this.srcpad.push(buffer) {
-                            if err != gst::FlowError::Flushing {
-                                gst::element_error!(
-                                    this.obj(),
-                                    gst::StreamError::Failed,
-                                    ["Streaming failed: {}", err]
-                                );
-                            }
-                            let _ = this.srcpad.pause_task();
+                    if let Err(err) = this.srcpad.push(buffer) {
+                        if err != gst::FlowError::Flushing {
+                            gst::element_error!(
+                                this.obj(),
+                                gst::StreamError::Failed,
+                                ["Streaming failed: {}", err]
+                            );
                         }
-                    }
-                    TranscriptOutput::Event(event) => {
-                        gst::debug!(CAT, imp = this, "pushing event {event:?}");
-
-                        this.srcpad.push_event(event);
+                        this.pause_srcpad_task();
                     }
                 }
+                Ok(TranscriptOutput::Event(event)) => {
+                    gst::debug!(CAT, imp = this, "pushing event {event:?}");
+
+                    this.srcpad.push_event(event);
+                }
+                Ok(TranscriptOutput::Eos) | Err(_) => {
+                    this.do_eos();
+                    break;
+                    // do eos
+                }
             }
+
+            this.state.lock().unwrap().result_rx = Some(result_rx);
         });
 
         if res.is_err() {
             return Err(gst::loggable_error!(CAT, "Failed to start pad task"));
         }
-
-        self.state.lock().unwrap().task_started = true;
 
         gst::debug!(CAT, imp = self, "started source pad task");
 
@@ -532,12 +533,7 @@ impl Transcriber {
         use gst::EventView::*;
         match event.view() {
             StreamStart(_) => {
-                gst::info!(CAT, imp = self, "received stream start, connecting");
-
-                if let Err(err) = self.start_srcpad_task() {
-                    gst::error!(CAT, imp = self, "Failed to start srcpad task: {err}");
-                    return false;
-                }
+                gst::info!(CAT, imp = self, "received stream start");
 
                 self.state.lock().unwrap().seqnum = event.seqnum();
 
@@ -547,43 +543,66 @@ impl Transcriber {
                 gst::info!(CAT, imp = self, "received flush start, disconnecting");
                 let ret = gst::Pad::event_default(pad, Some(&*self.obj()), event);
                 let _ = self.state.lock().unwrap().result_rx.take();
-                let _ = self.srcpad.pause_task();
-                self.disconnect(false);
+                self.pause_srcpad_task();
+                drop(self.disconnect(self.state.lock().unwrap()));
                 ret
             }
             Segment(e) => {
-                {
-                    let mut state = self.state.lock().unwrap();
-
-                    if state.in_segment.is_some() {
+                let segment = match e.segment().clone().downcast::<gst::ClockTime>() {
+                    Err(segment) => {
                         gst::element_imp_error!(
                             self,
                             gst::StreamError::Format,
-                            ["Multiple segments not supported"]
+                            ["Only Time segments supported, got {:?}", segment.format(),]
                         );
                         return false;
                     }
+                    Ok(segment) => segment,
+                };
 
-                    let mut segment = match e.segment().clone().downcast::<gst::ClockTime>() {
-                        Err(segment) => {
-                            gst::element_imp_error!(
-                                self,
-                                gst::StreamError::Format,
-                                ["Only Time segments supported, got {:?}", segment.format(),]
-                            );
-                            return false;
-                        }
-                        Ok(segment) => segment,
-                    };
+                let lateness = self.settings.lock().unwrap().lateness;
 
-                    segment.set_position(segment.start());
+                let mut state = self.state.lock().unwrap();
 
-                    gst::info!(CAT, imp = self, "using segment {segment:?}");
-
-                    state.in_segment = Some(segment);
+                if let Some(ref in_segment) = state.in_segment {
+                    // If segment changes in any other way than the position
+                    // we'll have to drain first.
+                    let mut compare_segment = segment.clone();
+                    compare_segment.set_position(in_segment.position());
+                    if *in_segment != compare_segment {
+                        // Do drain
+                        state = match self.drain(state) {
+                            Err(err) => {
+                                gst::error!(CAT, imp = self, "Failed to drain: {err}");
+                                gst::element_imp_error!(
+                                    self,
+                                    gst::StreamError::Failed,
+                                    ["Failed to drain: {err}"]
+                                );
+                                return false;
+                            }
+                            Ok(state) => state,
+                        };
+                    }
                 }
 
-                gst::Pad::event_default(pad, Some(&*self.obj()), event)
+                gst::info!(CAT, imp = self, "input segment is now {:?}", segment);
+
+                state.in_segment = Some(segment.clone());
+
+                let mut out_segment = segment.clone();
+
+                out_segment.set_base(segment.base().unwrap_or(gst::ClockTime::ZERO) + lateness);
+
+                state.out_segment = Some(out_segment.clone());
+
+                let out_event = gst::event::Segment::builder(&out_segment)
+                    .seqnum(state.seqnum)
+                    .build();
+
+                drop(state);
+
+                self.srcpad.push_event(out_event)
             }
             Caps(_) => {
                 let caps = gst::Caps::builder("text/x-raw")
@@ -611,6 +630,17 @@ impl Transcriber {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::trace!(CAT, obj = pad, "Handling {buffer:?}");
 
+        let now = self.obj().current_running_time();
+
+        self.ensure_connection().map_err(|err| {
+            gst::element_imp_error!(
+                self,
+                gst::StreamError::Failed,
+                ["Streaming failed: {}", err]
+            );
+            gst::FlowError::Error
+        })?;
+
         {
             let mut state = self.state.lock().unwrap();
 
@@ -620,47 +650,21 @@ impl Transcriber {
                     imp = self,
                     "buffer is discont, storing pending discont"
                 );
-                state.pending_discont = true;
+                state.discont = true;
             }
-
-            let Some(segment) = state.in_segment.as_ref() else {
-                gst::warning!(CAT, imp = self, "dropping buffer before segment");
-                return Ok(gst::FlowSuccess::Ok);
-            };
 
             let Some(pts) = buffer.pts() else {
                 gst::warning!(CAT, imp = self, "dropping first buffer without a PTS");
                 return Ok(gst::FlowSuccess::Ok);
             };
 
-            let Some(mut rtime) = segment.to_running_time(pts) else {
-                gst::log!(CAT, imp = self, "clipping buffer outside segment");
-                return Ok(gst::FlowSuccess::Ok);
-            };
-
-            if state.pending_discont {
-                state.pending_discont = false;
-
-                let discont_rtime = state.last_input_rtime.unwrap_or(gst::ClockTime::ZERO);
-
-                gst::info!(
-                    CAT,
-                    imp = self,
-                    "storing discont with running time {discont_rtime} and pts {pts}"
-                );
-
-                state.disconts.push_back((discont_rtime, pts));
+            if state.first_buffer_pts.is_none() {
+                state.first_buffer_pts = Some(pts);
             }
 
-            rtime.opt_add_assign(buffer.duration());
-
-            gst::trace!(CAT, imp = self, "storing last input running time {rtime}");
-
-            if state.last_input_rtime.is_none() {
-                state.in_segment.as_mut().unwrap().set_position(Some(pts));
+            if let Some(now) = now {
+                state.input_times.push_back((pts, now));
             }
-
-            state.last_input_rtime = Some(rtime);
         }
 
         let Some(mut audio_tx) = self.state.lock().unwrap().audio_tx.take() else {
@@ -687,7 +691,7 @@ impl Transcriber {
             );
 
             let (audio_tx, audio_rx) = mpsc::channel::<gst::Buffer>(1);
-            let (result_tx, result_rx) = std::sync::mpsc::channel::<aws_types::TranscriptEvent>();
+            let (result_tx, result_rx) = std::sync::mpsc::channel::<TranscriptOutput>();
 
             // Stream the incoming buffers chunked
             let chunk_stream = audio_rx.flat_map(move |buffer| {
@@ -695,8 +699,12 @@ impl Transcriber {
                     let data = buffer.map_readable().unwrap();
                     use aws_sdk_transcribestreaming::primitives::Blob;
                     use aws_types::{AudioEvent, AudioStream};
-                    for chunk in data.chunks(8192) {
-                        yield Ok(AudioStream::AudioEvent(AudioEvent::builder().audio_chunk(Blob::new(chunk)).build()));
+                    if !data.is_empty() {
+                        for chunk in data.chunks(8192) {
+                            yield Ok(AudioStream::AudioEvent(AudioEvent::builder().audio_chunk(Blob::new(chunk)).build()));
+                        }
+                    } else {
+                        yield Ok(AudioStream::AudioEvent(AudioEvent::builder().audio_chunk(Blob::new([])).build()));
                     }
                 }
             });
@@ -737,6 +745,14 @@ impl Transcriber {
 
             gst::info!(CAT, imp = self, "connection established!");
 
+            if let Err(err) = self.start_srcpad_task() {
+                gst::error!(CAT, imp = self, "Failed to start srcpad task: {}", err);
+                return Err(gst::error_msg!(
+                    gst::CoreError::Failed,
+                    ["Failed to start srcpad task: {err}"]
+                ));
+            }
+
             let this_weak = self.downgrade();
             state.receive_handle = Some(RUNTIME.spawn(async move {
                 loop {
@@ -760,17 +776,56 @@ impl Transcriber {
 
                     let Some(event) = event else {
                         if let Some(this) = this_weak.upgrade() {
-                            gst::debug!(CAT, imp = this, "Transcriber loop sending EOS");
+                            if result_tx.send(TranscriptOutput::Eos).is_err() {
+                                gst::info!(CAT, imp = this, "Result tx closed");
+                                break;
+                            }
                         }
                         break;
                     };
-                    if let aws_types::TranscriptResultStream::TranscriptEvent(transcript_evt) =
+                    if let aws_types::TranscriptResultStream::TranscriptEvent(mut transcript_evt) =
                         event
                     {
-                        if result_tx.send(transcript_evt).is_err() {
-                            if let Some(this) = this_weak.upgrade() {
-                                gst::info!(CAT, imp = this, "Result tx closed");
-                            }
+                        let Some(this) = this_weak.upgrade() else {
+                            break;
+                        };
+
+                        let Some(ref mut transcript) = transcript_evt.transcript else {
+                            gst::trace!(
+                                CAT,
+                                imp = this,
+                                "transcript event does not contain a transcript"
+                            );
+                            continue;
+                        };
+
+                        let t = TranscriptDef {
+                            results: transcript.results.clone(),
+                        };
+
+                        let serialized = serde_json::to_string(&t).expect("serializable");
+
+                        let s = gst::Structure::builder("awstranscribe/raw")
+                            .field("transcript", serialized)
+                            .field("arrival-time", this.obj().current_running_time())
+                            .field(
+                                "language-code",
+                                &this.settings.lock().as_ref().unwrap().language_code,
+                            )
+                            .build();
+
+                        gst::trace!(
+                            CAT,
+                            imp = this,
+                            "serialized transcript event, posting message"
+                        );
+
+                        let _ = this.obj().post_message(
+                            gst::message::Element::builder(s).src(&*this.obj()).build(),
+                        );
+
+                        if this.dequeue(transcript, &result_tx).is_err() {
+                            gst::info!(CAT, imp = this, "Result tx closed");
                             break;
                         }
                     } else if let Some(this) = this_weak.upgrade() {
@@ -841,30 +896,23 @@ impl Transcriber {
         Ok(())
     }
 
-    fn disconnect(&self, stop_task: bool) {
-        let mut state = self.state.lock().unwrap();
-
+    fn disconnect<'a>(&'a self, mut state: MutexGuard<'a, State>) -> MutexGuard<'a, State> {
         if let Some(handle) = state.receive_handle.take() {
             gst::info!(CAT, imp = self, "aborting result reception");
             handle.abort();
         }
 
-        let mut task_started = state.task_started;
+        *state = State::default();
 
-        // Make sure the task is fully stopped before resetting the state,
-        // in order not to break expectations such as in_segment being
-        // present while the task is still processing items
-        if stop_task {
-            drop(state);
-            let _ = self.srcpad.stop_task();
-            state = self.state.lock().unwrap();
-            task_started = false;
-        }
+        self.state_cond.notify_one();
 
-        *state = State {
-            task_started,
-            ..Default::default()
-        };
+        drop(state);
+
+        let _ = self.srcpad.stop_task();
+
+        gst::info!(CAT, imp = self, "disconnected");
+
+        self.state.lock().unwrap()
     }
 
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
@@ -934,6 +982,7 @@ impl ObjectSubclass for Transcriber {
             settings: Default::default(),
             state: Default::default(),
             aws_config: Default::default(),
+            state_cond: Condvar::default(),
         }
     }
 }
@@ -1012,6 +1061,12 @@ impl ObjectImpl for Transcriber {
                     .blurb("Defines whether to partition speakers in the transcription output")
                     .default_value(DEFAULT_SHOW_SPEAKER_LABEL)
                     .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("max-observed-delay")
+                    .nick("Maximum Observed Delay")
+                    .blurb("Maximum delay observed between the sending of an audio sample and the reception of an item")
+                    .default_value(0)
+                    .read_only()
                     .build(),
             ]
         });
@@ -1141,6 +1196,10 @@ impl ObjectImpl for Transcriber {
                 let settings = self.settings.lock().unwrap();
                 settings.show_speaker_label.to_value()
             }
+            "max-observed-delay" => {
+                let state = self.state.lock().unwrap();
+                (state.observed_max_delay.mseconds() as u32).to_value()
+            }
             _ => unimplemented!(),
         }
     }
@@ -1210,7 +1269,7 @@ impl ElementImpl for Transcriber {
             }
             gst::StateChange::PausedToReady => {
                 let _ = self.state.lock().unwrap().result_rx.take();
-                self.disconnect(true);
+                drop(self.disconnect(self.state.lock().unwrap()));
             }
             _ => (),
         }
