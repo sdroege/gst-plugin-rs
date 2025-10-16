@@ -201,6 +201,7 @@ foreach option_name: plugins.keys()
 endforeach
 
 rtp_option = rtp_option.enable_if(webrtc_option.enabled(), error_message: 'webrtc option needs rtp')
+rtp_option = rtp_option.enable_if(rtsp_option.enabled(), error_message: 'rtsp option needs rtp')
 
 deps = [
   # name, subproject name, subproject dep, library object
@@ -216,24 +217,28 @@ if threadshare_option.allowed() \
   or raptorq_option.allowed() \
   or rtp_option.allowed() \
   or webrtc_option.allowed()
-  deps += [['gstreamer-rtp-1.0', 'gst-plugins-base', 'rtp_dep', 'gst_rtp']]
+  req = threadshare_option.enabled() or onvif_option.enabled() \
+      or raptorq_option.enabled() or rtp_option.enabled() or webrtc_option.enabled()
+  deps += [['gstreamer-rtp-1.0', 'gst-plugins-base', 'rtp_dep', 'gst_rtp', req]]
 endif
 if webrtc_option.allowed() \
   or webrtchttp_option.allowed()
-  deps += [['gstreamer-webrtc-1.0', 'gst-plugins-bad', 'gstwebrtc_dep', 'gstwebrtc']]
-  deps += [['gstreamer-sdp-1.0', 'gst-plugins-base', 'sdp_dep', 'gstsdp']]
+  req = webrtc_option.enabled() or webrtchttp_option.enabled()
+  deps += [['gstreamer-webrtc-1.0', 'gst-plugins-bad', 'gstwebrtc_dep', 'gstwebrtc', req]]
+  deps += [['gstreamer-sdp-1.0', 'gst-plugins-base', 'sdp_dep', 'gstsdp', req]]
 endif
 if get_option('tests').allowed()
-  deps += [['gstreamer-check-1.0', 'gstreamer', 'gst_check_dep', 'gst_check']]
+  deps += [['gstreamer-check-1.0', 'gstreamer', 'gst_check_dep', 'gst_check', get_option('tests')]]
 endif
 if gtk4_option.allowed()
   deps += [['gstreamer-gl-1.0', 'gst-plugins-base', 'gstgl_dep', 'gstgl', gtk4_option]]
 endif
 if threadshare_option.allowed() or rtsp_option.allowed()
-  deps += [['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net']]
+  req = threadshare_option.enabled() or rtsp_option.enabled()
+  deps += [['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net', req]]
 endif
 if analytics_option.allowed()
-  deps += [['gstreamer-analytics-1.0', 'gst-plugins-bad', 'gstanalytics_dep', 'gstanalytics']]
+  deps += [['gstreamer-analytics-1.0', 'gst-plugins-bad', 'gstanalytics_dep', 'gstanalytics', analytics_option]]
 endif
 
 glib_dep = dependency('glib-2.0', version: glib_req)
