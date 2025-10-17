@@ -12,6 +12,9 @@ import time
 from argparse import ArgumentParser
 from pathlib import Path as P
 
+# Import to get precise library names from Cargo.toml
+from dependencies import CargoAnalyzer
+
 PARSER = ArgumentParser()
 PARSER.add_argument('command', choices=['build', 'test', 'clippy'])
 PARSER.add_argument('build_dir', type=P)
@@ -90,6 +93,21 @@ def generate_depfile_for(fpath, build_start_time, logfile=None):
                 depfile_content += f"{output}: {' '.join(all_deps)}\n"
 
     return depfile_content
+
+
+def get_library_names_from_packages(packages, src_dir, logfile=None):
+    """
+    Convert package names to library names by parsing Cargo.toml files.
+    Package names like 'gst-plugin-validate' map to library names like
+    'libgstrsvalidate' and pkg-config files like 'gstrsvalidate.pc'
+    """
+    analyzer = CargoAnalyzer(src_dir=src_dir)
+    analyzer.load_crates()
+
+    print(f'Processing packages for library name extraction: {packages}', file=logfile)
+    lib_names = analyzer.get_library_names(packages)
+    print(f'Allowed library names: {lib_names}', file=logfile)
+    return lib_names
 
 
 # Copied from gst-env.py
@@ -302,8 +320,10 @@ if __name__ == '__main__':
     build_start_time = time.time()
     run(cargo_cmd, env)
 
+    allowed_lib_names = get_library_names_from_packages(opts.packages, opts.src_dir, logfile) if opts.packages else []
     if opts.command == 'build':
         target_dir = cargo_target_dir / '**' / opts.target
+
         if opts.bin:
             exe = glob.glob(
                 str(target_dir / opts.bin) + opts.exe_suffix, recursive=True
@@ -311,11 +331,17 @@ if __name__ == '__main__':
             shutil.copy2(exe, opts.build_dir)
             depfile_content = generate_depfile_for(P(exe), build_start_time, logfile)
         else:
-            # Copy so files to build dir
+            # Copy library files to build dir
             depfile_content = ''
+            # Get allowed library names if filtering by packages
             for suffix in opts.lib_suffixes:
                 for f in glob.glob(str(target_dir / f'*.{suffix}'), recursive=True):
                     libfile = P(f)
+
+                    # Filter by package if packages were specified
+                    if libfile.stem not in allowed_lib_names:
+                        print(f'Skipping {libfile.name} (not in --packages)', file=logfile)
+                        continue
 
                     depfile_content += generate_depfile_for(
                         libfile, build_start_time, logfile
@@ -345,6 +371,11 @@ if __name__ == '__main__':
 
         # Copy generated pkg-config files
         for f in glob.glob(str(target_dir / '*.pc'), recursive=True):
+            pc_file = P(f)
+            if pc_file.stem not in allowed_lib_names:
+                print(f'Skipping {pc_file.name} (not in --packages)', file=logfile)
+                continue
+            print(f'Copying {pc_file}', file=logfile)
             shutil.copy(f, opts.build_dir)
 
         # Move -uninstalled.pc to meson-uninstalled
