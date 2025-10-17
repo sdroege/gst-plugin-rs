@@ -11,6 +11,8 @@ prefix = sys.argv[1]
 
 plugins = glob.glob(os.path.join(
     prefix, '**', 'gstreamer-1.0', '*.so'), recursive=True)
+plugins += glob.glob(os.path.join(
+    prefix, '**', 'gstreamer-1.0', 'validate', '*.so'), recursive=True)
 plugins = list(map(os.path.basename, plugins))
 print("Built plugins:", plugins)
 

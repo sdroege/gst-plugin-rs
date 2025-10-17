@@ -152,6 +152,7 @@ meson shared:
     - ./ci/check-installed.py install
     - ninja -C build docs/gst_plugins_cache.json
     - ci/check-documentation-diff.py
+    - meson test -C build/ validate.rs.check_qrcode_content
   artifacts:
     when: always
     expire_in: "7 days"

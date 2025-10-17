@@ -1,0 +1,12 @@
+meta,
+    args = {
+        "videotestsrc num-buffers=1 ! debugqroverlay name=qr ! video/x-raw,format=I420,width=320,height=240,framerate=30/1 ! fakesink name=sink enable-last-sample=true",
+    },
+    handles-states=true
+
+play
+wait, message-type=eos
+
+check-last-frame-qrcode, sink-name=sink, expected-data="{\"TIMESTAMP\":0,\"BUFFERCOUNT\":1,\"FRAMERATE\":\"30/1\",\"NAME\":\"QR\"}"
+
+stop

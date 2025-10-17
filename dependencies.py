@@ -36,6 +36,7 @@ RENAMES = {
     'rswebp': 'webp',
     'rsonvif': 'onvif',
     'rstracers': 'tracers',
+    'rsvalidate': 'validate',
     'rsclosedcaption': 'closedcaption',
     'rswebrtc': 'webrtc',
     'rspng': 'png',

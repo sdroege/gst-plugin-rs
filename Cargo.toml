@@ -55,6 +55,7 @@ members = [
     "utils/togglerecord",
     "utils/tracers",
     "utils/uriplaylistbin",
+    "utils/validate",
 
     "video/cdg",
     "video/closedcaption",
@@ -116,6 +117,7 @@ default-members = [
     "utils/togglerecord",
     "utils/tracers",
     "utils/uriplaylistbin",
+    "utils/validate",
 
     "video/cdg",
     "video/ffv1",
@@ -170,5 +172,6 @@ gst-rtp = { package = "gstreamer-rtp", git = "https://gitlab.freedesktop.org/gst
 gst-sdp = { package = "gstreamer-sdp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main" }
 gst-tag = { package = "gstreamer-tag", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main" }
 gst-utils = { package = "gstreamer-utils", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main" }
+gst-validate = { package = "gstreamer-validate", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main" }
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main" }
 gst-webrtc = { package = "gstreamer-webrtc", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main" }

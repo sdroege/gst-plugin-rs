@@ -60,6 +60,7 @@ option('livesync', type: 'feature', value: 'auto', description: 'Build livesync 
 option('togglerecord', type: 'feature', value: 'auto', description: 'Build togglerecord plugin')
 option('tracers', type: 'feature', value: 'auto', description: 'Build tracers plugin')
 option('uriplaylistbin', type: 'feature', value: 'auto', description: 'Build uriplaylistbin plugin')
+option('validate', type: 'feature', value: 'auto', description: 'Build validate plugin')
 
 # video
 option('cdg', type: 'feature', value: 'auto', description: 'Build cdg plugin')

@@ -26,6 +26,7 @@ RS_PREFIXED = [
     'rtp',
     'rtsp',
     'inter',
+    'validate',
 ]
 
 OVERRIDE = {

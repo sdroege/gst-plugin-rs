@@ -1,0 +1,45 @@
+[package]
+name = "gst-plugin-validate"
+version.workspace = true
+authors = ["Thibault Saunier <tsaunier@igalia.com>"]
+license = "MPL-2.0"
+description = "GStreamer Validate Plugin in rust"
+repository.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+gst.workspace = true
+gst-base.workspace = true
+gst-video.workspace = true
+gst-validate.workspace = true
+rqrr = { version = "0.7", default-features = false, features = ["img"] }
+image = { version = "0.25", default-features = false }
+serde_json = "1.0"
+
+[lib]
+name = "gstrsvalidate"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper.workspace = true
+
+[features]
+static = []
+capi = []
+doc = ["gst/v1_18"]
+
+[package.metadata.capi]
+min_version = "0.9.21"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0/validate/"
+versioning = false
+import_library = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gstreamer-video-1.0, gstreamer-validate-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

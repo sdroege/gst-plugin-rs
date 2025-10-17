@@ -185,6 +185,7 @@ plugins = {
     ],
   },
   'skia': {}, # skia can have external dependencies, see below
+  'validate': {}, # Only used to handle the validate feature option
   'speechmatics': {'library': 'libgstspeechmatics'},
   'vvdec': {
     'library': 'libgstvvdec',
@@ -666,6 +667,9 @@ extra_env += {'RUSTC': ' '.join(rustc.cmd_array())}
 
 # Build plugins in the plugins subdirectory
 subdir('plugins')
+
+# Build validate plugins in separate directory
+subdir('validate-plugins')
 
 # This is used by GStreamer to static link Rust plugins into gst-full
 gst_plugins = []
