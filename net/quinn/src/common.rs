@@ -6,9 +6,11 @@
 // <https://mozilla.org/MPL/2.0/>.
 //
 // SPDX-License-Identifier: MPL-2.0
+
 use bytes::BufMut;
 use gst::glib;
 use quinn::VarInt;
+use std::{net::SocketAddr, path::PathBuf};
 
 pub(crate) static DEFAULT_SERVER_NAME: &str = "localhost";
 pub(crate) static DEFAULT_ADDR: &str = "127.0.0.1";
@@ -51,7 +53,22 @@ pub enum QuinnQuicRole {
     Client,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Clone, Debug)]
+pub struct QuinnQuicEndpointConfig {
+    pub server_addr: SocketAddr,
+    pub server_name: String,
+    pub client_addr: Option<SocketAddr>,
+    pub secure_conn: bool,
+    pub alpns: Vec<String>,
+    pub certificate_file: Option<PathBuf>,
+    pub private_key_file: Option<PathBuf>,
+    pub keep_alive_interval: u64,
+    pub transport_config: QuinnQuicTransportConfig,
+    pub with_client_auth: bool,
+    pub webtransport: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct QuinnQuicTransportConfig {
     pub datagram_receive_buffer_size: usize,
     pub datagram_send_buffer_size: usize,

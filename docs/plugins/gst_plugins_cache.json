@@ -7620,6 +7620,18 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "role": {
+                        "blurb": "WebTransport session role to use.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "server (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstQuinnQuicRole",
+                        "writable": true
+                    },
                     "secure-connection": {
                         "blurb": "Use certificates for QUIC connection. False: Insecure connection, True: Secure connection.",
                         "conditionally-available": false,
@@ -7682,6 +7694,18 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "guint",
+                        "writable": true
+                    },
+                    "url": {
+                        "blurb": "URL of the HTTP/3 server to connect to.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "127.0.0.1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
                         "writable": true
                     },
                     "use-datagram": {

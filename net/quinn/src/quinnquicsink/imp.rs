@@ -8,11 +8,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::common::*;
+use crate::quinnconnection::*;
 use crate::quinnquicmeta::*;
 use crate::quinnquicquery::*;
 use crate::utils::{
-    client_endpoint, get_stats, make_socket_addr, server_endpoint, wait, QuinnQuicEndpointConfig,
-    WaitError, CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG, RUNTIME,
+    client_endpoint, get_stats, make_socket_addr, server_endpoint, wait, WaitError,
+    CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG, RUNTIME,
 };
 use crate::{common::*, utils};
 use bytes::Bytes;
@@ -24,6 +25,7 @@ use quinn::{
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
@@ -95,6 +97,7 @@ pub struct QuinnQuicSink {
     settings: Mutex<Settings>,
     state: Mutex<State>,
     canceller: Mutex<utils::Canceller>,
+    connection: Mutex<Option<Connection>>,
 }
 
 impl Default for QuinnQuicSink {
@@ -103,6 +106,7 @@ impl Default for QuinnQuicSink {
             settings: Mutex::new(Settings::default()),
             state: Mutex::new(State::default()),
             canceller: Mutex::new(utils::Canceller::default()),
+            connection: Mutex::new(None),
         }
     }
 }
@@ -470,49 +474,40 @@ impl ObjectSubclass for QuinnQuicSink {
 
 impl BaseSinkImpl for QuinnQuicSink {
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        let settings = self.settings.lock().unwrap();
-        let timeout = settings.timeout;
-        drop(settings);
-
-        let mut state = self.state.lock().unwrap();
-
+        let state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
             unreachable!("QuicSink is already started");
         }
+        drop(state);
 
-        match wait(&self.canceller, self.init_connection(), timeout) {
-            Ok(Ok(c)) => {
-                *state = State::Started(Started {
-                    connection: c,
-                    stream: None,
-                    stream_map: HashMap::new(),
-                });
-
-                gst::info!(CAT, imp = self, "Started");
-
-                Ok(())
+        let conn_guard = self.connection.lock().unwrap();
+        let connection = match *conn_guard {
+            Some(ref c) => {
+                // We will end up here if upstream MoQ muxer
+                // requested for a Connection before we could
+                // set up.
+                gst::info!(
+                    CAT,
+                    imp = self,
+                    "Using existing connection with ID: {}",
+                    c.stable_id()
+                );
+                c.clone()
             }
-            Ok(Err(e)) => match e {
-                WaitError::FutureAborted => {
-                    gst::warning!(CAT, imp = self, "Connection aborted");
-                    Ok(())
-                }
-                WaitError::FutureError(err) => {
-                    gst::error!(CAT, imp = self, "Connection request failed: {}", err);
-                    Err(gst::error_msg!(
-                        gst::ResourceError::Failed,
-                        ["Connection request failed: {}", err]
-                    ))
-                }
-            },
-            Err(e) => {
-                gst::error!(CAT, imp = self, "Failed to establish a connection: {:?}", e);
-                Err(gst::error_msg!(
-                    gst::ResourceError::Failed,
-                    ["Failed to establish a connection: {:?}", e]
-                ))
-            }
-        }
+            None => self.setup_connection()?,
+        };
+        drop(conn_guard);
+
+        let mut state = self.state.lock().unwrap();
+        *state = State::Started(Started {
+            connection,
+            stream: None,
+            stream_map: HashMap::new(),
+        });
+
+        gst::info!(CAT, imp = self, "Started");
+
+        Ok(())
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
@@ -524,8 +519,6 @@ impl BaseSinkImpl for QuinnQuicSink {
         let mut state = self.state.lock().unwrap();
 
         if let State::Started(ref mut state) = *state {
-            let connection = &state.connection;
-
             if !use_datagram {
                 if let Some(ref mut send) = state.stream.take() {
                     self.close_stream(send, timeout);
@@ -536,7 +529,7 @@ impl BaseSinkImpl for QuinnQuicSink {
                 self.close_stream(stream, timeout);
             }
 
-            connection.close(
+            state.connection.close(
                 CONNECTION_CLOSE_CODE.into(),
                 CONNECTION_CLOSE_MSG.as_bytes(),
             );
@@ -583,6 +576,39 @@ impl BaseSinkImpl for QuinnQuicSink {
     fn query(&self, query: &mut gst::QueryRef) -> bool {
         match query.view_mut() {
             gst::QueryViewMut::Custom(q) => self.sink_query(q),
+            gst::QueryViewMut::Context(c) => {
+                gst::debug!(CAT, imp = self, "Handling Context query");
+
+                if let Some(context) = self.set_connection_context() {
+                    gst::info!(CAT, imp = self, "Setting Quinn Connection Context");
+                    c.set_context(&context);
+                    return true;
+                }
+
+                match self.setup_connection() {
+                    Ok(connection) => {
+                        let mut conn_guard = self.connection.lock().unwrap();
+                        *conn_guard = Some(connection);
+                        drop(conn_guard);
+
+                        match self.set_connection_context() {
+                            Some(context) => {
+                                gst::info!(CAT, imp = self, "Setting Quinn Connection Context");
+                                c.set_context(&context);
+                                true
+                            }
+                            None => {
+                                gst::error!(CAT, imp = self, "Failed to set context");
+                                false
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        gst::error!(CAT, imp = self, "Failed to setup connection, {e:?}");
+                        false
+                    }
+                }
+            }
             _ => BaseSinkImplExt::parent_query(self, query),
         }
     }
@@ -631,6 +657,44 @@ impl BaseSinkImpl for QuinnQuicSink {
 }
 
 impl QuinnQuicSink {
+    fn get_role_and_epconfig(
+        &self,
+    ) -> Result<(QuinnQuicRole, QuinnQuicEndpointConfig), gst::ErrorMessage> {
+        let settings = self.settings.lock().unwrap();
+
+        let client_addr =
+            make_socket_addr(format!("{}:{}", settings.bind_address, settings.bind_port).as_str())?;
+
+        let server_addr =
+            make_socket_addr(format!("{}:{}", settings.address, settings.port).as_str())?;
+
+        let server_name = settings.server_name.clone();
+        let alpns = settings.alpns.clone();
+        let role = settings.role;
+        let keep_alive_interval = settings.keep_alive_interval;
+        let secure_conn = settings.secure_conn;
+        let certificate_file = settings.certificate_file.clone();
+        let private_key_file = settings.private_key_file.clone();
+        let transport_config = settings.transport_config;
+
+        Ok((
+            role,
+            QuinnQuicEndpointConfig {
+                server_addr,
+                server_name,
+                client_addr: Some(client_addr),
+                secure_conn,
+                alpns,
+                certificate_file,
+                private_key_file,
+                keep_alive_interval,
+                transport_config,
+                with_client_auth: true,
+                webtransport: false,
+            },
+        ))
+    }
+
     fn send_buffer(
         &self,
         src: &[u8],
@@ -694,91 +758,6 @@ impl QuinnQuicSink {
             let send = started.stream.as_mut().expect("Stream must be valid here");
             self.write_stream(send, src, timeout)
         }
-    }
-
-    async fn init_connection(&self) -> Result<Connection, WaitError> {
-        let (role, endpoint_config) = {
-            let settings = self.settings.lock().unwrap();
-
-            let client_addr = make_socket_addr(
-                format!("{}:{}", settings.bind_address, settings.bind_port).as_str(),
-            )?;
-
-            let server_addr =
-                make_socket_addr(format!("{}:{}", settings.address, settings.port).as_str())?;
-
-            let server_name = settings.server_name.clone();
-            let alpns = settings.alpns.clone();
-            let role = settings.role;
-            let keep_alive_interval = settings.keep_alive_interval;
-            let secure_conn = settings.secure_conn;
-            let certificate_file = settings.certificate_file.clone();
-            let private_key_file = settings.private_key_file.clone();
-            let transport_config = settings.transport_config;
-
-            (
-                role,
-                QuinnQuicEndpointConfig {
-                    server_addr,
-                    server_name,
-                    client_addr: Some(client_addr),
-                    secure_conn,
-                    alpns,
-                    certificate_file,
-                    private_key_file,
-                    keep_alive_interval,
-                    transport_config,
-                    with_client_auth: true,
-                },
-            )
-        };
-
-        let endpoint = match role {
-            QuinnQuicRole::Server => server_endpoint(&endpoint_config).map_err(|err| {
-                WaitError::FutureError(gst::error_msg!(
-                    gst::ResourceError::Failed,
-                    ["Failed to configure endpoint: {}", err]
-                ))
-            })?,
-            QuinnQuicRole::Client => client_endpoint(&endpoint_config).map_err(|err| {
-                WaitError::FutureError(gst::error_msg!(
-                    gst::ResourceError::Failed,
-                    ["Failed to configure endpoint: {}", err]
-                ))
-            })?,
-        };
-
-        let connection = match role {
-            QuinnQuicRole::Server => {
-                let incoming_conn = endpoint.accept().await.unwrap();
-
-                incoming_conn.await.map_err(|err| {
-                    WaitError::FutureError(gst::error_msg!(
-                        gst::ResourceError::Failed,
-                        ["Connection error: {}", err]
-                    ))
-                })?
-            }
-            QuinnQuicRole::Client => endpoint
-                .connect(endpoint_config.server_addr, &endpoint_config.server_name)
-                .unwrap()
-                .await
-                .map_err(|err| {
-                    WaitError::FutureError(gst::error_msg!(
-                        gst::ResourceError::Failed,
-                        ["Connection error: {}", err]
-                    ))
-                })?,
-        };
-
-        gst::info!(
-            CAT,
-            imp = self,
-            "Remote connection established: {}",
-            connection.remote_address()
-        );
-
-        Ok(connection)
     }
 
     fn handle_open_stream_query(&self, s: &mut gst::StructureRef) -> bool {
@@ -1042,5 +1021,118 @@ impl QuinnQuicSink {
                 }
             },
         }
+    }
+
+    fn setup_connection(&self) -> Result<Connection, gst::ErrorMessage> {
+        let settings = self.settings.lock().unwrap();
+        let timeout = settings.timeout;
+        drop(settings);
+
+        let (role, endpoint_config) = self.get_role_and_epconfig()?;
+        let addr = match role {
+            QuinnQuicRole::Client => endpoint_config.server_addr,
+            QuinnQuicRole::Server => endpoint_config
+                .client_addr
+                .expect("Client address should be valid"),
+        };
+        let mut shared_connection = SharedConnection::get_or_init(addr);
+
+        shared_connection.set_endpoint_config(endpoint_config);
+
+        let connection = match shared_connection.connection() {
+            Some(c) => match c {
+                QuinnConnection::Quic(conn) => {
+                    gst::info!(
+                        CAT,
+                        imp = self,
+                        "Using existing connection with ID: {}",
+                        conn.stable_id()
+                    );
+
+                    conn
+                }
+                QuinnConnection::WebTransport(_) => unreachable!(),
+            },
+            None => match wait(
+                &self.canceller,
+                shared_connection.connect(role, None),
+                timeout,
+            ) {
+                Ok(Ok(_)) => {
+                    let c = shared_connection
+                        .connection()
+                        .expect("Connection should be valid here");
+                    match c {
+                        QuinnConnection::WebTransport(_) => unreachable!(),
+                        QuinnConnection::Quic(conn) => {
+                            gst::info!(
+                                CAT,
+                                imp = self,
+                                "Using existing connection with ID: {}",
+                                conn.stable_id()
+                            );
+
+                            conn
+                        }
+                    }
+                }
+                Ok(Err(e)) | Err(e) => match e {
+                    WaitError::FutureAborted => {
+                        gst::warning!(CAT, imp = self, "Connection aborted");
+                        return Err(gst::error_msg!(
+                            gst::ResourceError::Failed,
+                            ["Connection request aborted"]
+                        ));
+                    }
+                    WaitError::FutureError(err) => {
+                        gst::error!(CAT, imp = self, "Connection request failed: {}", err);
+                        return Err(gst::error_msg!(
+                            gst::ResourceError::Failed,
+                            ["Connection request failed: {err}"]
+                        ));
+                    }
+                },
+            },
+        };
+
+        gst::info!(
+            CAT,
+            imp = self,
+            "QUIC connection established with ID: {}",
+            connection.stable_id()
+        );
+
+        Ok(connection)
+    }
+
+    fn set_connection_context(&self) -> Option<gst::Context> {
+        let conn_guard = self.connection.lock().unwrap();
+
+        if let Some(ref connection) = *conn_guard {
+            gst::debug!(CAT, imp = self, "Using already established Connection");
+
+            let conn = QuinnConnectionContext(Arc::new(QuinnConnectionContextInner {
+                connection: QuinnConnection::Quic(connection.clone()),
+            }));
+
+            let mut context = gst::Context::new(QUINN_CONNECTION_CONTEXT, true);
+            {
+                let context = context.get_mut().unwrap();
+                let s = context.structure_mut();
+                s.set("connection", conn);
+            };
+
+            self.obj().set_context(&context);
+
+            let _ = self.obj().post_message(
+                gst::message::HaveContext::builder(context.clone())
+                    .src(&*self.obj())
+                    .build(),
+            );
+
+            return Some(context.to_owned());
+        }
+
+        None
     }
 }

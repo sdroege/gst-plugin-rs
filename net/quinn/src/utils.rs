@@ -33,20 +33,6 @@ use web_transport_quinn::Client;
 pub const CONNECTION_CLOSE_CODE: u32 = 0;
 pub const CONNECTION_CLOSE_MSG: &str = "Stopped";
 
-#[derive(Debug)]
-pub struct QuinnQuicEndpointConfig {
-    pub server_addr: SocketAddr,
-    pub server_name: String,
-    pub client_addr: Option<SocketAddr>,
-    pub secure_conn: bool,
-    pub alpns: Vec<String>,
-    pub certificate_file: Option<PathBuf>,
-    pub private_key_file: Option<PathBuf>,
-    pub keep_alive_interval: u64,
-    pub transport_config: QuinnQuicTransportConfig,
-    pub with_client_auth: bool,
-}
-
 #[derive(Error, Debug)]
 pub enum WaitError {
     #[error("Future aborted")]
@@ -144,13 +130,13 @@ where
     res
 }
 
-pub fn make_socket_addr(addr: &str) -> Result<SocketAddr, WaitError> {
+pub fn make_socket_addr(addr: &str) -> Result<SocketAddr, gst::ErrorMessage> {
     match addr.parse::<SocketAddr>() {
         Ok(address) => Ok(address),
-        Err(e) => Err(WaitError::FutureError(gst::error_msg!(
+        Err(e) => Err(gst::error_msg!(
             gst::ResourceError::Failed,
             ["Invalid address: {}", e]
-        ))),
+        )),
     }
 }
 

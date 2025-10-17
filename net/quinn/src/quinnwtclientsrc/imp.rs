@@ -10,11 +10,12 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use crate::quinnconnection::*;
 use crate::quinnquicmeta::QuinnQuicMeta;
 use crate::quinnquicquery::*;
 use crate::utils::{
     client, client_endpoint, get_stats, make_socket_addr, server_endpoint, wait, Canceller,
-    QuinnQuicEndpointConfig, WaitError, CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG, RUNTIME,
+    WaitError, CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG, RUNTIME,
 };
 use crate::{common::*, utils};
 use async_channel::{unbounded, Receiver, Sender};
@@ -31,7 +32,7 @@ use std::fmt::Error;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::thread::{spawn, Builder, JoinHandle};
 use tokio::net::lookup_host;
 use tokio::sync::oneshot;
@@ -106,6 +107,7 @@ pub struct QuinnWebTransportClientSrc {
     settings: Mutex<Settings>,
     state: Mutex<State>,
     canceller: Mutex<utils::Canceller>,
+    session: Mutex<Option<Session>>,
 }
 
 impl Default for QuinnWebTransportClientSrc {
@@ -114,6 +116,7 @@ impl Default for QuinnWebTransportClientSrc {
             settings: Mutex::new(Settings::default()),
             state: Mutex::new(State::default()),
             canceller: Mutex::new(utils::Canceller::default()),
+            session: Mutex::new(None),
         }
     }
 }
@@ -281,59 +284,97 @@ impl BaseSrcImpl for QuinnWebTransportClientSrc {
         false
     }
 
+    fn query(&self, query: &mut gst::QueryRef) -> bool {
+        use gst::QueryViewMut;
+
+        match query.view_mut() {
+            QueryViewMut::Context(c) => {
+                gst::debug!(CAT, imp = self, "Handling Context query");
+
+                if let Some(context) = self.set_session_context() {
+                    gst::info!(CAT, imp = self, "Setting Quinn Session Context");
+                    c.set_context(&context);
+                    return true;
+                }
+
+                match self.setup_session() {
+                    Ok(session) => {
+                        let mut conn_guard = self.session.lock().unwrap();
+                        *conn_guard = Some(session);
+                        drop(conn_guard);
+
+                        match self.set_session_context() {
+                            Some(context) => {
+                                gst::info!(CAT, imp = self, "Setting Quinn Session Context");
+                                c.set_context(&context);
+                                true
+                            }
+                            None => {
+                                gst::error!(CAT, imp = self, "Failed to set context");
+                                false
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        gst::error!(CAT, imp = self, "Failed to setup session, {e:?}");
+                        false
+                    }
+                }
+            }
+            _ => BaseSrcImplExt::parent_query(self, query),
+        }
+    }
+
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        let settings = self.settings.lock().unwrap();
-        let timeout = settings.timeout;
-        drop(settings);
-
-        let mut state = self.state.lock().unwrap();
-
+        let state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
             unreachable!("QuinnWebTransportClientSrc already started");
         }
+        drop(state);
 
-        match wait(&self.canceller, self.init_session(), timeout) {
-            Ok(Ok(sess)) => {
-                let sess_clone = sess.clone();
-
-                let (tx_quit, rx_quit): (oneshot::Sender<()>, oneshot::Receiver<()>) =
-                    oneshot::channel();
-                let (data_tx, data_rx): (Sender<QuinnData>, Receiver<QuinnData>) = unbounded();
-
-                let self_ = self.ref_counted();
-                let data_handler = Builder::new()
-                    .name(DATA_HANDLER_THREAD.to_string())
-                    .spawn(move || {
-                        self_.handle_data(sess_clone, data_tx, rx_quit);
-                        gst::debug!(CAT, imp = self_, "Data handler thread exit");
-                    })
-                    .unwrap();
-
-                *state = State::Started(Started {
-                    session: sess,
-                    data_handler: Some(data_handler),
-                    data_rx: Some(data_rx),
-                    thread_quit: Some(tx_quit),
-                });
-
-                gst::info!(CAT, imp = self, "Started");
-
-                Ok(())
+        let sess_guard = self.session.lock().unwrap();
+        let session = match *sess_guard {
+            Some(ref s) => {
+                // We will end up here if downstream MoQ demuxer
+                // requested for a Session before we could
+                // set up.
+                gst::info!(
+                    CAT,
+                    imp = self,
+                    "Using existing connection with ID: {}",
+                    s.stable_id()
+                );
+                s.clone()
             }
-            Ok(Err(e)) | Err(e) => match e {
-                WaitError::FutureAborted => {
-                    gst::warning!(CAT, imp = self, "Connection aborted");
-                    Ok(())
-                }
-                WaitError::FutureError(err) => {
-                    gst::error!(CAT, imp = self, "Connection request failed: {}", err);
-                    Err(gst::error_msg!(
-                        gst::ResourceError::Failed,
-                        ["Connection request failed: {}", err]
-                    ))
-                }
-            },
-        }
+            None => self.setup_session()?,
+        };
+        drop(sess_guard);
+
+        let sess_clone = session.clone();
+        let (tx_quit, rx_quit): (oneshot::Sender<()>, oneshot::Receiver<()>) = oneshot::channel();
+        let (data_tx, data_rx): (Sender<QuinnData>, Receiver<QuinnData>) = unbounded();
+
+        let self_ = self.ref_counted();
+        let data_handler = Builder::new()
+            .name(DATA_HANDLER_THREAD.to_string())
+            .spawn(move || {
+                self_.handle_data(sess_clone, data_tx, rx_quit);
+                gst::debug!(CAT, imp = self_, "Data handler thread exit");
+            })
+            .unwrap();
+
+        let mut state = self.state.lock().unwrap();
+        *state = State::Started(Started {
+            session,
+            data_handler: Some(data_handler),
+            data_rx: Some(data_rx),
+            thread_quit: Some(tx_quit),
+        });
+        drop(state);
+
+        gst::info!(CAT, imp = self, "Started");
+
+        Ok(())
     }
 
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
@@ -478,88 +519,82 @@ impl QuinnWebTransportClientSrc {
         }
     }
 
-    async fn init_session(&self) -> Result<Session, WaitError> {
-        let (url, mut endpoint_config) = {
-            let settings = self.settings.lock().unwrap();
+    fn get_epconfig(&self) -> Result<(url::Url, QuinnQuicEndpointConfig), gst::ErrorMessage> {
+        let settings = self.settings.lock().unwrap();
+        let timeout = settings.timeout;
+        let secure_conn = settings.secure_conn;
+        let certificate_file = settings.certificate_file.clone();
+        let keep_alive_interval = settings.keep_alive_interval;
+        let transport_config = settings.transport_config;
 
-            let client_addr = make_socket_addr(
-                format!("{}:{}", settings.bind_address, settings.bind_port).as_str(),
-            )?;
+        let client_addr =
+            make_socket_addr(format!("{}:{}", settings.bind_address, settings.bind_port).as_str())?;
 
-            let url = url::Url::parse(&settings.url).map_err(|err| {
-                WaitError::FutureError(gst::error_msg!(
-                    gst::ResourceError::Failed,
-                    ["Failed to parse URL: {}", err]
-                ))
-            })?;
-
-            (
-                url.clone(),
-                QuinnQuicEndpointConfig {
-                    server_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 4443), // This will be filled in correctly later
-                    server_name: DEFAULT_SERVER_NAME.to_string(),
-                    client_addr: Some(client_addr),
-                    secure_conn: settings.secure_conn,
-                    alpns: vec![HTTP3_ALPN.to_string()],
-                    certificate_file: settings.certificate_file.clone(),
-                    private_key_file: None,
-                    keep_alive_interval: settings.keep_alive_interval,
-                    transport_config: settings.transport_config,
-                    with_client_auth: false,
-                },
-            )
-        };
+        let url = url::Url::parse(&settings.url).map_err(|err| {
+            gst::error_msg!(gst::ResourceError::Failed, ["Failed to parse URL: {}", err])
+        })?;
+        drop(settings);
 
         let server_port = url.port().unwrap_or(443);
-
-        let host = url.host_str().ok_or_else(|| {
-            WaitError::FutureError(gst::error_msg!(
+        if !url.has_host() {
+            return Err(gst::error_msg!(
                 gst::ResourceError::Failed,
-                ["Cannot parse host for URL: {}", url.as_str()]
-            ))
-        })?;
+                ["Cannot parse host for URL"]
+            ));
+        }
+        let host = url.host_str().unwrap().to_owned();
 
         // Look up the DNS entry.
-        let mut remotes = lookup_host((host, server_port)).await.map_err(|_| {
-            WaitError::FutureError(gst::error_msg!(
-                gst::ResourceError::Failed,
-                ["Cannot resolve host name for URL: {}", url.as_str()]
-            ))
-        })?;
+        let mut remotes = match wait(&self.canceller, lookup_host((host, server_port)), timeout) {
+            Ok(Ok(remotes)) => remotes,
+            Ok(Err(err)) => {
+                return Err(gst::error_msg!(
+                    gst::ResourceError::Failed,
+                    ["Host lookup request failed: {err}"]
+                ));
+            }
+            Err(err) => match err {
+                WaitError::FutureAborted => {
+                    return Err(gst::error_msg!(
+                        gst::ResourceError::Failed,
+                        ["Host lookup request aborted"]
+                    ));
+                }
+                WaitError::FutureError(err) => {
+                    return Err(gst::error_msg!(
+                        gst::ResourceError::Failed,
+                        ["Host lookup request failed: {err}"]
+                    ));
+                }
+            },
+        };
 
-        // Use the first entry.
-        endpoint_config.server_addr = match remotes.next() {
+        let server_addr = match remotes.next() {
             Some(remote) => Ok(remote),
-            None => Err(WaitError::FutureError(gst::error_msg!(
+            None => Err(gst::error_msg!(
                 gst::ResourceError::Failed,
-                ["Cannot resolve host name for URL: {}", url.as_str()]
-            ))),
+                ["Cannot resolve host name for URL"]
+            )),
         }?;
 
         drop(remotes);
 
-        let client = client(&endpoint_config).map_err(|err| {
-            WaitError::FutureError(gst::error_msg!(
-                gst::ResourceError::Failed,
-                ["Failed to configure endpoint: {}", err]
-            ))
-        })?;
-
-        let session = client.connect(url).await.map_err(|err| {
-            WaitError::FutureError(gst::error_msg!(
-                gst::ResourceError::Failed,
-                ["Failed to connect to server: {}", err]
-            ))
-        })?;
-
-        gst::info!(
-            CAT,
-            imp = self,
-            "Remote connection accepted: {}",
-            session.remote_address()
-        );
-
-        Ok(session)
+        Ok((
+            url,
+            QuinnQuicEndpointConfig {
+                server_addr,
+                server_name: DEFAULT_SERVER_NAME.to_string(),
+                client_addr: Some(client_addr),
+                secure_conn,
+                alpns: vec![HTTP3_ALPN.to_string()],
+                certificate_file,
+                private_key_file: None,
+                keep_alive_interval,
+                transport_config,
+                with_client_auth: false,
+                webtransport: true,
+            },
+        ))
     }
 
     fn handle_connection_error(&self, session_err: SessionError) {
@@ -711,5 +746,113 @@ impl QuinnWebTransportClientSrc {
         });
 
         gst::info!(CAT, imp = self, "Quit data handler thread");
+    }
+
+    fn setup_session(&self) -> Result<Session, gst::ErrorMessage> {
+        let settings = self.settings.lock().unwrap();
+        let timeout = settings.timeout;
+        drop(settings);
+
+        let (url, endpoint_config) = self.get_epconfig()?;
+
+        let mut shared_connection = SharedConnection::get_or_init(endpoint_config.server_addr);
+
+        shared_connection.set_endpoint_config(endpoint_config);
+
+        let session = match shared_connection.connection() {
+            Some(c) => match c {
+                QuinnConnection::WebTransport(sess) => {
+                    gst::info!(
+                        CAT,
+                        imp = self,
+                        "Using existing session with ID: {}",
+                        sess.stable_id()
+                    );
+
+                    sess
+                }
+                QuinnConnection::Quic(_) => unreachable!(),
+            },
+            None => match wait(
+                &self.canceller,
+                shared_connection.connect(QuinnQuicRole::Client, Some(url)),
+                timeout,
+            ) {
+                Ok(Ok(_)) => {
+                    let c = shared_connection
+                        .connection()
+                        .expect("Connection should be valid here");
+                    match c {
+                        QuinnConnection::Quic(_) => unreachable!(),
+                        QuinnConnection::WebTransport(sess) => {
+                            gst::info!(
+                                CAT,
+                                imp = self,
+                                "Using existing session with ID: {}",
+                                sess.stable_id()
+                            );
+
+                            sess
+                        }
+                    }
+                }
+                Ok(Err(e)) | Err(e) => match e {
+                    WaitError::FutureAborted => {
+                        gst::warning!(CAT, imp = self, "Session aborted");
+                        return Err(gst::error_msg!(
+                            gst::ResourceError::Failed,
+                            ["Session request aborted"]
+                        ));
+                    }
+                    WaitError::FutureError(err) => {
+                        gst::error!(CAT, imp = self, "Session request failed: {}", err);
+                        return Err(gst::error_msg!(
+                            gst::ResourceError::Failed,
+                            ["Session request failed: {err}"]
+                        ));
+                    }
+                },
+            },
+        };
+
+        gst::info!(
+            CAT,
+            imp = self,
+            "Remote session established: {}",
+            session.remote_address()
+        );
+
+        Ok(session)
+    }
+
+    fn set_session_context(&self) -> Option<gst::Context> {
+        let sess_guard = self.session.lock().unwrap();
+
+        if let Some(ref session) = *sess_guard {
+            gst::debug!(CAT, imp = self, "Using already established Connection");
+
+            let conn = QuinnConnectionContext(Arc::new(QuinnConnectionContextInner {
+                connection: QuinnConnection::WebTransport(session.clone()),
+            }));
+
+            let mut context = gst::Context::new(QUINN_CONNECTION_CONTEXT, true);
+            {
+                let context = context.get_mut().unwrap();
+                let s = context.structure_mut();
+                s.set("connection", conn);
+            };
+
+            self.obj().set_context(&context);
+
+            let _ = self.obj().post_message(
+                gst::message::HaveContext::builder(context.clone())
+                    .src(&*self.obj())
+                    .build(),
+            );
+
+            return Some(context.to_owned());
+        }
+
+        None
     }
 }
