@@ -15,7 +15,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        crate::plugin_register_static().expect("rtpvp8 test");
+        crate::plugin_register_static().expect("rtp linear audio test");
     });
 }
 
