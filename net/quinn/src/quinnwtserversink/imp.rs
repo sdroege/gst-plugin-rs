@@ -102,14 +102,14 @@ impl Default for Settings {
     }
 }
 
-pub struct QuinnWebTransportServerSink {
+pub struct QuinnWebTransportSink {
     settings: Mutex<Settings>,
     state: Mutex<State>,
     canceller: Mutex<utils::Canceller>,
     session: Mutex<Option<Session>>,
 }
 
-impl Default for QuinnWebTransportServerSink {
+impl Default for QuinnWebTransportSink {
     fn default() -> Self {
         Self {
             settings: Mutex::new(Settings::default()),
@@ -120,9 +120,9 @@ impl Default for QuinnWebTransportServerSink {
     }
 }
 
-impl GstObjectImpl for QuinnWebTransportServerSink {}
+impl GstObjectImpl for QuinnWebTransportSink {}
 
-impl ElementImpl for QuinnWebTransportServerSink {
+impl ElementImpl for QuinnWebTransportSink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
@@ -177,7 +177,7 @@ impl ElementImpl for QuinnWebTransportServerSink {
     }
 }
 
-impl ObjectImpl for QuinnWebTransportServerSink {
+impl ObjectImpl for QuinnWebTransportSink {
     fn constructed(&self) {
         self.parent_constructed();
     }
@@ -401,17 +401,17 @@ impl ObjectImpl for QuinnWebTransportServerSink {
 }
 
 #[glib::object_subclass]
-impl ObjectSubclass for QuinnWebTransportServerSink {
-    const NAME: &'static str = "GstQuinnWebTransportServerSink";
-    type Type = super::QuinnWebTransportServerSink;
+impl ObjectSubclass for QuinnWebTransportSink {
+    const NAME: &'static str = "GstQuinnWebTransportSink";
+    type Type = super::QuinnWebTransportSink;
     type ParentType = gst_base::BaseSink;
 }
 
-impl BaseSinkImpl for QuinnWebTransportServerSink {
+impl BaseSinkImpl for QuinnWebTransportSink {
     fn start(&self) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
-            unreachable!("QuinnWebTransportServerSink is already started");
+            unreachable!("QuinnWebTransportSink is already started");
         }
 
         let sess_guard = self.session.lock().unwrap();
@@ -589,7 +589,7 @@ impl BaseSinkImpl for QuinnWebTransportServerSink {
     }
 }
 
-impl QuinnWebTransportServerSink {
+impl QuinnWebTransportSink {
     fn send_buffer(
         &self,
         src: &[u8],

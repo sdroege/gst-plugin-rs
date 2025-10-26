@@ -7468,11 +7468,11 @@
                 },
                 "rank": "marginal"
             },
-            "quinnwtserversink": {
+            "quinnwtsink": {
                 "author": "Ruben Gonzalez <rgonzalez@fluendo.com>",
                 "description": "Send data over the network via WebTransport",
                 "hierarchy": [
-                    "GstQuinnWebTransportServerSink",
+                    "GstQuinnWebTransportSink",
                     "GstBaseSink",
                     "GstElement",
                     "GstObject",

@@ -36,7 +36,7 @@ fn send_receive(src_pipeline_props: &str, sink_pipeline_props: &str) {
 
     let src_pipeline = format!("quinnwtclientsrc {src_pipeline_props} secure-connection=false");
     let sink_pipeline = format!(
-        "quinnwtserversink {sink_pipeline_props} server-name=localhost \
+        "quinnwtsink {sink_pipeline_props} server-name=localhost \
             address=127.0.0.1 secure-connection=false"
     );
     let h1_orig = Arc::new(Mutex::new(gst_check::Harness::new_empty()));

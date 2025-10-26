@@ -28,14 +28,21 @@ use gst::prelude::*;
 pub mod imp;
 
 glib::wrapper! {
-    pub struct QuinnWebTransportServerSink(ObjectSubclass<imp::QuinnWebTransportServerSink>) @extends gst_base::BaseSink, gst::Element, gst::Object;
+    pub struct QuinnWebTransportSink(ObjectSubclass<imp::QuinnWebTransportSink>) @extends gst_base::BaseSink, gst::Element, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(not(feature = "doc"))]
     gst::Element::register(
         Some(plugin),
         "quinnwtserversink",
         gst::Rank::MARGINAL,
-        QuinnWebTransportServerSink::static_type(),
+        QuinnWebTransportSink::static_type(),
+    )?;
+    gst::Element::register(
+        Some(plugin),
+        "quinnwtsink",
+        gst::Rank::MARGINAL,
+        QuinnWebTransportSink::static_type(),
     )
 }
