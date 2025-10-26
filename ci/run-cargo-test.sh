@@ -5,17 +5,7 @@ set -ex
 rustc --version
 cargo --version
 
-if [[ "$RUST_VERSION" == "1.83.0" ]]; then
-    # FIXME: cargo nextest fails trying to get metadata for librespot.
-    # specifying --exclude gst-plugin-spotify does not work.
-    # Issue: https://github.com/nextest-rs/nextest/issues/2552
-    sed -i '/audio\/spotify/d' Cargo.toml
-    # Cannot use `--locked` as that will fail with Spotify removed from
-    # the workspace above.
-    build_cfg="--all --all-targets"
-else
-    build_cfg="--locked --all --all-targets"
-fi
+build_cfg="--locked --all --all-targets"
 
 cpus=$(nproc || sysctl -n hw.ncpu)
 CARGO_FLAGS="--color=always -j${FDO_CI_CONCURRENT:-$cpus}"

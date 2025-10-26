@@ -1,9 +1,5 @@
 $env:ErrorActionPreference='Stop'
 
-if ($env:RUST_VERSION -match "1.83.0") {
-    (Get-Content "Cargo.toml") | Where-Object { $_ -notmatch "audio/spotify" } | Set-Content "Cargo.toml"
-}
-
 [string[]] $exclude_crates = @(
     "--exclude",
     "gst-plugin-csound",

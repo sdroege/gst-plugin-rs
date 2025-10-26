@@ -6,7 +6,7 @@ repository.workspace = true
 license = "MPL-2.0"
 description = "GStreamer Spotify Plugin"
 edition.workspace = true
-rust-version = "1.85"
+rust-version.workspace = true
 
 [dependencies]
 gst.workspace = true
