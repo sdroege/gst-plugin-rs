@@ -9,7 +9,7 @@ description = "GStreamer WebP Plugin"
 repository.workspace = true
 
 [dependencies]
-libwebp-sys2 = { version = "0.1.2", default-features = false, features = ["demux", "0_5"] }
+libwebp-sys2 = { version = "0.2", default-features = false, features = ["std", "demux", "0_5"] }
 gst.workspace = true
 gst-video.workspace = true
 
