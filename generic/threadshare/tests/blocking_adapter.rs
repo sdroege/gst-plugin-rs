@@ -4,13 +4,13 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::task;
 use std::thread;
 use std::time::Duration;
 
 use futures::channel::mpsc;
 use futures::executor::block_on;
 use futures::prelude::*;
-use futures::task;
 
 use gst::prelude::*;
 
@@ -198,8 +198,7 @@ fn without_adapter() {
     // The concurrent task is blocked
     // wait a bit in order to make sure it is handled
     thread::sleep(Duration::from_millis(20));
-    // With MSRC >= 1.85.0, this could use `std::task` && `task::Waker::noop`
-    let mut cx = task::Context::from_waker(task::noop_waker_ref());
+    let mut cx = task::Context::from_waker(task::Waker::noop());
     assert!(ts_task_handle.poll_unpin(&mut cx).is_pending());
 
     // 3d buffer handling result still not available

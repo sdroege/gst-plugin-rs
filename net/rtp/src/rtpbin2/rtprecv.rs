@@ -42,7 +42,7 @@ use std::net::SocketAddr;
 use std::ops::{ControlFlow, Deref};
 use std::pin::Pin;
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
-use std::task::{Poll, Waker};
+use std::task::{self, Poll, Waker};
 use std::time::{Duration, Instant, SystemTime};
 
 use futures::channel::mpsc as async_mpsc;
@@ -721,8 +721,6 @@ impl RecvSessionSrcTask {
             JitterBufferPendingItems,
         )>,
     ) -> ControlFlow<Self, (Self, JitterBufferStreams)> {
-        use futures::task;
-
         loop {
             for (pad, _semaphore_permit, items) in all_pad_items.drain(..) {
                 for item in items {
@@ -768,8 +766,7 @@ impl RecvSessionSrcTask {
 
             let mut combined_jb_stream = Self::combine_jb_streams(&mut jb_streams);
 
-            // With MSRC >= 1.85.0, this could use `std::task` && `task::Waker::noop`
-            let mut cx = task::Context::from_waker(task::noop_waker_ref());
+            let mut cx = task::Context::from_waker(task::Waker::noop());
             let Poll::Ready(Some(all_pad_items_)) = combined_jb_stream.poll_next_unpin(&mut cx)
             else {
                 drop(combined_jb_stream);
