@@ -782,6 +782,12 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property("keyframe-period", 2560u32);
                 enc.set_property_from_str("rate-control", "cbr");
             }
+            "vavp8enc" | "vavp8lpenc" | "vavp9enc" | "vavp9lpenc" | "vah264enc" | "vah264lpenc"
+            | "vah265enc" | "vah265lpenc" | "vaav1enc" | "vaav1lpenc" => {
+                enc.set_property("bitrate", start_bitrate / 1000);
+                enc.set_property("key-int-max", 256u32);
+                enc.set_property_from_str("rate-control", "cbr");
+            }
             "nvv4l2h264enc" => {
                 enc.set_property("bitrate", start_bitrate);
                 enc.set_property_from_str("preset-level", "UltraFastPreset");
@@ -1093,6 +1099,16 @@ impl VideoEncoder {
                 | "rav1enc"
                 | "vpuenc_h264"
                 | "nvv4l2av1enc"
+                | "vavp8enc"
+                | "vavp8lpenc"
+                | "vavp9enc"
+                | "vavp9lpenc"
+                | "vah264enc"
+                | "vah264lpenc"
+                | "vah265enc"
+                | "vah265lpenc"
+                | "vaav1enc"
+                | "vaav1lpenc"
         )
     }
 
@@ -1101,8 +1117,11 @@ impl VideoEncoder {
             "vp8enc" | "vp9enc" => self.element.property::<i32>("target-bitrate"),
             "av1enc" => (self.element.property::<u32>("target-bitrate") * 1000) as i32,
             "x264enc" | "nvh264enc" | "nvh265enc" | "vaapih264enc" | "vaapivp8enc"
-            | "vaapivp9enc" | "qsvh264enc" | "nvav1enc" | "vpuenc_h264" | "vavp9enc"
-            | "vavp9lpenc" => (self.element.property::<u32>("bitrate") * 1000) as i32,
+            | "vaapivp9enc" | "qsvh264enc" | "nvav1enc" | "vpuenc_h264" | "vavp8enc"
+            | "vavp8lpenc" | "vavp9enc" | "vavp9lpenc" | "vah264enc" | "vah264lpenc"
+            | "vah265enc" | "vah265lpenc" | "vaav1enc" | "vaav1lpenc" => {
+                (self.element.property::<u32>("bitrate") * 1000) as i32
+            }
             "openh264enc" | "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "rav1enc"
             | "nvv4l2av1enc" => (self.element.property::<u32>("bitrate")) as i32,
             _ => return Err(WebRTCSinkError::BitrateNotSupported),
@@ -1137,8 +1156,9 @@ impl VideoEncoder {
                 .element
                 .set_property("target-bitrate", (bitrate / 1000) as u32),
             "x264enc" | "nvh264enc" | "nvh265enc" | "vaapih264enc" | "vaapivp8enc"
-            | "vaapivp9enc" | "qsvh264enc" | "nvav1enc" | "vpuenc_h264" | "vavp9enc"
-            | "vavp9lpenc" => {
+            | "vaapivp9enc" | "qsvh264enc" | "nvav1enc" | "vpuenc_h264" | "vavp8enc"
+            | "vavp8lpenc" | "vavp9enc" | "vavp9lpenc" | "vah264enc" | "vah264lpenc"
+            | "vah265enc" | "vah265lpenc" | "vaav1enc" | "vaav1lpenc" => {
                 self.element
                     .set_property("bitrate", (bitrate / 1000) as u32);
             }
