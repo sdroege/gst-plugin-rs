@@ -435,6 +435,10 @@ gst-launch-1.0 -e uridecodebin uri=file:///home/meh/path/to/video/file ! \
   livekitwebrtcsink signaller::ws-url=ws://127.0.0.1:7880 signaller::auth-token=mygeneratedtoken signaller::room-name=testroom
 ```
 
+Note: The generated auth token must have a grant of `{ "canSubscribe": false }`
+or the server will disconnect `livekitwebrtcsink` after roughly 30 seconds.
+This can be achieved with the `--grant` option to `livekit-cli` when generating
+an auth token.
 
 You should see a second video displayed in the videoroomtest web page.
 
