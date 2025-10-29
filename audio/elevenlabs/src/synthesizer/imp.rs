@@ -526,6 +526,11 @@ impl Synthesizer {
         }
 
         #[cfg(feature = "signalsmith_stretch")]
+        let mut compression_factor: Option<f64> = None;
+        #[cfg(not(feature = "signalsmith_stretch"))]
+        let compression_factor: Option<f64> = None;
+
+        #[cfg(feature = "signalsmith_stretch")]
         if matches!(overflow, Overflow::Compress) {
             let max_overflow = self.settings.lock().unwrap().max_overflow;
             let overflow_budget = match self.state.lock().unwrap().out_segment.position() {
@@ -556,12 +561,15 @@ impl Synthesizer {
             );
 
             if bytes.len() > max_expected_bytes as usize {
+                let factor = bytes.len() as f64 / max_expected_bytes as f64;
+
                 gst::debug!(
                     CAT,
                     imp = self,
-                    "compressing {content} by a factor of {}",
-                    bytes.len() as f64 / max_expected_bytes as f64
+                    "compressing {content} by a factor of {factor}",
                 );
+
+                compression_factor = Some(factor);
 
                 let samples: Vec<_> = bytes
                     .chunks_exact(2)
@@ -691,6 +699,24 @@ impl Synthesizer {
         }
 
         state.out_segment.set_position(pts + duration);
+
+        let mut s_builder = gst::Structure::builder("elevenlabs/synthesized-audio")
+            .field("content", content)
+            .field("pts", pts)
+            .field("input-duration", duration)
+            .field("actual-duration", duration);
+
+        if let Some(factor) = compression_factor {
+            s_builder = s_builder.field("compression-factor", factor)
+        }
+
+        let s = s_builder.build();
+
+        drop(state);
+
+        let _ = self
+            .obj()
+            .post_message(gst::message::Element::builder(s).src(&*self.obj()).build());
 
         Ok(Some(buf))
     }
