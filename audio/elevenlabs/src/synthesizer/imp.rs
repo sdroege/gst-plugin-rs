@@ -1094,6 +1094,19 @@ impl ObjectImpl for Synthesizer {
                     .blurb("Use received elevenlabs/speaker-voice events to pick the current voice")
                     .mutable_ready()
                     .build(),
+                /**
+                 * GstElevenLabsSynthesizer:speaker-map:
+                 *
+                 * Set a custom speaker to voice ID map.
+                 *
+                 * When #GstElevenLabsSynthesizer:use-voice-id-events is set,
+                 * the voice ids may still be updated by upstream voice ID
+                 * events.
+                 */
+                glib::ParamSpecBoxed::builder::<gst::Structure>("speaker-map")
+                    .nick("Speaker Map")
+                    .blurb("Map of speaker to voice id")
+                    .build(),
             ]
         });
 
@@ -1154,6 +1167,27 @@ impl ObjectImpl for Synthesizer {
                 let mut settings = self.settings.lock().unwrap();
                 settings.use_voice_id_events = value.get().expect("type checked upstream");
             }
+            "speaker-map" => {
+                let mut state = self.state.lock().unwrap();
+
+                if let Some(s) = value
+                    .get::<Option<gst::Structure>>()
+                    .expect("type checked upstream")
+                {
+                    for speaker in s.fields() {
+                        let Ok(voice_id) = s.get::<String>(speaker) else {
+                            gst::error!(
+                                CAT,
+                                imp = self,
+                                "skipping non-string voice id for {speaker}"
+                            );
+                            continue;
+                        };
+
+                        state.speaker_map.insert(speaker.to_string(), voice_id);
+                    }
+                }
+            }
             _ => unimplemented!(),
         }
     }
@@ -1200,6 +1234,16 @@ impl ObjectImpl for Synthesizer {
                 let settings = self.settings.lock().unwrap();
                 settings.use_voice_id_events.to_value()
             }
+            "speaker-map" => gst::Structure::from_iter(
+                "application/x-elevenlabs-speaker-map",
+                self.state
+                    .lock()
+                    .unwrap()
+                    .speaker_map
+                    .iter()
+                    .map(|(k, v)| (k.as_str(), v.to_send_value())),
+            )
+            .to_value(),
             _ => unimplemented!(),
         }
     }

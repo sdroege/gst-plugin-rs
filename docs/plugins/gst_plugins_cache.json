@@ -3102,6 +3102,18 @@
                         "type": "gboolean",
                         "writable": true
                     },
+                    "speaker-map": {
+                        "blurb": "Map of speaker to voice id",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "application/x-elevenlabs-speaker-map;",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": true
+                    },
                     "use-voice-id-events": {
                         "blurb": "Use received elevenlabs/speaker-voice events to pick the current voice",
                         "conditionally-available": false,
