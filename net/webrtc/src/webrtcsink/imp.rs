@@ -49,6 +49,7 @@ const CUDA_MEMORY_FEATURE: &str = "memory:CUDAMemory";
 const GL_MEMORY_FEATURE: &str = "memory:GLMemory";
 const NVMM_MEMORY_FEATURE: &str = "memory:NVMM";
 const D3D11_MEMORY_FEATURE: &str = "memory:D3D11Memory";
+const VA_MEMORY_FEATURE: &str = "memory:VAMemory";
 
 const RTP_TWCC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
@@ -656,6 +657,11 @@ fn make_converter_for_video_caps(caps: &gst::Caps, codec: &Codec) -> Result<gst:
                 gst::Element::link_many([&glupload, &glconvert, &glscale])?;
 
                 (glupload, glscale)
+            } else if feature.contains(VA_MEMORY_FEATURE) {
+                let vapostproc = make_element("vapostproc", None)?;
+
+                ret.add_many([&vapostproc])?;
+                (vapostproc.clone(), vapostproc)
             } else {
                 let convert = make_element("videoconvert", None)?;
                 let scale = make_element("videoscale", None)?;
@@ -5357,6 +5363,10 @@ impl ElementImpl for BaseWebRTCSink {
                 .structure_with_features(
                     gst::Structure::builder("video/x-raw").build(),
                     gst::CapsFeatures::new([D3D11_MEMORY_FEATURE]),
+                )
+                .structure_with_features(
+                    gst::Structure::builder("video/x-raw").build(),
+                    gst::CapsFeatures::new([VA_MEMORY_FEATURE]),
                 );
 
             // Ignore specific raw caps from Codecs: they are covered by video/x-raw & audio/x-raw
