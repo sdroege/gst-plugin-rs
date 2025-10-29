@@ -16629,6 +16629,18 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "remove-disfluencies": {
+                        "blurb": "Remove hesitation sounds from transcript",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "url": {
                         "blurb": "URL of the transcription server",
                         "conditionally-available": false,

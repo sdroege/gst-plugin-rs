@@ -147,6 +147,11 @@ struct SpeakerDiarizationConfig {
 }
 
 #[derive(serde::Serialize, Debug)]
+struct TranscriptFilteringConfig {
+    remove_disfluencies: bool,
+}
+
+#[derive(serde::Serialize, Debug)]
 struct TranscriptionConfig {
     language: String,
     enable_partials: bool,
@@ -154,6 +159,7 @@ struct TranscriptionConfig {
     additional_vocab: Vec<Vocable>,
     diarization: Diarization,
     speaker_diarization_config: SpeakerDiarizationConfig,
+    transcript_filtering_config: TranscriptFilteringConfig,
 }
 
 #[derive(serde::Serialize, Debug)]
@@ -201,6 +207,7 @@ const DEFAULT_MASK_PROFANITIES: bool = false;
 const DEFAULT_DIARIZATION: SpeechmaticsTranscriberDiarization =
     SpeechmaticsTranscriberDiarization::None;
 const DEFAULT_MAX_SPEAKERS: u32 = 50;
+const DEFAULT_REMOVE_DISFLUENCIES: bool = false;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -215,6 +222,7 @@ struct Settings {
     diarization: SpeechmaticsTranscriberDiarization,
     max_speakers: u32,
     mask_profanities: bool,
+    remove_disfluencies: bool,
 }
 
 impl Default for Settings {
@@ -231,6 +239,7 @@ impl Default for Settings {
             diarization: DEFAULT_DIARIZATION,
             max_speakers: DEFAULT_MAX_SPEAKERS,
             mask_profanities: DEFAULT_MASK_PROFANITIES,
+            remove_disfluencies: DEFAULT_REMOVE_DISFLUENCIES,
         }
     }
 }
@@ -1354,6 +1363,9 @@ impl Transcriber {
                 speaker_diarization_config: SpeakerDiarizationConfig {
                     max_speakers: settings.max_speakers,
                 },
+                transcript_filtering_config: TranscriptFilteringConfig {
+                    remove_disfluencies: settings.remove_disfluencies,
+                },
             },
             translation_config: TranslationConfig {
                 target_languages: translation_languages,
@@ -1710,6 +1722,14 @@ impl ObjectImpl for Transcriber {
                     .default_value(0)
                     .read_only()
                     .build(),
+                glib::ParamSpecBoolean::builder("remove-disfluencies")
+                    .nick("Remove disfluencies")
+                    .blurb(
+                        "Remove hesitation sounds from transcript"
+                    )
+                    .default_value(DEFAULT_REMOVE_DISFLUENCIES)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -1844,6 +1864,10 @@ impl ObjectImpl for Transcriber {
                 let mut settings = self.settings.lock().unwrap();
                 settings.mask_profanities = value.get().expect("type checked upstream");
             }
+            "remove-disfluencies" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.remove_disfluencies = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -1904,6 +1928,10 @@ impl ObjectImpl for Transcriber {
             "mask-profanities" => {
                 let settings = self.settings.lock().unwrap();
                 settings.mask_profanities.to_value()
+            }
+            "remove-disfluencies" => {
+                let settings = self.settings.lock().unwrap();
+                settings.remove_disfluencies.to_value()
             }
             "max-observed-delay" => {
                 let state = self.state.lock().unwrap();
