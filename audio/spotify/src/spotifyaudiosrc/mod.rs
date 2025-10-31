@@ -11,22 +11,17 @@ use gst::prelude::*;
 
 mod imp;
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, Default, glib::Enum)]
 #[repr(u32)]
 #[enum_type(name = "GstRsSpotifyBitrate")]
 enum Bitrate {
     #[enum_value(name = "96 kbit/s", nick = "96")]
     B96,
+    #[default]
     #[enum_value(name = "160 kbit/s", nick = "160")]
     B160,
     #[enum_value(name = "320 kbit/s", nick = "320")]
     B320,
-}
-
-impl Default for Bitrate {
-    fn default() -> Self {
-        Self::B160
-    }
 }
 
 impl From<Bitrate> for librespot_playback::config::Bitrate {

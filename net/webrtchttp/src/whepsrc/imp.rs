@@ -98,17 +98,16 @@ impl Default for Settings {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 enum State {
+    #[default]
     Stopped,
-    Post { redirects: u8 },
-    Running { whep_resource: String },
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self::Stopped
-    }
+    Post {
+        redirects: u8,
+    },
+    Running {
+        whep_resource: String,
+    },
 }
 
 pub struct WhepSrc {
