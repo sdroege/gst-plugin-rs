@@ -58,17 +58,16 @@ impl Default for Settings {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 enum State {
+    #[default]
     Stopped,
-    Post { redirects: u8 },
-    Running { whip_resource_url: String },
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self::Stopped
-    }
+    Post {
+        redirects: u8,
+    },
+    Running {
+        whip_resource_url: String,
+    },
 }
 
 pub struct WhipSink {

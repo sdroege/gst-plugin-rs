@@ -46,8 +46,9 @@ pub struct SizedObu {
     pub is_fragment: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ObuType {
+    #[default]
     Reserved,
     SequenceHeader,
     TemporalDelimiter,
@@ -58,12 +59,6 @@ pub enum ObuType {
     RedundantFrameHeader,
     TileList,
     Padding,
-}
-
-impl Default for ObuType {
-    fn default() -> Self {
-        Self::Reserved
-    }
 }
 
 impl UnsizedObu {

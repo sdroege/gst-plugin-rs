@@ -409,7 +409,7 @@ fn video_frame_to_memory_texture(
 
             for plane in 0..(frame.n_planes() as usize) {
                 builder = builder
-                    .set_offset(plane as u32, frame.plane_offset()[plane] as usize)
+                    .set_offset(plane as u32, frame.plane_offset()[plane])
                     .set_stride_for_plane(plane as u32, frame.plane_stride()[plane] as usize);
             }
 

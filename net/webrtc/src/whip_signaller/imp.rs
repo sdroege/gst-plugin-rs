@@ -39,17 +39,16 @@ const DEFAULT_STUN_SERVER: Option<&str> = Some("stun://stun.l.google.com:19303")
 const CONTENT_SDP: &str = "application/sdp";
 const CONTENT_TRICKLE_ICE: &str = "application/trickle-ice-sdpfrag";
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 enum WhipClientState {
+    #[default]
     Stopped,
-    Post { redirects: u8 },
-    Running { whip_resource_url: String },
-}
-
-impl Default for WhipClientState {
-    fn default() -> Self {
-        Self::Stopped
-    }
+    Post {
+        redirects: u8,
+    },
+    Running {
+        whip_resource_url: String,
+    },
 }
 
 #[derive(Clone)]
