@@ -57,4 +57,4 @@ name = "inter-basic"
 path = "examples/basic.rs"
 
 [package.metadata.gstreamer]
-release_date = "2025-07-16"
+release_date = "2025-10-31"

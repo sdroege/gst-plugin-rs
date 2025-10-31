@@ -45,4 +45,4 @@ requires_private = "gstreamer-1.0, gstreamer-base-1.0, gstreamer-video-1.0, gobj
 gst-check.workspace = true
 
 [package.metadata.gstreamer]
-release_date = "2025-07-16"
+release_date = "2025-10-31"
