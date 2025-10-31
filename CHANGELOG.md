@@ -5,6 +5,32 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.14.3] - 2025-10-31
+### Fixed
+- fallbacksrc: Fix custom source re-use.
+- gtk4paintablesink: Implement cropped imports for odd resolutions and padded
+  input frames.
+- livekitwebrtc: Fix deadlock.
+- onvifmetadatapay: Copy metadata from source buffer.
+- reqwest: Use the platform's native certificates again.
+- rtpamrpay2: Set frame quality indicator flag correctly.
+- rtpbasepay2: Re-use last PTS if no PTS is available.
+- rtpbaseaudiopay2: Fix marker bit handling.
+- rtp: Add L8/16/24 RTP payloaders / depayloaders.
+- threadshare: Fix/add latency reporting.
+- threadshare: Fix shutdown in error states.
+- threadshare: Fix flush-start and query handling.
+- ts-audiotestsrc: Act as a pseudo live source by default.
+- tracers: Fix inverted append logic when writing log files.
+- uriplaylistbin: Add details into upstream error message.
+
+### Added
+- ts-audiotestsrc: Support more audio formats.
+
+### Changed
+- Various dependency updates.
+- Remove constraints on AWS SDK dependencies and tune optimizations.
+
 ## [0.14.2] - 2025-09-18
 ### Fixed
 - analyticscombiner: Fix running with latest GStreamer git main.
@@ -834,7 +860,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.2...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.3...HEAD
+[0.14.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.2...0.14.3
 [0.14.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.1...0.14.2
 [0.14.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.0...0.14.1
 [0.14.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.13.7...0.14.0
