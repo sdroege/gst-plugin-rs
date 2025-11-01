@@ -11,9 +11,9 @@ rust-version.workspace = true
 [dependencies]
 gst.workspace = true
 anyhow = "1"
-icu_segmenter = "2"
-icu_locale = "2"
-icu_provider = "2"
+icu_segmenter = { version = "2", default-features = false, features = ["compiled_data"] }
+icu_locale = { version = "2", default-features = false }
+icu_provider = { version = "2", default-features = false, features = ["sync"] }
 itertools = "0.14"
 regex = "1"
 
