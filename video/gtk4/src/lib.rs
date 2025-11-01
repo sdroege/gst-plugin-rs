@@ -20,6 +20,7 @@ use gst::glib;
 mod sink;
 mod utils;
 pub use sink::frame::Orientation;
+pub use sink::imp::ReconfigureMode;
 pub use sink::paintable::Paintable;
 // The widget needs to be public so it can be used by the example and element debug window but
 // we don't want it be part of the official API for now.
@@ -34,6 +35,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
         sink::paintable::Paintable::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
         sink::frame::Orientation::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        sink::imp::ReconfigureMode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
 
     #[cfg(not(feature = "gtk_v4_10"))]

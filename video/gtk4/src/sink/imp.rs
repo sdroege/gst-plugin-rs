@@ -60,6 +60,7 @@ struct StreamConfig {
     global_orientation: frame::Orientation,
     /// Orientation from a stream scope tag
     stream_orientation: Option<frame::Orientation>,
+    has_overlay: bool,
 }
 
 impl Default for StreamConfig {
@@ -68,6 +69,7 @@ impl Default for StreamConfig {
             info: None,
             global_orientation: frame::Orientation::Rotate0,
             stream_orientation: None,
+            has_overlay: false,
         }
     }
 }
@@ -84,10 +86,21 @@ pub struct PaintableSink {
     window_resized: AtomicBool,
 }
 
+#[derive(Debug, Default, glib::Enum, PartialEq, Eq, Copy, Clone)]
+#[repr(C)]
+#[enum_type(name = "GstGtk4PaintableSinkReconfigureMode")]
+pub enum ReconfigureMode {
+    Never,
+    Always,
+    #[default]
+    OverlayOnly,
+}
+
 #[derive(Default)]
 struct Settings {
     window_width: u32,
     window_height: u32,
+    reconfigure_on_window_resize: ReconfigureMode,
 }
 
 impl Drop for PaintableSink {
@@ -124,6 +137,11 @@ impl ObjectImpl for PaintableSink {
                 glib::ParamSpecUInt::builder("window-height")
                     .nick("Window height")
                     .blurb("the height of the main widget rendering the paintable")
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecEnum::builder::<ReconfigureMode>("reconfigure-on-window-resize")
+                    .nick("Reconfigure on window resize")
+                    .blurb("send reconfigure event to upstream elements whenever window-width or window-height changes")
                     .mutable_playing()
                     .build(),
             ]
@@ -193,6 +211,10 @@ impl ObjectImpl for PaintableSink {
                 let settings = self.settings.lock().unwrap();
                 settings.window_height.to_value()
             }
+            "reconfigure-on-window-resize" => {
+                let settings = self.settings.lock().unwrap();
+                settings.reconfigure_on_window_resize.to_value()
+            }
             _ => unimplemented!(),
         }
     }
@@ -214,6 +236,11 @@ impl ObjectImpl for PaintableSink {
                     self.window_resized.store(true, atomic::Ordering::SeqCst);
                 }
                 settings.window_height = value;
+            }
+            "reconfigure-on-window-resize" => {
+                let mut settings = self.settings.lock().unwrap();
+                let value = value.get().expect("type checked upstream");
+                settings.reconfigure_on_window_resize = value;
             }
             _ => unimplemented!(),
         }
@@ -584,7 +611,12 @@ impl BaseSinkImpl for PaintableSink {
                 .into(),
         };
 
-        self.config.lock().unwrap().info = Some(video_info);
+        let mut config = self.config.lock().unwrap();
+        config.info = Some(video_info);
+        config.has_overlay = caps
+            .features(0)
+            .unwrap()
+            .contains(gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION);
 
         Ok(())
     }
@@ -708,8 +740,19 @@ impl VideoSinkImpl for PaintableSink {
     fn show_frame(&self, buffer: &gst::Buffer) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::trace!(CAT, imp = self, "Rendering buffer {:?}", buffer);
 
-        if self.window_resized.swap(false, atomic::Ordering::SeqCst) {
-            gst::debug!(CAT, imp = self, "Window size changed, needs to reconfigure");
+        let reconfigure = {
+            if self.window_resized.swap(false, atomic::Ordering::SeqCst) {
+                let reconfigure_on_window_resize =
+                    self.settings.lock().unwrap().reconfigure_on_window_resize;
+                reconfigure_on_window_resize == ReconfigureMode::Always
+                    || (reconfigure_on_window_resize == ReconfigureMode::OverlayOnly
+                        && self.config.lock().unwrap().has_overlay)
+            } else {
+                false
+            }
+        };
+        if reconfigure {
+            gst::info!(CAT, imp = self, "Window size changed, needs to reconfigure");
             let obj = self.obj();
             let sink = obj.sink_pad();
             sink.push_event(gst::event::Reconfigure::builder().build());
