@@ -26,6 +26,7 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 });
 
 const DEFAULT_TIMEOUT: u32 = 30;
+const DEFAULT_SEND_COUNTER_OFFER: bool = false;
 
 const ROOT: &str = "whep";
 const ENDPOINT_PATH: &str = "endpoint";
@@ -42,7 +43,8 @@ struct Settings {
     timeout: u32,
     shutdown_signal: Option<tokio::sync::oneshot::Sender<()>>,
     server_handle: Option<tokio::task::JoinHandle<()>>,
-    sdp_answer: HashMap<String, mpsc::Sender<Option<SDPMessage>>>,
+    sdp_response: HashMap<String, mpsc::Sender<Option<SDPMessage>>>,
+    send_counter_offer: bool,
 }
 
 impl Default for Settings {
@@ -54,7 +56,8 @@ impl Default for Settings {
             timeout: DEFAULT_TIMEOUT,
             shutdown_signal: None,
             server_handle: None,
-            sdp_answer: HashMap::new(),
+            sdp_response: HashMap::new(),
+            send_counter_offer: false,
         }
     }
 }
@@ -103,7 +106,7 @@ impl WhepServer {
                                 }
 
                                 let tx = settings
-                                    .sdp_answer
+                                    .sdp_response
                                     .remove(&session_id)
                                     .expect("SDP answer Sender needs to be valid");
 
@@ -129,13 +132,63 @@ impl WhepServer {
         })
     }
 
-    async fn patch_handler(&self, _id: String) -> Result<impl warp::Reply, warp::Rejection> {
-        // FIXME: implement ICE Trickle and ICE restart
-        // emit signal `handle-ice` to for ICE trickle
+    async fn patch_handler(
+        &self,
+        id: String,
+        body: bytes::Bytes,
+        headers: http::HeaderMap,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        let mut send_counter_offer = self.settings.lock().unwrap().send_counter_offer;
+        let mut ice_trickle = false;
+
+        for h in headers {
+            if let Some(name) = h.0 {
+                match name {
+                    http::header::CONTENT_TYPE => match h.1.to_str() {
+                        Ok(CONTENT_SDP) => {
+                            send_counter_offer &= true;
+                        }
+                        Ok(CONTENT_TRICKLE_ICE) => {
+                            ice_trickle = true;
+                        }
+                        Ok(t) => gst::info!(CAT, imp = self, "Unhandled content type: {t}"),
+                        Err(e) => gst::error!(CAT, imp = self, "Error getting content type {e}"),
+                    },
+                    _ => gst::info!(CAT, imp = self, "Unhandled header: {:?}", name),
+                }
+            }
+        }
+
+        if send_counter_offer {
+            match gst_sdp::SDPMessage::parse_buffer(body.as_ref()) {
+                Ok(answer_sdp) => {
+                    let answer = gst_webrtc::WebRTCSessionDescription::new(
+                        gst_webrtc::WebRTCSDPType::Answer,
+                        answer_sdp,
+                    );
+                    self.obj()
+                        .emit_by_name::<()>("session-description", &[&id, &answer]);
+
+                    let reply = warp::reply::reply();
+                    let res = warp::reply::with_status(reply, http::StatusCode::NO_CONTENT);
+                    return Ok(res.into_response());
+                }
+                Err(err) => {
+                    gst::error!(CAT, imp = self, "Could not parse answer SDP: {err}");
+                    let reply = warp::reply::reply();
+                    let res = warp::reply::with_status(reply, http::StatusCode::NOT_ACCEPTABLE);
+                    return Ok(res.into_response());
+                }
+            }
+        } else if ice_trickle {
+            // FIXME: implement ICE Trickle and ICE restart
+            // emit signal `handle-ice` to for ICE trickle
+            //FIXME: add state checking once ICE trickle is implemented
+        }
+
         let reply = warp::reply::reply();
         let res = warp::reply::with_status(reply, http::StatusCode::NOT_IMPLEMENTED);
         Ok(res.into_response())
-        //FIXME: add state checking once ICE trickle is implemented
     }
 
     async fn delete_handler(&self, id: String) -> Result<impl warp::Reply, warp::Rejection> {
@@ -223,36 +276,52 @@ impl WhepServer {
 
         let (tx, mut rx) = mpsc::channel::<Option<SDPMessage>>(1);
 
-        let wait_timeout = {
+        let (wait_timeout, send_counter_offer) = {
             let mut settings = self.settings.lock().unwrap();
             let wait_timeout = settings.timeout;
-            settings.sdp_answer.insert(session_id.clone(), tx);
+            let send_counter_offer = settings.send_counter_offer;
+            settings.sdp_response.insert(session_id.clone(), tx);
             drop(settings);
-            wait_timeout
+            (wait_timeout, send_counter_offer)
         };
 
-        match gst_sdp::SDPMessage::parse_buffer(body.as_ref()) {
-            Ok(offer_sdp) => {
-                let offer = gst_webrtc::WebRTCSessionDescription::new(
-                    gst_webrtc::WebRTCSDPType::Offer,
-                    offer_sdp,
-                );
-                self.obj()
-                    .emit_by_name::<()>("session-requested", &[&session_id, &session_id, &offer]);
+        let resp_code = if send_counter_offer {
+            self.obj().emit_by_name::<()>(
+                "session-requested",
+                &[
+                    &session_id,
+                    &session_id,
+                    &None::<gst_webrtc::WebRTCSessionDescription>,
+                ],
+            );
+            http::StatusCode::NOT_ACCEPTABLE
+        } else {
+            match gst_sdp::SDPMessage::parse_buffer(body.as_ref()) {
+                Ok(offer_sdp) => {
+                    let offer = gst_webrtc::WebRTCSessionDescription::new(
+                        gst_webrtc::WebRTCSDPType::Offer,
+                        offer_sdp,
+                    );
+                    self.obj().emit_by_name::<()>(
+                        "session-requested",
+                        &[&session_id, &session_id, &offer],
+                    );
+                    http::StatusCode::CREATED
+                }
+                Err(err) => {
+                    gst::error!(CAT, imp = self, "Could not parse offer SDP: {err}");
+                    let reply = warp::reply::reply();
+                    let res = warp::reply::with_status(reply, http::StatusCode::NOT_ACCEPTABLE);
+                    return Ok(res.into_response());
+                }
             }
-            Err(err) => {
-                gst::error!(CAT, imp = self, "Could not parse offer SDP: {err}");
-                let reply = warp::reply::reply();
-                let res = warp::reply::with_status(reply, http::StatusCode::NOT_ACCEPTABLE);
-                return Ok(res.into_response());
-            }
-        }
+        };
 
         let canceller = Mutex::new(None);
         let result = wait_async(&canceller, rx.recv(), wait_timeout).await;
 
-        let answer = match result {
-            Ok(ans) => match ans {
+        let response_sdp = match result {
+            Ok(resp) => match resp {
                 Some(a) => a,
                 None => {
                     let err = "Channel closed, can't receive SDP".to_owned();
@@ -322,7 +391,7 @@ impl WhepServer {
 
         // Note: including the ETag in the original "201 Created" response is only REQUIRED
         // if the WHEP resource supports ICE restarts and OPTIONAL otherwise.
-        let sdp_text = if let Some(sdp) = answer {
+        let sdp_text = if let Some(sdp) = response_sdp {
             match sdp.as_text() {
                 Ok(text) => {
                     gst::debug!(CAT, imp = self, "{text:?}");
@@ -344,7 +413,7 @@ impl WhepServer {
             Ok(sdp) => {
                 let resource_url = "/".to_owned() + ROOT + "/" + RESOURCE_PATH + "/" + &session_id;
                 let mut res = http::Response::builder()
-                    .status(http::StatusCode::CREATED)
+                    .status(resp_code)
                     .header(http::header::CONTENT_TYPE, CONTENT_SDP)
                     .header("location", resource_url)
                     .body(sdp.into());
@@ -472,15 +541,13 @@ impl WhepServer {
             .and(warp::path(RESOURCE_PATH))
             .and(warp::path::param::<String>())
             .and(warp::path::end())
-            .and(warp::header::exact(
-                http::header::CONTENT_TYPE.as_str(),
-                CONTENT_TRICKLE_ICE,
-            ))
+            .and(warp::body::bytes())
+            .and(warp::header::headers_cloned())
             .and_then(glib::clone!(
                 #[weak(rename_to = s)]
                 self,
                 #[upgrade_or_panic]
-                move |id| async move { s.patch_handler(id).await }
+                move |id, body, headers| async move { s.patch_handler(id, body, headers).await }
             ));
 
         // DELETE /resource/:id
@@ -592,6 +659,11 @@ impl ObjectImpl for WhepServer {
                     .default_value(false)
                     .read_only()
                     .build(),
+                glib::ParamSpecBoolean::builder("send-counter-offer")
+                    .nick("Send Counter offer")
+                    .blurb("Reject the offer sent by the WHEP player and propose a counter offer")
+                    .default_value(DEFAULT_SEND_COUNTER_OFFER)
+                    .build(),
             ]
         });
         PROPERTIES.as_ref()
@@ -620,6 +692,10 @@ impl ObjectImpl for WhepServer {
                 let mut settings = self.settings.lock().unwrap();
                 settings.timeout = value.get().unwrap();
             }
+            "send-counter-offer" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.send_counter_offer = value.get().unwrap();
+            }
             _ => unimplemented!(),
         }
     }
@@ -632,6 +708,7 @@ impl ObjectImpl for WhepServer {
             "turn-servers" => settings.turn_servers.to_value(),
             "timeout" => settings.timeout.to_value(),
             "manual-sdp-munging" => false.to_value(),
+            "send-counter-offer" => settings.send_counter_offer.to_value(),
             _ => unimplemented!(),
         }
     }
