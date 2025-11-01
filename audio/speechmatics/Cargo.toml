@@ -14,7 +14,7 @@ gst.workspace = true
 gst-base.workspace = true
 gst-audio = { workspace = true, features = ["v1_16"] }
 tokio = { version = "1", features = [ "full" ] }
-async-tungstenite = { version = "0.31", features = ["tokio", "tokio-runtime", "tokio-rustls-native-certs"] }
+async-tungstenite = { version = "0.32", features = ["tokio", "tokio-runtime", "tokio-rustls-native-certs"] }
 rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
