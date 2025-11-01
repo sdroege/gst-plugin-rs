@@ -4012,6 +4012,18 @@
                         "type": "GstGtk4Paintable",
                         "writable": false
                     },
+                    "reconfigure-on-window-resize": {
+                        "blurb": "send reconfigure event to upstream elements whenever window-width or window-height changes",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "overlay-only (2)",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "GstGtk4PaintableSinkReconfigureMode",
+                        "writable": true
+                    },
                     "window-height": {
                         "blurb": "the height of the main widget rendering the paintable",
                         "conditionally-available": false,
@@ -4179,6 +4191,26 @@
                         "desc": "FlipRotate270",
                         "name": "flip-rotate270",
                         "value": "8"
+                    }
+                ]
+            },
+            "GstGtk4PaintableSinkReconfigureMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Never",
+                        "name": "never",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Always",
+                        "name": "always",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "OverlayOnly",
+                        "name": "overlay-only",
+                        "value": "2"
                     }
                 ]
             }
