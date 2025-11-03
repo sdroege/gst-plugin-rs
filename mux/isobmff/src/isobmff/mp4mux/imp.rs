@@ -12,6 +12,8 @@ use std::str::FromStr;
 use std::sync::Mutex;
 
 use crate::av1::obu::read_seq_header_obu_bytes;
+use crate::isobmff::boxes::create_dac3;
+use crate::isobmff::boxes::create_dec3;
 use crate::isobmff::boxes::create_ftyp;
 use crate::isobmff::boxes::create_mdat_header_non_frag;
 use crate::isobmff::boxes::create_moov;
@@ -184,6 +186,9 @@ struct Stream {
     running_time_utc_time_mapping: Option<(gst::Signed<gst::ClockTime>, gst::ClockTime)>,
 
     extra_header_data: Option<Vec<u8>>,
+
+    /// Codec-specific boxes to be included in the sample entry
+    codec_specific_boxes: Vec<u8>,
 
     /// Language code from tags
     language_code: Option<[u8; 3]>,
@@ -1509,6 +1514,7 @@ impl MP4Mux {
 
             let mut delta_frames = DeltaFrames::IntraOnly;
             let mut discard_header_buffers = false;
+            let mut codec_specific_boxes = Vec::new();
             match s.name().as_str() {
                 "video/x-h264" | "video/x-h265" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
@@ -1565,6 +1571,45 @@ impl MP4Mux {
                         return Err(gst::FlowError::NotNegotiated);
                     };
                 }
+                "audio/x-ac3" | "audio/x-eac3" => {
+                    let Some(first_buffer) = pad.peek_buffer() else {
+                        gst::error!(
+                            CAT,
+                            obj = pad,
+                            "Need first buffer for AC-3 / EAC-3 when creating header"
+                        );
+                        return Err(gst::FlowError::NotNegotiated);
+                    };
+                    match s.name().as_str() {
+                        "audio/x-ac3" => {
+                            codec_specific_boxes = match create_dac3(&first_buffer) {
+                                Ok(boxes) => boxes,
+                                Err(err) => {
+                                    gst::error!(
+                                        CAT,
+                                        obj = pad,
+                                        "Failed to create AC-3 codec specific box: {err}"
+                                    );
+                                    return Err(gst::FlowError::NotNegotiated);
+                                }
+                            };
+                        }
+                        "audio/x-eac3" => {
+                            codec_specific_boxes = match create_dec3(&first_buffer) {
+                                Ok(boxes) => boxes,
+                                Err(err) => {
+                                    gst::error!(
+                                        CAT,
+                                        obj = pad,
+                                        "Failed to create EAC-3 codec specific box: {err}"
+                                    );
+                                    return Err(gst::FlowError::NotNegotiated);
+                                }
+                            };
+                        }
+                        _ => unreachable!(),
+                    }
+                }
                 "audio/x-alaw" | "audio/x-mulaw" => (),
                 "audio/x-adpcm" => (),
                 "application/x-onvif-metadata" => (),
@@ -1587,6 +1632,7 @@ impl MP4Mux {
                 end_pts: None,
                 running_time_utc_time_mapping: None,
                 extra_header_data: None,
+                codec_specific_boxes,
                 language_code,
                 global_orientation,
                 stream_orientation,
@@ -2137,7 +2183,8 @@ impl AggregatorImpl for MP4Mux {
                     match caps_structure.name().as_str() {
                         "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9"
                         | "image/jpeg" | "video/x-raw" | "audio/mpeg" | "audio/x-opus"
-                        | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
+                        | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm"
+                        | "audio/x-ac3" | "audio/x-eac3" => {
                             compatible_brands.insert(*b"mp41");
                             compatible_brands.insert(*b"mp42");
                             compatible_brands.insert(*b"isom");
@@ -2235,7 +2282,7 @@ impl AggregatorImpl for MP4Mux {
                     chunks: stream.chunks,
                     tai_clock_info: stream.tai_clock_info,
                     auxiliary_info: stream.aux_info,
-                    codec_specific_boxes: vec![],
+                    codec_specific_boxes: stream.codec_specific_boxes.clone(),
                 });
             }
 
@@ -2499,6 +2546,18 @@ impl ElementImpl for ISOMP4Mux {
                         .field("framed", true)
                         .field("channels", gst::IntRange::<i32>::new(1, 8))
                         .field("rate", gst::IntRange::<i32>::new(1, 10 * u16::MAX as i32))
+                        .build(),
+                    gst::Structure::builder("audio/x-ac3")
+                        .field("framed", true)
+                        .field("alignment", "frame")
+                        .field("channels", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .build(),
+                    gst::Structure::builder("audio/x-eac3")
+                        .field("framed", true)
+                        .field("alignment", "iec61937")
+                        .field("channels", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
                         .build(),
                 ]
                 .into_iter()
