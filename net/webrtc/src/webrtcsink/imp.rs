@@ -3773,22 +3773,22 @@ impl BaseWebRTCSink {
                             err
                         );
                         remove = true;
-                        session = session_clone.lock().unwrap();
                         state_guard = self.state.lock().unwrap();
+                        session = session_clone.lock().unwrap();
                         state = state_guard.deref_mut();
                         break;
                     }
                     Ok(Some(res)) => res,
                     Ok(None) => {
-                        session = session_clone.lock().unwrap();
                         state_guard = self.state.lock().unwrap();
+                        session = session_clone.lock().unwrap();
                         state = state_guard.deref_mut();
                         continue;
                     }
                 };
 
-                session = session_clone.lock().unwrap();
                 state_guard = self.state.lock().unwrap();
+                session = session_clone.lock().unwrap();
                 state = state_guard.deref_mut();
 
                 if let Err(err) =
