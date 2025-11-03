@@ -812,34 +812,66 @@ impl Codec {
         let mut enc_s = gst::Structure::new_empty(codec_caps_name);
         let mut pay_s = gst::Structure::new_empty("application/x-rtp");
 
-        let is_h264 = self.name == "H264";
+        let has_profile_level_id = self.name == "H264" && s.has_field("profile-level-id");
+
+        fn compat_profiles(profile: &str) -> gst::List {
+            let profile_idc = H264_PROFILES_COMPAT
+                .iter()
+                .position(|p| p == &profile)
+                .expect("Unsupported profile, please implement");
+
+            gst::List::new(H264_PROFILES_COMPAT[0..profile_idc + 1].to_vec())
+        }
+
+        fn compat_levels(level: &str) -> gst::List {
+            let level_idc = H264_LEVELS
+                .iter()
+                .position(|p| p == level)
+                .expect("Unsupported level, please implement");
+
+            gst::List::new(H264_LEVELS[0..level_idc + 1].to_vec())
+        }
 
         for (key, value) in s {
             if key.starts_with("a-") {
                 continue;
-            } else if is_h264 && key == "profile" {
-                let profile = in_caps
-                    .structure(0)
-                    .unwrap()
-                    .get::<&str>("profile")
-                    .unwrap_or(value.get::<&str>().unwrap());
-                let profile_idc = H264_PROFILES_COMPAT
-                    .iter()
-                    .position(|p| p == &profile)
-                    .expect("Unsupported profile, please implement");
-                enc_s.set(key, gst::List::new(H264_PROFILES_COMPAT[0..profile_idc + 1].to_vec()));
-            } else if is_h264 && key == "level" {
-                let level = in_caps
-                    .structure(0)
-                    .unwrap()
-                    .get::<&str>("level")
-                    .unwrap_or(value.get::<&str>().unwrap());
-                let level_idc = H264_LEVELS
-                    .iter()
-                    .position(|p| p == &level)
-                    .expect("Unsupported level, please implement");
+            } else if key == "profile" {
+                if !has_profile_level_id {
+                    let profile = in_caps
+                        .structure(0)
+                        .unwrap()
+                        .get::<&str>("profile")
+                        .unwrap_or(value.get::<&str>().unwrap());
 
-                enc_s.set(key, gst::List::new(H264_LEVELS[0..level_idc + 1].to_vec()));
+                    enc_s.set(key, compat_profiles(profile));
+                }
+            } else if key == "level" {
+                if !has_profile_level_id {
+                    let level = in_caps
+                        .structure(0)
+                        .unwrap()
+                        .get::<&str>("level")
+                        .unwrap_or(value.get::<&str>().unwrap());
+
+                    enc_s.set(key, compat_levels(level));
+                }
+            } else if key == "profile-level-id" {
+                let profile_level_id = in_caps
+                    .structure(0)
+                    .unwrap()
+                    .get::<&str>("profile-level-id")
+                    .unwrap_or(value.get::<&str>().unwrap());
+
+                if let Ok(profile_level_id) = u32::from_str_radix(profile_level_id, 16) {
+                    let sps = &profile_level_id.to_be_bytes()[1..];
+
+                    if let Ok(profile) = gst_pbutils::codec_utils_h264_get_profile(sps) {
+                        enc_s.set("profile", compat_profiles(&profile));
+                    }
+                    if let Ok(level) = gst_pbutils::codec_utils_h264_get_level(sps) {
+                        enc_s.set("level", compat_levels(&level));
+                    }
+                }
             } else if key.starts_with("extmap-")
                 && value
                     .get::<&str>()
