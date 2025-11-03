@@ -87,6 +87,19 @@ class Session:
         if model is None:
             import demucs.pretrained
             import demucs.apply
+            import multiprocessing
+
+            # This is a workaround for a bug where the get_model() call below
+            # would end up spawning another process of our host binary
+            # (e.g. gst-launch-1.0) instead of Python. Pytorch uses tqdm
+            # to display a progress bar when downloading models,
+            # which internally uses multiprocessing, which then tries
+            # to execute some code in a separate process, using sys.executable
+            # as the target. Setting this to an empty string prevents that
+            # and doesn't seem to break anything for our use case.
+            # See:
+            # https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/merge_requests/2554#note_3128828
+            multiprocessing.set_executable("")
 
             model = demucs.pretrained.get_model(model_name, MODEL_REPO)
             if model is None:
