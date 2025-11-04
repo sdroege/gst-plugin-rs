@@ -820,7 +820,7 @@ impl Codec {
                 .position(|p| p == &profile)
                 .expect("Unsupported profile, please implement");
 
-            gst::List::new(H264_PROFILES_COMPAT[0..profile_idc + 1].to_vec())
+            gst::List::new(H264_PROFILES_COMPAT[0..profile_idc + 1].iter().rev())
         }
 
         fn compat_levels(level: &str) -> gst::List {
@@ -829,7 +829,7 @@ impl Codec {
                 .position(|p| p == level)
                 .expect("Unsupported level, please implement");
 
-            gst::List::new(H264_LEVELS[0..level_idc + 1].to_vec())
+            gst::List::new(H264_LEVELS[0..level_idc + 1].iter().rev())
         }
 
         for (key, value) in s {
