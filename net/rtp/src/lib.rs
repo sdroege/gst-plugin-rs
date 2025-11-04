@@ -39,6 +39,7 @@ mod linear_audio;
 mod mp2t;
 mod mp4a;
 mod mp4g;
+mod mparobust;
 mod opus;
 mod pcmau;
 mod vp8;
@@ -89,6 +90,8 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
     mp4g::depay::register(plugin)?;
     mp4g::pay::register(plugin)?;
+
+    mparobust::depay::register(plugin)?;
 
     opus::depay::register(plugin)?;
     opus::pay::register(plugin)?;

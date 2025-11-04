@@ -12421,6 +12421,32 @@
                 },
                 "rank": "marginal"
             },
+            "rtpmparobustdepay2": {
+                "author": "François Laignel <francois centricular com>",
+                "description": "Depayload MPEG Audio Robust elementary streams from RTP packets (RFC 5219)",
+                "hierarchy": [
+                    "GstRtpMpegAudioRobustDepay",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: audio\n     clock-rate: 90000\n  encoding-name: MPA-ROBUST\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "audio/mpeg:\n    mpegversion: 1\n         parsed: true\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
             "rtpopusdepay2": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
                 "description": "Depayload an Opus audio stream from RTP packets (RFC 7587)",
