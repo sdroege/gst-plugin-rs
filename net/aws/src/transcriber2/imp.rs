@@ -10,6 +10,8 @@
 //!
 //! This element calls AWS Transcribe to generate text from audio
 
+use futures::future::abortable;
+use futures::stream::AbortHandle;
 use gst::subclass::prelude::*;
 use gst::{glib, prelude::*};
 
@@ -88,6 +90,7 @@ struct State {
     client: Option<aws_sdk_transcribestreaming::Client>,
     audio_tx: Option<mpsc::Sender<gst::Buffer>>,
     result_rx: Option<std::sync::mpsc::Receiver<TranscriptOutput>>,
+    send_handle: Option<AbortHandle>,
     receive_handle: Option<tokio::task::JoinHandle<()>>,
     partial_index: usize,
     seqnum: gst::Seqnum,
@@ -108,6 +111,7 @@ impl Default for State {
             audio_tx: None,
             result_rx: None,
             receive_handle: None,
+            send_handle: None,
             partial_index: 0,
             seqnum: gst::Seqnum::next(),
             draining: false,
@@ -193,27 +197,9 @@ impl Transcriber {
         &'a self,
         mut state: MutexGuard<'a, State>,
     ) -> Result<MutexGuard<'a, State>, gst::FlowError> {
-        let Some(mut audio_tx) = state.audio_tx.take() else {
-            gst::debug!(CAT, imp = self, "Flushing");
-            return Err(gst::FlowError::Flushing);
-        };
-
         state.draining = true;
 
-        drop(state);
-
-        let _ = RUNTIME
-            .block_on(audio_tx.send(gst::Buffer::new()))
-            .map_err(|err| {
-                gst::element_imp_error!(
-                    self,
-                    gst::StreamError::Failed,
-                    ["Streaming failed: {err}"]
-                );
-                gst::FlowError::Error
-            });
-
-        let mut state = self.state.lock().unwrap();
+        state = self.send(state, gst::Buffer::new())?;
 
         while (self.srcpad.task_state() == gst::TaskState::Started) && state.draining {
             state = self.state_cond.wait(state).unwrap();
@@ -623,6 +609,64 @@ impl Transcriber {
         }
     }
 
+    fn send<'a>(
+        &'a self,
+        mut state: MutexGuard<'a, State>,
+        buffer: gst::Buffer,
+    ) -> Result<MutexGuard<'a, State>, gst::FlowError> {
+        let Some(mut audio_tx) = state.audio_tx.take() else {
+            gst::debug!(CAT, imp = self, "Flushing");
+            return Err(gst::FlowError::Flushing);
+        };
+
+        let (future, abort_handle) = abortable(audio_tx.send(buffer));
+
+        state.send_handle = Some(abort_handle);
+
+        drop(state);
+
+        let _enter_guard = RUNTIME.enter();
+
+        match futures::executor::block_on(tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            future,
+        )) {
+            Err(err) => {
+                gst::error!(CAT, "error: {err}");
+
+                gst::element_imp_error!(
+                    self,
+                    gst::StreamError::Failed,
+                    ["Streaming failed: {err}"]
+                );
+                return Err(gst::FlowError::Error);
+            }
+            Ok(res) => match res {
+                Err(_) => {
+                    gst::debug!(CAT, imp = self, "cancelled, returning flushing");
+                    return Err(gst::FlowError::Flushing);
+                }
+                Ok(res) => match res {
+                    Ok(_) => (),
+                    Err(err) => {
+                        gst::element_imp_error!(
+                            self,
+                            gst::StreamError::Failed,
+                            ["Streaming failed: {err}"]
+                        );
+                        return Err(gst::FlowError::Error);
+                    }
+                },
+            },
+        };
+
+        state = self.state.lock().unwrap();
+
+        state.audio_tx = Some(audio_tx);
+
+        Ok(state)
+    }
+
     fn sink_chain(
         &self,
         pad: &gst::Pad,
@@ -667,17 +711,7 @@ impl Transcriber {
             }
         }
 
-        let Some(mut audio_tx) = self.state.lock().unwrap().audio_tx.take() else {
-            gst::debug!(CAT, obj = pad, "Flushing");
-            return Err(gst::FlowError::Flushing);
-        };
-
-        futures::executor::block_on(audio_tx.send(buffer)).map_err(|err| {
-            gst::element_imp_error!(self, gst::StreamError::Failed, ["Streaming failed: {err}"]);
-            gst::FlowError::Error
-        })?;
-
-        self.state.lock().unwrap().audio_tx = Some(audio_tx);
+        drop(self.send(self.state.lock().unwrap(), buffer)?);
 
         Ok(gst::FlowSuccess::Ok)
     }
@@ -899,6 +933,11 @@ impl Transcriber {
     fn disconnect<'a>(&'a self, mut state: MutexGuard<'a, State>) -> MutexGuard<'a, State> {
         if let Some(handle) = state.receive_handle.take() {
             gst::info!(CAT, imp = self, "aborting result reception");
+            handle.abort();
+        }
+
+        if let Some(handle) = state.send_handle.take() {
+            gst::info!(CAT, imp = self, "aborting audio transmission");
             handle.abort();
         }
 
