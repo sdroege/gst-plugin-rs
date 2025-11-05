@@ -11,7 +11,7 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::LazyLock;
 use std::sync::{Arc, Mutex};
@@ -93,6 +93,7 @@ struct Connection {
     room_timeout_task: Option<JoinHandle<()>>,
     last_participant_lost_at: Option<Instant>,
     our_participant_sid: String,
+    published_tracks: HashSet<String>,
 }
 
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq, glib::Enum)]
@@ -320,6 +321,7 @@ impl Signaller {
                 gst::debug!(CAT, imp = self, "Track published: {:?}", publish_res);
                 if let Some(connection) = &mut *self.connection.lock().unwrap() {
                     if let Some(tx) = connection.pending_tracks.remove(&publish_res.cid) {
+                        connection.published_tracks.insert(publish_res.cid);
                         let _ = tx.send(publish_res.track.unwrap());
                     }
                 }
@@ -516,10 +518,15 @@ impl Signaller {
 
                         let (tx, rx) = oneshot::channel();
                         if let Some(connection) = &mut *imp.connection.lock().unwrap() {
+                            if connection.published_tracks.contains(&req.cid) {
+                                continue;
+                            }
+
                             let pendings_tracks = &mut connection.pending_tracks;
                             if pendings_tracks.contains_key(&req.cid) {
                                 panic!("track already published");
                             }
+
                             pendings_tracks.insert(req.cid.clone(), tx);
                         }
 
@@ -812,6 +819,7 @@ impl SignallableImpl for Signaller {
                     .participant
                     .map(|p| p.sid.clone())
                     .unwrap_or_default(),
+                published_tracks: HashSet::new(),
             };
             if !join_response.other_participants.is_empty() {
                 connection.last_participant_lost_at = None;

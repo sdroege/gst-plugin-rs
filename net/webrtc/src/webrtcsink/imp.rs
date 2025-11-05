@@ -310,14 +310,14 @@ struct SessionInner {
     rtprtxsend: Option<gst::Element>,
     webrtc_pads: HashMap<u32, WebRTCPad>,
     peer_id: String,
-    encoders: Vec<VideoEncoder>,
+    // The key is the name of the input stream
+    encoders: HashMap<String, VideoEncoder>,
 
     // Our Homegrown controller (if cc_info.heuristic == Homegrown)
     congestion_controller: Option<CongestionController>,
     // Our BandwidthEstimator (if cc_info.heuristic == GoogleCongestionControl)
     rtpgccbwe: Option<gst::Element>,
 
-    sdp: Option<gst_sdp::SDPMessage>,
     stats: gst::Structure,
 
     cc_info: CCInfo,
@@ -333,6 +333,20 @@ struct SessionInner {
     navigation_handler: Option<NavigationEventHandler>,
     control_events_handler: Option<ControlRequestHandler>,
     enabled_mitigation_modes: WebRTCSinkMitigationMode,
+
+    last_sdp: Option<gst_sdp::SDPMessage>,
+
+    // When a new pad is requested while we already are renegotiating,
+    // the new stream names will be stored here to trigger a new negotiation
+    // later on
+    pending_streams: HashSet<String>,
+    // Same as above for released pads
+    pending_removed_streams: HashSet<String>,
+    // Separate set for all streams that were removed from the session,
+    // this is used to prune the webrtc pads collection. This is needed because
+    // if a pad is added and released before the current negotiation is done,
+    // a discovery might finish after pending_removed_streams has been purged
+    removed_streams: HashSet<String>,
 }
 
 #[derive(Clone)]
@@ -944,6 +958,16 @@ impl PayloadChainBuilder {
 
         let mut elements: Vec<gst::Element> = Vec::new();
 
+        // Not-linked errors might occur when an input stream is released on renegotiation,
+        // simply ignoring those errors is convenient and correct
+        elements.push(
+            gst::ElementFactory::make("errorignore")
+                .property("ignore-notlinked", true)
+                .property("convert-to", gst::FlowReturn::Ok)
+                .build()
+                .with_context(|| "Failed to make element errorignore".to_string())?,
+        );
+
         let (raw_filter, encoder) = if needs_encoding {
             elements.push(match self.codec.is_video() {
                 true => make_converter_for_video_caps(&self.input_caps, &self.codec)?.upcast(),
@@ -1348,9 +1372,8 @@ impl SessionInner {
             congestion_controller,
             rtpgccbwe,
             stats: gst::Structure::new_empty("application/x-webrtc-stats"),
-            sdp: None,
             webrtc_pads: HashMap::new(),
-            encoders: Vec::new(),
+            encoders: HashMap::new(),
             links: HashMap::new(),
             stats_sigid: None,
             codecs: None,
@@ -1358,6 +1381,10 @@ impl SessionInner {
             navigation_handler: None,
             control_events_handler: None,
             enabled_mitigation_modes,
+            last_sdp: None,
+            pending_streams: HashSet::new(),
+            pending_removed_streams: HashSet::new(),
+            removed_streams: HashSet::new(),
         }
     }
 
@@ -1366,7 +1393,7 @@ impl SessionInner {
 
         let encoder_stats = self
             .encoders
-            .iter()
+            .values()
             .map(VideoEncoder::gather_stats)
             .map(|s| s.to_send_value())
             .collect::<gst::Array>();
@@ -1487,7 +1514,7 @@ impl SessionInner {
                     _ => enc.transceiver.set_property("fec-percentage", 0u32),
                 }
 
-                self.encoders.push(enc);
+                self.encoders.insert(stream_name.to_string(), enc);
 
                 if let Some(rtpgccbwe) = self.rtpgccbwe.as_ref() {
                     let max_bitrate = self.cc_info.max_bitrate * (self.encoders.len() as u32);
@@ -1535,6 +1562,9 @@ impl InputStream {
         let appsink = make_element("appsink", None)?
             .downcast::<gst_app::AppSink>()
             .unwrap();
+
+        // We do not want addition of new sinks to cause the state to regress to PAUSED
+        appsink.set_property("async", false);
 
         element.add(&clocksync).unwrap();
         element.add(&appsink).unwrap();
@@ -1930,9 +1960,16 @@ impl BaseWebRTCSink {
         webrtcbin: &gst::Element,
         webrtc_pads: &mut HashMap<u32, WebRTCPad>,
         is_video: bool,
+        last_sdp: Option<gst_sdp::SDPMessage>,
     ) {
+        let last_sdp_n_media = last_sdp.map(|sdp| sdp.medias_len()).unwrap_or(0);
         let ssrc = self.generate_ssrc(webrtc_pads);
-        let media_idx = webrtc_pads.len() as i32;
+        let media_idx = webrtc_pads
+            .values()
+            .map(|pad| pad.media_idx)
+            .max()
+            .unwrap_or(last_sdp_n_media)
+            .max(last_sdp_n_media);
 
         let Some(pad) = webrtcbin.request_pad_simple(&format!("sink_{media_idx}")) else {
             gst::error!(CAT, imp = self, "Failed to request pad from webrtcbin");
@@ -1962,7 +1999,7 @@ impl BaseWebRTCSink {
             WebRTCPad {
                 pad,
                 in_caps: gst::Caps::new_empty(),
-                media_idx: media_idx as u32,
+                media_idx,
                 ssrc,
                 stream_name: None,
                 payload: None,
@@ -1970,17 +2007,27 @@ impl BaseWebRTCSink {
         );
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn request_webrtcbin_pad(
         &self,
         webrtcbin: &gst::Element,
-        stream: &mut InputStream,
+        stream: &InputStream,
         media: Option<&gst_sdp::SDPMediaRef>,
         settings: &Settings,
         webrtc_pads: &mut HashMap<u32, WebRTCPad>,
         codecs: &mut BTreeMap<i32, Codec>,
+        last_sdp: Option<gst_sdp::SDPMessage>,
     ) {
         let ssrc = self.generate_ssrc(webrtc_pads);
-        let media_idx = webrtc_pads.len() as i32;
+
+        let last_sdp_n_media = last_sdp.as_ref().map(|sdp| sdp.medias_len()).unwrap_or(0);
+
+        let media_idx = webrtc_pads
+            .values()
+            .map(|pad| pad.media_idx + 1)
+            .max()
+            .unwrap_or(last_sdp_n_media)
+            .max(last_sdp_n_media);
 
         let mut payloader_caps = match media {
             Some(media) => {
@@ -2014,7 +2061,7 @@ impl BaseWebRTCSink {
         };
 
         if payloader_caps.is_empty() {
-            self.request_inactive_webrtcbin_pad(webrtcbin, webrtc_pads, stream.is_video);
+            self.request_inactive_webrtcbin_pad(webrtcbin, webrtc_pads, stream.is_video, last_sdp);
         } else {
             let payloader_caps_mut = payloader_caps.make_mut();
             payloader_caps_mut.set("ssrc", ssrc);
@@ -2122,13 +2169,74 @@ impl BaseWebRTCSink {
                 WebRTCPad {
                     pad,
                     in_caps: stream.in_caps.as_ref().unwrap().clone(),
-                    media_idx: media_idx as u32,
+                    media_idx,
                     ssrc,
                     stream_name: Some(stream.sink_pad.name().to_string()),
                     payload: None,
                 },
             );
         }
+    }
+
+    async fn renegotiate(
+        &self,
+        settings_clone: &Settings,
+        session: &Session,
+        mut streams: Vec<InputStream>,
+    ) {
+        let (last_sdp, webrtcbin, pipeline, mut webrtc_pads, session_id) = {
+            let mut session_inner = session.0.lock().unwrap();
+            let Some(last_sdp) = session_inner.last_sdp.take() else {
+                session_inner
+                    .pending_streams
+                    .extend(streams.drain(..).map(|s| s.sink_pad.name().to_string()));
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "session {} currently negotiating, postponing renegotiation",
+                    session_inner.id,
+                );
+                return;
+            };
+
+            (
+                last_sdp,
+                session_inner.webrtcbin.clone(),
+                session_inner.pipeline.clone(),
+                session_inner.webrtc_pads.clone(),
+                session_inner.id.clone(),
+            )
+        };
+
+        let mut codecs: BTreeMap<i32, Codec> = BTreeMap::new();
+
+        for stream in streams.drain(..) {
+            self.request_webrtcbin_pad(
+                &webrtcbin,
+                &stream,
+                None,
+                settings_clone,
+                &mut webrtc_pads,
+                &mut codecs,
+                Some(last_sdp.clone()),
+            )
+            .await;
+        }
+
+        gst::debug!(
+            CAT,
+            imp = self,
+            "posting renegotiate for session {session_id}"
+        );
+
+        let _ = pipeline.post_message(
+            gst::message::Element::builder(
+                gst::Structure::builder("webrtcsink/renegotiate").build(),
+            )
+            .build(),
+        );
+
+        session.0.lock().unwrap().webrtc_pads = webrtc_pads;
     }
 
     #[cfg(feature = "web_server")]
@@ -2226,19 +2334,16 @@ impl BaseWebRTCSink {
         gst::debug!(CAT, imp = self, "preparing");
 
         #[cfg(feature = "web_server")]
-        let settings = self.settings.lock().unwrap();
-        let mut state = self.state.lock().unwrap();
+        {
+            let settings = self.settings.lock().unwrap();
 
-        state
-            .streams
-            .iter_mut()
-            .try_for_each(|(_, stream)| stream.prepare(&self.obj()))?;
-
-        #[cfg(feature = "web_server")]
-        if settings.run_web_server {
-            let (web_shutdown_tx, web_join_handle) = BaseWebRTCSink::spawn_web_server(&settings)?;
-            state.web_shutdown_tx = Some(web_shutdown_tx);
-            state.web_join_handle = Some(web_join_handle);
+            if settings.run_web_server {
+                let mut state = self.state.lock().unwrap();
+                let (web_shutdown_tx, web_join_handle) =
+                    BaseWebRTCSink::spawn_web_server(&settings)?;
+                state.web_shutdown_tx = Some(web_shutdown_tx);
+                state.web_join_handle = Some(web_join_handle);
+            }
         }
 
         Ok(())
@@ -2486,9 +2591,7 @@ impl BaseWebRTCSink {
 
         if let Some(session) = session {
             let mut session = session.0.lock().unwrap();
-            let sdp = answer.sdp();
-
-            session.sdp = Some(sdp.to_owned());
+            let sdp = answer.sdp().to_owned();
 
             for webrtc_pad in session.webrtc_pads.values_mut() {
                 webrtc_pad.payload = sdp
@@ -2517,7 +2620,7 @@ impl BaseWebRTCSink {
             let session_id = session.id.clone();
             drop(session);
 
-            self.on_remote_description_set(&session_id)
+            self.on_remote_description_set(&session_id, sdp)
         }
     }
 
@@ -2713,11 +2816,19 @@ impl BaseWebRTCSink {
     fn negotiate(&self, session_id: &str, offer: Option<&gst_webrtc::WebRTCSessionDescription>) {
         let state = self.state.lock().unwrap();
 
-        gst::debug!(CAT, imp = self, "Negotiating for session {}", session_id);
-
         if let Some(session) = state.sessions.get(session_id) {
-            let session = session.0.lock().unwrap();
-            gst::trace!(CAT, imp = self, "WebRTC pads: {:?}", session.webrtc_pads);
+            let mut session = session.0.lock().unwrap();
+
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Negotiating for session {} with webrtc pads {:?}",
+                session.id,
+                session.webrtc_pads
+            );
+
+            session.last_sdp = None;
+
             let webrtcbin = session.webrtcbin.clone();
             drop(session);
 
@@ -2773,6 +2884,15 @@ impl BaseWebRTCSink {
                             offer.get::<gst_webrtc::WebRTCSessionDescription>().unwrap()
                         }) {
                             this.on_offer_created(offer, &session_id);
+                        } else if let Ok(err) = reply.get::<glib::Error>("error") {
+                            gst::error!(
+                                CAT,
+                                imp = this,
+                                "error when creating offer for session {}: {:?}",
+                                session_id,
+                                err
+                            );
+                            let _ = this.remove_session(&session_id, true);
                         } else {
                             gst::warning!(
                                 CAT,
@@ -3306,6 +3426,19 @@ impl BaseWebRTCSink {
                         );
                         let _ = this.remove_session(&session_id_clone, true);
                     }
+                    gst::MessageView::Element(m) => {
+                        if m.structure()
+                            .map(|s| s.has_name("webrtcsink/renegotiate"))
+                            .unwrap_or(false)
+                        {
+                            gst::debug!(
+                                CAT,
+                                imp = this,
+                                "renegotiating session {session_id_clone} now!"
+                            );
+                            this.negotiate(&session_id_clone, None);
+                        }
+                    }
                     gst::MessageView::StateChanged(state_changed) => {
                         if state_changed.src() == Some(pipeline.upcast_ref())
                             && state_changed.old() == gst::State::Ready
@@ -3385,14 +3518,15 @@ impl BaseWebRTCSink {
 
                             media_is_video == stream_is_video
                         }) {
-                            let mut stream = streams.remove(idx);
+                            let stream = streams.remove(idx);
                             this.request_webrtcbin_pad(
                                 &webrtcbin,
-                                &mut stream,
+                                &stream,
                                 Some(media),
                                 &settings_clone,
                                 &mut webrtc_pads,
                                 &mut codecs,
+                                None,
                             )
                             .await;
                         } else {
@@ -3400,18 +3534,20 @@ impl BaseWebRTCSink {
                                 &webrtcbin,
                                 &mut webrtc_pads,
                                 media_is_video,
+                                None,
                             );
                         }
                     }
                 } else {
-                    for mut stream in streams {
+                    for stream in streams {
                         this.request_webrtcbin_pad(
                             &webrtcbin,
-                            &mut stream,
+                            &stream,
                             None,
                             &settings_clone,
                             &mut webrtc_pads,
                             &mut codecs,
+                            None,
                         )
                         .await;
                     }
@@ -3601,7 +3737,7 @@ impl BaseWebRTCSink {
             }
 
             let mut s_builder = gst::Structure::builder("webrtcsink/encoder-bitrates");
-            for encoder in session.encoders.iter() {
+            for encoder in session.encoders.values() {
                 s_builder = s_builder.field(&encoder.stream_name, encoder_bitrate);
             }
             let s = s_builder.build();
@@ -3611,7 +3747,7 @@ impl BaseWebRTCSink {
                 &[&session.peer_id, &(encoders_bitrate as i32), &s],
             );
 
-            for encoder in session.encoders.iter_mut() {
+            for encoder in session.encoders.values_mut() {
                 let defined_encoder_bitrate =
                     match updated_bitrates.get::<i32>(&encoder.stream_name) {
                         Ok(bitrate) => {
@@ -3738,7 +3874,7 @@ impl BaseWebRTCSink {
         )))
     }
 
-    fn on_remote_description_set(&self, session_id: &str) {
+    fn on_remote_description_set(&self, session_id: &str, sdp: gst_sdp::SDPMessage) {
         let mut state_guard = self.state.lock().unwrap();
         let mut state = state_guard.deref_mut();
         let Some(session_clone) = state.sessions.get(session_id).map(|s| s.0.clone()) else {
@@ -3749,6 +3885,41 @@ impl BaseWebRTCSink {
 
         let mut session = session_clone.lock().unwrap();
 
+        let pending_removed_streams: HashSet<_> = session.pending_removed_streams.drain().collect();
+
+        let had_pending_removed_streams = !pending_removed_streams.is_empty();
+
+        session.removed_streams.extend(pending_removed_streams);
+
+        let removed_streams = session.removed_streams.clone();
+
+        session.webrtc_pads.retain(|&_, webrtc_pad| {
+            if let Some(ref name) = webrtc_pad.stream_name {
+                if removed_streams.contains(name) {
+                    let transceiver = webrtc_pad
+                        .pad
+                        .property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
+                    transceiver.set_direction(gst_webrtc::WebRTCRTPTransceiverDirection::Inactive);
+
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "removing pad {webrtc_pad:?} in session {session_id}"
+                    );
+
+                    false
+                } else {
+                    true
+                }
+            } else {
+                true
+            }
+        });
+
+        session
+            .encoders
+            .retain(|name, _| !removed_streams.contains(name));
+
         for webrtc_pad in session.webrtc_pads.clone().values() {
             let transceiver = webrtc_pad
                 .pad
@@ -3757,6 +3928,18 @@ impl BaseWebRTCSink {
             let Some(ref stream_name) = webrtc_pad.stream_name else {
                 continue;
             };
+
+            if session.links.contains_key(&webrtc_pad.ssrc) {
+                // We are renegotiating and this pad was already linked
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "skipping already linked stream {} for session {}",
+                    stream_name,
+                    session.id
+                );
+                continue;
+            }
 
             if let Some(mid) = transceiver.mid() {
                 state
@@ -3780,7 +3963,6 @@ impl BaseWebRTCSink {
 
                 let peer_id = session.peer_id.clone();
                 let session_codecs = session.codecs.clone().unwrap_or_else(|| codecs.clone());
-                let sdp = session.sdp.clone();
                 let pipeline = session.pipeline.clone();
 
                 drop(session);
@@ -3789,7 +3971,7 @@ impl BaseWebRTCSink {
                     &peer_id,
                     webrtc_pad,
                     &session_codecs,
-                    sdp.as_ref().unwrap(),
+                    &sdp,
                     &pipeline,
                 ) {
                     Err(err) => {
@@ -3834,7 +4016,7 @@ impl BaseWebRTCSink {
                     remove = true;
                     break;
                 }
-            } else {
+            } else if !removed_streams.contains(stream_name) {
                 gst::error!(
                     CAT,
                     imp = self,
@@ -3854,18 +4036,22 @@ impl BaseWebRTCSink {
         let this_weak = self.downgrade();
         let webrtcbin = session.webrtcbin.downgrade();
         let session_id_clone = session.id.clone();
-        session.stats_collection_handle = Some(RUNTIME.spawn(async move {
-            let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
+        if session.stats_collection_handle.is_none() {
+            session.stats_collection_handle = Some(RUNTIME.spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
 
-            loop {
-                interval.tick().await;
-                if let (Some(webrtcbin), Some(this)) = (webrtcbin.upgrade(), this_weak.upgrade()) {
-                    this.process_stats(webrtcbin, &session_id_clone);
-                } else {
-                    break;
+                loop {
+                    interval.tick().await;
+                    if let (Some(webrtcbin), Some(this)) =
+                        (webrtcbin.upgrade(), this_weak.upgrade())
+                    {
+                        this.process_stats(webrtcbin, &session_id_clone);
+                    } else {
+                        break;
+                    }
                 }
-            }
-        }));
+            }));
+        }
 
         if remove {
             let _ = state.sessions.remove(&session.id);
@@ -3877,6 +4063,51 @@ impl BaseWebRTCSink {
             let signaller = settings.signaller.clone();
             drop(settings);
             signaller.end_session(&session_id);
+        } else {
+            let pending_streams: Vec<_> = session
+                .pending_streams
+                .drain()
+                .filter_map(|name| state.streams.get(&name))
+                .cloned()
+                .collect();
+
+            session.last_sdp = Some(sdp.clone());
+
+            let bwe = session.rtpgccbwe.clone();
+
+            drop(session);
+            drop(state_guard);
+
+            // The bandwidth estimator stops notifying once max bitrate is reached.
+            // As we may have added or removed video encoders, we want to make sure we
+            // re-attribute the available bandwidth properly.
+            if let Some(bwe) = bwe {
+                self.set_bitrate(session_id, bwe.property::<u32>("estimated-bitrate"));
+            }
+
+            if !pending_streams.is_empty() || had_pending_removed_streams {
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "session {session_id} had pending streams, triggering renegotiate"
+                );
+
+                RUNTIME.spawn(glib::clone!(
+                    #[to_owned(rename_to = this)]
+                    self,
+                    async move {
+                        let settings_clone = this.settings.lock().unwrap().clone();
+                        this.renegotiate(&settings_clone, &Session(session_clone), pending_streams)
+                            .await;
+                    }
+                ));
+            } else {
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "no pending streams in session {session_id}, no need to renegotiate"
+                );
+            }
         }
     }
 
@@ -3917,40 +4148,10 @@ impl BaseWebRTCSink {
         if let Some(session) = state.sessions.get(session_id).map(|s| s.0.clone()) {
             let mut session = session.lock().unwrap();
 
-            let sdp = desc.sdp();
-
-            session.sdp = Some(sdp.to_owned());
+            let sdp = desc.sdp().to_owned();
 
             for webrtc_pad in session.webrtc_pads.values_mut() {
                 let media_idx = webrtc_pad.media_idx;
-                /* TODO: support partial answer, webrtcbin doesn't seem
-                 * very well equipped to deal with this at the moment */
-                if let Some(media) = sdp.media(media_idx) {
-                    if media.attribute_val("inactive").is_some() {
-                        let media_str = sdp
-                            .media(webrtc_pad.media_idx)
-                            .and_then(|media| media.as_text().ok());
-
-                        gst::warning!(
-                            CAT,
-                            imp = self,
-                            "consumer from session {} refused media {}: {:?}",
-                            session_id,
-                            media_idx,
-                            media_str
-                        );
-
-                        drop(session);
-                        if let Some(_session) = state.end_session(&self.obj(), session_id) {
-                            drop(state);
-                            let settings = self.settings.lock().unwrap();
-                            let signaller = settings.signaller.clone();
-                            drop(settings);
-                            signaller.end_session(session_id);
-                        }
-                        return;
-                    }
-                }
 
                 if let Some(payload) = sdp
                     .media(webrtc_pad.media_idx)
@@ -3989,7 +4190,7 @@ impl BaseWebRTCSink {
                 session_id,
                 move |reply| {
                     gst::debug!(CAT, imp = this, "received reply {:?}", reply);
-                    this.on_remote_description_set(&session_id);
+                    this.on_remote_description_set(&session_id, sdp);
                 }
             ));
 
@@ -4393,7 +4594,7 @@ impl BaseWebRTCSink {
                     let stream_name = pad.name().to_string();
 
                     for session in state.sessions.values() {
-                        for encoder in session.0.lock().unwrap().encoders.iter_mut() {
+                        for encoder in session.0.lock().unwrap().encoders.values_mut() {
                             if encoder.stream_name == stream_name {
                                 encoder.halved_framerate =
                                     video_info.fps().mul(gst::Fraction::new(1, 2));
@@ -4491,18 +4692,41 @@ impl BaseWebRTCSink {
                         );
                     }
                     Ok(Ok(_)) => {
-                        let settings = this.settings.lock().unwrap();
+                        let settings_clone = this.settings.lock().unwrap().clone();
+
+                        let (sessions, stream) = {
+                            let mut state = this.state.lock().unwrap();
+
+                            state.codec_discovery_done = state
+                                .streams
+                                .values()
+                                .all(|stream| stream.out_caps.is_some());
+
+                            (
+                                state.sessions.clone(),
+                                state.streams.get(&stream_name_clone).cloned(),
+                            )
+                        };
+
+                        if let Some(stream) = stream {
+                            for session in sessions.values() {
+                                gst::debug!(
+                                    CAT,
+                                    imp = this,
+                                    "renegotiating session {} from discovery done",
+                                    session.0.lock().unwrap().id
+                                );
+                                this.renegotiate(&settings_clone, session, vec![stream.clone()])
+                                    .await;
+                            }
+                        }
+
                         let mut state = this.state.lock().unwrap();
-                        state.codec_discovery_done = state
-                            .streams
-                            .values()
-                            .all(|stream| stream.out_caps.is_some());
-                        let signaller = settings.signaller.clone();
-                        drop(settings);
+
                         if state.should_start_signaller(&this.obj()) {
                             state.signaller_state = SignallerState::Started;
                             drop(state);
-                            signaller.start();
+                            settings_clone.signaller.start();
                         }
                     }
                     _ => (),
@@ -5412,14 +5636,6 @@ impl ElementImpl for BaseWebRTCSink {
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
         let element = self.obj();
-        if element.current_state() > gst::State::Ready {
-            gst::error!(
-                CAT,
-                imp = self,
-                "element pads can only be requested before starting"
-            );
-            return None;
-        }
 
         let mut state = self.state.lock().unwrap();
 
@@ -5460,21 +5676,86 @@ impl ElementImpl for BaseWebRTCSink {
         sink_pad.use_fixed_caps();
         element.add_pad(&sink_pad).unwrap();
 
-        state.streams.insert(
-            name,
-            InputStream {
-                sink_pad: sink_pad.clone(),
-                producer: None,
-                in_caps: None,
-                out_caps: None,
-                clocksync: None,
-                is_video,
-                serial,
-                initial_discovery_started: false,
-            },
-        );
+        let mut input_stream = InputStream {
+            sink_pad: sink_pad.clone(),
+            producer: None,
+            in_caps: None,
+            out_caps: None,
+            clocksync: None,
+            is_video,
+            serial,
+            initial_discovery_started: false,
+        };
+
+        drop(state);
+
+        if let Err(err) = input_stream.prepare(&element) {
+            element.remove_pad(&sink_pad).unwrap();
+            sink_pad.set_active(false).unwrap();
+            gst::error!(CAT, "failed to prepare input stream: {err:?}");
+            return None;
+        }
+
+        let mut state = self.state.lock().unwrap();
+
+        state.streams.insert(name, input_stream);
 
         Some(sink_pad.upcast())
+    }
+
+    fn release_pad(&self, pad: &gst::Pad) {
+        let mut state = self.state.lock().unwrap();
+
+        let pad_name = pad.name().to_string();
+
+        gst::debug!(CAT, "releasing pad {}", pad_name);
+
+        let Some(stream) = state.streams.remove(&pad_name) else {
+            gst::error!(CAT, "no such stream: {}", pad_name);
+            return;
+        };
+
+        for session in state.sessions.values() {
+            let mut session = session.0.lock().unwrap();
+
+            let session_pipeline = session.pipeline.clone();
+            let session_id = session.id.clone();
+
+            let post_renegotiate = session.last_sdp.is_some();
+
+            if !post_renegotiate {
+                session
+                    .pending_removed_streams
+                    .insert(stream.sink_pad.name().to_string());
+            } else {
+                session
+                    .removed_streams
+                    .insert(stream.sink_pad.name().to_string());
+            }
+
+            drop(session);
+
+            if post_renegotiate {
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "no negotiation pending in session {session_id}, renegotiating"
+                );
+
+                let _ = session_pipeline.post_message(
+                    gst::message::Element::builder(
+                        gst::Structure::builder("webrtcsink/renegotiate").build(),
+                    )
+                    .build(),
+                );
+            } else {
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "negotiation pending in session {session_id}, defering renegotiation"
+                );
+            }
+        }
     }
 
     fn change_state(

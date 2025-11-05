@@ -6,6 +6,7 @@ use gst::{
     glib::{self, value::FromValue},
     prelude::*,
 };
+use std::collections::HashMap;
 use std::sync::LazyLock;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
@@ -293,7 +294,7 @@ impl CongestionController {
         &mut self,
         element: &super::BaseWebRTCSink,
         stats: &gst::StructureRef,
-        encoders: &mut [VideoEncoder],
+        encoders: &mut HashMap<String, VideoEncoder>,
     ) {
         let loss_percentage = stats.get::<f64>("packet-loss-pct").unwrap();
 
@@ -318,7 +319,7 @@ impl CongestionController {
         &mut self,
         element: &super::BaseWebRTCSink,
         stats: &gst::StructureRef,
-        encoders: &mut [VideoEncoder],
+        encoders: &mut HashMap<String, VideoEncoder>,
     ) {
         if let Some(twcc_stats) = lookup_twcc_stats(stats) {
             let op = self.update_delay(element, &twcc_stats, self.lookup_rtt(stats));
@@ -329,7 +330,7 @@ impl CongestionController {
     fn apply_control_op(
         &mut self,
         element: &super::BaseWebRTCSink,
-        encoders: &mut [VideoEncoder],
+        encoders: &mut HashMap<String, VideoEncoder>,
         control_op: CongestionControlOp,
         controller_type: ControllerType,
     ) {
@@ -412,7 +413,7 @@ impl CongestionController {
 
         let fec_percentage = (fec_ratio * 50f64) as u32;
 
-        for encoder in encoders.iter_mut() {
+        for encoder in encoders.values_mut() {
             if encoder
                 .set_bitrate(element, target_bitrate, WebRTCSinkMitigationMode::all())
                 .is_ok()

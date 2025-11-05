@@ -147,3 +147,9 @@ name = "stream-selector-server"
 
 [[example]]
 name = "stream-selector-client"
+
+[[example]]
+name = "renegotiation-server"
+
+[[example]]
+name = "renegotiation-client"
