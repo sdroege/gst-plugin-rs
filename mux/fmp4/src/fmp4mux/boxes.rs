@@ -3035,7 +3035,7 @@ mod eac3 {
                         } else {
                             SAMPLE_RATES[header.bsi.fscod as usize] as u32
                         })
-                        / NUM_BLOCKS[header.bsi.numblkscod as usize] as u32
+                        / (NUM_BLOCKS[header.bsi.numblkscod as usize] as u32 * 16)
                 })
                 .sum::<u32>();
             w.write::<13, u16>((data_rate / 1000) as u16)
