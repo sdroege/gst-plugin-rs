@@ -472,7 +472,7 @@ impl Signaller {
                         }
 
                         // Our SDP should always have a mid
-                        let mid = media.attribute_val("mid").unwrap().to_string();
+                        let mut name = media.attribute_val("mid").unwrap().to_string();
 
                         let mut trackid = "";
                         for attr in media.attributes() {
@@ -481,6 +481,12 @@ impl Signaller {
                                     let split: Vec<&str> = val.split_whitespace().collect();
                                     if split.len() == 3 && split[1].starts_with("msid:") {
                                         trackid = split[2];
+                                        let split: Vec<&str> = split[1].splitn(2, ":").collect();
+
+                                        if split.len() == 2 {
+                                            name = split[1].to_string();
+                                        }
+
                                         break;
                                     }
                                 }
@@ -498,7 +504,7 @@ impl Signaller {
 
                         let req = proto::AddTrackRequest {
                             cid: trackid.to_string(),
-                            name: mid.clone(),
+                            name,
                             r#type: mtype as i32,
                             muted: false,
                             source: msource,
