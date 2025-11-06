@@ -391,26 +391,22 @@ impl JsonGstParse {
         Ok(())
     }
 
-    fn scan_duration(&self) -> Result<Option<gst::ClockTime>, gst::LoggableError> {
+    fn scan_duration(&self) -> Result<Option<gst::ClockTime>, gst::FlowError> {
         gst::debug!(CAT, imp = self, "Scanning duration");
 
         /* First let's query the bytes duration upstream */
         let mut q = gst::query::Duration::new(gst::Format::Bytes);
 
         if !self.sinkpad.peer_query(&mut q) {
-            return Err(gst::loggable_error!(
-                CAT,
-                "Failed to query upstream duration"
-            ));
+            gst::error!(CAT, imp = self, "Failed to query upstream duration");
+            return Err(gst::FlowError::Error);
         }
 
         let size = match q.result() {
             gst::GenericFormattedValue::Bytes(Some(size)) => *size,
             _ => {
-                return Err(gst::loggable_error!(
-                    CAT,
-                    "Failed to query upstream duration"
-                ));
+                gst::error!(CAT, imp = self, "Failed to query upstream duration");
+                return Err(gst::FlowError::Error);
             }
         };
 
@@ -428,21 +424,23 @@ impl JsonGstParse {
                     buffers.push(buffer);
                 }
                 Err(flow) => {
-                    return Err(gst::loggable_error!(
+                    gst::debug!(
                         CAT,
+                        imp = self,
                         "Failed to pull buffer while scanning duration: {:?}",
                         flow
-                    ));
+                    );
+                    return Err(flow);
                 }
             }
 
             let mut reader = LineReader::new();
 
             for buf in buffers.iter().rev() {
-                let buf = buf
-                    .clone()
-                    .into_mapped_buffer_readable()
-                    .map_err(|_| gst::loggable_error!(CAT, "Failed to map buffer readable"))?;
+                let buf = buf.clone().into_mapped_buffer_readable().map_err(|_| {
+                    gst::error!(CAT, imp = self, "Failed to map buffer readable");
+                    gst::FlowError::Error
+                })?;
 
                 reader.push(buf);
             }
@@ -508,8 +506,19 @@ impl JsonGstParse {
             let duration = match self.scan_duration() {
                 Ok(Some(pts)) => pts,
                 Ok(None) => gst::ClockTime::ZERO,
-                Err(err) => {
-                    err.log();
+                Err(gst::FlowError::Flushing) => {
+                    gst::debug!(CAT, imp = self, "Failed to scan duration, reason: flushing");
+
+                    self.sinkpad.pause_task().unwrap();
+                    return;
+                }
+                Err(flow) => {
+                    gst::error!(
+                        CAT,
+                        imp = self,
+                        "Failed to scan duration, reason: {:?}",
+                        flow
+                    );
 
                     gst::element_imp_error!(
                         self,

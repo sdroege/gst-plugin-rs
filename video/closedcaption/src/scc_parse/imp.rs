@@ -509,26 +509,22 @@ impl SccParse {
         Ok(())
     }
 
-    fn scan_duration(&self) -> Result<Option<gst_video::ValidVideoTimeCode>, gst::LoggableError> {
+    fn scan_duration(&self) -> Result<Option<gst_video::ValidVideoTimeCode>, gst::FlowError> {
         gst::debug!(CAT, imp = self, "Scanning duration");
 
         /* First let's query the bytes duration upstream */
         let mut q = gst::query::Duration::new(gst::Format::Bytes);
 
         if !self.sinkpad.peer_query(&mut q) {
-            return Err(gst::loggable_error!(
-                CAT,
-                "Failed to query upstream duration"
-            ));
+            gst::error!(CAT, imp = self, "Failed to query upstream duration");
+            return Err(gst::FlowError::Error);
         }
 
         let size = match q.result() {
             gst::GenericFormattedValue::Bytes(Some(size)) => *size,
             _ => {
-                return Err(gst::loggable_error!(
-                    CAT,
-                    "Failed to query upstream duration"
-                ));
+                gst::error!(CAT, imp = self, "Failed to query upstream duration");
+                return Err(gst::FlowError::Error);
             }
         };
 
@@ -546,11 +542,13 @@ impl SccParse {
                     buffers.push(buffer);
                 }
                 Err(flow) => {
-                    return Err(gst::loggable_error!(
+                    gst::debug!(
                         CAT,
+                        imp = self,
                         "Failed to pull buffer while scanning duration: {:?}",
                         flow
-                    ));
+                    );
+                    return Err(flow);
                 }
             }
 
@@ -558,10 +556,10 @@ impl SccParse {
             let mut parser = SccParser::new_scan_captions();
 
             for buf in buffers.iter().rev() {
-                let buf = buf
-                    .clone()
-                    .into_mapped_buffer_readable()
-                    .map_err(|_| gst::loggable_error!(CAT, "Failed to map buffer readable"))?;
+                let buf = buf.clone().into_mapped_buffer_readable().map_err(|_| {
+                    gst::error!(CAT, imp = self, "Failed to map buffer readable");
+                    gst::FlowError::Error
+                })?;
 
                 reader.push(buf);
             }
@@ -697,8 +695,19 @@ impl SccParse {
             let duration = match self.scan_duration() {
                 Ok(Some(tc)) => tc.time_since_daily_jam(),
                 Ok(None) => gst::ClockTime::ZERO,
-                Err(err) => {
-                    err.log();
+                Err(gst::FlowError::Flushing) => {
+                    gst::debug!(CAT, imp = self, "Failed to scan duration, reason: flushing");
+
+                    let _ = self.sinkpad.pause_task();
+                    return;
+                }
+                Err(flow) => {
+                    gst::error!(
+                        CAT,
+                        imp = self,
+                        "Failed to scan duration, reason: {:?}",
+                        flow
+                    );
 
                     gst::element_imp_error!(
                         self,
