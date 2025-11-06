@@ -718,12 +718,12 @@ impl MccParse {
     fn loop_fn(&self) {
         let mut state = self.state.lock().unwrap();
         let State {
-            timecode_rate: ref tc_rate,
+            ref timecode_rate,
             ref mut pull,
             ..
         } = *state;
         let pull = pull.as_mut().unwrap();
-        let scan_tc_rate = tc_rate.is_none() && pull.duration.is_none();
+        let scan_tc_rate = timecode_rate.is_none() && pull.duration.is_none();
         let offset = pull.offset;
 
         pull.offset += 4096;
@@ -762,60 +762,54 @@ impl MccParse {
             }
         };
 
-        match self.handle_buffer(buffer, scan_tc_rate) {
-            Ok(_) => {
-                let tc_rate = self.state.lock().unwrap().timecode_rate;
-                if scan_tc_rate && tc_rate.is_some() {
-                    match self.scan_duration() {
-                        Ok(Some(tc)) => {
-                            let mut state = self.state.lock().unwrap();
-                            let pull = state.pull.as_mut().unwrap();
-                            pull.duration = Some(tc.time_since_daily_jam());
-                        }
-                        Ok(None) => {
-                            let mut state = self.state.lock().unwrap();
-                            let pull = state.pull.as_mut().unwrap();
-                            pull.duration = Some(gst::ClockTime::ZERO);
-                        }
-                        Err(err) => {
-                            err.log();
+        if let Err(flow) = self.handle_buffer(buffer, scan_tc_rate) {
+            match flow {
+                gst::FlowError::Flushing => {
+                    gst::debug!(CAT, imp = self, "Pausing after flow {:?}", flow);
+                }
+                gst::FlowError::Eos => {
+                    self.push_eos();
 
-                            gst::element_imp_error!(
-                                self,
-                                gst::StreamError::Decode,
-                                ["Failed to scan duration"]
-                            );
+                    gst::debug!(CAT, imp = self, "Pausing after flow {:?}", flow);
+                }
+                _ => {
+                    self.push_eos();
 
-                            let _ = self.sinkpad.pause_task();
-                        }
-                    }
+                    gst::error!(CAT, imp = self, "Pausing after flow {:?}", flow);
+
+                    gst::element_imp_error!(
+                        self,
+                        gst::StreamError::Failed,
+                        ["Streaming stopped, reason: {:?}", flow]
+                    );
                 }
             }
-            Err(flow) => {
-                match flow {
-                    gst::FlowError::Flushing => {
-                        gst::debug!(CAT, imp = self, "Pausing after flow {:?}", flow);
-                    }
-                    gst::FlowError::Eos => {
-                        self.push_eos();
 
-                        gst::debug!(CAT, imp = self, "Pausing after flow {:?}", flow);
-                    }
-                    _ => {
-                        self.push_eos();
+            let _ = self.sinkpad.pause_task();
+            return;
+        }
 
-                        gst::error!(CAT, imp = self, "Pausing after flow {:?}", flow);
+        if scan_tc_rate && self.state.lock().unwrap().timecode_rate.is_some() {
+            let duration = match self.scan_duration() {
+                Ok(Some(tc)) => tc.time_since_daily_jam(),
+                Ok(None) => gst::ClockTime::ZERO,
+                Err(err) => {
+                    err.log();
 
-                        gst::element_imp_error!(
-                            self,
-                            gst::StreamError::Failed,
-                            ["Streaming stopped, reason: {:?}", flow]
-                        );
-                    }
+                    gst::element_imp_error!(
+                        self,
+                        gst::StreamError::Decode,
+                        ["Failed to scan duration"]
+                    );
+
+                    let _ = self.sinkpad.pause_task();
+                    return;
                 }
+            };
 
-                let _ = self.sinkpad.pause_task();
-            }
+            let mut state = self.state.lock().unwrap();
+            let pull = state.pull.as_mut().unwrap();
+            pull.duration = Some(duration);
         }
     }
 

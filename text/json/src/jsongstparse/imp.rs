@@ -505,12 +505,9 @@ impl JsonGstParse {
         drop(state);
 
         if scan_duration {
-            match self.scan_duration() {
-                Ok(pts) => {
-                    let mut state = self.state.lock().unwrap();
-                    let pull = state.pull.as_mut().unwrap();
-                    pull.duration = pts;
-                }
+            let duration = match self.scan_duration() {
+                Ok(Some(pts)) => pts,
+                Ok(None) => gst::ClockTime::ZERO,
                 Err(err) => {
                     err.log();
 
@@ -521,8 +518,13 @@ impl JsonGstParse {
                     );
 
                     self.sinkpad.pause_task().unwrap();
+                    return;
                 }
-            }
+            };
+
+            let mut state = self.state.lock().unwrap();
+            let pull = state.pull.as_mut().unwrap();
+            pull.duration = Some(duration);
         }
 
         let buffer = match self.sinkpad.pull_range(offset, 4096) {
