@@ -250,7 +250,7 @@ impl ToBitStream for Dec3 {
             chan_loc: u16,
         }
 
-        let mut num_ind_sub = 0;
+        let mut num_ind_sub = 0u8;
         let mut ind_subs = Vec::new();
 
         // We assume the stream is well-formed and don't validate increasing
@@ -262,7 +262,7 @@ impl ToBitStream for Dec3 {
         {
             num_ind_sub += 1;
 
-            let mut num_dep_sub = 0;
+            let mut num_dep_sub = 0u8;
 
             let independent_stream = substream[0];
 
@@ -278,10 +278,14 @@ impl ToBitStream for Dec3 {
 
             ind_subs.push(IndSub {
                 header: independent_stream,
-                num_dep_sub,
+                // One less than the number of independent substreams, according to the spec
+                num_dep_sub: num_dep_sub.saturating_sub(1),
                 chan_loc,
             });
         }
+
+        // One less than the number of independent substreams, according to the spec
+        num_ind_sub = num_ind_sub.saturating_sub(1);
 
         let len = 4
             + 4
