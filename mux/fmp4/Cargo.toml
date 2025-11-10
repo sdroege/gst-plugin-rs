@@ -29,7 +29,7 @@ gst-check = { workspace = true, features = ["v1_18"] }
 gst-pbutils = { workspace = true, features = ["v1_20"] }
 m3u8-rs = "6.0"
 chrono = "0.4.35"
-dash-mpd = { version = "0.18", default-features = false }
+dash-mpd = { version = "0.19", default-features = false }
 quick-xml = { version = "0.38", features = ["serialize"] }
 serde = "1"
 
