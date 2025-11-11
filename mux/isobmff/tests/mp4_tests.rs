@@ -280,7 +280,12 @@ fn test_expected_uncompressed_output(location: &Path, width: u32, height: u32) {
         location,
         b"iso4".into(),
         0,
-        vec![b"isom".into(), b"mp41".into(), b"mp42".into()],
+        vec![
+            b"iso4".into(),
+            b"isom".into(),
+            b"mp41".into(),
+            b"mp42".into(),
+        ],
         ExpectedConfiguration {
             width,
             height,
@@ -675,7 +680,13 @@ fn test_audio_only_output(location: &Path) {
         location,
         b"iso4".into(),
         0,
-        vec![b"isom".into(), b"mp41".into(), b"mp42".into()],
+        vec![
+            b"iso4".into(),
+            b"isom".into(),
+            b"mp41".into(),
+            b"mp42".into(),
+            b"opus".into(),
+        ],
         ExpectedConfiguration {
             is_audio: true,
             ..Default::default()
@@ -721,7 +732,13 @@ fn test_taic_encode(video_enc: &str) {
         location,
         b"iso4".into(),
         0,
-        vec![b"isom".into(), b"mp41".into(), b"mp42".into()],
+        vec![
+            b"avc1".into(),
+            b"iso4".into(),
+            b"isom".into(),
+            b"mp41".into(),
+            b"mp42".into(),
+        ],
         ExpectedConfiguration {
             has_ctts: true,
             has_stss: true,
@@ -830,13 +847,21 @@ fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
         0,
         if enabled {
             vec![
+                b"avc1".into(),
+                b"iso4".into(),
                 b"isom".into(),
                 b"mp41".into(),
                 b"mp42".into(),
                 b"iso6".into(),
             ]
         } else {
-            vec![b"isom".into(), b"mp41".into(), b"mp42".into()]
+            vec![
+                b"avc1".into(),
+                b"iso4".into(),
+                b"isom".into(),
+                b"mp41".into(),
+                b"mp42".into(),
+            ]
         },
         ExpectedConfiguration {
             is_audio: false,
@@ -944,7 +969,13 @@ fn test_taic_encode_cannot_sync(video_enc: &str) {
         location,
         b"iso4".into(),
         0,
-        vec![b"isom".into(), b"mp41".into(), b"mp42".into()],
+        vec![
+            b"avc1".into(),
+            b"iso4".into(),
+            b"isom".into(),
+            b"mp41".into(),
+            b"mp42".into(),
+        ],
         ExpectedConfiguration {
             has_ctts: true,
             has_stss: true,
@@ -1000,7 +1031,12 @@ fn test_flac_mux_boxes() {
         location,
         b"iso4".into(),
         0,
-        vec![b"isom".into(), b"mp41".into(), b"mp42".into()],
+        vec![
+            b"iso4".into(),
+            b"isom".into(),
+            b"mp41".into(),
+            b"mp42".into(),
+        ],
         ExpectedConfiguration {
             is_audio: true,
             audio_channel_count: 1,
@@ -1055,7 +1091,13 @@ fn test_ac3_mux_boxes() {
         location,
         b"iso4".into(),
         0,
-        vec![b"isom".into(), b"mp41".into(), b"mp42".into()],
+        vec![
+            b"dby1".into(),
+            b"iso4".into(),
+            b"isom".into(),
+            b"mp41".into(),
+            b"mp42".into(),
+        ],
         ExpectedConfiguration {
             is_audio: true,
             audio_channel_count: 2,
@@ -1110,7 +1152,13 @@ fn test_eac3_mux_boxes() {
         location,
         b"iso4".into(),
         0,
-        vec![b"isom".into(), b"mp41".into(), b"mp42".into()],
+        vec![
+            b"dby1".into(),
+            b"iso4".into(),
+            b"isom".into(),
+            b"mp41".into(),
+            b"mp42".into(),
+        ],
         ExpectedConfiguration {
             is_audio: true,
             audio_channel_count: 2,

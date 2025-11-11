@@ -6,6 +6,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::collections::BTreeSet;
+
 use crate::isobmff::{
     boxes::{
         create_moov, write_box, write_full_box, FULL_BOX_FLAGS_NONE, FULL_BOX_VERSION_0,
@@ -17,7 +19,7 @@ use crate::isobmff::{
 use anyhow::{anyhow, Context, Error};
 use gst::prelude::*;
 
-fn cmaf_brands_from_caps(caps: &gst::CapsRef, compatible_brands: &mut Vec<&'static [u8; 4]>) {
+fn cmaf_brands_from_caps(caps: &gst::CapsRef, compatible_brands: &mut BTreeSet<[u8; 4]>) {
     let s = caps.structure(0).unwrap();
     match s.name().as_str() {
         "video/x-h264" => {
@@ -61,11 +63,11 @@ fn cmaf_brands_from_caps(caps: &gst::CapsRef, compatible_brands: &mut Vec<&'stat
                                 gst_video::VideoColorMatrix::Bt709
                                     | gst_video::VideoColorMatrix::Bt601
                             ) {
-                                compatible_brands.push(b"cfsd");
+                                compatible_brands.insert(*b"cfsd");
                             }
                         } else {
                             // Assume it's OK
-                            compatible_brands.push(b"cfsd");
+                            compatible_brands.insert(*b"cfsd");
                         }
                     } else if width <= 1920
                         && height <= 1080
@@ -85,11 +87,11 @@ fn cmaf_brands_from_caps(caps: &gst::CapsRef, compatible_brands: &mut Vec<&'stat
                                 colorimetry.matrix(),
                                 gst_video::VideoColorMatrix::Bt709
                             ) {
-                                compatible_brands.push(b"cfhd");
+                                compatible_brands.insert(*b"cfhd");
                             }
                         } else {
                             // Assume it's OK
-                            compatible_brands.push(b"cfhd");
+                            compatible_brands.insert(*b"cfhd");
                         }
                     } else if width <= 1920
                         && height <= 1080
@@ -109,28 +111,24 @@ fn cmaf_brands_from_caps(caps: &gst::CapsRef, compatible_brands: &mut Vec<&'stat
                                 colorimetry.matrix(),
                                 gst_video::VideoColorMatrix::Bt709
                             ) {
-                                compatible_brands.push(b"chdf");
+                                compatible_brands.insert(*b"chdf");
                             }
                         } else {
                             // Assume it's OK
-                            compatible_brands.push(b"chdf");
+                            compatible_brands.insert(*b"chdf");
                         }
                     }
                 }
             }
         }
         "audio/mpeg" => {
-            compatible_brands.push(b"caac");
+            compatible_brands.insert(*b"caac");
         }
         "audio/x-eac3" => {
-            compatible_brands.push(b"ceac");
-        }
-        "audio/x-opus" => {
-            compatible_brands.push(b"opus");
+            compatible_brands.insert(*b"ceac");
         }
         "video/x-av1" => {
-            compatible_brands.push(b"av01");
-            compatible_brands.push(b"cmf2");
+            compatible_brands.insert(*b"cmf2");
         }
         "video/x-h265" => {
             let width = s.get::<i32>("width").ok();
@@ -166,11 +164,11 @@ fn cmaf_brands_from_caps(caps: &gst::CapsRef, compatible_brands: &mut Vec<&'stat
                                 colorimetry.matrix(),
                                 gst_video::VideoColorMatrix::Bt709
                             ) {
-                                compatible_brands.push(b"chhd");
+                                compatible_brands.insert(*b"chhd");
                             }
                         } else {
                             // Assume it's OK
-                            compatible_brands.push(b"chhd");
+                            compatible_brands.insert(*b"chhd");
                         }
                     } else if width <= 3840
                         && height <= 2160
@@ -190,11 +188,11 @@ fn cmaf_brands_from_caps(caps: &gst::CapsRef, compatible_brands: &mut Vec<&'stat
                                 colorimetry.matrix(),
                                 gst_video::VideoColorMatrix::Bt709
                             ) {
-                                compatible_brands.push(b"cud8");
+                                compatible_brands.insert(*b"cud8");
                             }
                         } else {
                             // Assume it's OK
-                            compatible_brands.push(b"cud8");
+                            compatible_brands.insert(*b"cud8");
                         }
                     }
                 } else if profile == "main-10" && tier == "main-10" {
@@ -216,11 +214,11 @@ fn cmaf_brands_from_caps(caps: &gst::CapsRef, compatible_brands: &mut Vec<&'stat
                                 colorimetry.matrix(),
                                 gst_video::VideoColorMatrix::Bt709
                             ) {
-                                compatible_brands.push(b"chh1");
+                                compatible_brands.insert(*b"chh1");
                             }
                         } else {
                             // Assume it's OK
-                            compatible_brands.push(b"chh1");
+                            compatible_brands.insert(*b"chh1");
                         }
                     } else if width <= 3840
                         && height <= 2160
@@ -244,7 +242,7 @@ fn cmaf_brands_from_caps(caps: &gst::CapsRef, compatible_brands: &mut Vec<&'stat
                                 gst_video::VideoColorMatrix::Bt709
                                     | gst_video::VideoColorMatrix::Bt2020
                             ) {
-                                compatible_brands.push(b"cud1");
+                                compatible_brands.insert(*b"cud1");
                             } else if matches!(
                                 colorimetry.primaries(),
                                 gst_video::VideoColorPrimaries::Bt2020
@@ -255,7 +253,7 @@ fn cmaf_brands_from_caps(caps: &gst::CapsRef, compatible_brands: &mut Vec<&'stat
                                 colorimetry.matrix(),
                                 gst_video::VideoColorMatrix::Bt2020
                             ) {
-                                compatible_brands.push(b"chd1");
+                                compatible_brands.insert(*b"chd1");
                             } else if matches!(
                                 colorimetry.primaries(),
                                 gst_video::VideoColorPrimaries::Bt2020
@@ -266,11 +264,11 @@ fn cmaf_brands_from_caps(caps: &gst::CapsRef, compatible_brands: &mut Vec<&'stat
                                 colorimetry.matrix(),
                                 gst_video::VideoColorMatrix::Bt2020
                             ) {
-                                compatible_brands.push(b"clg1");
+                                compatible_brands.insert(*b"clg1");
                             }
                         } else {
                             // Assume it's OK
-                            compatible_brands.push(b"cud1");
+                            compatible_brands.insert(*b"cud1");
                         }
                     }
                 }
@@ -282,32 +280,73 @@ fn cmaf_brands_from_caps(caps: &gst::CapsRef, compatible_brands: &mut Vec<&'stat
 
 fn brands_from_variant_and_caps<'a>(
     variant: Variant,
-    mut caps: impl Iterator<Item = &'a gst::Caps>,
-) -> (&'static [u8; 4], Vec<&'static [u8; 4]>) {
+    caps: impl Iterator<Item = &'a gst::Caps> + Clone,
+) -> (u32, [u8; 4], Vec<[u8; 4]>) {
+    let mut major_brand = *b"iso6";
+    let mut minor_version = 0u32;
+    let mut compatible_brands = BTreeSet::new();
+
     match variant {
-        Variant::FragmentedISO | Variant::FragmentedONVIF => (b"iso6", vec![b"iso6"]),
+        Variant::FragmentedISO | Variant::FragmentedONVIF => {}
         Variant::DASH => {
+            major_brand = *b"msdh";
+
             // FIXME: `dsms` / `dash` brands, `msix`
-            (b"msdh", vec![b"dums", b"msdh", b"iso6"])
+            compatible_brands.insert(*b"dums");
+            compatible_brands.insert(*b"msdh");
+            compatible_brands.insert(*b"iso6");
         }
         Variant::CMAF => {
-            let mut compatible_brands = vec![b"iso6", b"cmfc"];
+            major_brand = *b"cmf2";
+            compatible_brands.insert(*b"iso6");
+            compatible_brands.insert(*b"cmfc");
 
+            let mut caps = caps.clone();
             cmaf_brands_from_caps(caps.next().unwrap(), &mut compatible_brands);
             assert_eq!(caps.next(), None);
-
-            (b"cmf2", compatible_brands)
         }
         Variant::ISO => todo!(),
         Variant::ONVIF => todo!(),
     }
+
+    for caps in caps {
+        let caps_structure = caps.structure(0).unwrap();
+        match caps_structure.name().as_str() {
+            "video/x-av1" => {
+                minor_version = 1;
+                compatible_brands.insert(*b"av01");
+            }
+            "video/x-h264" => {
+                compatible_brands.insert(*b"avc1");
+            }
+            "audio/x-ac3" | "audio/x-eac3" => {
+                compatible_brands.insert(*b"dby1");
+            }
+            "audio/x-opus" => {
+                compatible_brands.insert(*b"opus");
+            }
+            _ => {}
+        }
+    }
+    compatible_brands.insert(major_brand);
+
+    (
+        minor_version,
+        major_brand,
+        compatible_brands.into_iter().collect(),
+    )
 }
 
 pub(crate) fn create_fmp4_header(cfg: PresentationConfiguration) -> Result<gst::Buffer, Error> {
-    let (brand, compatible_brands) =
+    let (minor_version, major_brand, compatible_brands) =
         brands_from_variant_and_caps(cfg.variant, cfg.tracks.iter().map(|s| &s.caps));
 
-    create_moov(cfg, Some(brand), Some(compatible_brands))
+    create_moov(
+        cfg,
+        minor_version,
+        Some(major_brand),
+        Some(compatible_brands),
+    )
 }
 
 pub(crate) fn write_mvex(v: &mut Vec<u8>, cfg: &PresentationConfiguration) -> Result<(), Error> {
@@ -383,18 +422,18 @@ pub(crate) fn create_fmp4_fragment_header(
 
     // Don't write a `styp` if this is only a chunk unless it's the last.
     if !cfg.chunk || cfg.last_fragment {
-        let (brand, mut compatible_brands) =
+        let (minor_version, major_brand, mut compatible_brands) =
             brands_from_variant_and_caps(cfg.variant, cfg.streams.iter().map(|s| &s.caps));
 
         if cfg.last_fragment {
-            compatible_brands.push(b"lmsg");
+            compatible_brands.push(*b"lmsg");
         }
 
         write_box(&mut v, b"styp", |v| {
             // major brand
-            v.extend(brand);
+            v.extend(major_brand);
             // minor version
-            v.extend(0u32.to_be_bytes());
+            v.extend(minor_version.to_be_bytes());
             // compatible brands
             v.extend(compatible_brands.into_iter().flatten());
 

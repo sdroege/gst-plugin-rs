@@ -63,9 +63,9 @@ pub(crate) fn write_full_box<T, F: FnOnce(&mut Vec<u8>) -> Result<T, Error>>(
 
 /// Creates `ftyp` box
 pub(crate) fn create_ftyp(
-    major_brand: &[u8; 4],
+    major_brand: [u8; 4],
     minor_version: u32,
-    compatible_brands: Vec<&[u8; 4]>,
+    compatible_brands: Vec<[u8; 4]>,
 ) -> Result<gst::Buffer, Error> {
     let mut v = vec![];
     write_ftyp(&mut v, major_brand, minor_version, compatible_brands)?;
@@ -75,9 +75,9 @@ pub(crate) fn create_ftyp(
 
 pub(crate) fn write_ftyp(
     v: &mut Vec<u8>,
-    major_brand: &[u8; 4],
+    major_brand: [u8; 4],
     minor_version: u32,
-    compatible_brands: Vec<&[u8; 4]>,
+    compatible_brands: Vec<[u8; 4]>,
 ) -> Result<(), Error> {
     write_box(v, b"ftyp", |v| {
         // major brand
@@ -119,14 +119,15 @@ pub(crate) fn create_mdat_header_non_frag(size: Option<u64>) -> Result<gst::Buff
 /// Creates `ftype` (if fragmented) and `moov` box
 pub(crate) fn create_moov(
     cfg: PresentationConfiguration,
-    major_brand: Option<&[u8; 4]>,
-    compatible_brands: Option<Vec<&[u8; 4]>>,
+    minor_version: u32,
+    major_brand: Option<[u8; 4]>,
+    compatible_brands: Option<Vec<[u8; 4]>>,
 ) -> Result<gst::Buffer, Error> {
     let mut v = vec![];
 
     if cfg.variant.is_fragmented() {
         if let (Some(brand), Some(compatible_brands)) = (major_brand, compatible_brands) {
-            write_ftyp(&mut v, brand, 0u32, compatible_brands)?;
+            write_ftyp(&mut v, brand, minor_version, compatible_brands)?;
         }
     }
 

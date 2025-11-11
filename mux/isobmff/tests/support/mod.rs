@@ -52,7 +52,10 @@ pub fn check_ftyp_output(
     assert_eq!(ftyp.minor_version, expected_minor_version);
     assert_eq!(
         ftyp.compatible_brands.len(),
-        expected_compatible_brands.len()
+        expected_compatible_brands.len(),
+        "Got {:?}, expected {:?}",
+        ftyp.compatible_brands,
+        expected_compatible_brands
     );
     for fourcc in expected_compatible_brands {
         assert!(ftyp.compatible_brands.contains(fourcc));
@@ -444,7 +447,7 @@ fn check_eac3_sample_entry_sanity(
     dec3: &mp4_atom::Ec3SpecificBox,
     _expected_config: &ExpectedConfiguration,
 ) {
-    assert_eq!(dec3.data_rate, 3064);
+    assert_eq!(dec3.data_rate, 191);
     assert_eq!(dec3.substreams.len(), 1);
     assert_eq!(
         *(dec3.substreams.first().unwrap()),

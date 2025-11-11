@@ -4348,7 +4348,7 @@ fn test_fmux_boxes() {
         location,
         b"iso6".into(),
         0,
-        vec![b"iso6".into()],
+        vec![b"avc1".into(), b"iso6".into()],
         ExpectedConfiguration {
             has_stss: true,
             is_fragmented: true,
@@ -4400,7 +4400,12 @@ fn test_cmaf_fmux_boxes() {
         location,
         b"cmf2".into(),
         0,
-        vec![b"iso6".into(), b"cmfc".into()],
+        vec![
+            b"avc1".into(),
+            b"cmf2".into(),
+            b"iso6".into(),
+            b"cmfc".into(),
+        ],
         ExpectedConfiguration {
             has_stss: true,
             has_taic: false,
@@ -4453,7 +4458,12 @@ fn test_dash_fmux_boxes() {
         location,
         b"msdh".into(),
         0,
-        vec![b"iso6".into(), b"dums".into(), b"msdh".into()],
+        vec![
+            b"avc1".into(),
+            b"iso6".into(),
+            b"dums".into(),
+            b"msdh".into(),
+        ],
         ExpectedConfiguration {
             has_stss: true,
             is_fragmented: true,
@@ -4562,7 +4572,7 @@ fn test_ac3_fmux_boxes() {
         location,
         b"iso6".into(),
         0,
-        vec![b"iso6".into()],
+        vec![b"dby1".into(), b"iso6".into()],
         ExpectedConfiguration {
             is_audio: true,
             is_fragmented: true,
@@ -4618,7 +4628,7 @@ fn test_eac3_fmux_boxes() {
         location,
         b"iso6".into(),
         0,
-        vec![b"iso6".into()],
+        vec![b"dby1".into(), b"iso6".into()],
         ExpectedConfiguration {
             is_audio: true,
             is_fragmented: true,

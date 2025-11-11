@@ -6,7 +6,7 @@ use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
 use num_integer::Integer;
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::str::FromStr;
 use std::sync::Mutex;
@@ -2154,19 +2154,14 @@ impl AggregatorImpl for MP4Mux {
             // ... and then create the ftyp box plus mdat box header so we can start outputting
             // actual data
 
-            let mut major_brand = b"iso4";
+            let mut major_brand = *b"iso4";
             let mut minor_version = 0u32;
-            let mut compatible_brands: HashSet<[u8; 4]> = HashSet::new();
+            let mut compatible_brands: BTreeSet<[u8; 4]> = BTreeSet::new();
             let mut have_image_sequence = false; // we'll mark true if an image sequence
             let mut have_only_image_sequence = true; // we'll mark false if video found
-            let variant = self.obj().class().as_ref().variant;
             for stream in state.streams.iter().as_ref() {
                 let caps_structure = stream.caps.structure(0).unwrap();
-                if let (Variant::ISO, "video/x-av1") = (variant, caps_structure.name().as_str()) {
-                    minor_version = 1;
-                    compatible_brands.insert(*b"iso4");
-                    compatible_brands.insert(*b"av01");
-                }
+
                 if stream.image_sequence_mode() {
                     compatible_brands.insert(*b"iso8");
                     compatible_brands.insert(*b"unif");
@@ -2192,19 +2187,37 @@ impl AggregatorImpl for MP4Mux {
                         _ => {}
                     }
                 }
+
+                match caps_structure.name().as_str() {
+                    "video/x-av1" => {
+                        minor_version = 1;
+                        compatible_brands.insert(*b"av01");
+                    }
+                    "video/x-h264" => {
+                        compatible_brands.insert(*b"avc1");
+                    }
+                    "audio/x-ac3" | "audio/x-eac3" => {
+                        compatible_brands.insert(*b"dby1");
+                    }
+                    "audio/x-opus" => {
+                        compatible_brands.insert(*b"opus");
+                    }
+                    _ => {}
+                }
                 if settings.with_precision_timestamps {
                     compatible_brands.insert(*b"iso6"); // required for saiz/saio support
                 }
             }
             if have_image_sequence && have_only_image_sequence {
-                major_brand = b"msf1";
+                major_brand = *b"msf1";
             }
             let settings = self.settings.lock().unwrap();
             for brand in &settings.extra_brands {
                 compatible_brands.insert(*brand);
             }
-            // Convert HashSet to Vector
-            let compatible_brands_vec: Vec<&[u8; 4]> = compatible_brands.iter().collect();
+            compatible_brands.insert(major_brand);
+            // Convert BTreeSet to Vector
+            let compatible_brands_vec: Vec<[u8; 4]> = compatible_brands.into_iter().collect();
             let ftyp =
                 create_ftyp(major_brand, minor_version, compatible_brands_vec).map_err(|err| {
                     gst::error!(CAT, imp = self, "Failed to create ftyp box: {err}");
@@ -2297,6 +2310,7 @@ impl AggregatorImpl for MP4Mux {
                     duration: None,
                     write_edts: false,
                 },
+                0,
                 None,
                 None,
             )
