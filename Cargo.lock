@@ -3182,10 +3182,12 @@ version = "0.15.0-alpha.1"
 dependencies = [
  "anyhow",
  "futures",
+ "glib",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-app",
  "gstreamer-check",
+ "gstreamer-gl",
  "gstreamer-utils",
  "pretty_assertions",
  "serial_test",

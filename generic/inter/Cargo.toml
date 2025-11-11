@@ -16,7 +16,9 @@ gst-app.workspace = true
 
 [dev-dependencies]
 pretty_assertions = "1"
+glib.workspace = true
 gst-check.workspace = true
+gst-gl.workspace = true
 futures = "0.3"
 tokio = { version = "1", features = ["fs", "macros", "rt-multi-thread", "time"] }
 tokio-stream = "0.1.11"
@@ -55,3 +57,7 @@ path = "examples/plug-and-play.rs"
 [[example]]
 name = "inter-basic"
 path = "examples/basic.rs"
+
+[[example]]
+name = "inter-basic-gl"
+path = "examples/basic-gl.rs"
