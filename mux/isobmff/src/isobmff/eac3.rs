@@ -321,7 +321,16 @@ impl ToBitStream for Dec3 {
                 .context("fscod")?;
             w.write::<5, u8>(ind_sub.header.bsi.bsid).context("bsid")?;
             w.write::<1, u8>(0).context("reserved")?;
-            w.write::<1, u8>(0).context("asvc")?;
+
+            // We take asvc from bsmod (Section 4.4.2.2). Not sure if this is correct, as it is
+            // redundant to store info twice. My guess is that asvc is a quick way of telling the
+            // decoder device to ignore the audio track, whereas bsmod provides a more detailed
+            // explanation of the service type.
+            w.write::<1, u8>(u8::from(
+                (2..=6).contains(&ind_sub.header.bsi.bsmod)
+                    || (ind_sub.header.bsi.bsmod == 7 && ind_sub.header.bsi.acmod < 2),
+            ))
+            .context("asvc")?;
             w.write::<3, u8>(ind_sub.header.bsi.bsmod)
                 .context("bsmod")?;
             w.write::<3, u8>(ind_sub.header.bsi.acmod)
