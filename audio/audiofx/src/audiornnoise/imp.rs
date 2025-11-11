@@ -169,6 +169,10 @@ impl AudioRNNoise {
                 self.process(state, &settings, in_data, out_data)
             };
 
+            // Copy metadata from input buffer to output buffer
+            Self::copy_metadata(self, ibuffer.as_ref(), buffer)
+                .map_err(|_| gst::FlowError::Error)?;
+
             gst_audio::AudioLevelMeta::add(buffer, level, has_voice);
         }
 
