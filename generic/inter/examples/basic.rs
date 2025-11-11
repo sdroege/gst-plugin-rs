@@ -43,8 +43,12 @@ async fn main() -> Result<(), Error> {
             MessageView::Latency(..) => {
                 if let Some(o) = msg.src() {
                     if let Ok(pipeline) = toplevel(o).downcast::<gst::Pipeline>() {
-                        eprintln!("Recalculating latency {pipeline:?}");
-                        let _ = pipeline.recalculate_latency();
+                        pipeline
+                            .call_async_future(|pipeline: &gst::Pipeline| {
+                                eprintln!("Recalculating latency {pipeline:?}");
+                                let _ = pipeline.recalculate_latency();
+                            })
+                            .await;
                     }
                 }
             }
