@@ -1048,7 +1048,9 @@ fn default_configure_mitigation_mode(
             b if b < 1_000_000 => 360,
             b if b < 2_000_000 => 720,
             _ => video_info.height() as i32,
-        };
+        }
+        .min(video_info.height() as i32);
+
         let width = VideoEncoder::scale_height_round_2(video_info, height);
 
         s.set("height", height);
