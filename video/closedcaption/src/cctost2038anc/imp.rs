@@ -151,8 +151,17 @@ impl CcToSt2038Anc {
                 state.format = Some(format);
                 drop(state);
 
+                let src_caps = {
+                    let mut caps = self.srcpad.pad_template_caps();
+                    let caps_ref = caps.make_mut();
+                    if let Ok(framerate) = s.get::<gst::Fraction>("framerate") {
+                        caps_ref.set("framerate", framerate);
+                    }
+                    caps
+                };
+
                 return self.srcpad.push_event(
-                    gst::event::Caps::builder(&self.srcpad.pad_template_caps())
+                    gst::event::Caps::builder(&src_caps)
                         .seqnum(ev.seqnum())
                         .build(),
                 );

@@ -32,6 +32,7 @@ struct State {
     cea608_srcpad: Option<gst::Pad>,
     cea708_srcpad: Option<gst::Pad>,
     flow_combiner: gst_base::UniqueFlowCombiner,
+    framerate: Option<gst::Fraction>,
 }
 
 pub struct St2038AncToCc {
@@ -114,12 +115,19 @@ impl St2038AncToCc {
                         let _ = srcpad.set_active(true);
 
                         self.sinkpad.sticky_events_foreach(|event| {
-                            if event.type_() < gst::EventType::Caps
-                                || event.type_() > gst::EventType::Caps
-                            {
+                            if event.type_() != gst::EventType::Caps {
                                 let _ = srcpad.store_sticky_event(event);
-                            } else if event.type_() == gst::EventType::Caps {
-                                let event = gst::event::Caps::builder(templ.caps())
+                            } else {
+                                let src_caps = {
+                                    let mut caps = srcpad.pad_template_caps();
+                                    let caps_ref = caps.make_mut();
+                                    if let Some(framerate) = state.framerate {
+                                        caps_ref.set("framerate", framerate);
+                                    }
+                                    caps
+                                };
+
+                                let event = gst::event::Caps::builder(&src_caps)
                                     .seqnum(event.seqnum())
                                     .build();
                                 let _ = srcpad.store_sticky_event(&event);
@@ -213,7 +221,26 @@ impl St2038AncToCc {
 
         gst::log!(CAT, obj = pad, "Handling event {:?}", event);
         match event.view() {
-            EventView::Caps(..) => {
+            EventView::Caps(ev) => {
+                let mut state = self.state.borrow_mut();
+                let s = ev.caps().structure(0).unwrap();
+                state.framerate = s.get::<gst::Fraction>("framerate").ok();
+
+                for srcpad in [state.cea608_srcpad.as_ref(), state.cea708_srcpad.as_ref()]
+                    .iter()
+                    .flatten()
+                {
+                    let mut caps = srcpad.pad_template_caps();
+                    if let Some(framerate) = state.framerate {
+                        caps.make_mut().set("framerate", framerate);
+                    }
+
+                    let event = gst::event::Caps::builder(&caps)
+                        .seqnum(event.seqnum())
+                        .build();
+                    let _ = srcpad.store_sticky_event(&event);
+                }
+
                 // Drop caps events
                 return true;
             }
