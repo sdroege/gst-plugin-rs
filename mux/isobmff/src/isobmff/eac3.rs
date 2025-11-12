@@ -266,14 +266,34 @@ impl ToBitStream for Dec3 {
 
             let independent_stream = substream[0];
 
-            let mut chan_loc = 0;
+            let mut chan_loc = 0u16;
             for dependent_stream in substream.iter().skip(1) {
                 num_dep_sub += 1;
                 chan_loc |= dependent_stream
                     .bsi
                     .chanmap
-                    .map(|chanmap| (chanmap >> 5) & 0x1f)
-                    .unwrap_or(independent_stream.bsi.acmod as u16);
+                    .map(|chanmap| {
+                        let mut chan_loc = 0u16;
+                        for bit in 5..=14 {
+                            if (chanmap & (1 << bit)) != 0 {
+                                chan_loc |= match bit {
+                                    5 => 1 << 0,
+                                    6 => 1 << 1,
+                                    7 => 1 << 2,
+                                    8 => 1 << 3,
+                                    9 => 1 << 4,
+                                    10 => 1 << 5,
+                                    11 => 1 << 6,
+                                    12 => 1 << 7,
+                                    13 => 0, // not mapped anywhere
+                                    14 => 1 << 8,
+                                    _ => unreachable!(),
+                                }
+                            }
+                        }
+                        chan_loc
+                    })
+                    .unwrap_or(0);
             }
 
             ind_subs.push(IndSub {
