@@ -293,11 +293,18 @@ impl St2038AncDemux {
                     .unwrap();
             }
             EventView::Caps(ev) => {
-                // Don't forward the caps event directly but set the alignment.
                 let mut caps = ev.caps_owned();
+                let s = caps.structure(0).unwrap();
+                let framerate = s.get::<gst::Fraction>("framerate");
+
+                // Don't forward the caps event directly but set the
+                // alignment and frame rate.
                 {
                     let caps = caps.make_mut();
                     caps.set("alignment", "packet");
+                    if let Ok(framerate) = framerate {
+                        caps.set("framerate", framerate);
+                    }
                 }
 
                 let event = gst::event::Caps::builder(&caps)
