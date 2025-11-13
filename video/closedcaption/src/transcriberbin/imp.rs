@@ -3442,7 +3442,7 @@ impl ObjectImpl for TranscriberSinkPad {
                 glib::ParamSpecObject::builder::<gst::Element>("transcriber")
                     .nick("Transcriber")
                     .blurb("The transcriber element to use")
-                    .mutable_ready()
+                    .mutable_playing()
                     .build(),
                 glib::ParamSpecBoxed::builder::<gst::Structure>("synthesis-languages")
                     .nick("Synthesis languages")

@@ -10761,7 +10761,7 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "mutable": "ready",
+                        "mutable": "playing",
                         "readable": true,
                         "type": "GstElement",
                         "writable": true
