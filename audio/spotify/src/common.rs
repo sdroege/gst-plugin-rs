@@ -13,8 +13,7 @@ use gst::prelude::*;
 
 use futures::future::{AbortHandle, Aborted};
 use librespot_core::{
-    authentication::Credentials, cache::Cache, config::SessionConfig, session::Session,
-    spotify_id::SpotifyId,
+    authentication::Credentials, cache::Cache, config::SessionConfig, session::Session, SpotifyUri,
 };
 
 #[derive(Default, Debug, Clone)]
@@ -159,11 +158,11 @@ impl Settings {
         Ok(session)
     }
 
-    pub fn track_id(&self) -> anyhow::Result<SpotifyId> {
+    pub fn track_uri(&self) -> anyhow::Result<SpotifyUri> {
         if self.track.is_empty() {
             bail!("track is not set");
         }
-        let track = SpotifyId::from_uri(&self.track)?;
+        let track = SpotifyUri::from_uri(&self.track)?;
 
         Ok(track)
     }

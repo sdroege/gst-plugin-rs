@@ -16,6 +16,7 @@ use gst::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::{base_src::CreateSuccess, prelude::*};
 
+use librespot_core::SpotifyId;
 use librespot_metadata::lyrics;
 
 use crate::common::SetupThread;
@@ -317,16 +318,28 @@ impl SpotifyLyricsSrc {
             };
 
             let session = common.connect_session(src.clone(), &CAT).await?;
-            let track_id = common.track_id()?;
+            let track_id = SpotifyId::from_base62(&common.track_uri()?.to_id()?);
 
             (session, track_id)
         };
 
-        let reply = lyrics::Lyrics::get(&session, &track_id)
+        let track_id_unpacked = track_id?;
+        let reply = lyrics::Lyrics::get(&session, &track_id_unpacked)
             .await
-            .map_err(|e| anyhow::anyhow!("failed to get lyrics for track {} ({})", track_id, e))?;
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "failed to get lyrics for track {} ({})",
+                    track_id_unpacked,
+                    e
+                )
+            })?;
 
-        gst::debug!(CAT, imp = self, "got lyrics for track {}", track_id);
+        gst::debug!(
+            CAT,
+            imp = self,
+            "got lyrics for track {}",
+            track_id_unpacked
+        );
 
         match reply.lyrics.sync_type {
             lyrics::SyncType::Unsynced => {

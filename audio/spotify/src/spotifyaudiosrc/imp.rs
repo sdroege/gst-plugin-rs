@@ -390,7 +390,7 @@ impl SpotifyAudioSrc {
             };
 
             let session = common.connect_session(src.clone(), &CAT).await?;
-            let track = common.track_id()?;
+            let track = common.track_uri()?;
             gst::debug!(CAT, imp = self, "Requesting bitrate {:?}", bitrate);
 
             (session, track, bitrate)

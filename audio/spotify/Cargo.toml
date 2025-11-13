@@ -11,11 +11,11 @@ rust-version.workspace = true
 [dependencies]
 gst.workspace = true
 gst-base.workspace = true
-librespot-core = { version = "0.7", default-features = false, features = [
+librespot-core = { version = "0.8", default-features = false, features = [
     "rustls-tls-native-roots",
 ] }
-librespot-metadata = { version = "0.7", default-features = false }
-librespot-playback = { version = "0.7", default-features = false, features = [
+librespot-metadata = { version = "0.8", default-features = false }
+librespot-playback = { version = "0.8", default-features = false, features = [
     'passthrough-decoder',
 ] }
 tokio = { version = "1.0", features = ["rt-multi-thread"] }
