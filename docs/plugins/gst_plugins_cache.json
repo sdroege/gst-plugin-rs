@@ -10098,6 +10098,50 @@
                 },
                 "rank": "none"
             },
+            "st2038extractor": {
+                "author": "Sanchayan Maity <sanchayan@centricular.com>",
+                "description": "Extracts ST2038 stream in GstAncillaryMeta from video input stream",
+                "hierarchy": [
+                    "GstSt2038Extractor",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    },
+                    "st2038": {
+                        "caps": "meta/x-st-2038:\n      alignment: frame\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "properties": {
+                    "remove-ancillary-meta": {
+                        "blurb": "Remove ancillary meta from outgoing video buffers",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
             "transcriberbin": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Transcribes audio and adds it as closed captions",
