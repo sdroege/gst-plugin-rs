@@ -11,7 +11,7 @@ description = "GStreamer GIF plugin"
 [dependencies]
 gst.workspace = true
 gst-video.workspace = true
-gif = "0.13"
+gif = "0.14"
 atomic_refcell = "0.1"
 
 [dev-dependencies]
