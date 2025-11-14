@@ -40,6 +40,7 @@ mod st2038anc_utils;
 mod st2038ancdemux;
 mod st2038ancmux;
 mod st2038anctocc;
+mod st2038extractor;
 mod transcriberbin;
 mod translationbin;
 mod tttocea608;
@@ -73,6 +74,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     st2038ancdemux::register(plugin)?;
     st2038ancmux::register(plugin)?;
     st2038anctocc::register(plugin)?;
+    st2038extractor::register(plugin)?;
     cctost2038anc::register(plugin)?;
     cdpserviceinject::register(plugin)?;
     Ok(())

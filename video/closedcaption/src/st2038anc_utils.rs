@@ -140,3 +140,52 @@ pub(crate) fn convert_to_st2038_buffer(
 
     Ok(gst::Buffer::from_mut_slice(output))
 }
+
+pub(crate) fn to_st2038_with_10bit(
+    st2038_buffer: &mut Vec<u8>,
+    meta: &AncillaryMeta,
+) -> Result<(), anyhow::Error> {
+    if meta.data().len() > 255 {
+        anyhow::bail!(
+            "Payload needs to be less than 256 bytes, got {}",
+            meta.data().len()
+        );
+    }
+
+    use anyhow::Context;
+    use bitstream_io::{BigEndian, BitWrite, BitWriter};
+    use std::io::Cursor;
+
+    let st2038_buffer_len = st2038_buffer.len() as u64;
+    let mut cursor = Cursor::new(st2038_buffer);
+    cursor.set_position(st2038_buffer_len);
+
+    let mut w = BitWriter::endian(cursor, BigEndian);
+
+    w.write::<6, u8>(0b00_0000).context("zero bits")?;
+    w.write_bit(meta.c_not_y_channel())
+        .context("c_not_y_channel")?;
+    w.write::<11, u16>(meta.line()).context("line number")?;
+    w.write::<12, u16>(meta.offset())
+        .context("horizontal offset")?;
+
+    w.write::<10, u16>(meta.did()).context("DID")?;
+    w.write::<10, u16>(meta.sdid_block_number())
+        .context("SDID")?;
+    w.write::<10, u16>(meta.data_count())
+        .context("data count")?;
+
+    for &b in meta.data() {
+        w.write::<10, u16>(b).context("payload")?;
+    }
+
+    w.write::<10, u16>(meta.checksum()).context("checksum")?;
+
+    while !w.byte_aligned() {
+        w.write_bit(true).context("padding")?;
+    }
+
+    w.flush().context("flushing")?;
+
+    Ok(())
+}
