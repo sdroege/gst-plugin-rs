@@ -88,6 +88,11 @@ pub trait RtpBasePay2Ext: IsA<RtpBasePay2> + 'static {
             .queue_packet(packet_to_buffer_relation, packet)
     }
 
+    /// Returns the sequence number of the next packet.
+    fn next_seqnum(&self) -> u16 {
+        self.upcast_ref::<RtpBasePay2>().imp().next_seqnum()
+    }
+
     /// Finish currently pending packets and push them downstream in a single buffer list.
     fn finish_pending_packets(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
         self.upcast_ref::<RtpBasePay2>()

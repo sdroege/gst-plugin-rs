@@ -41,6 +41,7 @@ mod mp4a;
 mod mp4g;
 mod opus;
 mod pcmau;
+mod smpte291;
 mod vp8;
 mod vp9;
 
@@ -95,6 +96,9 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
     pcmau::depay::register(plugin)?;
     pcmau::pay::register(plugin)?;
+
+    smpte291::depay::register(plugin)?;
+    smpte291::pay::register(plugin)?;
 
     vp8::depay::register(plugin)?;
     vp8::pay::register(plugin)?;

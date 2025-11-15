@@ -12257,6 +12257,58 @@
                     }
                 }
             },
+            "rtpsmpte291depay": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Depayload an SMPTE ST291-1 ANC stream from RTP packets (RFC 8331)",
+                "hierarchy": [
+                    "GstRtpSmpte291Depay",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: application\n     clock-rate: 90000\n  encoding-name: smpte291\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "meta/x-st-2038:\n      alignment: packet\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtpsmpte291pay": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Payload an SMPTE ST291-1 ANC stream into RTP packets (RFC 8331)",
+                "hierarchy": [
+                    "GstRtpSmpte291Pay",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "meta/x-st-2038:\n      alignment: frame\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: application\n     clock-rate: 90000\n  encoding-name: smpte291\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
             "rtpvp8depay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Depayload VP8 from RTP packets",
