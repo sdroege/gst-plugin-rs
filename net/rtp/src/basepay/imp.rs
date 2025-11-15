@@ -286,6 +286,16 @@ impl RtpBasePay2 {
         }
     }
 
+    pub(super) fn next_seqnum(&self) -> u16 {
+        let state = self.state.borrow();
+        let Some(stream) = state.stream.as_ref() else {
+            return 0;
+        };
+        let mut seqnum = stream.last_seqnum;
+        seqnum += 1;
+        seqnum.0
+    }
+
     pub(super) fn queue_packet(
         &self,
         packet_to_buffer_relation: PacketToBufferRelation,
