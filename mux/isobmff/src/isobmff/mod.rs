@@ -44,7 +44,7 @@ glib::wrapper! {
 }
 
 glib::wrapper! {
-    pub(crate) struct MP4Mux(ObjectSubclass<crate::isobmff::mp4mux::imp::MP4Mux>) @extends gst_base::Aggregator, gst::Element, gst::Object;
+    pub(crate) struct MP4Mux(ObjectSubclass<crate::isobmff::mp4mux::imp::MP4Mux>) @extends gst_base::Aggregator, gst::Element, gst::Object, @implements gst::ChildProxy;
 }
 
 glib::wrapper! {
@@ -60,15 +60,15 @@ glib::wrapper! {
 }
 
 glib::wrapper! {
-    pub(crate) struct ISOMP4Mux(ObjectSubclass<crate::isobmff::mp4mux::imp::ISOMP4Mux>) @extends MP4Mux, gst_base::Aggregator, gst::Element, gst::Object;
+    pub(crate) struct ISOMP4Mux(ObjectSubclass<crate::isobmff::mp4mux::imp::ISOMP4Mux>) @extends MP4Mux, gst_base::Aggregator, gst::Element, gst::Object, @implements gst::ChildProxy;
 }
 
 glib::wrapper! {
-    pub(crate) struct ONVIFFMP4Mux(ObjectSubclass<crate::isobmff::fmp4mux::imp::ONVIFFMP4Mux>) @extends FMP4Mux, gst_base::Aggregator, gst::Element, gst::Object;
+    pub(crate) struct ONVIFFMP4Mux(ObjectSubclass<crate::isobmff::fmp4mux::imp::ONVIFFMP4Mux>) @extends FMP4Mux, gst_base::Aggregator, gst::Element, gst::Object, @implements gst::ChildProxy;
 }
 
 glib::wrapper! {
-    pub(crate) struct ONVIFMP4Mux(ObjectSubclass<crate::isobmff::mp4mux::imp::ONVIFMP4Mux>) @extends MP4Mux, gst_base::Aggregator, gst::Element, gst::Object;
+    pub(crate) struct ONVIFMP4Mux(ObjectSubclass<crate::isobmff::mp4mux::imp::ONVIFMP4Mux>) @extends MP4Mux, gst_base::Aggregator, gst::Element, gst::Object, @implements gst::ChildProxy;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

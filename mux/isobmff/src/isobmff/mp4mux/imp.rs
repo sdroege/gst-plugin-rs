@@ -1685,6 +1685,7 @@ impl ObjectSubclass for MP4Mux {
     type Type = crate::isobmff::MP4Mux;
     type ParentType = gst_base::Aggregator;
     type Class = Class;
+    type Interfaces = (gst::ChildProxy,);
 }
 
 impl ObjectImpl for MP4Mux {
@@ -1844,8 +1845,20 @@ impl ElementImpl for MP4Mux {
             );
             return None;
         }
+        let pad = self.parent_request_new_pad(templ, name, caps);
 
-        self.parent_request_new_pad(templ, name, caps)
+        if let Some(ref pad) = pad {
+            let element = self.obj();
+            element.child_added(pad, &pad.name());
+        }
+
+        pad
+    }
+
+    fn release_pad(&self, pad: &gst::Pad) {
+        let element = self.obj();
+        element.child_removed(pad, &pad.name());
+        self.parent_release_pad(pad);
     }
 }
 
@@ -2791,5 +2804,30 @@ impl AggregatorPadImpl for MP4MuxPad {
         drop(mux_state);
 
         self.parent_flush(aggregator)
+    }
+}
+
+impl ChildProxyImpl for MP4Mux {
+    fn children_count(&self) -> u32 {
+        let object = self.obj();
+        object.num_sink_pads() as u32
+    }
+
+    fn child_by_name(&self, name: &str) -> Option<glib::Object> {
+        let object = self.obj();
+        object
+            .sink_pads()
+            .into_iter()
+            .find(|p| p.name() == name)
+            .map(|p| p.upcast())
+    }
+
+    fn child_by_index(&self, index: u32) -> Option<glib::Object> {
+        let object = self.obj();
+        object
+            .pads()
+            .into_iter()
+            .nth(index as usize)
+            .map(|p| p.upcast())
     }
 }
