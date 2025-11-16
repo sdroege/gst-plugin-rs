@@ -3878,6 +3878,7 @@ impl ObjectSubclass for FMP4Mux {
     type Type = super::FMP4Mux;
     type ParentType = gst_base::Aggregator;
     type Class = Class;
+    type Interfaces = (gst::ChildProxy,);
 }
 
 static FMP4_SIGNAL_SEND_HEADERS: &str = "send-headers";
@@ -4291,7 +4292,20 @@ impl ElementImpl for FMP4Mux {
             return None;
         }
 
-        self.parent_request_new_pad(templ, name, caps)
+        let pad = self.parent_request_new_pad(templ, name, caps);
+
+        if let Some(ref pad) = pad {
+            let element = self.obj();
+            element.child_added(pad, &pad.name());
+        }
+
+        pad
+    }
+
+    fn release_pad(&self, pad: &gst::Pad) {
+        let element = self.obj();
+        element.child_removed(pad, &pad.name());
+        self.parent_release_pad(pad);
     }
 }
 
@@ -5388,5 +5402,30 @@ impl AggregatorPadImpl for FMP4MuxPad {
         drop(mux_state);
 
         self.parent_flush(aggregator)
+    }
+}
+
+impl ChildProxyImpl for FMP4Mux {
+    fn children_count(&self) -> u32 {
+        let object = self.obj();
+        object.num_sink_pads() as u32
+    }
+
+    fn child_by_name(&self, name: &str) -> Option<glib::Object> {
+        let object = self.obj();
+        object
+            .sink_pads()
+            .into_iter()
+            .find(|p| p.name() == name)
+            .map(|p| p.upcast())
+    }
+
+    fn child_by_index(&self, index: u32) -> Option<glib::Object> {
+        let object = self.obj();
+        object
+            .pads()
+            .into_iter()
+            .nth(index as usize)
+            .map(|p| p.upcast())
     }
 }
