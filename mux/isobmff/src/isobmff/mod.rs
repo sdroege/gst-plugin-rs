@@ -40,7 +40,7 @@ glib::wrapper! {
 }
 
 glib::wrapper! {
-    pub(crate) struct FMP4Mux(ObjectSubclass<crate::isobmff::fmp4mux::imp::FMP4Mux>) @extends gst_base::Aggregator, gst::Element, gst::Object;
+    pub(crate) struct FMP4Mux(ObjectSubclass<crate::isobmff::fmp4mux::imp::FMP4Mux>) @extends gst_base::Aggregator, gst::Element, gst::Object, @implements gst::ChildProxy;
 }
 
 glib::wrapper! {
@@ -48,15 +48,15 @@ glib::wrapper! {
 }
 
 glib::wrapper! {
-    pub(crate) struct CMAFMux(ObjectSubclass<crate::isobmff::fmp4mux::imp::CMAFMux>) @extends FMP4Mux, gst_base::Aggregator, gst::Element, gst::Object;
+    pub(crate) struct CMAFMux(ObjectSubclass<crate::isobmff::fmp4mux::imp::CMAFMux>) @extends FMP4Mux, gst_base::Aggregator, gst::Element, gst::Object, @implements gst::ChildProxy;
 }
 
 glib::wrapper! {
-    pub(crate) struct DASHMP4Mux(ObjectSubclass<crate::isobmff::fmp4mux::imp::DASHMP4Mux>) @extends FMP4Mux, gst_base::Aggregator, gst::Element, gst::Object;
+    pub(crate) struct DASHMP4Mux(ObjectSubclass<crate::isobmff::fmp4mux::imp::DASHMP4Mux>) @extends FMP4Mux, gst_base::Aggregator, gst::Element, gst::Object, @implements gst::ChildProxy;
 }
 
 glib::wrapper! {
-    pub(crate) struct ISOFMP4Mux(ObjectSubclass<crate::isobmff::fmp4mux::imp::ISOFMP4Mux>) @extends FMP4Mux, gst_base::Aggregator, gst::Element, gst::Object;
+    pub(crate) struct ISOFMP4Mux(ObjectSubclass<crate::isobmff::fmp4mux::imp::ISOFMP4Mux>) @extends FMP4Mux, gst_base::Aggregator, gst::Element, gst::Object, @implements gst::ChildProxy;
 }
 
 glib::wrapper! {
