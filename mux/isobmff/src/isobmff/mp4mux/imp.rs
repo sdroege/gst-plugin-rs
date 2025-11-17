@@ -1845,6 +1845,8 @@ impl ElementImpl for MP4Mux {
             );
             return None;
         }
+        drop(state);
+
         let pad = self.parent_request_new_pad(templ, name, caps);
 
         if let Some(ref pad) = pad {
