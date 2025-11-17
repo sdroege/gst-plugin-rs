@@ -10028,7 +10028,7 @@
                         "type": "GstSt2038AncMuxSinkPad"
                     },
                     "src": {
-                        "caps": "meta/x-st-2038:\n      alignment: { (string)packet, (string)line }\n",
+                        "caps": "meta/x-st-2038:\n      alignment: { (string)packet, (string)line, (string)frame }\n",
                         "direction": "src",
                         "presence": "always",
                         "type": "GstAggregatorPad"
