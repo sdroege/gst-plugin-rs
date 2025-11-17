@@ -3409,6 +3409,9 @@
                     "GInitiallyUnowned",
                     "GObject"
                 ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
                 "klass": "Codec/Muxer",
                 "long-name": "CMAFMux",
                 "pad-templates": {
@@ -3446,6 +3449,9 @@
                     "GInitiallyUnowned",
                     "GObject"
                 ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
                 "klass": "Codec/Muxer",
                 "long-name": "DASHMP4Mux",
                 "pad-templates": {
@@ -3474,6 +3480,9 @@
                     "GstObject",
                     "GInitiallyUnowned",
                     "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
                 ],
                 "klass": "Codec/Muxer",
                 "long-name": "ISOFMP4Mux",
@@ -3518,6 +3527,9 @@
                     "GInitiallyUnowned",
                     "GObject"
                 ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
                 "klass": "Codec/Muxer",
                 "long-name": "ONVIFFMP4Mux",
                 "pad-templates": {
@@ -3547,6 +3559,9 @@
                     "GstObject",
                     "GInitiallyUnowned",
                     "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
                 ],
                 "kind": "object",
                 "properties": {
@@ -5402,6 +5417,9 @@
                     "GInitiallyUnowned",
                     "GObject"
                 ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
                 "klass": "Codec/Muxer",
                 "pad-templates": {
                     "sink_%%u": {
@@ -5429,6 +5447,9 @@
                     "GstObject",
                     "GInitiallyUnowned",
                     "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
                 ],
                 "klass": "Codec/Muxer",
                 "pad-templates": {
@@ -5458,6 +5479,9 @@
                     "GstObject",
                     "GInitiallyUnowned",
                     "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
                 ],
                 "kind": "object",
                 "properties": {
