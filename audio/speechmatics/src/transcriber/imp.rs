@@ -573,6 +573,8 @@ impl TranscriberSrcPad {
                         ));
                     }
 
+                    self.state.lock().unwrap().out_segment.set_position(pts_end);
+
                     Ok(())
                 }
                 TranscriberOutput::Position(position) => {
@@ -589,6 +591,12 @@ impl TranscriberSrcPad {
                                     ["failed to push gap"]
                                 ));
                             }
+
+                            self.state
+                                .lock()
+                                .unwrap()
+                                .out_segment
+                                .set_position(position);
                         }
                     }
 
