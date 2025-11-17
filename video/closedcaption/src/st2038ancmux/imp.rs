@@ -45,6 +45,7 @@ enum Alignment {
     #[default]
     Packet,
     Line,
+    Frame,
 }
 
 #[derive(Default)]
@@ -65,6 +66,136 @@ pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
         Some("ST2038 Anc Mux Element"),
     )
 });
+
+impl St2038AncMux {
+    // Collect all anc buffers for this frame and output them as a single buffer list,
+    // sorted by line. Multiple anc in a single line are merged into a single buffer
+    // or buffer list.
+    fn merge_lines(
+        &self,
+        lines: BTreeMap<u16, BTreeMap<u16, (u16, super::St2038AncMuxSinkPad, gst::Buffer)>>,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let state = self.state.lock().unwrap();
+
+        let alignment = state.alignment;
+
+        let src_segment = self
+            .obj()
+            .src_pad()
+            .segment()
+            .downcast::<gst::ClockTime>()
+            .expect("Non-TIME segment");
+        let start_running_time =
+            if src_segment.position().is_none() || src_segment.position() < src_segment.start() {
+                src_segment.start().unwrap()
+            } else {
+                src_segment.position().unwrap()
+            };
+
+        // Only if downstream framerate provided, otherwise we output as we go
+        let duration = if let Some(framerate) = state.downstream_framerate {
+            gst::ClockTime::SECOND
+                .nseconds()
+                .mul_div_round(framerate.denom() as u64, framerate.numer() as u64)
+                .unwrap()
+                .nseconds()
+        } else {
+            gst::ClockTime::ZERO
+        };
+
+        drop(state);
+
+        if alignment == Alignment::Frame {
+            let mut new_buffer = gst::Buffer::new();
+
+            for (_, line) in lines {
+                for (horizontal_offset, (_, _pad, buffer)) in line {
+                    gst::trace!(CAT, imp = self, "Horizontal offset {horizontal_offset}");
+
+                    let new_buffer_ref = new_buffer.get_mut().unwrap();
+                    let _ = buffer.copy_into(new_buffer_ref, gst::BUFFER_COPY_METADATA, ..);
+
+                    new_buffer.append(buffer);
+                }
+            }
+
+            if duration > gst::ClockTime::ZERO {
+                let buffer_ref = new_buffer.make_mut();
+                buffer_ref.set_pts(start_running_time);
+                buffer_ref.set_duration(duration);
+            }
+
+            self.finish_buffer(new_buffer)
+        } else {
+            let mut buffers = gst::BufferList::new();
+            let buffers_ref = buffers.get_mut().unwrap();
+
+            for (line_idx, line) in lines {
+                // If there are multiple buffers for a line then merge them into a single buffer
+                // unless packet alignment is selected
+                if line.len() == 1 || alignment == Alignment::Packet {
+                    for (horizontal_offset, (_, _pad, buffer)) in line {
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "Outputting ST2038 packet at {line_idx}x{horizontal_offset}"
+                        );
+                        buffers_ref.add(buffer);
+                    }
+                } else {
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "Outputting multiple ST2038 packets at line {line_idx}"
+                    );
+                    let mut new_buffer = gst::Buffer::new();
+                    for (horizontal_offset, (_, _pad, buffer)) in line {
+                        gst::trace!(CAT, imp = self, "Horizontal offset {horizontal_offset}");
+                        // Copy over metadata of the first buffer for this line
+                        if new_buffer.size() == 0 {
+                            let new_buffer_ref = new_buffer.get_mut().unwrap();
+                            let _ = buffer.copy_into(new_buffer_ref, gst::BUFFER_COPY_METADATA, ..);
+                        }
+                        new_buffer.append(buffer);
+                    }
+                    buffers_ref.add(new_buffer);
+                }
+            }
+
+            gst::trace!(CAT, imp = self, "Outputting {} buffers", buffers_ref.len());
+
+            // Unset marker flag on all buffers, and set PTS/duration if there is a downstream
+            // framerate. Otherwise we leave them as-is.
+            if duration > gst::ClockTime::ZERO {
+                buffers_ref.foreach_mut(|mut buffer, _idx| {
+                    let buffer_ref = buffer.make_mut();
+                    buffer_ref.set_pts(start_running_time);
+                    buffer_ref.set_duration(duration);
+                    buffer_ref.unset_flags(gst::BufferFlags::MARKER);
+
+                    ControlFlow::Continue(Some(buffer))
+                });
+            } else {
+                buffers_ref.foreach_mut(|mut buffer, _idx| {
+                    if buffer.flags().contains(gst::BufferFlags::MARKER) {
+                        let buffer_ref = buffer.make_mut();
+                        buffer_ref.unset_flags(gst::BufferFlags::MARKER);
+                    }
+
+                    ControlFlow::Continue(Some(buffer))
+                });
+            }
+
+            // Set marker flag on last buffer
+            {
+                let last = buffers_ref.get_mut(buffers_ref.len() - 1).unwrap();
+                last.set_flags(gst::BufferFlags::MARKER);
+            }
+
+            self.finish_buffer_list(buffers)
+        }
+    }
+}
 
 impl AggregatorImpl for St2038AncMux {
     fn aggregate(&self, timeout: bool) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -94,7 +225,6 @@ impl AggregatorImpl for St2038AncMux {
             gst::ClockTime::ZERO
         };
         let end_running_time = start_running_time + duration;
-        let alignment = state.alignment;
         drop(state);
 
         gst::trace!(
@@ -317,76 +447,8 @@ impl AggregatorImpl for St2038AncMux {
             }
         }
 
-        // Collect all anc buffers for this frame and output them as a single buffer list,
-        // sorted by line. Multiple anc in a single line are merged into a single buffer.
         let ret = if !lines.is_empty() {
-            let mut buffers = gst::BufferList::new();
-
-            let buffers_ref = buffers.get_mut().unwrap();
-
-            for (line_idx, line) in lines {
-                // If there are multiple buffers for a line then merge them into a single buffer
-                // unless packet alignment is selected
-                if line.len() == 1 || alignment == Alignment::Packet {
-                    for (horizontal_offset, (_, _pad, buffer)) in line {
-                        gst::trace!(
-                            CAT,
-                            imp = self,
-                            "Outputting ST2038 packet at {line_idx}x{horizontal_offset}"
-                        );
-                        buffers_ref.add(buffer);
-                    }
-                } else {
-                    gst::trace!(
-                        CAT,
-                        imp = self,
-                        "Outputting multiple ST2038 packets at line {line_idx}"
-                    );
-                    let mut new_buffer = gst::Buffer::new();
-                    for (horizontal_offset, (_, _pad, buffer)) in line {
-                        gst::trace!(CAT, imp = self, "Horizontal offset {horizontal_offset}");
-                        // Copy over metadata of the first buffer for this line
-                        if new_buffer.size() == 0 {
-                            let new_buffer_ref = new_buffer.get_mut().unwrap();
-                            let _ = buffer.copy_into(new_buffer_ref, gst::BUFFER_COPY_METADATA, ..);
-                        }
-                        new_buffer.append(buffer);
-                    }
-                    buffers_ref.add(new_buffer);
-                }
-            }
-
-            gst::trace!(CAT, imp = self, "Outputting {} buffers", buffers_ref.len());
-
-            // Unset marker flag on all buffers, and set PTS/duration if there is a downstream
-            // framerate. Otherwise we leave them as-is.
-            if duration > gst::ClockTime::ZERO {
-                buffers_ref.foreach_mut(|mut buffer, _idx| {
-                    let buffer_ref = buffer.make_mut();
-                    buffer_ref.set_pts(start_running_time);
-                    buffer_ref.set_duration(duration);
-                    buffer_ref.unset_flags(gst::BufferFlags::MARKER);
-
-                    ControlFlow::Continue(Some(buffer))
-                });
-            } else {
-                buffers_ref.foreach_mut(|mut buffer, _idx| {
-                    if buffer.flags().contains(gst::BufferFlags::MARKER) {
-                        let buffer_ref = buffer.make_mut();
-                        buffer_ref.unset_flags(gst::BufferFlags::MARKER);
-                    }
-
-                    ControlFlow::Continue(Some(buffer))
-                });
-            }
-
-            // Set marker flag on last buffer
-            {
-                let last = buffers_ref.get_mut(buffers_ref.len() - 1).unwrap();
-                last.set_flags(gst::BufferFlags::MARKER);
-            }
-
-            self.finish_buffer_list(buffers)
+            self.merge_lines(lines)
         } else {
             let mut duration = duration;
 
@@ -502,6 +564,7 @@ impl AggregatorImpl for St2038AncMux {
         let alignment = match s.get::<&str>("alignment").ok() {
             Some("packet") => Alignment::Packet,
             Some("line") => Alignment::Line,
+            Some("frame") => Alignment::Frame,
             _ => {
                 let peer_caps = peer_caps.make_mut();
                 peer_caps.set("alignment", "packet");
@@ -532,6 +595,15 @@ impl AggregatorImpl for St2038AncMux {
             gst::debug!(CAT, imp = self, "Downstream requested no framerate");
             state.downstream_framerate = None;
             drop(state);
+
+            if alignment == Alignment::Frame {
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Downstream requested frame alignment without a framerate"
+                );
+                return false;
+            }
 
             // Assume 25fps as a worst case
             self.obj().set_latency(40.mseconds(), None);
@@ -607,7 +679,7 @@ impl ElementImpl for St2038AncMux {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let caps = gst::Caps::builder("meta/x-st-2038")
-                .field("alignment", gst::List::new(["packet", "line"]))
+                .field("alignment", gst::List::new(["packet", "line", "frame"]))
                 .build();
             let src_pad_template = gst::PadTemplate::builder(
                 "src",
