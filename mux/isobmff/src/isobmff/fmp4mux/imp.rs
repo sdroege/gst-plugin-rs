@@ -4513,6 +4513,7 @@ impl ElementImpl for FMP4Mux {
             );
             return None;
         }
+        drop(state);
 
         let pad = self.parent_request_new_pad(templ, name, caps);
 
