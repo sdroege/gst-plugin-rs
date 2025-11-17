@@ -5167,6 +5167,9 @@
                     "GInitiallyUnowned",
                     "GObject"
                 ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
                 "klass": "Codec/Muxer",
                 "pad-templates": {
                     "sink": {
@@ -5195,6 +5198,9 @@
                     "GInitiallyUnowned",
                     "GObject"
                 ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
                 "klass": "Codec/Muxer",
                 "pad-templates": {
                     "sink": {
@@ -5222,6 +5228,9 @@
                     "GstObject",
                     "GInitiallyUnowned",
                     "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
                 ],
                 "klass": "Codec/Muxer",
                 "pad-templates": {
@@ -5265,6 +5274,9 @@
                     "GInitiallyUnowned",
                     "GObject"
                 ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
                 "klass": "Codec/Muxer",
                 "pad-templates": {
                     "sink_%%u": {
@@ -5292,6 +5304,9 @@
                     "GstObject",
                     "GInitiallyUnowned",
                     "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
                 ],
                 "klass": "Codec/Muxer",
                 "pad-templates": {
@@ -5321,6 +5336,9 @@
                     "GInitiallyUnowned",
                     "GObject"
                 ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
                 "klass": "Codec/Muxer",
                 "pad-templates": {
                     "sink_%%u": {
@@ -5349,6 +5367,9 @@
                     "GstObject",
                     "GInitiallyUnowned",
                     "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
                 ],
                 "kind": "object",
                 "properties": {
@@ -5667,6 +5688,9 @@
                     "GstObject",
                     "GInitiallyUnowned",
                     "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
                 ],
                 "kind": "object",
                 "properties": {
