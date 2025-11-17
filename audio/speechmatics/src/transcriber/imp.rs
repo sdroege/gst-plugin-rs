@@ -87,6 +87,12 @@ struct Transcript {
 
 #[derive(serde::Deserialize, Debug)]
 #[allow(dead_code)]
+struct SpeakersResult {
+    speakers: Vec<LabeledSpeaker>,
+}
+
+#[derive(serde::Deserialize, Debug)]
+#[allow(dead_code)]
 struct TranslationResult {
     start_time: f32,
     end_time: f32,
@@ -124,6 +130,12 @@ struct Vocable {
     sounds_like: Vec<String>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct LabeledSpeaker {
+    label: String,
+    speaker_identifiers: Vec<String>,
+}
+
 #[derive(serde::Serialize, Debug)]
 #[serde(rename_all = "lowercase")]
 enum Diarization {
@@ -144,6 +156,7 @@ impl From<SpeechmaticsTranscriberDiarization> for Diarization {
 #[derive(serde::Serialize, Debug)]
 struct SpeakerDiarizationConfig {
     max_speakers: u32,
+    speakers: Vec<LabeledSpeaker>,
 }
 
 #[derive(serde::Serialize, Debug)]
@@ -182,6 +195,13 @@ struct EndOfStream {
     last_seq_no: u64,
 }
 
+#[derive(serde::Serialize, Debug)]
+struct GetSpeakers {
+    message: String,
+    #[serde(rename = "final")]
+    final_: bool,
+}
+
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "speechmaticstranscribe",
@@ -208,6 +228,7 @@ const DEFAULT_DIARIZATION: SpeechmaticsTranscriberDiarization =
     SpeechmaticsTranscriberDiarization::None;
 const DEFAULT_MAX_SPEAKERS: u32 = 50;
 const DEFAULT_REMOVE_DISFLUENCIES: bool = false;
+const DEFAULT_GET_SPEAKERS_INTERVAL: u32 = 0;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -223,6 +244,7 @@ struct Settings {
     max_speakers: u32,
     mask_profanities: bool,
     remove_disfluencies: bool,
+    get_speakers_interval: u32,
 }
 
 impl Default for Settings {
@@ -240,6 +262,7 @@ impl Default for Settings {
             max_speakers: DEFAULT_MAX_SPEAKERS,
             mask_profanities: DEFAULT_MASK_PROFANITIES,
             remove_disfluencies: DEFAULT_REMOVE_DISFLUENCIES,
+            get_speakers_interval: DEFAULT_GET_SPEAKERS_INTERVAL,
         }
     }
 }
@@ -284,6 +307,9 @@ struct State {
     srcpads: BTreeSet<super::TranscriberSrcPad>,
     observed_max_delay: gst::ClockTime,
     upstream_is_live: Option<bool>,
+    labeled_speakers: Vec<LabeledSpeaker>,
+    n_non_empty_transcripts: u32,
+    send_get_speakers: bool,
 }
 
 impl State {}
@@ -303,6 +329,9 @@ impl Default for State {
             srcpads: BTreeSet::new(),
             observed_max_delay: gst::ClockTime::ZERO,
             upstream_is_live: None,
+            labeled_speakers: vec![],
+            n_non_empty_transcripts: 0,
+            send_get_speakers: false,
         }
     }
 }
@@ -948,6 +977,27 @@ impl Transcriber {
         let mut n_chunks = 0;
 
         if let Some(ws_sink) = self.ws_sink.borrow_mut().as_mut() {
+            let send_get_speakers = {
+                let mut state = self.state.lock().unwrap();
+
+                let do_send = state.send_get_speakers;
+                state.send_get_speakers = false;
+                do_send
+            };
+
+            if send_get_speakers {
+                let message = serde_json::to_string(&GetSpeakers {
+                    message: "GetSpeakers".to_string(),
+                    final_: false,
+                })
+                .unwrap();
+
+                ws_sink.send(Message::text(message)).await.map_err(|err| {
+                    gst::error!(CAT, imp = self, "Failed sending GetSpeakers: {}", err);
+                    gst::FlowError::Error
+                })?;
+            }
+
             if let Some(buffer) = buffer {
                 let data = buffer.map_readable().unwrap();
                 for chunk in data.chunks(8192) {
@@ -1090,12 +1140,18 @@ impl Transcriber {
 
                 let now = self.obj().current_running_time();
 
-                let (transcriber_language_code, join_punctuation, mask_profanities) = {
+                let (
+                    transcriber_language_code,
+                    join_punctuation,
+                    mask_profanities,
+                    get_speakers_interval,
+                ) = {
                     let settings = self.settings.lock().unwrap();
                     (
                         settings.language_code.clone(),
                         settings.join_punctuation,
                         settings.mask_profanities,
+                        settings.get_speakers_interval,
                     )
                 };
 
@@ -1152,6 +1208,22 @@ impl Transcriber {
 
                         gst::log!(CAT, imp = self, "Parsed transcript {:?}", transcript);
 
+                        if get_speakers_interval != 0
+                            && transcript
+                                .results
+                                .iter()
+                                .next()
+                                .map(|r| r.alternatives.iter().next())
+                                .is_some()
+                        {
+                            let mut state = self.state.lock().unwrap();
+
+                            state.n_non_empty_transcripts += 1;
+                            if state.n_non_empty_transcripts % get_speakers_interval == 0 {
+                                state.send_get_speakers = true;
+                            }
+                        }
+
                         for item in transcript.results.iter_mut() {
                             if mask_profanities {
                                 for alternative in item.alternatives.iter_mut() {
@@ -1204,6 +1276,39 @@ impl Transcriber {
                         for srcpad in &self.state.lock().unwrap().srcpads {
                             srcpad.imp().enqueue_eos();
                         }
+                    }
+                    "SpeakersResult" => {
+                        let speakers_result: SpeakersResult = serde_json::from_value(json)
+                            .map_err(|err| {
+                                gst::error_msg!(
+                                    gst::StreamError::Failed,
+                                    ["Unexpected message: {} ({})", text, err]
+                                )
+                            })?;
+
+                        let mut labeled_speakers = vec![];
+                        for speaker in &speakers_result.speakers {
+                            let mut s = gst::Structure::new_empty("speechmatics/labeled-speaker");
+                            s.set("label", speaker.label.clone());
+                            s.set(
+                                "speaker_identifiers",
+                                gst::Array::new(
+                                    speaker
+                                        .speaker_identifiers
+                                        .iter()
+                                        .map(|word| word.to_send_value()),
+                                ),
+                            );
+                            labeled_speakers.push(s.to_send_value());
+                        }
+
+                        let s = gst::Structure::builder("speechmatics/speaker-labels")
+                            .field("speakers", gst::Array::new(labeled_speakers))
+                            .build();
+
+                        let _ = self.obj().post_message(
+                            gst::message::Element::builder(s).src(&*self.obj()).build(),
+                        );
                     }
                     _ => (),
                 }
@@ -1370,6 +1475,7 @@ impl Transcriber {
                 diarization: settings.diarization.into(),
                 speaker_diarization_config: SpeakerDiarizationConfig {
                     max_speakers: settings.max_speakers,
+                    speakers: state.labeled_speakers.clone(),
                 },
                 transcript_filtering_config: TranscriptFilteringConfig {
                     remove_disfluencies: settings.remove_disfluencies,
@@ -1389,6 +1495,22 @@ impl Transcriber {
             .block_on(ws_sink.send(Message::text(message)))
             .map_err(|err| {
                 gst::error!(CAT, imp = self, "Failed to send StartRecognition: {err}");
+                gst::error_msg!(
+                    gst::CoreError::Failed,
+                    ["Failed to send StartRecognition: {err}"]
+                )
+            })?;
+
+        let message = serde_json::to_string(&GetSpeakers {
+            message: "GetSpeakers".to_string(),
+            final_: true,
+        })
+        .unwrap();
+
+        RUNTIME
+            .block_on(ws_sink.send(Message::text(message)))
+            .map_err(|err| {
+                gst::error!(CAT, imp = self, "Failed to send GetSpeakers: {err}");
                 gst::error_msg!(
                     gst::CoreError::Failed,
                     ["Failed to send StartRecognition: {err}"]
@@ -1738,6 +1860,26 @@ impl ObjectImpl for Transcriber {
                     .default_value(DEFAULT_REMOVE_DISFLUENCIES)
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecUInt::builder("get-speakers-interval")
+                    .nick("Get Speakers Interval")
+                    .blurb("Interval between GetSpeakers calls, in number of non-empty transcripts. 0 = disabled")
+                    .default_value(DEFAULT_GET_SPEAKERS_INTERVAL)
+                    .build(),
+                gst::ParamSpecArray::builder("labeled-speakers")
+                    .nick("Labeled speakers")
+                    .blurb("Known array of labeled speakers. Each structure should a hold a \
+                        label field with a string value, and a speaker_identifiers field with \
+                        an array of strings as value.\
+                        See https://docs.speechmatics.com/speech-to-text/realtime/speaker-identification \
+                        for more information.")
+                    .element_spec(
+                        &glib::ParamSpecBoxed::builder::<gst::Structure>("labeled-speaker")
+                            .nick("Labeled Speaker")
+                            .blurb("A labeled speaker")
+                            .build(),
+                    )
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -1876,6 +2018,55 @@ impl ObjectImpl for Transcriber {
                 let mut settings = self.settings.lock().unwrap();
                 settings.remove_disfluencies = value.get().expect("type checked upstream");
             }
+            "get-speakers-interval" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.get_speakers_interval = value.get().expect("type checked upstream");
+            }
+            "labeled-speakers" => {
+                let mut state = self.state.lock().unwrap();
+                state.labeled_speakers = vec![];
+                let speakers: gst::Array = value.get().expect("type checked upstream");
+                for speaker in speakers.as_slice() {
+                    let Some(s) = speaker
+                        .get::<Option<gst::Structure>>()
+                        .expect("type checked upstream")
+                    else {
+                        continue;
+                    };
+
+                    let Ok(label) = s.get::<String>("label") else {
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "skipping labeled speaker: {s}, expected label field",
+                        );
+                        continue;
+                    };
+
+                    let speaker_identifiers: Vec<String> =
+                        match s.get::<gst::Array>("speaker_identifiers") {
+                            Ok(speaker_identifiers) => speaker_identifiers
+                                .as_slice()
+                                .iter()
+                                .filter_map(|s| s.get::<Option<String>>().unwrap_or(None))
+                                .collect(),
+                            Err(_) => vec![],
+                        };
+
+                    if !speaker_identifiers.is_empty() {
+                        state.labeled_speakers.push(LabeledSpeaker {
+                            label,
+                            speaker_identifiers,
+                        });
+                    } else {
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "skipping labeled speaker: {s}, expected non-empty speaker_identifiers value",
+                        );
+                    }
+                }
+            }
             _ => unimplemented!(),
         }
     }
@@ -1944,6 +2135,31 @@ impl ObjectImpl for Transcriber {
             "max-observed-delay" => {
                 let state = self.state.lock().unwrap();
                 (state.observed_max_delay.mseconds() as u32).to_value()
+            }
+            "get-speakers-interval" => self
+                .settings
+                .lock()
+                .unwrap()
+                .get_speakers_interval
+                .to_value(),
+            "labeled-speakers" => {
+                let state = self.state.lock().unwrap();
+                let mut labeled_speakers = vec![];
+                for speaker in &state.labeled_speakers {
+                    let mut s = gst::Structure::new_empty("speechmatics/labeled-speaker");
+                    s.set("label", speaker.label.clone());
+                    s.set(
+                        "speaker_identifiers",
+                        gst::Array::new(
+                            speaker
+                                .speaker_identifiers
+                                .iter()
+                                .map(|word| word.to_send_value()),
+                        ),
+                    );
+                    labeled_speakers.push(s.to_send_value());
+                }
+                gst::Array::new(labeled_speakers).to_value()
             }
             _ => unimplemented!(),
         }
