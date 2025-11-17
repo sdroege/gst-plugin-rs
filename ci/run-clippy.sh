@@ -12,6 +12,7 @@ CARGO_FLAGS="--color=always -j${FDO_CI_CONCURRENT:-$cpus}"
 no_default_excludes="\
     --exclude gst-plugin-burn \
     --exclude gst-plugin-compress \
+    --exclude gst-plugin-dsc \
     --exclude gst-plugin-webrtc \
     --exclude gst-plugin-reqwest \
     --exclude gst-plugin-icecast \

@@ -182,6 +182,10 @@ plugins = {
     'extra-deps': {'dav1d': ['>=1.3']},
     'features': ['gst/v1_18', 'gst-base/v1_18', 'gst-video/v1_18'],
   },
+  'dsc': {
+    'library': 'libgstdsc',
+    'gst-version': '>=1.29',
+  },
   'elevenlabs': {'library': 'libgstelevenlabs'},
   'ffv1': {'library': 'libgstffv1'},
   'flavors': {'library': 'libgstrsflv'},

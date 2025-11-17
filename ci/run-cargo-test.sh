@@ -19,6 +19,7 @@ mkdir -p "$new_report_dir"
 no_default_excludes="\
     --exclude gst-plugin-burn \
     --exclude gst-plugin-compress \
+    --exclude gst-plugin-dsc \
     --exclude gst-plugin-webrtc \
     --exclude gst-plugin-reqwest \
     --exclude gst-plugin-icecast \

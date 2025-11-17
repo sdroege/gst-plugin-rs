@@ -1,0 +1,61 @@
+[package]
+name = "gst-plugin-dsc"
+version.workspace = true
+authors = ["Diego Nieto <dnieto@fluendo.com>"]
+repository.workspace = true
+license = "MPL-2.0"
+description = "GStreamer Digital Signed Content plugin"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow = "1"
+glib.workspace = true
+gst = { workspace = true, features = ["v1_30"] }
+gst-base = { workspace = true, features = ["v1_30"] }
+gst-video = { workspace = true, features = ["v1_30"] }
+
+hex = "0.4"
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "charset", "http2", "system-proxy", "rustls-no-provider"] }
+rsa = { version = "0.9", features = ["pem"] }
+rustls.workspace = true
+rustls-pemfile = "2"
+sha1 = { version = "0.10", features = ["oid"] }
+sha2 = { version = "0.10", features = ["oid"] }
+smallvec = "1.13"
+url = "2"
+x509-parser = { version = "0.16", features = ["verify"] }
+
+[dev-dependencies]
+gst-check = { workspace = true, features = ["v1_20"] }
+rcgen = "0.14"
+
+[lib]
+name = "gstdsc"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper.workspace = true
+
+[features]
+static = []
+capi = []
+doc = ["gst/v1_20"]
+default = ["rustls-aws-lc-rs"]
+rustls-ring = ["rustls/ring"]
+rustls-aws-lc-rs = ["rustls/aws-lc-rs"]
+
+[package.metadata.capi]
+min_version = "0.9.21"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+import_library = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gstreamer-video-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

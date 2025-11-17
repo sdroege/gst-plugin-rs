@@ -4038,6 +4038,228 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "dsc": {
+        "description": "GStreamer Digital Signed Content plugin",
+        "elements": {
+            "dscsigner": {
+                "author": "Diego Nieto <dnieto@fluendo.com>",
+                "description": "Signs video buffers using H.274 DSC SEI metadata",
+                "hierarchy": [
+                    "GstDscSigner",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-h265:\n      alignment: au\n  stream-format: { (string)byte-stream, (string)hvc1, (string)hev1 }\nvideo/x-h266:\n      alignment: au\n  stream-format: { (string)byte-stream, (string)vvc1, (string)vvi1 }\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-h265:\n      alignment: au\n  stream-format: { (string)byte-stream, (string)hvc1, (string)hev1 }\nvideo/x-h266:\n      alignment: au\n  stream-format: { (string)byte-stream, (string)vvc1, (string)vvi1 }\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "content-uuid": {
+                        "blurb": "Content UUID as hex string (32 characters)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "hash-method": {
+                        "blurb": "Hash algorithm to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "sha256 (2)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstDscHashMethod",
+                        "writable": true
+                    },
+                    "private-key-path": {
+                        "blurb": "Path to PEM-encoded private key",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "public-key-uri": {
+                        "blurb": "URI of the public key for signature verification",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "substream-length": {
+                        "blurb": "Number of buffers per substream (GOP length)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5",
+                        "max": "-1",
+                        "min": "1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
+            "dscverifier": {
+                "author": "Diego Nieto <dnieto@fluendo.com>",
+                "description": "Verifies video buffer signatures using metadata-provided keys",
+                "hierarchy": [
+                    "GstDscVerifier",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-h265:\n      alignment: au\n  stream-format: { (string)byte-stream, (string)hvc1, (string)hev1 }\nvideo/x-h266:\n      alignment: au\n  stream-format: { (string)byte-stream, (string)vvc1, (string)vvi1 }\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-h265:\n      alignment: au\n  stream-format: { (string)byte-stream, (string)hvc1, (string)hev1 }\nvideo/x-h266:\n      alignment: au\n  stream-format: { (string)byte-stream, (string)vvc1, (string)vvi1 }\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "buffer": {
+                        "blurb": "Whether to buffer the full GOP before outputting after verification (default: true)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "fail-on-verification-error": {
+                        "blurb": "Whether to fail the pipeline when signature verification fails (default: false)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "key-store-path": {
+                        "blurb": "Fallback directory used to resolve the certificate file name when the key source URI from the stream cannot be fetched directly",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "max-buffering-time": {
+                        "blurb": "Maximum media duration of buffers held before forwarding (0 = unlimited). When exceeded, buffered data is forwarded unverified and the current substream is reported as failed",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5000000000",
+                        "max": "18446744073709551614",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "trust-store-path": {
+                        "blurb": "Directory path where trusted CA certificates are stored (trustStoreDir)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstdsc",
+        "license": "MPL-2.0",
+        "other-types": {
+            "GstDscHashMethod": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "SHA-1",
+                        "name": "sha1",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "SHA-224",
+                        "name": "sha224",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "SHA-256",
+                        "name": "sha256",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "SHA-384",
+                        "name": "sha384",
+                        "value": "3"
+                    },
+                    {
+                        "desc": "SHA-512",
+                        "name": "sha512",
+                        "value": "4"
+                    }
+                ]
+            }
+        },
+        "package": "gst-plugin-dsc",
+        "source": "gst-plugin-dsc",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "elevenlabs": {
         "description": "GStreamer ElevenLabs plugin",
         "elements": {
