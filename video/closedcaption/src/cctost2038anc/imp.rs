@@ -151,12 +151,27 @@ impl CcToSt2038Anc {
                 state.format = Some(format);
                 drop(state);
 
+                let templ_caps = self.srcpad.pad_template_caps();
+                let mut peer_caps = self.srcpad.peer_query_caps(Some(&templ_caps));
+                gst::debug!(CAT, obj = pad, "Downstream caps {peer_caps:?}");
+
+                let alignment = if peer_caps.is_empty() {
+                    "frame"
+                } else {
+                    peer_caps.fixate();
+                    peer_caps
+                        .structure(0)
+                        .and_then(|s| s.get::<&str>("alignment").ok())
+                        .unwrap_or("frame")
+                };
+
                 let src_caps = {
                     let mut caps = self.srcpad.pad_template_caps();
                     let caps_ref = caps.make_mut();
                     if let Ok(framerate) = s.get::<gst::Fraction>("framerate") {
                         caps_ref.set("framerate", framerate);
                     }
+                    caps_ref.set("alignment", alignment);
                     caps
                 };
 
@@ -310,11 +325,14 @@ impl ElementImpl for CcToSt2038Anc {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
+            let caps_aligned = gst::Caps::builder("meta/x-st-2038")
+                .field("alignment", gst::List::new(["frame", "line", "packet"]))
+                .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
                 gst::PadPresence::Sometimes,
-                &gst::Caps::builder("meta/x-st-2038").build(),
+                &caps_aligned,
             )
             .unwrap();
 
