@@ -1211,9 +1211,8 @@ impl Transcriber {
                         if get_speakers_interval != 0
                             && transcript
                                 .results
-                                .iter()
-                                .next()
-                                .map(|r| r.alternatives.iter().next())
+                                .first()
+                                .map(|r| r.alternatives.first())
                                 .is_some()
                         {
                             let mut state = self.state.lock().unwrap();
@@ -1368,7 +1367,7 @@ impl Transcriber {
     }
 
     fn ensure_connection(&self) -> Result<(), gst::ErrorMessage> {
-        let mut state = self.state.lock().unwrap();
+        let state = self.state.lock().unwrap();
 
         if state.connected {
             return Ok(());
@@ -1381,215 +1380,272 @@ impl Transcriber {
         let s = in_caps.structure(0).unwrap();
         let sample_rate: i32 = s.get::<i32>("rate").unwrap();
 
-        let settings = self.settings.lock().unwrap();
+        let (connect_request, messages) = {
+            let settings = self.settings.lock().unwrap();
 
-        gst::info!(CAT, imp = self, "Connecting ..");
+            if settings.latency_ms + settings.lateness_ms < 700 {
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "latency + lateness must be above 700 milliseconds",
+                );
+                return Err(gst::error_msg!(
+                    gst::LibraryError::Settings,
+                    ["latency + lateness must be above 700 milliseconds",]
+                ));
+            }
 
-        let url = match &settings.url {
-            Some(url) => url.to_string(),
-            None => "ws://0.0.0.0:9000".to_string(),
-        };
+            let url = match &settings.url {
+                Some(url) => url.to_string(),
+                None => "ws://0.0.0.0:9000".to_string(),
+            };
 
-        let uri = Url::parse(&url).map_err(|e| {
-            gst::error_msg!(
-                gst::CoreError::Failed,
-                ["Failed to parse provided url: {}", e]
-            )
-        })?;
-        let Some(api_key) = settings.api_key.clone() else {
-            return Err(gst::error_msg!(
-                gst::CoreError::Failed,
-                ["An API key is required"]
-            ));
-        };
-        let authority = uri.authority();
-        let host = authority.splitn(2, '@').last().unwrap_or("");
+            let uri = Url::parse(&url).map_err(|e| {
+                gst::error_msg!(
+                    gst::CoreError::Failed,
+                    ["Failed to parse provided url: {}", e]
+                )
+            })?;
 
-        let request = Request::builder()
-            .method("GET")
-            .uri(&url)
-            .header("Host", host)
-            .header("Upgrade", "websocket")
-            .header("Connection", "keep-alive, upgrade")
-            .header(
-                "Sec-Websocket-Key",
-                async_tungstenite::tungstenite::handshake::client::generate_key(),
-            )
-            .header("Sec-Websocket-Version", "13")
-            .header("Authorization", format!("Bearer {}", &api_key))
-            .body(())
-            .unwrap();
+            let Some(api_key) = settings.api_key.clone() else {
+                return Err(gst::error_msg!(
+                    gst::CoreError::Failed,
+                    ["An API key is required"]
+                ));
+            };
+            let authority = uri.authority();
+            let host = authority.splitn(2, '@').last().unwrap_or("");
 
-        let (ws, _) = RUNTIME.block_on(connect_async(request)).map_err(|err| {
-            gst::error!(CAT, imp = self, "Failed to connect: {}", err);
-            gst::error_msg!(gst::CoreError::Failed, ["Failed to connect: {}", err])
-        })?;
+            let connect_request = Request::builder()
+                .method("GET")
+                .uri(&url)
+                .header("Host", host)
+                .header("Upgrade", "websocket")
+                .header("Connection", "keep-alive, upgrade")
+                .header(
+                    "Sec-Websocket-Key",
+                    async_tungstenite::tungstenite::handshake::client::generate_key(),
+                )
+                .header("Sec-Websocket-Version", "13")
+                .header("Authorization", format!("Bearer {}", &api_key))
+                .body(())
+                .unwrap();
 
-        let (mut ws_sink, mut ws_stream) = ws.split();
-
-        if settings.latency_ms + settings.lateness_ms < 700 {
-            gst::error!(
+            let mut messages = vec![];
+            let translation_languages = state
+                .srcpads
+                .iter()
+                .flat_map(|pad| pad.imp().settings.lock().unwrap().language_code.clone())
+                .collect();
+            gst::info!(
                 CAT,
-                imp = self,
-                "latency + lateness must be above 700 milliseconds",
+                "Translation languages: {:?} ({})",
+                translation_languages,
+                state.srcpads.len()
             );
-            return Err(gst::error_msg!(
-                gst::LibraryError::Settings,
-                ["latency + lateness must be above 700 milliseconds",]
-            ));
-        }
 
-        let translation_languages = state
-            .srcpads
-            .iter()
-            .flat_map(|pad| pad.imp().settings.lock().unwrap().language_code.clone())
-            .collect();
-        gst::info!(
-            CAT,
-            "Translation languages: {:?} ({})",
-            translation_languages,
-            state.srcpads.len()
-        );
+            let max_delay = if settings.max_delay_ms == 0 {
+                ((settings.latency_ms + settings.lateness_ms) as f32) / 1000.
+            } else {
+                settings.max_delay_ms as f32 / 1000.
+            };
 
-        let max_delay = if settings.max_delay_ms == 0 {
-            ((settings.latency_ms + settings.lateness_ms) as f32) / 1000.
-        } else {
-            settings.max_delay_ms as f32 / 1000.
+            let start_message = StartRecognition {
+                message: "StartRecognition".to_string(),
+                audio_format: AudioType {
+                    type_: "raw".to_string(),
+                    encoding: "pcm_s16le".to_string(),
+                    sample_rate: sample_rate as u32,
+                },
+                transcription_config: TranscriptionConfig {
+                    language: settings
+                        .language_code
+                        .clone()
+                        .unwrap_or_else(|| "en".to_string()),
+                    enable_partials: false,
+                    max_delay,
+                    additional_vocab: state.additional_vocabulary.clone(),
+                    diarization: settings.diarization.into(),
+                    speaker_diarization_config: SpeakerDiarizationConfig {
+                        max_speakers: settings.max_speakers,
+                        speakers: state.labeled_speakers.clone(),
+                    },
+                    transcript_filtering_config: TranscriptFilteringConfig {
+                        remove_disfluencies: settings.remove_disfluencies,
+                    },
+                },
+                translation_config: TranslationConfig {
+                    target_languages: translation_languages,
+                    enable_partials: false,
+                },
+            };
+
+            messages.push(serde_json::to_string(&start_message).unwrap());
+            messages.push(
+                serde_json::to_string(&GetSpeakers {
+                    message: "GetSpeakers".to_string(),
+                    final_: true,
+                })
+                .unwrap(),
+            );
+
+            (connect_request, messages)
         };
 
-        let start_message = StartRecognition {
-            message: "StartRecognition".to_string(),
-            audio_format: AudioType {
-                type_: "raw".to_string(),
-                encoding: "pcm_s16le".to_string(),
-                sample_rate: sample_rate as u32,
-            },
-            transcription_config: TranscriptionConfig {
-                language: settings
-                    .language_code
-                    .clone()
-                    .unwrap_or_else(|| "en".to_string()),
-                enable_partials: false,
-                max_delay,
-                additional_vocab: state.additional_vocabulary.clone(),
-                diarization: settings.diarization.into(),
-                speaker_diarization_config: SpeakerDiarizationConfig {
-                    max_speakers: settings.max_speakers,
-                    speakers: state.labeled_speakers.clone(),
-                },
-                transcript_filtering_config: TranscriptFilteringConfig {
-                    remove_disfluencies: settings.remove_disfluencies,
-                },
-            },
-            translation_config: TranslationConfig {
-                target_languages: translation_languages,
-                enable_partials: false,
-            },
-        };
+        let this_weak = self.downgrade();
 
-        let message = serde_json::to_string(&start_message).unwrap();
+        drop(state);
 
-        gst::debug!(CAT, imp = self, "Sending start message: {}", message);
-
-        RUNTIME
-            .block_on(ws_sink.send(Message::text(message)))
-            .map_err(|err| {
-                gst::error!(CAT, imp = self, "Failed to send StartRecognition: {err}");
-                gst::error_msg!(
-                    gst::CoreError::Failed,
-                    ["Failed to send StartRecognition: {err}"]
-                )
+        let future = async move {
+            let (ws, _) = connect_async(connect_request).await.map_err(|err| {
+                gst::error!(CAT, imp = self, "Failed to connect: {}", err);
+                gst::error_msg!(gst::CoreError::Failed, ["Failed to connect: {}", err])
             })?;
 
-        let message = serde_json::to_string(&GetSpeakers {
-            message: "GetSpeakers".to_string(),
-            final_: true,
-        })
-        .unwrap();
+            let (mut ws_sink, mut ws_stream) = ws.split();
 
-        RUNTIME
-            .block_on(ws_sink.send(Message::text(message)))
-            .map_err(|err| {
-                gst::error!(CAT, imp = self, "Failed to send GetSpeakers: {err}");
-                gst::error_msg!(
-                    gst::CoreError::Failed,
-                    ["Failed to send StartRecognition: {err}"]
-                )
-            })?;
-
-        loop {
-            let res = RUNTIME
-                .block_on(ws_stream.next())
-                .ok_or_else(|| {
-                    gst::error!(CAT, imp = self, "Connection closed unexpectedly");
-                    gst::error_msg!(gst::CoreError::Failed, ["Connection closed unexpectedly"])
-                })?
-                .map_err(|err| {
-                    gst::error!(
-                        CAT,
-                        imp = self,
-                        "Failed to receive RecognitionStarted: {err}"
-                    );
+            for message in messages {
+                ws_sink.send(Message::text(message)).await.map_err(|err| {
+                    gst::error!(CAT, imp = self, "Failed to send GetSpeakers: {err}");
                     gst::error_msg!(
                         gst::CoreError::Failed,
-                        ["Failed to receive RecognitionStarted: {err}"]
+                        ["Failed to send initial message: {err}"]
                     )
                 })?;
+            }
 
-            let text = match res {
-                Message::Text(text) => Ok(text),
-                _ => {
-                    gst::error!(CAT, imp = self, "Invalid message type: {}", res);
-                    Err(gst::error_msg!(
-                        gst::CoreError::Failed,
-                        ["Invalid message type: {}", res]
-                    ))
-                }
-            }?;
+            loop {
+                let res = ws_stream
+                    .next()
+                    .await
+                    .ok_or_else(|| {
+                        gst::error!(CAT, imp = self, "Connection closed unexpectedly");
+                        gst::error_msg!(gst::CoreError::Failed, ["Connection closed unexpectedly"])
+                    })?
+                    .map_err(|err| {
+                        gst::error!(
+                            CAT,
+                            imp = self,
+                            "Failed to receive RecognitionStarted: {err}"
+                        );
+                        gst::error_msg!(
+                            gst::CoreError::Failed,
+                            ["Failed to receive RecognitionStarted: {err}"]
+                        )
+                    })?;
 
-            let mut json: serde_json::Value = serde_json::from_str(&text).unwrap();
-            let message_type = {
-                let obj = json.as_object_mut().expect("object");
-                let message_type = obj.remove("message").expect("`message` field");
-                if let serde_json::Value::String(s) = message_type {
-                    s
-                } else {
-                    panic!("message field not a string");
+                let text = match res {
+                    Message::Text(text) => Ok(text),
+                    _ => {
+                        gst::error!(CAT, imp = self, "Invalid message type: {}", res);
+                        Err(gst::error_msg!(
+                            gst::CoreError::Failed,
+                            ["Invalid message type: {}", res]
+                        ))
+                    }
+                }?;
+
+                let mut json: serde_json::Value = serde_json::from_str(&text).unwrap();
+                let message_type = {
+                    let obj = json.as_object_mut().expect("object");
+                    let message_type = obj.remove("message").expect("`message` field");
+                    if let serde_json::Value::String(s) = message_type {
+                        s
+                    } else {
+                        panic!("message field not a string");
+                    }
+                };
+
+                match message_type.as_str() {
+                    "RecognitionStarted" => {
+                        gst::info!(CAT, imp = self, "Recognition started!");
+                        break;
+                    }
+                    "Error" => {
+                        let error: TranscriptError =
+                            serde_json::from_value(json).map_err(|err| {
+                                gst::error_msg!(
+                                    gst::StreamError::Failed,
+                                    ["Unexpected message: {} ({})", text, err]
+                                )
+                            })?;
+                        gst::error!(
+                            CAT,
+                            imp = self,
+                            "StartRecognition failed: {} ({})",
+                            error.type_,
+                            error.reason
+                        );
+                        Err(gst::error_msg!(
+                            gst::CoreError::Failed,
+                            ("StartRecognition failed"),
+                            ["{} ({})", error.type_, error.reason]
+                        ))
+                    }
+                    _ => {
+                        continue;
+                    }
+                }?;
+            }
+
+            *self.ws_sink.borrow_mut() = Some(Box::pin(ws_sink));
+
+            let this_weak_2 = this_weak.clone();
+            let future = async move {
+                while let Some(this) = this_weak_2.upgrade() {
+                    let Some(msg) = ws_stream.next().await else {
+                        break;
+                    };
+
+                    let msg = match msg {
+                        Ok(msg) => msg,
+                        Err(err) => {
+                            gst::error!(CAT, imp = this, "Failed to receive data: {}", err);
+                            gst::element_imp_error!(
+                                this,
+                                gst::StreamError::Failed,
+                                ["Streaming failed: {}", err]
+                            );
+                            break;
+                        }
+                    };
+
+                    if let Err(err) = this.dispatch_message(msg) {
+                        gst::error!(CAT, imp = this, "Failed to dispatch message: {}", err);
+                        gst::element_imp_error!(
+                            this,
+                            gst::StreamError::Failed,
+                            ["Failed to dispatch message: {}", err]
+                        );
+                        break;
+                    }
                 }
             };
 
-            match message_type.as_str() {
-                "RecognitionStarted" => {
-                    gst::info!(CAT, imp = self, "Recognition started!");
-                    break;
-                }
-                "Error" => {
-                    let error: TranscriptError = serde_json::from_value(json).map_err(|err| {
-                        gst::error_msg!(
-                            gst::StreamError::Failed,
-                            ["Unexpected message: {} ({})", text, err]
-                        )
-                    })?;
-                    gst::error!(
-                        CAT,
-                        imp = self,
-                        "StartRecognition failed: {} ({})",
-                        error.type_,
-                        error.reason
-                    );
-                    Err(gst::error_msg!(
-                        gst::CoreError::Failed,
-                        ("StartRecognition failed"),
-                        ["{} ({})", error.type_, error.reason]
-                    ))
-                }
-                _ => {
-                    continue;
-                }
-            }?;
-        }
+            let (future, abort_handle) = abortable(future);
 
-        *self.ws_sink.borrow_mut() = Some(Box::pin(ws_sink));
+            if let Some(this) = this_weak.upgrade() {
+                this.state.lock().unwrap().recv_abort_handle = Some(abort_handle);
+
+                RUNTIME.spawn(future);
+            }
+
+            Ok(())
+        };
+
+        let (future, abort_handle) = abortable(future);
+
+        self.state.lock().unwrap().send_abort_handle = Some(abort_handle);
+
+        match RUNTIME.block_on(future) {
+            Ok(ret) => ret,
+            Err(_) => {
+                gst::debug!(CAT, imp = self, "connection aborted");
+                return Ok(());
+            }
+        }?;
+
+        let mut state = self.state.lock().unwrap();
 
         for srcpad in &state.srcpads {
             if let Err(err) = srcpad.imp().start_task() {
@@ -1600,44 +1656,6 @@ impl Transcriber {
                 ));
             }
         }
-
-        let this_weak = self.downgrade();
-        let future = async move {
-            while let Some(this) = this_weak.upgrade() {
-                let Some(msg) = ws_stream.next().await else {
-                    break;
-                };
-
-                let msg = match msg {
-                    Ok(msg) => msg,
-                    Err(err) => {
-                        gst::error!(CAT, imp = this, "Failed to receive data: {}", err);
-                        gst::element_imp_error!(
-                            this,
-                            gst::StreamError::Failed,
-                            ["Streaming failed: {}", err]
-                        );
-                        break;
-                    }
-                };
-
-                if let Err(err) = this.dispatch_message(msg) {
-                    gst::error!(CAT, imp = this, "Failed to dispatch message: {}", err);
-                    gst::element_imp_error!(
-                        this,
-                        gst::StreamError::Failed,
-                        ["Failed to dispatch message: {}", err]
-                    );
-                    break;
-                }
-            }
-        };
-
-        let (future, abort_handle) = abortable(future);
-
-        state.recv_abort_handle = Some(abort_handle);
-
-        RUNTIME.spawn(future);
 
         state.connected = true;
 
@@ -1680,7 +1698,14 @@ impl Transcriber {
         drop(state);
 
         for srcpad in &srcpads {
+            let seqnum = {
+                let mut sstate = srcpad.imp().state.lock().unwrap();
+                let _ = sstate.sender.take();
+                sstate.seqnum
+            };
+            srcpad.push_event(gst::event::FlushStart::builder().seqnum(seqnum).build());
             let _ = srcpad.stop_task();
+            srcpad.push_event(gst::event::FlushStop::builder(false).seqnum(seqnum).build());
 
             let mut sstate = srcpad.imp().state.lock().unwrap();
             *sstate = TranscriberSrcPadState::default();
@@ -2287,13 +2312,11 @@ impl ElementImpl for Transcriber {
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst::info!(CAT, imp = self, "Changing state {:?}", transition);
 
-        let success = self.parent_change_state(transition)?;
-
         if transition == gst::StateChange::PausedToReady {
             drop(self.disconnect(self.state.lock().unwrap()));
         }
 
-        Ok(success)
+        self.parent_change_state(transition)
     }
 }
 
