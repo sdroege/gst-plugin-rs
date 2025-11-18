@@ -8857,7 +8857,7 @@
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "meta/x-st-2038:\n",
+                        "caps": "meta/x-st-2038:\n      alignment: { (string)frame, (string)line, (string)packet }\n",
                         "direction": "src",
                         "presence": "sometimes"
                     }
