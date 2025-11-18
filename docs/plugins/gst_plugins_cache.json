@@ -9991,7 +9991,7 @@
                 "klass": "Metadata/Video/Demuxer",
                 "pad-templates": {
                     "anc_%%02x_%%02x_at_%%u_%%u": {
-                        "caps": "meta/x-st-2038:\n      alignment: packet\n",
+                        "caps": "meta/x-st-2038:\n      alignment: { (string)frame, (string)line, (string)packet }\n",
                         "direction": "src",
                         "presence": "sometimes"
                     },
