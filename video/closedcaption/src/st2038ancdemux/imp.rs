@@ -293,34 +293,72 @@ impl St2038AncDemux {
                     .unwrap();
             }
             EventView::Caps(ev) => {
-                let mut caps = ev.caps_owned();
-                let s = caps.structure(0).unwrap();
-                let framerate = s.get::<gst::Fraction>("framerate");
+                let (alignment, framerate) = {
+                    let caps = ev.caps();
+                    let s = caps.structure(0).unwrap();
+
+                    (
+                        s.get::<&str>("alignment").ok(),
+                        s.get::<gst::Fraction>("framerate").ok(),
+                    )
+                };
 
                 // Don't forward the caps event directly but set the
                 // alignment and frame rate.
-                {
+                let src_caps = {
+                    let mut caps = ev.caps_owned();
                     let caps = caps.make_mut();
-                    caps.set("alignment", "packet");
-                    if let Ok(framerate) = framerate {
+
+                    if let Some(align) = alignment {
+                        caps.set("alignment", align);
+                    }
+                    if let Some(framerate) = framerate {
                         caps.set("framerate", framerate);
                     }
-                }
 
-                let event = gst::event::Caps::builder(&caps)
+                    caps.to_owned()
+                };
+
+                let src_event = gst::event::Caps::builder(&src_caps)
                     .seqnum(event.seqnum())
                     .build();
 
-                let mut ret = self.srcpad.push_event(event.clone());
+                let mut ret = self.srcpad.push_event(src_event.clone());
+
                 let state = self.state.borrow_mut();
-                let pads = state
+                let anc_pads = state
                     .streams
                     .values()
                     .map(|stream| stream.pad.clone())
                     .collect::<Vec<_>>();
                 drop(state);
-                for pad in pads {
-                    ret |= pad.push_event(event.clone());
+
+                for pad in anc_pads {
+                    let mut templ_caps = pad.pad_template_caps();
+                    let mut peer_caps = pad.peer_query_caps(Some(&templ_caps));
+                    gst::debug!(CAT, obj = pad, "Downstream caps {peer_caps:?}");
+
+                    let anc_caps = {
+                        let caps_ref = templ_caps.make_mut();
+                        if peer_caps.is_empty() {
+                            caps_ref.set("alignment", "frame");
+                        } else {
+                            peer_caps.fixate();
+
+                            let s = peer_caps.structure(0).unwrap();
+                            match s.get::<&str>("alignment").ok() {
+                                Some(align) => caps_ref.set("alignment", align),
+                                None => caps_ref.set("alignment", "frame"),
+                            }
+                        }
+
+                        templ_caps
+                    };
+
+                    let anc_event = gst::event::Caps::builder(&anc_caps)
+                        .seqnum(event.seqnum())
+                        .build();
+                    ret |= pad.push_event(anc_event.clone());
                 }
 
                 return ret;
@@ -382,7 +420,9 @@ impl ElementImpl for St2038AncDemux {
                 "anc_%02x_%02x_at_%u_%u",
                 gst::PadDirection::Src,
                 gst::PadPresence::Sometimes,
-                &caps_aligned,
+                &gst::Caps::builder("meta/x-st-2038")
+                    .field("alignment", gst::List::new(["frame", "line", "packet"]))
+                    .build(),
             )
             .unwrap();
 
