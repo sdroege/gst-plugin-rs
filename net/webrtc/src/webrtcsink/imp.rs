@@ -3293,8 +3293,12 @@ impl BaseWebRTCSink {
                         let _ = this.remove_session(&session_id_clone, true);
                     }
                     gst::MessageView::Latency(..) => {
-                        gst::info!(CAT, obj = pipeline, "Recalculating latency");
-                        let _ = pipeline.recalculate_latency();
+                        pipeline
+                            .call_async_future(|pipeline| {
+                                gst::info!(CAT, obj = pipeline, "Recalculating latency");
+                                let _ = pipeline.recalculate_latency();
+                            })
+                            .await;
                     }
                     gst::MessageView::Eos(..) => {
                         gst::error!(
