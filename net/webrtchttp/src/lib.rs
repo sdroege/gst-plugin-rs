@@ -13,6 +13,9 @@
  * plugin-webrtchttp:
  *
  * Since: plugins-rs-0.9.0
+ *
+ * Deprecated: plugins-rs-0.16.0 Use the `whipclientsink` and `whepclientsrc` elements from the
+ * `rswebrtc` plugin instead
  */
 use gst::glib;
 mod utils;
@@ -37,6 +40,14 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
         IceTransportPolicy::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
+
+    #[cfg(feature = "v1_24")]
+    plugin.add_status_warning(
+        "This plugin is now deprecated. \
+        Please use `whipclientsink` and `whepclientsrc` \
+        from the rswebrtc plugin instead of `whipsink` and `whepsrc`.",
+    );
+
     whipsink::register(plugin)?;
     whepsrc::register(plugin)?;
 

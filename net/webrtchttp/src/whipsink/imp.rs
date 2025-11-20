@@ -360,10 +360,9 @@ impl ObjectImpl for WhipSink {
         obj.set_suppressed_flags(gst::ElementFlags::SINK | gst::ElementFlags::SOURCE);
         obj.set_element_flags(gst::ElementFlags::SINK);
 
-        gst::warning!(
-            CAT,
-            imp = self,
-            "whipsink will be deprecated in the future, \
+        glib::g_warning!(
+            "whipsink",
+            "whipsink is now deprecated and \
             it is recommended that whipclientsink be used instead"
         );
 

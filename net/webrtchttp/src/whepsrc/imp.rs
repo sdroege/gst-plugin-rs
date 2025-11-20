@@ -416,6 +416,12 @@ impl ObjectImpl for WhepSrc {
             .set_suppressed_flags(gst::ElementFlags::SINK | gst::ElementFlags::SOURCE);
         self.obj().set_element_flags(gst::ElementFlags::SOURCE);
 
+        glib::g_warning!(
+            "whepsrc",
+            "whepsrc is now deprecated and \
+            it is recommended that whepclientsrc be used instead"
+        );
+
         self.setup_webrtcbin();
 
         self.obj().add(&self.webrtcbin).unwrap();

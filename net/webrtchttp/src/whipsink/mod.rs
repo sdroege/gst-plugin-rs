@@ -20,8 +20,8 @@
  * whip.sink_1 whipsink name=whip auth-token=$WHIP_TOKEN whip-endpoint=$WHIP_ENDPOINT
  * ```
  *
- * Note: whipsink will be deprecated in the future. It is replaced by whipclientsink,
- * which provides more features such as managing encoding and performing bandwidth adaptation
+ * Deprecated: plugins-rs-0.16.0: This element is replaced by whipclientsink, which provides more features
+ * such as managing encoding and performing bandwidth adaptation
  *
  */
 use gst::glib;

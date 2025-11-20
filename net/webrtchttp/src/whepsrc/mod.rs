@@ -7,6 +7,13 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+/**
+ * SECTION:element-whepsrc
+ *
+ * Deprecated: plugins-rs-0.16.0: This element is replaced by `whepclientsrc`, which is more robust
+ * and has inbuilt decoding and RTP depayloading capabilites
+ *
+ */
 use gst::glib;
 use gst::prelude::*;
 

@@ -31,9 +31,11 @@ path = "src/lib.rs"
 gst-plugin-version-helper.workspace = true
 
 [features]
+default = ["v1_24"]
 static = []
 capi = []
 doc = []
+v1_24 = ["gst/v1_24"]
 
 [package.metadata.capi]
 min_version = "0.9.21"
