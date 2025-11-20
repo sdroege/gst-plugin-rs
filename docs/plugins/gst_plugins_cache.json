@@ -10098,6 +10098,43 @@
                 },
                 "rank": "none"
             },
+            "st2038combiner": {
+                "author": "Sanchayan Maity <sanchayan@centricular.com>",
+                "description": "Combines video input stream and ST2038 stream in GstAncillaryMeta",
+                "hierarchy": [
+                    "GstSt2038Combiner",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Filter",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always",
+                        "type": "GstAggregatorPad"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always",
+                        "type": "GstAggregatorPad"
+                    },
+                    "st2038": {
+                        "caps": "meta/x-st-2038:\n      alignment: frame\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstAggregatorPad"
+                    }
+                },
+                "rank": "none"
+            },
             "st2038extractor": {
                 "author": "Sanchayan Maity <sanchayan@centricular.com>",
                 "description": "Extracts ST2038 stream in GstAncillaryMeta from video input stream",
