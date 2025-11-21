@@ -374,33 +374,24 @@ pub fn build_link_header(url_str: &str) -> Result<String, url::ParseError> {
 
     let mut link_str: String = "<".to_owned() + url.scheme();
     if let Some(host) = url.host_str() {
-        link_str = link_str + ":" + host;
+        link_str += &format!(":{}", host);
     }
 
     if let Some(port) = url.port() {
-        link_str = link_str + ":" + port.to_string().as_str();
+        link_str += &format!(":{}", port.to_string().as_str());
     }
 
     link_str += url.path();
 
     if let Some(query) = url.query() {
-        link_str = link_str + "?" + query;
+        link_str += &format!("?{}", query);
     }
 
     link_str += ">";
 
     if let Some(password) = url.password() {
-        link_str = link_str
-            + "; "
-            + "rel=\"ice-server\""
-            + "; "
-            + "username=\""
-            + url.username()
-            + "\"; "
-            + "credential:\""
-            + password
-            + "\"; "
-            + "credential-type:\"password\";";
+        link_str += &format!("; rel=\"ice-server\"; username=\"{}\"; credential:\"{}\"; credential-type:\"password\";",
+            url.username(), password);
     }
 
     Ok(link_str)

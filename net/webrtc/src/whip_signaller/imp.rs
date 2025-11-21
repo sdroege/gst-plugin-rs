@@ -11,6 +11,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_sdp::SDPMessage;
 use gst_webrtc::{WebRTCICEGatheringState, WebRTCSessionDescription};
+use http::{HeaderName, HeaderValue};
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use std::sync::Mutex;
@@ -616,7 +617,7 @@ impl ObjectImpl for WhipClient {
 struct WhipServerSettings {
     stun_server: Option<String>,
     turn_servers: gst::Array,
-    host_addr: Url,
+    host_addr: Option<Url>,
     timeout: u32,
     shutdown_signal: Option<tokio::sync::oneshot::Sender<()>>,
     server_handle: Option<tokio::task::JoinHandle<()>>,
@@ -626,7 +627,7 @@ struct WhipServerSettings {
 impl Default for WhipServerSettings {
     fn default() -> Self {
         Self {
-            host_addr: Url::parse(DEFAULT_HOST_ADDR).unwrap(),
+            host_addr: Some(Url::parse(DEFAULT_HOST_ADDR).unwrap()),
             stun_server: DEFAULT_STUN_SERVER.map(String::from),
             turn_servers: gst::Array::new(Vec::new() as Vec<glib::SendValue>),
             timeout: DEFAULT_TIMEOUT,
@@ -716,7 +717,7 @@ impl WhipServer {
         //FIXME: add state checking once ICE trickle is implemented
     }
 
-    async fn delete_handler(&self, id: String) -> Result<impl warp::Reply, warp::Rejection> {
+    async fn delete_session(&self, id: String) -> http::StatusCode {
         if self
             .obj()
             .emit_by_name::<bool>("session-ended", &[&id.as_str()])
@@ -726,7 +727,12 @@ impl WhipServer {
             gst::info!(CAT, imp = self, "Failed to End session {id}");
             // FIXME: Do we send a different response
         }
-        Ok(warp::reply::reply().into_response())
+
+        http::StatusCode::OK
+    }
+
+    async fn delete_handler(&self, id: String) -> Result<impl warp::Reply, warp::Rejection> {
+        Ok(self.delete_session(id).await.into_response())
     }
 
     #[allow(clippy::single_match)]
@@ -787,11 +793,18 @@ impl WhipServer {
         Ok(res)
     }
 
-    async fn post_handler(
+    async fn create_session(
         &self,
-        body: warp::hyper::body::Bytes,
+        body: &[u8],
         id: Option<String>,
-    ) -> Result<impl warp::reply::Reply, warp::Rejection> {
+    ) -> (
+        http::StatusCode,
+        Vec<(HeaderName, HeaderValue)>,
+        Option<bytes::Bytes>,
+    ) {
+        let mut status = http::StatusCode::CREATED;
+        let mut headermap = Vec::new();
+
         let session_id = match id {
             Some(id) => {
                 gst::debug!(CAT, imp = self, "got session id {id} from the URL");
@@ -812,7 +825,7 @@ impl WhipServer {
             wait_timeout
         };
 
-        match gst_sdp::SDPMessage::parse_buffer(body.as_ref()) {
+        match gst_sdp::SDPMessage::parse_buffer(body) {
             Ok(offer_sdp) => {
                 let offer = gst_webrtc::WebRTCSessionDescription::new(
                     gst_webrtc::WebRTCSDPType::Offer,
@@ -826,9 +839,8 @@ impl WhipServer {
             }
             Err(err) => {
                 gst::error!(CAT, imp = self, "Could not parse offer SDP: {err}");
-                let reply = warp::reply::reply();
-                let res = warp::reply::with_status(reply, http::StatusCode::NOT_ACCEPTABLE);
-                return Ok(res.into_response());
+                status = http::StatusCode::NOT_ACCEPTABLE;
+                return (status, headermap, None);
             }
         }
 
@@ -842,12 +854,8 @@ impl WhipServer {
                 Some(a) => a,
                 None => {
                     let err = "Channel closed, can't receive SDP".to_owned();
-                    let res = http::Response::builder()
-                        .status(http::StatusCode::INTERNAL_SERVER_ERROR)
-                        .body(err.into())
-                        .unwrap();
-
-                    return Ok(res);
+                    status = http::StatusCode::INTERNAL_SERVER_ERROR;
+                    return (status, headermap, Some(err.into()));
                 }
             },
             Err(e) => {
@@ -855,26 +863,22 @@ impl WhipServer {
                     WaitError::FutureAborted => "Aborted".to_owned(),
                     WaitError::FutureError(err) => err.to_string(),
                 };
-                let res = http::Response::builder()
-                    .status(http::StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(err.into())
-                    .unwrap();
-
-                return Ok(res);
+                status = http::StatusCode::INTERNAL_SERVER_ERROR;
+                return (status, headermap, Some(err.into()));
             }
         };
 
         let settings = self.settings.lock().unwrap();
-        let mut links = http::HeaderMap::new();
+        let mut links = vec![];
 
         #[allow(clippy::single_match)]
         match &settings.stun_server {
             Some(stun) => match build_link_header(stun.as_str()) {
                 Ok(stun_link) => {
-                    links.append(
+                    links.push((
                         http::header::LINK,
                         http::HeaderValue::from_str(stun_link.as_str()).unwrap(),
-                    );
+                    ));
                 }
                 Err(e) => {
                     gst::error!(CAT, imp = self, "Failed to parse {stun:?} : {e:?}");
@@ -889,10 +893,10 @@ impl WhipServer {
                     gst::debug!(CAT, imp = self, "turn server: {}", turn.as_str());
                     match build_link_header(turn.as_str()) {
                         Ok(turn_link) => {
-                            links.append(
+                            links.push((
                                 http::header::LINK,
                                 http::HeaderValue::from_str(turn_link.as_str()).unwrap(),
-                            );
+                            ));
                         }
                         Err(e) => {
                             gst::error!(
@@ -935,34 +939,52 @@ impl WhipServer {
 
         // If ans_text is an error. Send error code and error string in the response
         if let Err(e) = ans_text {
-            let res = http::Response::builder()
-                .status(http::StatusCode::INTERNAL_SERVER_ERROR)
-                .body(e.into())
-                .unwrap();
-            return Ok(res);
+            status = http::StatusCode::INTERNAL_SERVER_ERROR;
+            return (status, headermap, Some(e.into()));
         }
 
         drop(settings);
 
-        // Got SDP answer, send answer in the response
         let resource_url = "/".to_owned() + ROOT + "/" + RESOURCE_PATH + "/" + &session_id;
-        let mut res = http::Response::builder()
-            .status(http::StatusCode::CREATED)
-            .header(http::header::CONTENT_TYPE, CONTENT_SDP)
-            .header("location", resource_url)
-            .body(ans_text.unwrap().into())
-            .unwrap();
 
-        let headers = res.headers_mut();
-        headers.extend(links);
+        headermap.push((
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_str(CONTENT_SDP).unwrap(),
+        ));
+        headermap.push((
+            HeaderName::from_static("location"),
+            HeaderValue::from_str(resource_url.as_str()).unwrap(),
+        ));
+        headermap.extend(links.drain(..));
 
-        Ok(res)
+        (status, headermap, Some(ans_text.unwrap().into()))
+    }
+
+    async fn post_handler(
+        &self,
+        body: &[u8],
+        id: Option<String>,
+    ) -> Result<impl warp::reply::Reply, warp::Rejection> {
+        let (status, mut headermap, body) = self.create_session(body, id.clone()).await;
+
+        let mut response_builder = http::Response::builder().status(status);
+
+        for (key, value) in headermap.drain(..) {
+            response_builder = response_builder.header(key, value);
+        }
+
+        return Ok(response_builder.body(body).unwrap());
     }
 
     fn serve(&self) -> Option<tokio::task::JoinHandle<()>> {
         let mut settings = self.settings.lock().unwrap();
+
+        let Some(ref host_addr) = settings.host_addr else {
+            return None;
+        };
+
         let addr: SocketAddr;
-        match settings.host_addr.socket_addrs(|| None) {
+        match host_addr.socket_addrs(|| None) {
             Ok(v) => {
                 // pick the first vector item
                 addr = v[0];
@@ -1002,9 +1024,20 @@ impl WhipServer {
         Some(jh)
     }
 
-    fn set_host_addr(&self, host_addr: &str) -> Result<(), url::ParseError> {
+    fn set_host_addr(&self, host_addr: Option<&str>) -> Result<(), url::ParseError> {
         let mut settings = self.settings.lock().unwrap();
-        settings.host_addr = Url::parse(host_addr)?;
+
+        if let Some(host_addr) = host_addr {
+            if !host_addr.is_empty() {
+                settings.host_addr = Some(Url::parse(host_addr)?);
+            } else {
+                // Special case for easily disabling server from gst-launch
+                settings.host_addr = None;
+            }
+        } else {
+            settings.host_addr = None;
+        }
+
         Ok(())
     }
 
@@ -1024,7 +1057,9 @@ impl WhipServer {
                 #[weak(rename_to = self_)]
                 self,
                 #[upgrade_or_panic]
-                move |body| async move { self_.post_handler(body, None).await }
+                move |body: warp::hyper::body::Bytes| async move {
+                    self_.post_handler(body.as_ref(), None).await
+                }
             ));
 
         // POST /endpoint/<session-id>
@@ -1041,7 +1076,9 @@ impl WhipServer {
                 #[weak(rename_to = self_)]
                 self,
                 #[upgrade_or_panic]
-                move |id, body| async move { self_.post_handler(body, Some(id)).await }
+                move |id, body: warp::hyper::body::Bytes| async move {
+                    self_.post_handler(body.as_ref(), Some(id)).await
+                }
             ));
 
         // OPTIONS /endpoint
@@ -1102,32 +1139,28 @@ impl SignallableImpl for WhipServer {
     fn stop(&self) {
         let mut settings = self.settings.lock().unwrap();
 
-        let handle = settings
-            .server_handle
-            .take()
-            .expect("Server handle should be set");
+        let handle = settings.server_handle.take();
 
-        let tx = settings
-            .shutdown_signal
-            .take()
-            .expect("Shutdown signal Sender needs to be valid");
-
-        if tx.send(()).is_err() {
-            gst::error!(
-                CAT,
-                imp = self,
-                "Failed to send shutdown signal. Receiver dropped"
-            );
+        if let Some(tx) = settings.shutdown_signal.take() {
+            if tx.send(()).is_err() {
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Failed to send shutdown signal. Receiver dropped"
+                );
+            }
         }
 
-        gst::debug!(CAT, imp = self, "Await server handle to join");
-        RUNTIME.block_on(async {
-            if let Err(e) = handle.await {
-                gst::error!(CAT, imp = self, "Failed to join server handle: {e:?}");
-            };
-        });
+        if let Some(handle) = handle {
+            gst::debug!(CAT, imp = self, "Await server handle to join");
+            RUNTIME.block_on(async {
+                if let Err(e) = handle.await {
+                    gst::error!(CAT, imp = self, "Failed to join server handle: {e:?}");
+                };
+            });
 
-        gst::info!(CAT, imp = self, "stopped the WHIP server");
+            gst::info!(CAT, imp = self, "stopped the WHIP server");
+        }
     }
 
     fn end_session(&self, session_id: &str) {
@@ -1190,7 +1223,7 @@ impl ObjectImpl for WhipServer {
         match pspec.name() {
             "host-addr" => {
                 if let Err(e) =
-                    self.set_host_addr(value.get::<&str>().expect("type checked upstream"))
+                    self.set_host_addr(value.get::<Option<&str>>().expect("type checked upstream"))
                 {
                     gst::error!(CAT, "Couldn't set the host address as {e:?}, fallback to the default value {DEFAULT_HOST_ADDR:?}");
                 }
@@ -1217,11 +1250,143 @@ impl ObjectImpl for WhipServer {
         let settings = self.settings.lock().unwrap();
         match pspec.name() {
             "manual-sdp-munging" => false.to_value(),
-            "host-addr" => settings.host_addr.to_string().to_value(),
+            "host-addr" => settings
+                .host_addr
+                .as_ref()
+                .map(|host_addr| host_addr.to_string())
+                .to_value(),
             "stun-server" => settings.stun_server.to_value(),
             "turn-servers" => settings.turn_servers.to_value(),
             "timeout" => settings.timeout.to_value(),
             _ => unimplemented!(),
         }
+    }
+
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
+            vec![
+                /**
+                 * GstWhipServerSignaller::post:
+                 * @self: a signaller instance
+                 * @id: optional session identifier
+                 * @request_body: body of the POST request
+                 * @promise: promise to receive the result
+                 *
+                 * When using whipserversrc with an external http server, use
+                 * this action signal to forward POST requests to the signaller.
+                 *
+                 * The #GstStructure in the promise reply will contain:
+                 *
+                 * * A "status" field with type #guint32
+                 * * A "headers" field with type #GstStructure with all string values
+                 * * An optional "body" field with type #GBytes
+                 */
+                glib::subclass::Signal::builder("post")
+                    .action()
+                    .class_handler(|args| {
+                        let signaller = args[0]
+                            .get::<super::WhipServerSignaller>()
+                            .expect("signal arg");
+                        let id = args[1]
+                            .get::<Option<String>>()
+                            .expect("ID as string as first parameter");
+                        let request_body = args[2]
+                            .get::<glib::Bytes>()
+                            .expect("request body as GBytes as second parameter");
+                        let promise = args[3]
+                            .get::<gst::Promise>()
+                            .expect("GstPromise as third parameter");
+
+                        RUNTIME.spawn(async move {
+                            let (status, mut headers, body) =
+                                signaller.imp().create_session(&request_body, id).await;
+
+                            let mut headers_builder =
+                                gst::Structure::builder("whip-wignaller/headers");
+
+                            for (header, value) in headers.drain(..) {
+                                let value = value.to_str().expect(
+                                    "Header value should contain only visible ASCII strings",
+                                );
+                                headers_builder = headers_builder.field(header.to_string(), value);
+                            }
+
+                            let mut reply_builder =
+                                gst::Structure::builder("whip-signaller/response")
+                                    .field("status", status.as_u16() as u32)
+                                    .field("headers", headers_builder.build());
+
+                            if let Some(body) = body {
+                                reply_builder =
+                                    reply_builder.field("body", glib::Bytes::from(&body));
+                            }
+
+                            let reply = reply_builder.build();
+
+                            gst::log!(CAT, obj = signaller, "replying to promise with {reply:?}");
+
+                            promise.reply(Some(reply));
+                        });
+
+                        None
+                    })
+                    .param_types([
+                        String::static_type(),
+                        glib::Bytes::static_type(),
+                        gst::Promise::static_type(),
+                    ])
+                    .return_type::<()>()
+                    .build(),
+                /**
+                 * GstWhipServerSignaller::delete:
+                 * @self: a signaller instance
+                 * @id: optional session identifier
+                 * @promise: promise to receive the result
+                 *
+                 * When using whipserversrc with an external http server, use
+                 * this action signal to forward DELETE requests to the signaller.
+                 *
+                 * The #GstStructure in the promise reply will contain:
+                 *
+                 * * A "status" field with type #guint32
+                 */
+                glib::subclass::Signal::builder("delete")
+                    .action()
+                    .class_handler(|args| {
+                        let signaller = args[0]
+                            .get::<super::WhipServerSignaller>()
+                            .expect("signal arg");
+                        let id = args[1]
+                            .get::<String>()
+                            .expect("ID as string as first parameter");
+                        let promise = args[3]
+                            .get::<gst::Promise>()
+                            .expect("GstPromise as third parameter");
+
+                        RUNTIME.spawn(async move {
+                            let status = signaller.imp().delete_session(id).await;
+
+                            let reply = gst::Structure::builder("whip-signaller/response")
+                                .field("status", status.as_u16() as u32)
+                                .build();
+
+                            gst::log!(CAT, obj = signaller, "replying to promise with {reply:?}");
+
+                            promise.reply(Some(reply));
+                        });
+
+                        None
+                    })
+                    .param_types([
+                        String::static_type(),
+                        glib::Bytes::static_type(),
+                        gst::Promise::static_type(),
+                    ])
+                    .return_type::<()>()
+                    .build(),
+            ]
+        });
+
+        SIGNALS.as_ref()
     }
 }
