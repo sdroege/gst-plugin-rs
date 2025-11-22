@@ -363,7 +363,7 @@ if gtk4_option.allowed()
 endif
 
 examples_opt = get_option('examples')
-if examples_opt.allowed() and 'gtk4' in plugins
+if examples_opt.allowed() and gtk4_option.allowed() and gtk_dep.found()
   plugins += {
     'fallbackswitch': {
       'library': 'libgstfallbackswitch',
