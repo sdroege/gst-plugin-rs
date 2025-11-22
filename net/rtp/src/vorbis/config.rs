@@ -215,13 +215,7 @@ impl VorbisHeaders {
         let comment_map = comment_buf.map_readable().unwrap();
         let setup_map = setup_buf.map_readable().unwrap();
 
-        // Create a packed config that we can parse with all the error checking that entails.
-        // We don't really need to do that, we can assume the headers from the caps are correct,
-        // but why not catch problems early if we can.
-        let packed = Self::pack_headers(&id_map, &comment_map, &setup_map)?;
-
-        let mut br = ByteReader::endian(Cursor::new(&packed), BigEndian);
-        br.parse::<VorbisHeaders>()
+        VorbisHeaders::new(id_map.to_vec(), comment_map.to_vec(), setup_map.to_vec())
     }
 
     // Make up a 24-bit ident value for these headers
