@@ -142,7 +142,7 @@ fn main() -> glib::ExitCode {
 
     gstgtk4::plugin_register_static().expect("Failed to register gstgtk4 plugin");
 
-    let app = gtk::Application::new(None::<&str>, gio::ApplicationFlags::FLAGS_NONE);
+    let app = gtk::Application::new(None::<&str>, gio::ApplicationFlags::default());
 
     app.connect_activate(create_ui);
     let res = app.run();
