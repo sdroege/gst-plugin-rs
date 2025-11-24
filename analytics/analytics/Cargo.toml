@@ -20,7 +20,7 @@ gst-base = { workspace = true, features = ["v1_24"] }
 gst-video = { workspace = true, features = ["v1_24"] }
 gst-analytics = { workspace = true }
 chrono = { version = "0.4.31", default-features = false }
-xmltree = "0.11"
+xmltree = "0.12"
 glib = { workspace = true, features = ["v2_62"] }
 
 [dev-dependencies]
