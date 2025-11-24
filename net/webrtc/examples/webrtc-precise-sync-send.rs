@@ -389,7 +389,11 @@ impl App {
                             .as_deref()
                             .unwrap_or("UNKNOWN"),
                     );
-                    if let Err(err) = self.pipeline().recalculate_latency() {
+                    if let Err(err) = self
+                        .pipeline()
+                        .call_async_future(|pipeline| pipeline.recalculate_latency())
+                        .await
+                    {
                         error!(%err, "Error recalculating latency");
                     }
                 }
