@@ -86,7 +86,7 @@ class WebRTCClient:
                 remove_bus_poll()
                 break
             elif msg.type == Gst.MessageType.LATENCY:
-                self.pipe.recalculate_latency()
+                self.pipe.call_async(lambda pipeline: pipeline.recalculate_latency())
 
     async def handle_json(self, message):
         try:
