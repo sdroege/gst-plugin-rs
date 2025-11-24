@@ -8,7 +8,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use gst::prelude::*;
-use serial_test::serial;
 use std::thread;
 
 fn init() {
@@ -28,7 +27,6 @@ fn make_buffer(content: &[u8]) -> gst::Buffer {
 }
 
 #[test]
-#[serial]
 fn test_send_receive_without_datagram() {
     init();
 
@@ -72,7 +70,6 @@ fn test_send_receive_without_datagram() {
 }
 
 #[test]
-#[serial]
 fn test_send_receive_with_datagram() {
     init();
 
@@ -82,18 +79,18 @@ fn test_send_receive_with_datagram() {
     // in the other test. We get a address already in use error otherwise.
     thread::spawn(move || {
         let mut h1 = gst_check::Harness::new_empty();
-        h1.add_parse(
-            "quinnquicsrc use-datagram=true address=127.0.0.1 port=6000 secure-connection=false",
-        );
+        h1.add_parse("quinnquicsink use-datagram=true bind-address=127.0.0.1 bind-port=6001 address=127.0.0.1 port=6000 secure-connection=false");
+
+        h1.set_src_caps(gst::Caps::builder("text/plain").build());
 
         h1.play();
 
-        let buf = h1.pull_until_eos().unwrap().unwrap();
+        assert!(h1.push(make_buffer(content)) == Ok(gst::FlowSuccess::Ok));
 
-        assert_eq!(
-            content,
-            buf.into_mapped_buffer_readable().unwrap().as_slice()
-        );
+        // Wait a bit before sending Eos and shutting down the pipeline
+        thread::sleep(std::time::Duration::from_secs(2));
+
+        h1.push_event(gst::event::Eos::new());
 
         h1.element().unwrap().set_state(gst::State::Null).unwrap();
 
@@ -101,15 +98,18 @@ fn test_send_receive_with_datagram() {
     });
 
     let mut h2 = gst_check::Harness::new_empty();
-    h2.add_parse("quinnquicsink use-datagram=true bind-address=127.0.0.1 bind-port=6001 address=127.0.0.1 port=6000 secure-connection=false");
-
-    h2.set_src_caps(gst::Caps::builder("text/plain").build());
+    h2.add_parse(
+        "quinnquicsrc use-datagram=true address=127.0.0.1 port=6000 secure-connection=false",
+    );
 
     h2.play();
 
-    assert!(h2.push(make_buffer(content)) == Ok(gst::FlowSuccess::Ok));
+    let buf = h2.pull_until_eos().unwrap().unwrap();
 
-    h2.push_event(gst::event::Eos::new());
+    assert_eq!(
+        content,
+        buf.into_mapped_buffer_readable().unwrap().as_slice()
+    );
 
     h2.element().unwrap().set_state(gst::State::Null).unwrap();
 

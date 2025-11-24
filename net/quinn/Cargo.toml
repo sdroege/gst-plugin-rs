@@ -32,7 +32,6 @@ url = "2.5.2"
 
 [dev-dependencies]
 gst-check = { workspace = true, features = ["v1_20"] }
-serial_test = "3"
 ctrlc = "3.4"
 clap = { version = "4", features = ["derive"] }
 

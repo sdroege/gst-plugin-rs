@@ -8,7 +8,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use gst::prelude::*;
-use serial_test::serial;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
@@ -85,19 +84,16 @@ fn send_receive(src_pipeline_props: &str, sink_pipeline_props: &str) {
 }
 
 #[test]
-#[serial]
 fn test_send_receive_without_datagram() {
     send_receive("url=https://127.0.0.1:7770", "port=7770");
 }
 
 #[test]
-#[serial]
 fn test_send_receive_with_datagram() {
     send_receive("url=https://127.0.0.1:7771", "use-datagram=true port=7771");
 }
 
 #[test]
-#[serial]
 #[ignore = "CI runners resolve localhost to an IPv6 address only which are not handled correctly yet"]
 fn test_send_receive_with_hostname() {
     send_receive("url=https://localhost:7772", "port=7772");
