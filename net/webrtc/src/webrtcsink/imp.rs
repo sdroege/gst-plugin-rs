@@ -1966,7 +1966,7 @@ impl BaseWebRTCSink {
         let ssrc = self.generate_ssrc(webrtc_pads);
         let media_idx = webrtc_pads
             .values()
-            .map(|pad| pad.media_idx)
+            .map(|pad| pad.media_idx + 1)
             .max()
             .unwrap_or(last_sdp_n_media)
             .max(last_sdp_n_media);
