@@ -16599,6 +16599,20 @@
                         "type": "gboolean",
                         "writable": true
                     },
+                    "get-speakers-interval": {
+                        "blurb": "Interval between GetSpeakers calls, in number of non-empty transcripts. 0 = disabled",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
                     "join-punctuation": {
                         "blurb": "Whether punctuation should be joined with the preceding word",
                         "conditionally-available": false,
@@ -16609,6 +16623,17 @@
                         "mutable": "playing",
                         "readable": true,
                         "type": "gboolean",
+                        "writable": true
+                    },
+                    "labeled-speakers": {
+                        "blurb": "Known array of labeled speakers. Each structure should a hold a label field with a string value, and a speaker_identifiers field with an array of strings as value.See https://docs.speechmatics.com/speech-to-text/realtime/speaker-identification for more information.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstValueArray",
                         "writable": true
                     },
                     "language-code": {
