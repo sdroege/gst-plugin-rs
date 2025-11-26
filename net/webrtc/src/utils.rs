@@ -805,29 +805,36 @@ impl Codec {
     }
 }
 
+fn can_leak(mut caps: gst::Caps) -> gst::Caps {
+    caps.make_mut().mark_may_be_leaked();
+    caps
+}
+
 pub static AUDIO_CAPS: LazyLock<gst::Caps> =
-    LazyLock::new(|| gst::Caps::new_empty_simple("audio/x-raw"));
+    LazyLock::new(|| can_leak(gst::Caps::new_empty_simple("audio/x-raw")));
 pub static OPUS_CAPS: LazyLock<gst::Caps> =
-    LazyLock::new(|| gst::Caps::new_empty_simple("audio/x-opus"));
+    LazyLock::new(|| can_leak(gst::Caps::new_empty_simple("audio/x-opus")));
 
 pub static VIDEO_CAPS: LazyLock<gst::Caps> = LazyLock::new(|| {
-    gst::Caps::builder_full_with_any_features()
-        .structure(gst::Structure::new_empty("video/x-raw"))
-        .build()
+    can_leak(
+        gst::Caps::builder_full_with_any_features()
+            .structure(gst::Structure::new_empty("video/x-raw"))
+            .build(),
+    )
 });
 pub static VP8_CAPS: LazyLock<gst::Caps> =
-    LazyLock::new(|| gst::Caps::new_empty_simple("video/x-vp8"));
+    LazyLock::new(|| can_leak(gst::Caps::new_empty_simple("video/x-vp8")));
 pub static VP9_CAPS: LazyLock<gst::Caps> =
-    LazyLock::new(|| gst::Caps::new_empty_simple("video/x-vp9"));
+    LazyLock::new(|| can_leak(gst::Caps::new_empty_simple("video/x-vp9")));
 pub static H264_CAPS: LazyLock<gst::Caps> =
-    LazyLock::new(|| gst::Caps::new_empty_simple("video/x-h264"));
+    LazyLock::new(|| can_leak(gst::Caps::new_empty_simple("video/x-h264")));
 pub static H265_CAPS: LazyLock<gst::Caps> =
-    LazyLock::new(|| gst::Caps::new_empty_simple("video/x-h265"));
+    LazyLock::new(|| can_leak(gst::Caps::new_empty_simple("video/x-h265")));
 pub static AV1_CAPS: LazyLock<gst::Caps> =
-    LazyLock::new(|| gst::Caps::new_empty_simple("video/x-av1"));
+    LazyLock::new(|| can_leak(gst::Caps::new_empty_simple("video/x-av1")));
 
 pub static RTP_CAPS: LazyLock<gst::Caps> =
-    LazyLock::new(|| gst::Caps::new_empty_simple("application/x-rtp"));
+    LazyLock::new(|| can_leak(gst::Caps::new_empty_simple("application/x-rtp")));
 
 #[derive(Debug, Clone)]
 pub struct Codecs(Vec<Codec>);
