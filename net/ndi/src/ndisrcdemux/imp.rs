@@ -3,6 +3,7 @@
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_video::prelude::*;
+use smallvec::SmallVec;
 use std::sync::LazyLock;
 
 use std::sync::Mutex;
@@ -1300,14 +1301,19 @@ impl NdiSrcDemux {
 
                 let mut buffer = if state.audio_non_interleaved {
                     let info = state.audio_info_non_interleaved.as_ref().unwrap();
-                    let mut buffer = gst::Buffer::from_slice(WrappedAudioFrame(audio_frame));
+                    let stride = audio_frame.channel_stride_or_data_size_in_bytes() as usize;
+                    let channels = audio_frame.no_channels() as usize;
 
+                    // Build offsets array: each channel starts at channel_index * stride
+                    let offsets: SmallVec<[usize; 8]> =
+                        (0..channels).map(|ch| ch * stride).collect();
+
+                    let mut buffer = gst::Buffer::from_slice(WrappedAudioFrame(audio_frame));
                     {
                         let buffer = buffer.get_mut().unwrap();
-
-                        gst_audio::AudioMeta::add(buffer, info, no_samples as usize, &[]).unwrap();
+                        gst_audio::AudioMeta::add(buffer, info, no_samples as usize, &offsets)
+                            .unwrap();
                     }
-
                     buffer
                 } else {
                     gst::debug!(gst::CAT_PERFORMANCE, imp = self, "Copying raw audio frame");
