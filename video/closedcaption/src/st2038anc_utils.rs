@@ -71,17 +71,12 @@ impl AncDataHeader {
     }
 }
 
-fn extend_with_even_odd_parity(v: u8, checksum: &mut u16) -> u16 {
-    let parity = v.count_ones() & 1;
-    let res = if parity == 0 {
+fn extend_with_even_odd_parity(v: u8) -> u16 {
+    if v.count_ones() & 1 == 0 {
         0x1_00 | (v as u16)
     } else {
         0x2_00 | (v as u16)
-    };
-
-    *checksum = checksum.wrapping_add(res);
-
-    res
+    }
 }
 
 pub(crate) fn convert_to_st2038_buffer(
@@ -112,24 +107,35 @@ pub(crate) fn convert_to_st2038_buffer(
     w.write::<12, u16>(horizontal_offset)
         .context("horizontal offset")?;
 
-    let mut checksum = 0u16;
+    let did_10bit = extend_with_even_odd_parity(did);
+    let sdid_10bit = extend_with_even_odd_parity(sdid);
+    let dc_10bit = extend_with_even_odd_parity(payload.len() as u8);
 
-    w.write::<10, u16>(extend_with_even_odd_parity(did, &mut checksum))
-        .context("DID")?;
-    w.write::<10, u16>(extend_with_even_odd_parity(sdid, &mut checksum))
-        .context("SDID")?;
-    w.write::<10, u16>(extend_with_even_odd_parity(
-        payload.len() as u8,
-        &mut checksum,
-    ))
-    .context("data count")?;
+    w.write::<10, u16>(did_10bit).context("DID")?;
+    w.write::<10, u16>(sdid_10bit).context("SDID")?;
+    w.write::<10, u16>(dc_10bit).context("data count")?;
+
+    /*
+     * See Section 6.7 of ST-291 on Checksum Word.
+     * Write data words and checksum.
+     *
+     * In 10-bit applications, the checksum value shall be equal to
+     * the nine least significant bits of the sum of the nine least
+     * significant bits of the DID, SDID, DC and UDW.
+     */
+    let mut checksum = 0u16;
+    checksum = checksum.wrapping_add(did_10bit & 0x1FF);
+    checksum = checksum.wrapping_add(sdid_10bit & 0x1FF);
+    checksum = checksum.wrapping_add(dc_10bit & 0x1FF);
 
     for &b in payload {
-        w.write::<10, u16>(extend_with_even_odd_parity(b, &mut checksum))
-            .context("payload")?;
+        let val = extend_with_even_odd_parity(b);
+        w.write::<10, u16>(val).context("payload")?;
+        checksum = checksum.wrapping_add(val & 0x1FF);
     }
 
     checksum &= 0x1_ff;
+    // bit b9 = NOT b8
     checksum |= ((!(checksum >> 8)) & 0x0_01) << 9;
 
     w.write::<10, u16>(checksum).context("checksum")?;
@@ -256,12 +262,10 @@ impl AncData {
 
 pub(crate) fn add_ancillary_meta_to_buffer(buffer: &mut gst::BufferRef, anc_data: &Vec<AncData>) {
     for anc in anc_data {
-        let mut checksum = 0u16;
         let mut meta = AncillaryMeta::add(buffer);
-
         meta.set_c_not_y_channel(anc.header.c_not_y_channel_flag);
-        meta.set_did(extend_with_even_odd_parity(anc.header.did, &mut checksum));
-        meta.set_sdid_block_number(extend_with_even_odd_parity(anc.header.sdid, &mut checksum));
+        meta.set_did(extend_with_even_odd_parity(anc.header.did));
+        meta.set_sdid_block_number(extend_with_even_odd_parity(anc.header.sdid));
         meta.set_line(anc.header.line_number);
         meta.set_offset(anc.header.horizontal_offset);
         meta.set_data(anc.data.clone().into());
