@@ -58,7 +58,8 @@ fn scc_payload_item(s: &mut &[u8]) -> ModalResult<(u8, u8)> {
     use winnow::stream::AsChar;
     use winnow::token::take_while;
 
-    take_while(4..=4, AsChar::is_hex_digit)
+    // TODO: Handle other caption services than the first one instead of silently dropping
+    take_while(4.., AsChar::is_hex_digit)
         .map(|s: &[u8]| {
             let hex_to_u8 = |v: u8| match v {
                 v if v.is_ascii_digit() => v - b'0',
