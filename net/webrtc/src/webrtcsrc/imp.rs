@@ -1644,6 +1644,28 @@ impl BaseWebRTCSrc {
             ),
         );
 
+        webrtcbin.connect_notify(
+            Some("ice-connection-state"),
+            glib::clone!(
+                #[weak(rename_to = this)]
+                self,
+                move |webrtcbin, _pspec| {
+                    let state = webrtcbin
+                        .property::<gst_webrtc::WebRTCICEConnectionState>("ice-connection-state");
+
+                    match state {
+                        gst_webrtc::WebRTCICEConnectionState::Failed => {
+                            gst::warning!(CAT, imp = this, "Ice connection state failed");
+                            let _ = this.remove_session();
+                        }
+                        _ => {
+                            gst::log!(CAT, imp = this, "Ice connection state changed: {:?}", state);
+                        }
+                    }
+                }
+            ),
+        );
+
         bin.add(&webrtcbin).unwrap();
         self.obj().add(&bin).context("Could not add `webrtcbin`")?;
         bin.sync_state_with_parent().unwrap();
