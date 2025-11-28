@@ -2744,6 +2744,7 @@ dependencies = [
  "chrono",
  "clap",
  "either",
+ "glib",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-base",
