@@ -17370,6 +17370,18 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "no-timeout": {
+                        "blurb": "whether the element should only output full sentences instead of timing out to push all items on time. This may result in timestamps being shifted forward, thus affecting synchronization.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "timeout-terminators": {
                         "blurb": "A regex for finding preferred break points when draining on timeout",
                         "conditionally-available": false,

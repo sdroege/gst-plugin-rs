@@ -28,6 +28,7 @@ const DEFAULT_DRAIN_ON_FINAL_TRANSCRIPTS: bool = true;
 const DEFAULT_DRAIN_ON_SPEAKER_CHANGE: bool = true;
 const DEFAULT_EXTEND_DURATION: bool = false;
 const DEFAULT_EXTENDED_DURATION_GAP: gst::ClockTime = gst::ClockTime::from_mseconds(500);
+const DEFAULT_NO_TIMEOUT: bool = false;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -38,6 +39,7 @@ struct Settings {
     drain_on_speaker_change: bool,
     extend_duration: bool,
     extended_duration_gap: gst::ClockTime,
+    no_timeout: bool,
 }
 
 impl Default for Settings {
@@ -50,6 +52,7 @@ impl Default for Settings {
             drain_on_speaker_change: DEFAULT_DRAIN_ON_SPEAKER_CHANGE,
             extend_duration: DEFAULT_EXTEND_DURATION,
             extended_duration_gap: DEFAULT_EXTENDED_DURATION_GAP,
+            no_timeout: DEFAULT_NO_TIMEOUT,
         }
     }
 }
@@ -427,6 +430,12 @@ impl Accumulate {
                         segment.base().unwrap_or(gst::ClockTime::ZERO) + settings.lateness,
                     );
 
+                    // Timestamps may be shifted forward by an arbitrary amount of time in
+                    // this mode, we thus cannot have a set end time on our segment.
+                    if settings.no_timeout {
+                        segment.set_stop(gst::ClockTime::NONE);
+                    }
+
                     (
                         state.input.as_mut().and_then(|input| input.drain_all()),
                         state.accumulate_tx.clone(),
@@ -459,7 +468,11 @@ impl Accumulate {
                 let (pts, duration) = gap.get();
 
                 /* We only insert the gap when the input is empty, as new gaps will otherwise be output
-                 * when the position of the accumulator progresses */
+                 * when the position of the accumulator progresses.
+                 *
+                 * We can also forward gaps in no-timeout in this situation, because that mode will
+                 * only ever push the timestamps further forward.
+                 */
                 if state
                     .input
                     .as_ref()
@@ -608,6 +621,46 @@ impl Accumulate {
             return Ok(gst::FlowSuccess::Ok);
         }
 
+        if settings.no_timeout {
+            if let Some((upstream_latency, now)) = self
+                .upstream_latency()
+                .zip(self.obj().current_running_time())
+            {
+                let (upstream_live, upstream_min, _) = upstream_latency;
+
+                if upstream_live {
+                    let state = self.state.lock().unwrap();
+                    // Safe unwrap, empty checked earlier
+                    let earliest_pts = to_push.first().unwrap().pts;
+
+                    let min_pts = state
+                        .segment
+                        .position_from_running_time(
+                            now.saturating_sub(upstream_min + settings.latency + settings.lateness),
+                        )
+                        .unwrap_or(state.segment.start().unwrap_or(gst::ClockTime::ZERO))
+                        .max(state.segment.position().unwrap_or(gst::ClockTime::ZERO));
+
+                    if min_pts > earliest_pts {
+                        let offset = min_pts.saturating_sub(earliest_pts);
+
+                        for item in to_push.iter_mut() {
+                            item.pts += offset;
+                        }
+
+                        gst::debug!(
+                            CAT,
+                            imp = self,
+                            "Applied offset {}, now is {}, earliest rtime now {:?}",
+                            offset,
+                            now,
+                            state.segment.to_running_time(to_push.first().unwrap().pts)
+                        );
+                    }
+                }
+            }
+        }
+
         gst::trace!(CAT, imp = self, "Constructing output bufferlist");
 
         let mut bufferlist = gst::BufferList::new();
@@ -728,12 +781,14 @@ impl Accumulate {
 
             let timeout = match this.upstream_latency() {
                 Some((true, upstream_min, _max)) => {
-                    if let Some(now) = this.obj().current_running_time() {
-                        let (latency, lateness) = {
-                            let settings = this.settings.lock().unwrap();
-                            (settings.latency, settings.lateness)
-                        };
+                    let (latency, lateness, no_timeout) = {
+                        let settings = this.settings.lock().unwrap();
+                        (settings.latency, settings.lateness, settings.no_timeout)
+                    };
 
+                    if no_timeout {
+                        std::time::Duration::MAX
+                    } else if let Some(now) = this.obj().current_running_time() {
                         if let Some(next_rtime) = this
                             .state
                             .lock()
@@ -1105,6 +1160,14 @@ impl ObjectImpl for Accumulate {
                     .default_value(DEFAULT_EXTENDED_DURATION_GAP.mseconds() as u32)
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("no-timeout")
+                    .nick("No Timeout")
+                    .blurb("whether the element should only output full sentences instead of \
+                        timing out to push all items on time. This may result in timestamps being \
+                        shifted forward, thus affecting synchronization.")
+                    .default_value(DEFAULT_NO_TIMEOUT)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -1158,6 +1221,10 @@ impl ObjectImpl for Accumulate {
                     value.get::<u32>().expect("type checked upstream").into(),
                 );
             }
+            "no-timeout" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.no_timeout = value.get::<bool>().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -1191,6 +1258,10 @@ impl ObjectImpl for Accumulate {
             "extended-duration-gap" => {
                 let settings = self.settings.lock().unwrap();
                 (settings.extended_duration_gap.mseconds() as u32).to_value()
+            }
+            "no-timeout" => {
+                let settings = self.settings.lock().unwrap();
+                settings.no_timeout.to_value()
             }
             _ => unimplemented!(),
         }
