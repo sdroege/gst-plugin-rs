@@ -291,11 +291,11 @@ async fn post_handler(
             response_builder.header(name.to_string(), value.get::<String>().unwrap());
     }
 
-    let body = body.ok().map(|b| bytes::Bytes::from_owner(b));
+    let body = body.ok().map(bytes::Bytes::from_owner);
 
     let response = response_builder.body(body).unwrap();
 
-    return Ok(response);
+    Ok(response)
 }
 
 fn serve(
@@ -536,7 +536,7 @@ fn main() -> Result<(), Error> {
 
     let ctrl_c = tokio::signal::ctrl_c();
 
-    let _ = RUNTIME.block_on(async move { ctrl_c.await });
+    let _ = RUNTIME.block_on(ctrl_c);
 
     let _ = shutdown_tx.send(());
 

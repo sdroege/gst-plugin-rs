@@ -955,7 +955,7 @@ impl WhipServer {
             HeaderName::from_static("location"),
             HeaderValue::from_str(resource_url.as_str()).unwrap(),
         ));
-        headermap.extend(links.drain(..));
+        headermap.append(&mut links);
 
         (status, headermap, Some(ans_text.unwrap().into()))
     }
@@ -973,15 +973,13 @@ impl WhipServer {
             response_builder = response_builder.header(key, value);
         }
 
-        return Ok(response_builder.body(body).unwrap());
+        Ok(response_builder.body(body).unwrap())
     }
 
     fn serve(&self) -> Option<tokio::task::JoinHandle<()>> {
         let mut settings = self.settings.lock().unwrap();
 
-        let Some(ref host_addr) = settings.host_addr else {
-            return None;
-        };
+        let host_addr = settings.host_addr.as_ref()?;
 
         let addr: SocketAddr;
         match host_addr.socket_addrs(|| None) {

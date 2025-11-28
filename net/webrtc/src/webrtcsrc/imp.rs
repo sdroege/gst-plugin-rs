@@ -365,11 +365,9 @@ impl SessionInner {
     ) -> Option<String> {
         let mline = transceiver.map_or(mline, |t| Some(t.mlineindex()));
 
-        // making a hash of the session ID and adding `:<some-id>`,
-        // here the ID is the mline of the stream in the SDP.
+        // Here the ID is the mline of the stream in the SDP.
         mline.map(|mline| {
-            let mut cs = glib::Checksum::new(glib::ChecksumType::Sha256).unwrap();
-            cs.update(self.id.as_bytes());
+            let cs = glib::Checksum::new(glib::ChecksumType::Sha256).unwrap();
             format!("{}:{mline}", cs.string().unwrap())
         })
     }
@@ -420,28 +418,17 @@ impl SessionInner {
             };
             match serde_json::to_string(&nav_event).ok() {
                 Some(str) => {
-                    gst::trace!(
-                        CAT,
-                        obj = element,
-                        "Sending navigation event to peer for session {}",
-                        self.id
-                    );
+                    gst::trace!(CAT, obj = element, "Sending navigation event to peer",);
                     if let Err(err) = data_channel.send_string_full(Some(str.as_str())) {
                         gst::error!(
                             CAT,
                             obj = element,
-                            "Failed sending navigation event to peer for session {}: {err}",
-                            self.id,
+                            "Failed sending navigation event to peer: {err}",
                         );
                     }
                 }
                 None => {
-                    gst::error!(
-                        CAT,
-                        obj = element,
-                        "Could not serialize navigation event for session {}",
-                        self.id
-                    );
+                    gst::error!(CAT, obj = element, "Could not serialize navigation event",);
                 }
             }
         }
@@ -462,28 +449,17 @@ impl SessionInner {
             self.request_counter += 1;
             match serde_json::to_string(&msg).ok() {
                 Some(str) => {
-                    gst::trace!(
-                        CAT,
-                        obj = element,
-                        "Sending control request to peer for session {}",
-                        self.id
-                    );
+                    gst::trace!(CAT, obj = element, "Sending control request to peer",);
                     if let Err(err) = data_channel.send_string_full(Some(str.as_str())) {
                         gst::error!(
                             CAT,
                             obj = element,
-                            "Failed sending control request to peer for session {}: {err}",
-                            self.id,
+                            "Failed sending control request to peer: {err}",
                         );
                     }
                 }
                 None => {
-                    gst::error!(
-                        CAT,
-                        obj = element,
-                        "Could not serialize navigation event for session {}",
-                        self.id
-                    );
+                    gst::error!(CAT, obj = element, "Could not serialize navigation event",);
                 }
             }
         }
@@ -518,8 +494,7 @@ impl SessionInner {
             gst::debug!(
                 CAT,
                 obj = element,
-                "Storing id {stream_id} on {webrtcbin_pad:?} for session {}",
-                self.id
+                "Storing id {stream_id} on {webrtcbin_pad:?}",
             );
             webrtcbin_pad.store_sticky_event(&builder.build()).ok();
 
@@ -558,13 +533,11 @@ impl SessionInner {
             .proxy_pad_chain_function(glib::clone!(
                 #[weak]
                 element,
-                #[strong(rename_to = sess_id)]
-                self.id,
                 #[upgrade_or_panic]
                 move |pad, parent, buffer| {
                     let padret = gst::ProxyPad::chain_default(pad, parent, buffer);
                     let state = element.imp().state.lock().unwrap();
-                    if let Some(session) = state.sessions.get(&sess_id) {
+                    if let Some(ref session) = state.session {
                         let session = session.0.lock().unwrap();
                         let f = session.flow_combiner.lock().unwrap().update_flow(padret);
                         f
@@ -578,13 +551,11 @@ impl SessionInner {
                 element,
                 #[weak(rename_to = webrtcpad)]
                 webrtcbin_pad,
-                #[strong(rename_to = sess_id)]
-                self.id,
                 #[upgrade_or_panic]
                 move |pad, parent, event| {
                     let event = if let gst::EventView::StreamStart(stream_start) = event.view() {
                         let state = element.imp().state.lock().unwrap();
-                        if let Some(session) = state.sessions.get(&sess_id) {
+                        if let Some(ref session) = state.session {
                             session
                                 .0
                                 .lock()
@@ -602,7 +573,7 @@ impl SessionInner {
                                 })
                                 .unwrap_or(event)
                         } else {
-                            gst::error!(CAT, obj = element, "session {sess_id:?} does not exist");
+                            gst::error!(CAT, obj = element, "no current session");
                             event
                         }
                     } else {
@@ -628,8 +599,6 @@ impl SessionInner {
                 glib::clone!(
                     #[weak]
                     element,
-                    #[strong(rename_to = sess_id)]
-                    self.id,
                     #[upgrade_or]
                     gst::PadProbeReturn::Remove,
                     move |pad, info| {
@@ -640,7 +609,7 @@ impl SessionInner {
                         match ev.view() {
                             gst::EventView::Navigation(nav) => {
                                 let mut state = element.imp().state.lock().unwrap();
-                                if let Some(session) = state.sessions.get_mut(&sess_id) {
+                                if let Some(ref mut session) = state.session {
                                     let mut session = session.0.lock().unwrap();
                                     if enable_data_channel_navigation {
                                         session.send_navigation_event(
@@ -668,7 +637,7 @@ impl SessionInner {
                                 let transceiver =
                                     pad.property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
                                 let mut state = element.imp().state.lock().unwrap();
-                                if let Some(session) = state.sessions.get_mut(&sess_id) {
+                                if let Some(ref mut session) = state.session {
                                     let mut session = session.0.lock().unwrap();
                                     if enable_control_data_channel {
                                         if let Some(s) = cup.structure() {
@@ -716,7 +685,7 @@ impl SessionInner {
                     .property::<Option<String>>("producer-peer-id")
                     .or_else(|| webrtcbin_pad.property("msid"))
             } else {
-                Some(self.id.clone())
+                None
             };
 
             let encoded_filter = element.emit_by_name::<Option<gst::Element>>(
@@ -825,7 +794,6 @@ impl SessionInner {
     }
 
     fn generate_offer(&self, element: &super::BaseWebRTCSrc) {
-        let sess_id = self.id.clone();
         let webrtcbin = self.webrtcbin();
         let direction = gst_webrtc::WebRTCRTPTransceiverDirection::Recvonly;
         let mut pt = 96..127;
@@ -888,6 +856,8 @@ impl SessionInner {
         let promise = gst::Promise::with_change_func(glib::clone!(
             #[weak (rename_to = ele)]
             element,
+            #[strong(rename_to = sess_id)]
+            self.id,
             move |reply| {
                 let Some(webrtcbin) = webrtcbin_weak.upgrade() else {
                     gst::error!(CAT, obj = ele, "generate offer::failed to get webrtcbin");
@@ -1092,14 +1062,12 @@ impl SessionInner {
         let promise = gst::Promise::with_change_func(glib::clone!(
             #[weak]
             element,
-            #[strong(rename_to = session_id)]
-            self.id,
             move |reply| {
                 if desc_type == gst_webrtc::WebRTCSDPType::Offer {
                     let state = element.imp().state.lock().unwrap();
-                    gst::info!(CAT, obj = element, "got answer for session {session_id:?}");
-                    let Some(session) = state.sessions.get(&session_id) else {
-                        gst::error!(CAT, obj = element, "no session {session_id:?}");
+                    gst::info!(CAT, obj = element, "got answer");
+                    let Some(ref session) = state.session else {
+                        gst::error!(CAT, obj = element, "no current session");
                         return;
                     };
                     session.0.lock().unwrap().on_answer_created(reply, &element);
@@ -1134,18 +1102,11 @@ impl SessionInner {
             element,
             #[strong]
             desc,
-            #[strong(rename_to = session_id)]
-            self.id,
             move |_| {
                 let mut state = element.imp().state.lock().unwrap();
-                gst::info!(
-                    CAT,
-                    obj = element,
-                    "got {:?} for session {session_id:?}",
-                    desc.type_()
-                );
-                let Some(session) = state.sessions.get_mut(&session_id) else {
-                    gst::error!(CAT, obj = element, "no session {session_id:?}");
+                gst::info!(CAT, obj = element, "got {:?}", desc.type_());
+                let Some(ref mut session) = state.session else {
+                    gst::error!(CAT, obj = element, "no current session");
                     return;
                 };
 
@@ -1272,12 +1233,7 @@ impl SessionInner {
                 return;
             }
         };
-        gst::log!(
-            CAT,
-            obj = element,
-            "Got ice candidate for {}: {candidate}",
-            self.id
-        );
+        gst::log!(CAT, obj = element, "Got ice candidate: {candidate}",);
 
         self.webrtcbin()
             .emit_by_name::<()>("add-ice-candidate", &[&sdp_m_line_index, &candidate]);
@@ -1293,27 +1249,23 @@ impl BaseWebRTCSrc {
         gst::info!(CAT, imp = self, "unpreparing");
 
         let mut state = self.state.lock().unwrap();
-        let session_ids: Vec<_> = state.sessions.keys().map(|k| k.to_owned()).collect();
-        let sessions: Vec<_> = session_ids
-            .iter()
-            .filter_map(|id| state.end_session(&self.obj(), id))
-            .collect();
+        let session = state.end_session(&self.obj());
         drop(state);
 
         gst::debug!(CAT, imp = self, "Ending sessions");
-        for session in sessions {
+        if let Some(session) = session {
             self.signaller().end_session(&session.0.lock().unwrap().id);
         }
         gst::debug!(CAT, imp = self, "All sessions have started finalizing");
 
         self.maybe_stop_signaller();
 
-        let finalizing_sessions = self.state.lock().unwrap().finalizing_sessions.clone();
+        let finalizing_session_opt = self.state.lock().unwrap().finalizing_session.clone();
 
-        let (sessions, cvar) = &*finalizing_sessions;
-        let mut sessions = sessions.lock().unwrap();
-        while !sessions.is_empty() {
-            sessions = cvar.wait(sessions).unwrap();
+        let (finalizing_session, cvar) = &*finalizing_session_opt;
+        let mut finalizing_session = finalizing_session.lock().unwrap();
+        while finalizing_session.is_some() {
+            finalizing_session = cvar.wait(finalizing_session).unwrap();
         }
 
         gst::debug!(CAT, imp = self, "All sessions are done finalizing");
@@ -1354,7 +1306,7 @@ impl BaseWebRTCSrc {
                         instance,
                         move |_signaller: glib::Object, session_id: &str, _peer_id: &str| {
                             let imp = instance.imp();
-                            gst::info!(CAT, imp = imp, "Session started: {session_id}");
+                            gst::info!(CAT, imp = imp, "session started");
                             let _ = imp.start_session(session_id);
                         }
                     ),
@@ -1366,19 +1318,19 @@ impl BaseWebRTCSrc {
                     glib::closure!(
                         #[watch]
                         instance,
-                        move |_signaller: glib::Object, session_id: &str| {
+                        move |_signaller: glib::Object, _session_id: &str| {
                             let this = instance.imp();
 
-                            if let Err(e) = this.remove_session(session_id) {
+                            if let Err(e) = this.remove_session() {
                                 gst::error!(
                                     CAT,
                                     imp = this,
-                                    " Failed to end session {session_id}: {e}"
+                                    " Failed to end session: {e}"
                                 );
                                 return false;
                             }
 
-                            gst::log!(CAT, imp = this, "Session {session_id} cleaned up");
+                            gst::log!(CAT, imp = this, "Session cleaned up");
 
                             true
                         }
@@ -1388,12 +1340,12 @@ impl BaseWebRTCSrc {
                 session_requested: signaller.connect_closure(
                     "session-requested",
                     false,
-                    glib::closure!(#[watch] instance, move |_signaler: glib::Object, session_id: &str, _peer_id: &str, offer: Option<&gst_webrtc::WebRTCSessionDescription>|{
+                    glib::closure!(#[watch] instance, move |_signaler: glib::Object, _session_id: &str, _peer_id: &str, offer: Option<&gst_webrtc::WebRTCSessionDescription>|{
                         if offer.is_none() {
                             let this = instance.imp();
                             let state = this.state.lock().unwrap();
-                            let Some(session) = state.sessions.get(session_id) else {
-                                gst::error!(CAT, imp = this, "session {session_id:?} not found");
+                            let Some(ref session) = state.session else {
+                                gst::error!(CAT, imp = this, "no current session");
                                 return
                             };
                             session.0.lock().unwrap().generate_offer(&this.obj());
@@ -1420,15 +1372,15 @@ impl BaseWebRTCSrc {
                         #[watch]
                         instance,
                         move |_signaller: glib::Object,
-                              session_id: &str,
+                              _session_id: &str,
                               desc: &gst_webrtc::WebRTCSessionDescription| {
                         match desc.type_() {
                             gst_webrtc::WebRTCSDPType::Offer | gst_webrtc::WebRTCSDPType::Answer => {
                                 let this = instance.imp();
                                 gst::info!(CAT, imp = this, "got sdp : {:?}", desc.type_());
                                 let mut state = this.state.lock().unwrap();
-                                let Some(session) = state.sessions.get_mut(session_id) else {
-                                    gst::error!(CAT, imp = this, "session {session_id:?} not found");
+                                let Some(ref mut session) = state.session else {
+                                    gst::error!(CAT, imp = this, "no current session");
                                     return;
                                 };
 
@@ -1455,14 +1407,14 @@ impl BaseWebRTCSrc {
                         #[watch]
                         instance,
                         move |_signaller: glib::Object,
-                              session_id: &str,
+                              _session_id: &str,
                               sdp_m_line_index: u32,
                               _sdp_mid: Option<String>,
                               candidate: &str| {
                             let this = instance.imp();
                             let state = this.state.lock().unwrap();
-                            let Some(session) = state.sessions.get(session_id) else {
-                                gst::error!(CAT, imp = this, "session {session_id:?} not found");
+                            let Some(ref session) = state.session else {
+                                gst::error!(CAT, imp = this, "no current session");
                                 return;
                             };
                             session.0.lock().unwrap().handle_ice(
@@ -1498,19 +1450,17 @@ impl BaseWebRTCSrc {
 
         let (template, name) = if media_type == "video" {
             (
-                obj.pad_template("video_%s_%u").unwrap(),
+                obj.pad_template("video_%u").unwrap(),
                 format!(
-                    "video_{}_{}",
-                    session.id,
+                    "video_{}",
                     session.n_video_pads.fetch_add(1, Ordering::SeqCst)
                 ),
             )
         } else if media_type == "audio" {
             (
-                obj.pad_template("audio_%s_%u").unwrap(),
+                obj.pad_template("audio_%u").unwrap(),
                 format!(
-                    "audio_{}_{}",
-                    session.id,
+                    "audio_{}",
                     session.n_audio_pads.fetch_add(1, Ordering::SeqCst)
                 ),
             )
@@ -1572,10 +1522,9 @@ impl BaseWebRTCSrc {
 
     fn start_session(&self, session_id: &str) -> Result<(), Error> {
         let state = self.state.lock().unwrap();
-        if state.sessions.contains_key(session_id) {
-            return Err(anyhow::anyhow!(
-                "session with id {session_id} already exists"
-            ));
+
+        if state.session.is_some() {
+            return Err(anyhow::anyhow!("webrtcsrc only supports a single session"));
         };
         drop(state);
 
@@ -1595,16 +1544,14 @@ impl BaseWebRTCSrc {
             }
         }
 
-        let bin = gst::Bin::with_name(session_id);
+        let bin = gst::Bin::new();
 
         bin.connect_pad_removed(glib::clone!(
             #[weak(rename_to = this)]
             self,
-            #[to_owned]
-            session_id,
             move |_, pad| {
                 let mut state = this.state.lock().unwrap();
-                if let Some(session) = state.sessions.get_mut(&session_id) {
+                if let Some(ref mut session) = state.session {
                     let session = session.0.lock().unwrap();
                     session.flow_combiner.lock().unwrap().remove_pad(pad);
                 };
@@ -1613,11 +1560,9 @@ impl BaseWebRTCSrc {
         bin.connect_pad_added(glib::clone!(
             #[weak(rename_to = this)]
             self,
-            #[to_owned]
-            session_id,
             move |_, pad| {
                 let mut state = this.state.lock().unwrap();
-                if let Some(session) = state.sessions.get_mut(&session_id) {
+                if let Some(ref mut session) = state.session {
                     let session = session.0.lock().unwrap();
                     session.flow_combiner.lock().unwrap().add_pad(pad);
                 };
@@ -1629,15 +1574,13 @@ impl BaseWebRTCSrc {
             self,
             #[weak]
             bin,
-            #[to_owned]
-            session_id,
             move |_webrtcbin, pad| {
                 if pad.direction() == gst::PadDirection::Sink {
                     return;
                 }
                 let mut state = this.state.lock().unwrap();
-                let Some(session) = state.sessions.get_mut(&session_id) else {
-                    gst::error!(CAT, imp = this, "session {session_id:?} not found");
+                let Some(ref mut session) = state.session else {
+                    gst::error!(CAT, imp = this, "no current session");
                     return;
                 };
                 let bin_ghostpad =
@@ -1655,11 +1598,9 @@ impl BaseWebRTCSrc {
         webrtcbin.connect_pad_removed(glib::clone!(
             #[weak(rename_to = this)]
             self,
-            #[to_owned]
-            session_id,
             move |_webrtcbin, pad| {
                 let mut state = this.state.lock().unwrap();
-                if let Some(session) = state.sessions.get_mut(&session_id) {
+                if let Some(ref mut session) = state.session {
                     let session = session.0.lock().unwrap();
                     session.flow_combiner.lock().unwrap().remove_pad(pad);
                 };
@@ -1672,12 +1613,10 @@ impl BaseWebRTCSrc {
             glib::closure!(
                 #[weak(rename_to = this)]
                 self,
-                #[to_owned]
-                session_id,
                 move |_webrtcbin: gst::Bin, sdp_m_line_index: u32, candidate: String| {
                     let mut state = this.state.lock().unwrap();
-                    let Some(session) = state.sessions.get_mut(&session_id) else {
-                        gst::error!(CAT, imp = this, "session {session_id:?} not found");
+                    let Some(ref mut session) = state.session else {
+                        gst::error!(CAT, imp = this, "no current session");
                         return;
                     };
                     let session = session.0.lock().unwrap();
@@ -1692,13 +1631,11 @@ impl BaseWebRTCSrc {
             glib::closure!(
                 #[weak(rename_to = this)]
                 self,
-                #[to_owned]
-                session_id,
                 move |_webrtcbin: gst::Bin, data_channel: glib::Object| {
                     let mut state = this.state.lock().unwrap();
 
-                    let Some(session) = state.sessions.get_mut(&session_id) else {
-                        gst::error!(CAT, imp = this, "session {session_id:?} not found");
+                    let Some(ref mut session) = state.session else {
+                        gst::error!(CAT, imp = this, "no current session");
                         return;
                     };
                     let mut session = session.0.lock().unwrap();
@@ -1715,44 +1652,37 @@ impl BaseWebRTCSrc {
             .emit_by_name::<()>("webrtcbin-ready", &[&session_id, &webrtcbin]);
 
         let mut state = self.state.lock().unwrap();
-        state.sessions.insert(
-            session_id.to_string(),
-            Session(Arc::new(Mutex::new(session))),
-        );
+        state.session = Some(Session(Arc::new(Mutex::new(session))));
 
         Ok(())
     }
 
-    fn remove_session(&self, session_id: &str) -> Result<(), Error> {
+    fn remove_session(&self) -> Result<(), Error> {
         let mut state = self.state.lock().unwrap();
-        if !state.sessions.contains_key(session_id) {
-            return Err(anyhow::anyhow!("No session with id: {session_id}"));
+        if state.session.is_none() {
+            return Err(anyhow::anyhow!("No current session"));
         }
 
         // We need to do a flush start, without which the pad chain
         // function trying to take the state lock causes a deadlock
         // with the state lock already acquired here.
-        self.flush_src_pad(session_id)?;
+        self.flush_src_pad()?;
 
-        if let Some(session) = state.end_session(&self.obj(), session_id) {
+        if let Some(session) = state.end_session(&self.obj()) {
             drop(state);
             let session = session.0.lock().unwrap();
             self.signaller().end_session(&session.id);
         }
 
-        self.remove_src_pad(session_id)?;
+        self.remove_src_pad()?;
 
         Ok(())
     }
 
-    fn flush_src_pad(&self, session_id: &str) -> Result<(), Error> {
+    fn flush_src_pad(&self) -> Result<(), Error> {
         let obj = self.obj();
 
-        for pad in obj
-            .src_pads()
-            .iter()
-            .filter(|pad| pad.name().contains(session_id))
-        {
+        for pad in obj.src_pads().iter() {
             if !pad.push_event(gst::event::FlushStart::new()) {
                 return Err(anyhow::anyhow!(
                     "Failed to send flush-start for pad: {}",
@@ -1764,14 +1694,10 @@ impl BaseWebRTCSrc {
         Ok(())
     }
 
-    fn remove_src_pad(&self, session_id: &str) -> Result<(), Error> {
+    fn remove_src_pad(&self) -> Result<(), Error> {
         let obj = self.obj();
 
-        for pad in obj
-            .src_pads()
-            .iter()
-            .filter(|pad| pad.name().contains(session_id))
-        {
+        for pad in obj.src_pads().iter() {
             obj.remove_pad(pad)
                 .map_err(|err| anyhow::anyhow!("Couldn't remove pad? {err:?}"))?;
 
@@ -1807,7 +1733,7 @@ impl ElementImpl for BaseWebRTCSrc {
 
             vec![
                 gst::PadTemplate::with_gtype(
-                    "video_%s_%u",
+                    "video_%u",
                     gst::PadDirection::Src,
                     gst::PadPresence::Sometimes,
                     &video_caps_builder.build(),
@@ -1815,7 +1741,7 @@ impl ElementImpl for BaseWebRTCSrc {
                 )
                 .unwrap(),
                 gst::PadTemplate::with_gtype(
-                    "audio_%s_%u",
+                    "audio_%u",
                     gst::PadDirection::Src,
                     gst::PadPresence::Sometimes,
                     &audio_caps_builder.build(),
@@ -1874,47 +1800,26 @@ impl ElementImpl for BaseWebRTCSrc {
                     return true;
                 }
 
-                if state.sessions.len() != 1 {
-                    gst::warning!(
-                        CAT,
-                        imp = self,
-                        "Navigation event can only be sent on the element if there is a single \
-                        session. For multiple sessions, send the event on the desired source \
-                        pad(s)"
-                    );
-                    false
-                } else {
+                if let Some(ref mut session) = state.session {
                     if settings.enable_data_channel_navigation {
-                        state
-                            .sessions
-                            .values_mut()
-                            .next()
-                            .unwrap()
-                            .0
-                            .lock()
-                            .unwrap()
-                            .send_navigation_event(
-                                gst_video::NavigationEvent::parse(ev).unwrap(),
-                                &self.obj(),
-                            );
+                        session.0.lock().unwrap().send_navigation_event(
+                            gst_video::NavigationEvent::parse(ev).unwrap(),
+                            &self.obj(),
+                        );
                     }
 
                     if settings.enable_control_data_channel {
                         let request = utils::ControlRequest::NavigationEvent {
                             event: gst_video::NavigationEvent::parse(ev).unwrap(),
                         };
-                        state
-                            .sessions
-                            .values_mut()
-                            .next()
-                            .unwrap()
+                        session
                             .0
                             .lock()
                             .unwrap()
                             .send_control_request(request, &self.obj(), None);
                     }
-                    true
                 }
+                true
             }
             _ => true,
         }
@@ -1970,19 +1875,19 @@ struct SessionInner {
 struct Session(Arc<Mutex<SessionInner>>);
 
 struct State {
-    sessions: HashMap<String, Session>,
+    session: Option<Session>,
     signaller_state: SignallerState,
     signaller_signals: Option<SignallerSignals>,
-    finalizing_sessions: Arc<(Mutex<HashMap<String, Session>>, Condvar)>,
+    finalizing_session: Arc<(Mutex<Option<Session>>, Condvar)>,
 }
 
 impl Default for State {
     fn default() -> Self {
         Self {
             signaller_state: SignallerState::Stopped,
-            sessions: HashMap::new(),
+            session: None,
             signaller_signals: Default::default(),
-            finalizing_sessions: Arc::new((Mutex::new(HashMap::new()), Condvar::new())),
+            finalizing_session: Arc::new((Mutex::new(None), Condvar::new())),
         }
     }
 }
@@ -1990,20 +1895,19 @@ impl Default for State {
 impl State {
     fn finalize_session(&mut self, element: &super::BaseWebRTCSrc, session: Session) {
         let inner = session.0.lock().unwrap();
-        let session_id = inner.id.clone();
         drop(inner);
 
-        gst::info!(CAT, "Ending session {}", session_id);
+        gst::info!(CAT, "Ending session");
 
-        let finalizing_sessions = self.finalizing_sessions.clone();
-        let (sessions, _cvar) = &*finalizing_sessions;
-        sessions.lock().unwrap().insert(session_id.clone(), session);
+        let finalizing_session_opt = self.finalizing_session.clone();
+        let (finalizing_session, _cvar) = &*finalizing_session_opt;
+        *finalizing_session.lock().unwrap() = Some(session);
 
         let element = element.clone();
         RUNTIME.spawn_blocking(move || {
-            let (sessions, cvar) = &*finalizing_sessions;
-            let mut sessions = sessions.lock().unwrap();
-            let session = sessions.remove(&session_id).unwrap();
+            let (finalizing_session, cvar) = &*finalizing_session_opt;
+            let mut finalizing_session = finalizing_session.lock().unwrap();
+            let session = finalizing_session.take().unwrap();
             let session = session.0.lock().unwrap();
 
             let bin = session
@@ -2016,23 +1920,18 @@ impl State {
 
             if let Some(webrtcsrc) = bin.parent() {
                 if let Err(e) = webrtcsrc.downcast_ref::<gst::Bin>().unwrap().remove(&bin) {
-                    gst::error!(
-                        CAT,
-                        obj = bin,
-                        "Failed to remove bin for session {} :{e}",
-                        session.id
-                    );
+                    gst::error!(CAT, obj = bin, "Failed to remove bin for session: {e}",);
                 }
             }
 
             cvar.notify_one();
 
-            gst::debug!(CAT, obj = element, "Session {session_id} ended");
+            gst::debug!(CAT, obj = element, "Session ended");
         });
     }
 
-    fn end_session(&mut self, element: &super::BaseWebRTCSrc, session_id: &str) -> Option<Session> {
-        if let Some(session) = self.sessions.remove(session_id) {
+    fn end_session(&mut self, element: &super::BaseWebRTCSrc) -> Option<Session> {
+        if let Some(session) = self.session.take() {
             self.finalize_session(element, session.clone());
             return Some(session);
         }
