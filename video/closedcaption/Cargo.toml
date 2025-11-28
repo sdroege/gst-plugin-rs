@@ -36,6 +36,7 @@ pretty_assertions = "1"
 rand = { version = "0.9", features = ["small_rng"] }
 gst-check.workspace = true
 clap = { version = "4", features = ["derive"] }
+glib = { workspace = true, features = ["v2_62"] }
 
 [lib]
 name = "gstrsclosedcaption"
