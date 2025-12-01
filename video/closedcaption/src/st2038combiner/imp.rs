@@ -631,10 +631,9 @@ impl St2038Combiner {
 
             gst::debug!(CAT,
                 imp = self,
-                "ST-2038 buffer with PTS, {st2038_time}, current_video_running_time: {:?}, current_video_running_time_end: {:?}, previous_video_running_time_end: {:?}",
+                "ST-2038 buffer with PTS: {st2038_time}, current_video_running_time: {:?}, current_video_running_time_end: {:?}, previous_video_running_time_end: {:?}",
                 state.current_video_running_time, state.current_video_running_time_end, state.previous_video_running_time_end);
 
-            let mut break_loop = false;
             if let Some(current_video_running_time_end) = state.current_video_running_time_end {
                 if st2038_time >= current_video_running_time_end {
                     gst::debug!(
@@ -642,7 +641,7 @@ impl St2038Combiner {
                                 imp = self,
                                 "Collected all ST-2038 data for this video buffer, {st2038_time} >= {current_video_running_time_end}"
                             );
-                    break_loop = true;
+                    break;
                 }
             } else {
                 if let Some(previous_video_running_time_end) = state.previous_video_running_time_end
@@ -686,10 +685,6 @@ impl St2038Combiner {
                 state.current_frame_st2038.len(),
                 state.current_video_running_time_end
             );
-
-            if break_loop {
-                break;
-            }
         }
 
         gst::log!(
