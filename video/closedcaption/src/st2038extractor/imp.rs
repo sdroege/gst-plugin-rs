@@ -182,6 +182,16 @@ impl St2038Extractor {
             state
                 .flow_combiner
                 .update_pad_flow(&st2038_srcpad, flow_ret)?;
+        } else if let Some((st2038_srcpad, pts)) =
+            Option::zip(state.st2038_srcpad.clone(), buffer.pts())
+        {
+            let gap = gst::event::Gap::builder(pts)
+                .duration(buffer.duration())
+                .build();
+
+            drop(state);
+            let _ = st2038_srcpad.push_event(gap);
+            state = self.state.lock().unwrap();
         }
         drop(state);
 
