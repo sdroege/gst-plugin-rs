@@ -348,7 +348,7 @@ impl Polly {
                     if pts > position {
                         max_overflow
                     } else {
-                        let budget = pts + max_overflow - position;
+                        let budget = (pts + max_overflow).saturating_sub(position);
                         pts = position;
                         budget
                     }
