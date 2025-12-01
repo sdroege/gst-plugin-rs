@@ -353,7 +353,7 @@ impl Polly {
                         budget
                     }
                 }
-                None => 2 * gst::ClockTime::SECOND,
+                None => max_overflow,
             };
 
             gst::debug!(CAT, "Overflow budget: {}", overflow_budget);
