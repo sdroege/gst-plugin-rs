@@ -1885,7 +1885,16 @@ impl TranscriberBin {
         let srcpad = gst::GhostPad::with_target(&srcpad).unwrap();
         internal_bin.add_pad(&srcpad)?;
 
-        let srcpad = gst::GhostPad::with_target(&srcpad).unwrap();
+        let srcpad = gst::GhostPad::builder_with_target(&srcpad)
+            .unwrap()
+            .query_function(|pad, parent, query| {
+                TranscriberBin::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |transcriber| transcriber.src_query(pad.upcast_ref(), query),
+                )
+            })
+            .build();
         self.obj().add_pad(&srcpad)?;
 
         Ok(())
