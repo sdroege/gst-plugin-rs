@@ -23,6 +23,7 @@ use std::sync::LazyLock;
 use std::sync::{Mutex, MutexGuard};
 
 const DEFAULT_REMOVE_ANCILLARY_META: bool = false;
+const DEFAULT_ALWAYS_ADD_ST2038_PAD: bool = false;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -35,6 +36,7 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 #[derive(Debug, Default, Clone)]
 struct Settings {
     remove_ancillary_meta: bool,
+    always_add_st2038_pad: bool,
 }
 
 pub struct St2038Extractor {
@@ -164,6 +166,8 @@ impl St2038Extractor {
         }
 
         let mut state = self.state.lock().unwrap();
+        let settings = self.settings.lock().unwrap().clone();
+
         if !st2038_buffer.is_empty() {
             let mut st2038_outbuf = gst::Buffer::from_mut_slice(st2038_buffer);
 
@@ -182,20 +186,25 @@ impl St2038Extractor {
             state
                 .flow_combiner
                 .update_pad_flow(&st2038_srcpad, flow_ret)?;
-        } else if let Some((st2038_srcpad, pts)) =
-            Option::zip(state.st2038_srcpad.clone(), buffer.pts())
-        {
-            let gap = gst::event::Gap::builder(pts)
-                .duration(buffer.duration())
-                .build();
-
             drop(state);
-            let _ = st2038_srcpad.push_event(gap);
-            state = self.state.lock().unwrap();
-        }
-        drop(state);
+        } else if let Some(pts) = buffer.pts() {
+            let st2038_srcpad = if settings.always_add_st2038_pad {
+                Some(self.create_st2038_srcpad(state))
+            } else {
+                let st2038_srcpad = state.st2038_srcpad.clone();
+                drop(state);
+                st2038_srcpad
+            };
 
-        let settings = self.settings.lock().unwrap();
+            if let Some(st2038_srcpad) = st2038_srcpad {
+                let gap = gst::event::Gap::builder(pts)
+                    .duration(buffer.duration())
+                    .build();
+
+                let _ = st2038_srcpad.push_event(gap);
+            }
+        }
+
         if settings.remove_ancillary_meta {
             let buffer = buffer.make_mut();
             buffer.foreach_meta_mut(|meta| {
@@ -206,7 +215,6 @@ impl St2038Extractor {
                 Continue(gst::buffer::BufferMetaForeachAction::Keep)
             });
         }
-        drop(settings);
 
         let flow_ret = self.srcpad.push(buffer);
 
@@ -364,12 +372,20 @@ impl ObjectSubclass for St2038Extractor {
 impl ObjectImpl for St2038Extractor {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecBoolean::builder("remove-ancillary-meta")
-                .nick("Remove Ancillary Meta")
-                .blurb("Remove ancillary meta from outgoing video buffers")
-                .default_value(DEFAULT_REMOVE_ANCILLARY_META)
-                .mutable_playing()
-                .build()]
+            vec![
+                glib::ParamSpecBoolean::builder("remove-ancillary-meta")
+                    .nick("Remove Ancillary Meta")
+                    .blurb("Remove ancillary meta from outgoing video buffers")
+                    .default_value(DEFAULT_REMOVE_ANCILLARY_META)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecBoolean::builder("always-add-st2038-pad")
+                    .nick("Always add ST2038 pad")
+                    .blurb("Always add the ST2038 pad even if not ancillary data was received yet")
+                    .default_value(DEFAULT_ALWAYS_ADD_ST2038_PAD)
+                    .mutable_playing()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()
@@ -381,6 +397,10 @@ impl ObjectImpl for St2038Extractor {
                 let mut settings = self.settings.lock().unwrap();
                 settings.remove_ancillary_meta = value.get().expect("type checked upstream");
             }
+            "always-add-st2038-pad" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.always_add_st2038_pad = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -389,6 +409,7 @@ impl ObjectImpl for St2038Extractor {
         let settings = self.settings.lock().unwrap();
         match pspec.name() {
             "remove-ancillary-meta" => settings.remove_ancillary_meta.to_value(),
+            "always-add-st2038-pad" => settings.always_add_st2038_pad.to_value(),
             _ => unimplemented!(),
         }
     }

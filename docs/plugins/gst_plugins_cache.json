@@ -10164,6 +10164,18 @@
                     }
                 },
                 "properties": {
+                    "always-add-st2038-pad": {
+                        "blurb": "Always add the ST2038 pad even if not ancillary data was received yet",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "remove-ancillary-meta": {
                         "blurb": "Remove ancillary meta from outgoing video buffers",
                         "conditionally-available": false,
