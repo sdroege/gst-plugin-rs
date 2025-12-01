@@ -205,7 +205,7 @@ impl AggregatorImpl for St2038Combiner {
                             Err(e) => Err(e),
                         }
                     } else {
-                        Ok(gst::FlowSuccess::Ok)
+                        Err(gst::FlowError::Eos)
                     }
                 } else {
                     Ok(gst::FlowSuccess::Ok)
