@@ -8896,7 +8896,7 @@
                 },
                 "properties": {
                     "c-not-y-channel": {
-                        "blurb": "Set the y_not_c_channel flag in the output",
+                        "blurb": "Set the c_not_y_channel flag in the output",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
