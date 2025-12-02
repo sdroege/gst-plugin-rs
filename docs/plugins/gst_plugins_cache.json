@@ -9881,7 +9881,7 @@
                 "long-name": "Mcc Encoder",
                 "pad-templates": {
                     "sink": {
-                        "caps": "closedcaption/x-cea-708:\n         format: cdp\n      framerate: { (fraction)24/1, (fraction)25/1, (fraction)30000/1001, (fraction)30/1, (fraction)50/1, (fraction)60000/1001, (fraction)60/1 }\nclosedcaption/x-cea-608:\n         format: s334-1a\n      framerate: { (fraction)24/1, (fraction)25/1, (fraction)30000/1001, (fraction)30/1, (fraction)50/1, (fraction)60000/1001, (fraction)60/1 }\n",
+                        "caps": "meta/x-st-2038:\n      alignment: packet\n",
                         "direction": "sink",
                         "presence": "always"
                     },

@@ -6,6 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use crate::st2038anc_utils::AncDataHeader;
 use gst::glib;
 use gst::prelude::*;
 use gst::structure;
@@ -21,6 +22,12 @@ use std::sync::Mutex;
 
 use super::headers::*;
 
+fn is_st2038() -> bool {
+    std::env::var("GST_MCC_AS_CEA")
+        .map(|val| val != "1")
+        .unwrap_or(true)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Format {
     Cea708Cdp,
@@ -31,6 +38,7 @@ enum Format {
 struct State {
     format: Option<Format>,
     need_headers: bool,
+    handle_as_st2038: bool,
 }
 
 impl Default for State {
@@ -38,6 +46,7 @@ impl Default for State {
         Self {
             format: None,
             need_headers: true,
+            handle_as_st2038: is_st2038(),
         }
     }
 }
@@ -277,38 +286,92 @@ impl MccEnc {
             gst::FlowError::Error
         })?;
 
-        let len = map.len();
-        if len >= 256 {
-            gst::element_imp_error!(
-                self,
-                gst::StreamError::Format,
-                ["Too big buffer: {}", map.len()]
-            );
+        if state.handle_as_st2038 {
+            // Maximum size of one ST2038 packet
+            let mut payload = Vec::with_capacity(328);
+            let mut slice = map.as_slice();
 
-            return Err(gst::FlowError::Error);
-        }
-        let len = len as u8;
+            while !slice.is_empty() {
+                // Stop on stuffing bytes
+                if slice[0] == 0b1111_1111 {
+                    break;
+                }
 
-        match state.format {
-            Some(Format::Cea608) => {
-                let _ = write!(outbuf, "6102{len:02X}");
+                let header = match AncDataHeader::from_slice(slice) {
+                    Ok(anc_hdr) => anc_hdr,
+                    Err(err) => {
+                        gst::debug!(
+                            CAT,
+                            imp = self,
+                            "Failed to parse ancillary data header: {err:?}"
+                        );
+                        return Err(gst::FlowError::Error);
+                    }
+                };
+
+                gst::trace!(CAT, imp = self, "Parsed ST2038 header {header:?}");
+
+                payload.clear();
+
+                payload.push(header.did);
+                payload.push(header.sdid);
+                payload.push(header.data_count);
+
+                use bitstream_io::{BigEndian, BitRead, BitReader};
+                use std::io::Cursor;
+
+                let mut r = BitReader::endian(Cursor::new(slice), BigEndian);
+                // Skip header portion
+                r.skip(6 + 1 + 11 + 12 + 10 + 10 + 10).unwrap();
+
+                for _ in 0..header.data_count {
+                    // We can unwrap as parsing would have raised an
+                    // error on failing to read beyond the data words.
+                    payload.push((r.read::<10, u16>().unwrap() & 0xFF) as u8);
+                }
+
+                payload.push((header.checksum & 0xFF) as u8);
+
+                Self::encode_payload(outbuf, payload.as_slice());
+
+                outbuf.extend_from_slice(b"\r\n".as_ref());
+
+                slice = &slice[header.len..];
             }
-            Some(Format::Cea708Cdp) => {
-                let _ = write!(outbuf, "T{len:02X}");
-            }
-            _ => return Err(gst::FlowError::NotNegotiated),
-        };
-
-        let checksum = map.iter().fold(0u8, |sum, b| sum.wrapping_add(*b));
-        Self::encode_payload(outbuf, &map);
-
-        if checksum == 0 {
-            outbuf.push(b'Z');
         } else {
-            let _ = write!(outbuf, "{checksum:02X}");
-        }
+            let len = map.len();
+            if len >= 256 {
+                gst::element_imp_error!(
+                    self,
+                    gst::StreamError::Format,
+                    ["Too big buffer: {}", map.len()]
+                );
 
-        outbuf.extend_from_slice(b"\r\n".as_ref());
+                return Err(gst::FlowError::Error);
+            }
+            let len = len as u8;
+
+            match state.format {
+                Some(Format::Cea608) => {
+                    let _ = write!(outbuf, "6102{len:02X}");
+                }
+                Some(Format::Cea708Cdp) => {
+                    let _ = write!(outbuf, "T{len:02X}");
+                }
+                _ => return Err(gst::FlowError::NotNegotiated),
+            };
+
+            let checksum = map.iter().fold(0u8, |sum, b| sum.wrapping_add(*b));
+            Self::encode_payload(outbuf, &map);
+
+            if checksum == 0 {
+                outbuf.push(b'Z');
+            } else {
+                let _ = write!(outbuf, "{checksum:02X}");
+            }
+
+            outbuf.extend_from_slice(b"\r\n".as_ref());
+        }
 
         Ok(())
     }
@@ -358,10 +421,12 @@ impl MccEnc {
                 };
 
                 let mut state = self.state.lock().unwrap();
-                if s.name() == "closedcaption/x-cea-608" {
-                    state.format = Some(Format::Cea608);
-                } else {
-                    state.format = Some(Format::Cea708Cdp);
+                if !state.handle_as_st2038 {
+                    if s.name() == "closedcaption/x-cea-608" {
+                        state.format = Some(Format::Cea608);
+                    } else {
+                        state.format = Some(Format::Cea708Cdp);
+                    }
                 }
                 drop(state);
 
@@ -531,32 +596,41 @@ impl ElementImpl for MccEnc {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
-            let mut caps = gst::Caps::new_empty();
-            {
-                let caps = caps.get_mut().unwrap();
+            let caps = if is_st2038() {
+                gst::Caps::builder("meta/x-st-2038")
+                    .field("alignment", "packet")
+                    .build()
+            } else {
+                let mut caps = gst::Caps::new_empty();
+                {
+                    let caps = caps.get_mut().unwrap();
 
-                let framerates = gst::List::new([
-                    gst::Fraction::new(24, 1),
-                    gst::Fraction::new(25, 1),
-                    gst::Fraction::new(30000, 1001),
-                    gst::Fraction::new(30, 1),
-                    gst::Fraction::new(50, 1),
-                    gst::Fraction::new(60000, 1001),
-                    gst::Fraction::new(60, 1),
-                ]);
+                    let framerates = gst::List::new([
+                        gst::Fraction::new(24, 1),
+                        gst::Fraction::new(25, 1),
+                        gst::Fraction::new(30000, 1001),
+                        gst::Fraction::new(30, 1),
+                        gst::Fraction::new(50, 1),
+                        gst::Fraction::new(60000, 1001),
+                        gst::Fraction::new(60, 1),
+                    ]);
 
-                let s = gst::Structure::builder("closedcaption/x-cea-708")
-                    .field("format", "cdp")
-                    .field("framerate", &framerates)
-                    .build();
-                caps.append_structure(s);
+                    let s = gst::Structure::builder("closedcaption/x-cea-708")
+                        .field("format", "cdp")
+                        .field("framerate", &framerates)
+                        .build();
+                    caps.append_structure(s);
 
-                let s = gst::Structure::builder("closedcaption/x-cea-608")
-                    .field("format", "s334-1a")
-                    .field("framerate", &framerates)
-                    .build();
-                caps.append_structure(s);
-            }
+                    let s = gst::Structure::builder("closedcaption/x-cea-608")
+                        .field("format", "s334-1a")
+                        .field("framerate", &framerates)
+                        .build();
+                    caps.append_structure(s);
+                }
+
+                caps
+            };
+
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,
