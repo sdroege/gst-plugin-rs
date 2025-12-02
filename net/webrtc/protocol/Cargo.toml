@@ -13,4 +13,4 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 [package.metadata.gstreamer]
-release_date = "2025-07-16"
+release_date = "2025-12-02"
