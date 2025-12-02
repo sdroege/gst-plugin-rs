@@ -46,4 +46,4 @@ import_library = false
 requires_private = "gstreamer-1.0, gstreamer-base-1.0, gobject-2.0, glib-2.0, gmodule-2.0"
 
 [package.metadata.gstreamer]
-release_date = "2025-12-02"
+release_date = "2025-07-16"

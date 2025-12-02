@@ -149,4 +149,4 @@ name = "stream-selector-server"
 name = "stream-selector-client"
 
 [package.metadata.gstreamer]
-release_date = "2025-12-02"
+release_date = "2025-07-16"
