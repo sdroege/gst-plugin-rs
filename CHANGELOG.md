@@ -5,6 +5,34 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.14.4] - 2025-12-02
+### Fixed
+- analyticssplitter / combiner: Update to latest batch meta API.
+- audiornnoise: Copy input metadata to output.
+- fmp4mux: Fix EAC-3 datarate calculation and substream writing.
+- fmp4mux: Fix potential deadlock when requesting a pad.
+- gtk4paintablesink: Add property to control the reconfigure-event behaviour.
+- jsongstparse: Don't send error messages on flushing
+- mccparse / sccparse: Don't send error messages on flushing
+- mp4mux: Fix potential deadlock when requesting a pad.
+- ndisrcdemux: Fix audio corruption when padding is used for non-interleaved audio.
+- rtpsmtpe291: New RTP payloader / depayloader for SMPTE 291 ancillary data.
+- st2038: Forward framerate in caps if available and set frame alignment.
+- st2038: Fix checksum calculation.
+- webrtcsink: Fix deadlock
+- webrtcsink: Don't block tokio runtime thread when recalculating latency.
+- webrtcsrc: Clean up EOS/session handling.
+
+### Added
+- fmp4mux: Implement childproxy interface.
+- mp4mux: Implement childproxy interface.
+- st2038extractor / combiner: New elements.
+- webrtcsink: Add support for VA encoders.
+
+### Changed
+- Fix a couple of new clippy / compiler warnings.
+- Update some dependencies.
+
 ## [0.14.3] - 2025-10-31
 ### Fixed
 - fallbacksrc: Fix custom source re-use.
@@ -860,7 +888,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.3...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.4...HEAD
+[0.14.4]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.3...0.14.4
 [0.14.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.2...0.14.3
 [0.14.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.1...0.14.2
 [0.14.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.0...0.14.1
