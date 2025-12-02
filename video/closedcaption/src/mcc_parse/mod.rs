@@ -12,6 +12,9 @@ use gst::prelude::*;
 mod imp;
 mod parser;
 
+#[cfg(test)]
+mod tests;
+
 glib::wrapper! {
     pub struct MccParse(ObjectSubclass<imp::MccParse>) @extends gst::Element, gst::Object;
 }

@@ -9937,7 +9937,7 @@
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "closedcaption/x-cea-708:\n         format: cdp\n      framerate: [ 1/2147483647, 2147483647/1 ]\nclosedcaption/x-cea-608:\n         format: s334-1a\n      framerate: [ 1/2147483647, 2147483647/1 ]\n",
+                        "caps": "meta/x-st-2038:\n      alignment: packet\n",
                         "direction": "src",
                         "presence": "always"
                     }

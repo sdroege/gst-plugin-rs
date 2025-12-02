@@ -19,6 +19,7 @@ use std::sync::LazyLock;
 use super::parser::{MccLine, MccParser};
 use crate::line_reader::LineReader;
 use crate::parser_utils::TimeCode;
+use crate::st2038anc_utils::convert_to_st2038_buffer;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -27,6 +28,32 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
         Some("Mcc Parser Element"),
     )
 });
+
+fn is_st2038() -> bool {
+    std::env::var("GST_MCC_AS_CEA")
+        .map(|val| val != "1")
+        .unwrap_or(true)
+}
+
+fn get_closedcaption_caps(did: u8, sdid: u8, framerate: gst::Fraction) -> (Format, gst::Caps) {
+    match (did, sdid) {
+        (0x61, 0x01) => (
+            Format::Cea708Cdp,
+            gst::Caps::builder("closedcaption/x-cea-708")
+                .field("format", "cdp")
+                .field("framerate", framerate)
+                .build(),
+        ),
+        (0x61, 0x02) => (
+            Format::Cea608,
+            gst::Caps::builder("closedcaption/x-cea-608")
+                .field("format", "s334-1a")
+                .field("framerate", framerate)
+                .build(),
+        ),
+        _ => unreachable!(),
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Format {
@@ -58,6 +85,7 @@ struct State {
     reader: LineReader<gst::MappedBuffer<gst::buffer::Readable>>,
     parser: MccParser,
     format: Option<Format>,
+    need_caps: bool,
     need_segment: bool,
     pending_events: Vec<gst::Event>,
     last_position: Option<gst::ClockTime>,
@@ -75,6 +103,8 @@ struct State {
     last_raw_line: Vec<u8>,
     replay_last_line: bool,
     need_flush_stop: bool,
+
+    handle_as_st2038: bool,
 }
 
 impl Default for State {
@@ -83,6 +113,7 @@ impl Default for State {
             reader: LineReader::new(),
             parser: MccParser::new(),
             format: None,
+            need_caps: true,
             need_segment: true,
             pending_events: Vec::new(),
             last_position: None,
@@ -96,6 +127,7 @@ impl Default for State {
             last_raw_line: Vec::new(),
             replay_last_line: false,
             need_flush_stop: false,
+            handle_as_st2038: is_st2038(),
         }
     }
 }
@@ -245,7 +277,7 @@ impl State {
     fn create_events(
         &mut self,
         imp: &MccParse,
-        format: Option<Format>,
+        did_sdid: Option<(u8, u8)>,
         framerate: gst::Fraction,
     ) -> Vec<gst::Event> {
         let mut events = Vec::new();
@@ -266,21 +298,21 @@ impl State {
             }
         }
 
-        if let Some(format) = format {
+        if self.handle_as_st2038 {
+            if self.need_caps {
+                self.need_caps = false;
+                let caps = gst::Caps::builder("meta/x-st-2038")
+                    .field("alignment", "packet")
+                    .field("framerate", framerate)
+                    .build();
+                events.push(gst::event::Caps::new(&caps));
+                gst::info!(CAT, imp = imp, "Caps changed to {:?}", &caps);
+            }
+        } else if let Some((did, sdid)) = did_sdid {
+            let (format, caps) = get_closedcaption_caps(did, sdid, framerate);
+
             if self.format != Some(format) {
                 self.format = Some(format);
-
-                let caps = match format {
-                    Format::Cea708Cdp => gst::Caps::builder("closedcaption/x-cea-708")
-                        .field("format", "cdp")
-                        .field("framerate", framerate)
-                        .build(),
-                    Format::Cea608 => gst::Caps::builder("closedcaption/x-cea-608")
-                        .field("format", "s334-1a")
-                        .field("framerate", framerate)
-                        .build(),
-                };
-
                 events.push(gst::event::Caps::new(&caps));
                 gst::info!(CAT, imp = imp, "Caps changed to {:?}", &caps);
             }
@@ -379,14 +411,24 @@ impl MccParse {
                         continue;
                     }
 
-                    let format = match (data[0], data[1]) {
-                        (0x61, 0x01) => Format::Cea708Cdp,
-                        (0x61, 0x02) => Format::Cea608,
-                        (did, sdid) => {
-                            gst::debug!(CAT, imp = self, "Unknown DID {:x} SDID {:x}", did, sdid);
-                            continue;
+                    let (did, sdid) = (data[0], data[1]);
+                    if !state.handle_as_st2038 {
+                        match (did, sdid) {
+                            (0x61, 0x01) | (0x61, 0x02) => {
+                                // Valid CEA-608/708 codes
+                            }
+                            _ => {
+                                gst::debug!(
+                                    CAT,
+                                    imp = self,
+                                    "Unknown DID {:x} SDID {:x}",
+                                    did,
+                                    sdid
+                                );
+                                continue;
+                            }
                         }
-                    };
+                    }
 
                     let len = data[2];
                     if data.len() < 3 + len as usize {
@@ -400,7 +442,7 @@ impl MccParse {
                         continue;
                     }
 
-                    state = self.handle_line(tc, data, format, state)?;
+                    state = self.handle_line(tc, data, did, sdid, state)?;
                 }
                 Ok(Some(MccLine::Caption(tc, None))) => {
                     assert!(state.seeking);
@@ -494,19 +536,42 @@ impl MccParse {
         &self,
         tc: TimeCode,
         data: Vec<u8>,
-        format: Format,
+        did: u8,
+        sdid: u8,
         mut state: MutexGuard<'_, State>,
     ) -> Result<MutexGuard<'_, State>, gst::FlowError> {
         let (framerate, drop_frame) = parse_timecode_rate(state.timecode_rate)?;
-        let events = state.create_events(self, Some(format), framerate);
+        let events = state.create_events(self, Some((did, sdid)), framerate);
         let timecode = state.handle_timecode(self, framerate, drop_frame, tc)?;
 
         let len = data[2] as usize;
-        let mut buffer = gst::Buffer::from_mut_slice(OffsetVec {
-            vec: data,
-            offset: 3,
-            len,
-        });
+        let mut buffer = if state.handle_as_st2038 {
+            let buffer = convert_to_st2038_buffer(
+                false,
+                0xFF, /* Unknown/unspecified */
+                0xFF, /* Unknown/unspecified */
+                did,
+                sdid,
+                OffsetVec {
+                    vec: data,
+                    offset: 3,
+                    len,
+                }
+                .as_ref(),
+            )
+            .map_err(|err| {
+                gst::error!(CAT, imp = self, "Failed to convert to ST-2038 {err:?}");
+                gst::FlowError::Error
+            })?;
+
+            buffer
+        } else {
+            gst::Buffer::from_mut_slice(OffsetVec {
+                vec: data,
+                offset: 3,
+                len,
+            })
+        };
 
         state.add_buffer_metadata(self, &mut buffer, &timecode, framerate);
 
@@ -1160,26 +1225,35 @@ impl ElementImpl for MccParse {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
-            let mut caps = gst::Caps::new_empty();
-            {
-                let caps = caps.get_mut().unwrap();
-                let framerate = gst::FractionRange::new(
-                    gst::Fraction::new(1, i32::MAX),
-                    gst::Fraction::new(i32::MAX, 1),
-                );
+            let caps = if is_st2038() {
+                gst::Caps::builder("meta/x-st-2038")
+                    .field("alignment", "packet")
+                    .build()
+            } else {
+                let mut caps = gst::Caps::new_empty();
+                {
+                    let caps = caps.get_mut().unwrap();
+                    let framerate = gst::FractionRange::new(
+                        gst::Fraction::new(1, i32::MAX),
+                        gst::Fraction::new(i32::MAX, 1),
+                    );
 
-                let s = gst::Structure::builder("closedcaption/x-cea-708")
-                    .field("format", "cdp")
-                    .field("framerate", framerate)
-                    .build();
-                caps.append_structure(s);
+                    let s = gst::Structure::builder("closedcaption/x-cea-708")
+                        .field("format", "cdp")
+                        .field("framerate", framerate)
+                        .build();
+                    caps.append_structure(s);
 
-                let s = gst::Structure::builder("closedcaption/x-cea-608")
-                    .field("format", "s334-1a")
-                    .field("framerate", framerate)
-                    .build();
-                caps.append_structure(s);
-            }
+                    let s = gst::Structure::builder("closedcaption/x-cea-608")
+                        .field("format", "s334-1a")
+                        .field("framerate", framerate)
+                        .build();
+                    caps.append_structure(s);
+                }
+
+                caps
+            };
+
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
