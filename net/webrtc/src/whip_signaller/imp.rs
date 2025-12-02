@@ -1357,7 +1357,7 @@ impl ObjectImpl for WhipServer {
                         let id = args[1]
                             .get::<String>()
                             .expect("ID as string as first parameter");
-                        let promise = args[3]
+                        let promise = args[2]
                             .get::<gst::Promise>()
                             .expect("GstPromise as third parameter");
 
@@ -1377,7 +1377,6 @@ impl ObjectImpl for WhipServer {
                     })
                     .param_types([
                         String::static_type(),
-                        glib::Bytes::static_type(),
                         gst::Promise::static_type(),
                     ])
                     .return_type::<()>()
