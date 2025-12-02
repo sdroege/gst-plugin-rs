@@ -153,3 +153,7 @@ name = "renegotiation-server"
 
 [[example]]
 name = "renegotiation-client"
+
+[[example]]
+name = "whepserver"
+required-features = [ "whep" ]

@@ -164,7 +164,7 @@ async fn post_handler(
             .child_by_name("signaller")
             .unwrap();
 
-        signaller.set_property("host_addr", None::<String>);
+        signaller.set_property("host-addr", None::<String>);
 
         ws.set_property("enable-data-channel-navigation", true);
 
