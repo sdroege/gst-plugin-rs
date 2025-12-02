@@ -233,8 +233,8 @@ impl ObjectImpl for CcToSt2038Anc {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
                 glib::ParamSpecBoolean::builder("c-not-y-channel")
-                    .nick("Y Not C Channel")
-                    .blurb("Set the y_not_c_channel flag in the output")
+                    .nick("C Not Y Channel")
+                    .blurb("Set the c_not_y_channel flag in the output")
                     .default_value(Settings::default().c_not_y_channel)
                     .mutable_playing()
                     .build(),
