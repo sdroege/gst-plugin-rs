@@ -353,7 +353,6 @@ impl State {
             }
 
             self.rows.clear();
-            self.cea608_state.reset();
         } else {
             for row in self.rows.values() {
                 if !row.is_empty() {
