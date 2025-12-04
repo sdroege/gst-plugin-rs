@@ -9850,6 +9850,18 @@
                     }
                 },
                 "properties": {
+                    "set-line-attribute": {
+                        "blurb": "Set the line attribute on cues, using the lowest row from the visible lines",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "timeout": {
                         "blurb": "Duration after which to erase text when no data has arrived",
                         "conditionally-available": false,

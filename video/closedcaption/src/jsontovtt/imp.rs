@@ -19,6 +19,8 @@ use std::sync::LazyLock;
 use std::collections::{BinaryHeap, VecDeque};
 use std::sync::Mutex;
 
+const DEFAULT_SET_LINE_ATTRIBUTE: bool = false;
+
 #[derive(Clone, Debug)]
 struct TimestampedLines {
     lines: Lines,
@@ -30,12 +32,14 @@ struct TimestampedLines {
 #[derive(Debug, Clone, Copy)]
 struct Settings {
     timeout: Option<gst::ClockTime>,
+    set_line_attribute: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Settings {
             timeout: gst::ClockTime::NONE,
+            set_line_attribute: DEFAULT_SET_LINE_ATTRIBUTE,
         }
     }
 }
@@ -138,6 +142,7 @@ impl State {
         timestamp: gst::ClockTime,
         duration: gst::ClockTime,
         text: &str,
+        base_line: Option<u32>,
     ) -> Option<gst::Buffer> {
         use std::fmt::Write;
 
@@ -153,9 +158,15 @@ impl State {
             return None;
         }
 
+        let line_attr = if let Some(line) = base_line {
+            format!(" line:{}", line)
+        } else {
+            String::from("")
+        };
+
         writeln!(
             &mut data,
-            "{h1:02}:{m1:02}:{s1:02}.{ms1:03} --> {h2:02}:{m2:02}:{s2:02}.{ms2:03}"
+            "{h1:02}:{m1:02}:{s1:02}.{ms1:03} --> {h2:02}:{m2:02}:{s2:02}.{ms2:03}{line_attr}",
         )
         .unwrap();
         writeln!(&mut data, "{text}").unwrap();
@@ -257,16 +268,27 @@ impl State {
             for lines in drained_lines {
                 let mut output_text = String::new();
 
+                let mut base_line: Option<u32> = None;
+
                 for line in &lines.lines.lines {
                     for chunk in &line.chunks {
                         output_text += &chunk.text;
                     }
                     output_text += "\n";
+
+                    if self.settings.set_line_attribute {
+                        if let Some(row) = line.row {
+                            base_line = Some(row - 1);
+                        } else if let Some(line) = base_line {
+                            base_line = Some(line + 1);
+                        }
+                    }
                 }
 
                 // No need to output an explicit cue for eg clear buffers
                 if !output_text.is_empty() {
-                    let mut buf = Self::create_vtt_buffer(lines.pts, lines.duration, &output_text);
+                    let mut buf =
+                        Self::create_vtt_buffer(lines.pts, lines.duration, &output_text, base_line);
 
                     if let Some(buf) = buf.take() {
                         buffers.push(buf);
@@ -578,13 +600,21 @@ impl ObjectSubclass for JsonToVtt {
 impl ObjectImpl for JsonToVtt {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecUInt64::builder("timeout")
-                .nick("Timeout")
-                .blurb("Duration after which to erase text when no data has arrived")
-                .minimum(16.seconds().nseconds())
-                .default_value(u64::MAX)
-                .mutable_playing()
-                .build()]
+            vec![
+                glib::ParamSpecUInt64::builder("timeout")
+                    .nick("Timeout")
+                    .blurb("Duration after which to erase text when no data has arrived")
+                    .minimum(16.seconds().nseconds())
+                    .default_value(u64::MAX)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecBoolean::builder("set-line-attribute")
+                    .nick("Set Line Attribute")
+                    .blurb("Set the line attribute on cues, using the lowest row from the visible lines")
+                    .default_value(DEFAULT_SET_LINE_ATTRIBUTE)
+                    .mutable_playing()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()
@@ -604,6 +634,15 @@ impl ObjectImpl for JsonToVtt {
                 };
                 state.settings.timeout = settings.timeout;
             }
+            "set-line-attribute" => {
+                let mut settings = self.settings.lock().unwrap();
+                let mut state = self.state.lock().unwrap();
+
+                let set_line_attribute = value.get().expect("type checked upstream");
+
+                settings.set_line_attribute = set_line_attribute;
+                state.settings.timeout = settings.timeout;
+            }
             _ => unimplemented!(),
         }
     }
@@ -618,6 +657,7 @@ impl ObjectImpl for JsonToVtt {
                     u64::MAX.to_value()
                 }
             }
+            "set-line-attribute" => self.settings.lock().unwrap().set_line_attribute.to_value(),
             _ => unimplemented!(),
         }
     }
