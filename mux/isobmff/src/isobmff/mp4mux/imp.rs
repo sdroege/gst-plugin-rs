@@ -2362,7 +2362,7 @@ impl AggregatorImpl for MP4Mux {
                 };
 
                 streams.push(TrackConfiguration {
-                    caps: stream.caps.clone(),
+                    caps: vec![stream.caps.clone()],
                     delta_frames: stream.delta_frames,
                     trak_timescale: stream.timescale(),
                     earliest_pts,

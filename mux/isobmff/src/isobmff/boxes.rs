@@ -157,11 +157,11 @@ fn write_moov(v: &mut Vec<u8>, cfg: &PresentationConfiguration) -> Result<(), Er
 
             // Reference the video track for ONVIF metadata tracks
             if (cfg.variant == Variant::FragmentedONVIF || cfg.variant == Variant::ONVIF)
-                && stream.caps.structure(0).unwrap().name() == "application/x-onvif-metadata"
+                && stream.caps().structure(0).unwrap().name() == "application/x-onvif-metadata"
             {
                 // Find the first video track
                 for (idx, other_stream) in cfg.tracks.iter().enumerate() {
-                    let s = other_stream.caps.structure(0).unwrap();
+                    let s = other_stream.caps().structure(0).unwrap();
 
                     if matches!(
                         s.name().as_str(),
@@ -252,7 +252,8 @@ fn write_minf(
     cfg: &PresentationConfiguration,
     stream: &TrackConfiguration,
 ) -> Result<(), Error> {
-    let s = stream.caps.structure(0).unwrap();
+    let caps = stream.caps();
+    let s = caps.structure(0).unwrap();
 
     match s.name().as_str() {
         "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
@@ -847,7 +848,7 @@ fn write_xml_meta_data_sample_entry(
     v: &mut Vec<u8>,
     stream: &super::TrackConfiguration,
 ) -> Result<(), Error> {
-    let s = stream.caps.structure(0).unwrap();
+    let s = stream.caps().structure(0).unwrap();
     let namespace = match s.name().as_str() {
         "application/x-onvif-metadata" => b"http://www.onvif.org/ver10/schema",
         _ => unreachable!(),
@@ -940,7 +941,7 @@ pub(crate) fn write_hdlr_box(
 }
 
 fn write_hdlr_for_stream(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error> {
-    let s = stream.caps.structure(0).unwrap();
+    let s = stream.caps().structure(0).unwrap();
     let (handler_type, name) = match s.name().as_str() {
         "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
         | "image/jpeg" | "video/x-raw" => {
@@ -1001,7 +1002,7 @@ fn write_tkhd(
     v.extend(0u16.to_be_bytes());
 
     // Volume
-    let s = stream.caps.structure(0).unwrap();
+    let s = stream.caps().structure(0).unwrap();
     match s.name().as_str() {
         "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
         | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" | "audio/x-raw" => {
@@ -1292,7 +1293,7 @@ pub(crate) fn write_stsd(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result
     // Entry count
     v.extend(1u32.to_be_bytes());
 
-    let s = stream.caps.structure(0).unwrap();
+    let s = stream.caps().structure(0).unwrap();
     match s.name().as_str() {
         "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
         | "image/jpeg" | "video/x-raw" => write_visual_sample_entry(v, stream)?,
@@ -1308,7 +1309,7 @@ pub(crate) fn write_stsd(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result
 }
 
 fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error> {
-    let s = stream.caps.structure(0).unwrap();
+    let s = stream.caps().structure(0).unwrap();
     let fourcc = match s.name().as_str() {
         "video/x-h264" => {
             let stream_format = s.get::<&str>("stream-format").context("no stream-format")?;
@@ -1547,7 +1548,7 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                 // Nothing to do here
             }
             "video/x-raw" => {
-                let video_info = gst_video::VideoInfo::from_caps(&stream.caps).unwrap();
+                let video_info = gst_video::VideoInfo::from_caps(stream.caps()).unwrap();
                 write_uncompressed_sample_entries(v, video_info)?
             }
             _ => unreachable!(),
@@ -1591,7 +1592,7 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
             })?;
         }
 
-        if let Ok(cll) = gst_video::VideoContentLightLevel::from_caps(&stream.caps) {
+        if let Ok(cll) = gst_video::VideoContentLightLevel::from_caps(stream.caps()) {
             write_box(v, b"clli", move |v| {
                 v.extend((cll.max_content_light_level()).to_be_bytes());
                 v.extend((cll.max_frame_average_light_level()).to_be_bytes());
@@ -1599,7 +1600,7 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
             })?;
         }
 
-        if let Ok(mastering) = gst_video::VideoMasteringDisplayInfo::from_caps(&stream.caps) {
+        if let Ok(mastering) = gst_video::VideoMasteringDisplayInfo::from_caps(stream.caps()) {
             write_box(v, b"mdcv", move |v| {
                 for primary in mastering.display_primaries() {
                     v.extend(primary.x.to_be_bytes());
@@ -1988,7 +1989,7 @@ pub(crate) fn write_chnl(
 
 fn write_audio_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error> {
     let audio_info = gst_audio::AudioInfo::from_caps(&stream.caps).context("failed AudioInfo")?;
-    let s = stream.caps.structure(0).unwrap();
+    let s = stream.caps().structure(0).unwrap();
     let fourcc = match s.name().as_str() {
         "audio/mpeg" => b"mp4a",
         "audio/x-opus" => b"Opus",
@@ -2022,7 +2023,7 @@ fn write_audio_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Res
         }
         "audio/x-flac" => {
             let (streamheader, _headers) =
-                parse_flac_stream_header(&stream.caps).context("FLAC streamheader")?;
+                parse_flac_stream_header(stream.caps()).context("FLAC streamheader")?;
             streamheader.stream_info.bits_per_sample as u16
         }
         "audio/x-raw" => audio_info.width() as u16,
@@ -2066,10 +2067,10 @@ fn write_audio_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Res
                 write_esds_aac(v, stream, &map)?;
             }
             "audio/x-opus" => {
-                write_dops(v, &stream.caps)?;
+                write_dops(v, stream.caps())?;
             }
             "audio/x-flac" => {
-                write_dfla(v, &stream.caps)?;
+                write_dfla(v, stream.caps())?;
             }
             "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
                 // Nothing to do here

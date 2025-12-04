@@ -339,7 +339,7 @@ fn brands_from_variant_and_caps<'a>(
 
 pub(crate) fn create_fmp4_header(cfg: PresentationConfiguration) -> Result<gst::Buffer, Error> {
     let (minor_version, major_brand, compatible_brands) =
-        brands_from_variant_and_caps(cfg.variant, cfg.tracks.iter().map(|s| &s.caps));
+        brands_from_variant_and_caps(cfg.variant, cfg.tracks.iter().map(|s| s.caps()));
 
     create_moov(
         cfg,

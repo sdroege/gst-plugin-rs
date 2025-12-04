@@ -354,7 +354,7 @@ pub(crate) struct Chunk {
 #[derive(Debug)]
 pub(crate) struct TrackConfiguration {
     /// Caps of this track
-    pub(crate) caps: gst::Caps,
+    pub(crate) caps: Vec<gst::Caps>,
 
     /// Set if this is an intra-only tracck
     pub(crate) delta_frames: DeltaFrames,
@@ -443,8 +443,16 @@ impl TrackConfiguration {
         if self.trak_timescale > 0 {
             self.trak_timescale
         } else {
-            caps_to_timescale(&self.caps)
+            caps_to_timescale(self.caps())
         }
+    }
+
+    pub(crate) fn caps(&self) -> &gst::Caps {
+        self.caps.first().unwrap()
+    }
+
+    pub(crate) fn stream_entry_count(&self) -> usize {
+        self.caps.len()
     }
 }
 

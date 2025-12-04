@@ -512,9 +512,11 @@ impl State {
         self.fragment_end_pts = None;
         self.chunk_start_pts = None;
     }
+
     fn stream_from_pad(&self, pad: &gst_base::AggregatorPad) -> Option<&Stream> {
         self.streams.iter().find(|s| *pad == s.sinkpad)
     }
+
     fn mut_stream_from_pad(&mut self, pad: &gst_base::AggregatorPad) -> Option<&mut Stream> {
         self.streams.iter_mut().find(|s| *pad == s.sinkpad)
     }
@@ -3935,10 +3937,11 @@ impl FMP4Mux {
             .iter()
             .map(|s| {
                 let trak_timescale = { s.sinkpad.imp().settings.lock().unwrap().trak_timescale };
+
                 TrackConfiguration {
                     trak_timescale,
                     delta_frames: s.delta_frames,
-                    caps: s.caps.clone(),
+                    caps: vec![s.caps.clone()],
                     extra_header_data: s.extra_header_data.clone(),
                     codec_specific_boxes: s.codec_specific_boxes.clone(),
                     language_code: s.language_code,
