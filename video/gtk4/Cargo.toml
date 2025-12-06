@@ -58,6 +58,7 @@ gtk_v4_14 = ["gtk/v4_14", "gtk_v4_12"]
 gtk_v4_16 = ["gtk/v4_16", "gtk_v4_14"]
 gtk_v4_18 = ["gtk/v4_18", "gtk_v4_16"]
 gtk_v4_20 = ["gtk/v4_20", "gtk_v4_18"]
+v1_28 = ["gst-allocators/v1_28", "gst-video/v1_28"]
 
 [package.metadata.capi]
 min_version = "0.9.21"
