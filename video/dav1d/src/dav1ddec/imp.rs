@@ -1346,122 +1346,270 @@ impl VideoDecoderImpl for Dav1dDec {
     ) -> Result<(), gst::LoggableError> {
         gst::debug!(CAT, imp = self, "Renegotiating allocation");
 
-        {
-            let mut state_guard = self.state.lock().unwrap();
-            if let Some(state) = &mut *state_guard {
-                state.video_meta_supported = false;
-                state.output_pool = None;
-            }
-        }
-
-        self.parent_decide_allocation(query)?;
-
-        let video_meta_supported = query
-            .find_allocation_meta::<gst_video::VideoMeta>()
-            .is_some();
-
         let mut state_guard = self.state.lock().unwrap();
+
         let Some(state) = &mut *state_guard else {
             gst::trace!(CAT, imp = self, "Flushing");
             return Ok(());
         };
 
-        state.video_meta_supported = video_meta_supported;
+        state.video_meta_supported = false;
+        state.output_pool = None;
+
+        let video_meta_index = query.find_allocation_meta::<gst_video::VideoMeta>();
+        // Downstream supports videometa so let's remember that in any case for the output side
+        state.video_meta_supported = video_meta_index.is_some();
 
         let Some(output_state) = self.obj().output_state() else {
             gst::warning!(CAT, imp = self, "No output state set");
             return Ok(());
         };
 
-        // Base class is adding one allocation param and pool at least
-        let (allocator, mut params) = query.allocation_params().next().unwrap();
+        let Some(caps) = output_state.caps_owned() else {
+            gst::warning!(CAT, imp = self, "No output state set");
+            return Ok(());
+        };
+        let info = output_state.info().clone();
+
+        let mut downstream_align = gst_video::VideoAlignment::default();
+        if let Some(params) = video_meta_index
+            .and_then(|idx| query.allocation_metas().nth(idx as usize))
+            .and_then(|(_, params)| params.filter(|params| params.has_name("video-meta")))
+        {
+            // FIXME: needs better API
+            let params = unsafe { &*(params.as_ptr() as *const gst::BufferPoolConfigRef) };
+
+            if let Some(align) = params.video_alignment() {
+                downstream_align = align;
+            }
+        }
+
+        let (mut allocator, mut params) = query.allocation_params().next().unwrap_or_default();
         params.set_align(cmp::max(params.align(), dav1d::PICTURE_ALIGNMENT - 1));
         params.set_padding(cmp::max(params.padding(), dav1d::PICTURE_ALIGNMENT));
+        // Make params immutable
+        let params = params;
 
-        let (pool, size, min, max) = query.allocation_pools().next().unwrap();
-        // Base class always sets one
-        let pool = pool.unwrap();
+        // We select the first pool below that allows for >= 32 buffers.
+        //
+        // If it supports video meta and video alignment then it's directly used for rendering
+        // into it, otherwise it will still be configured but we have to copy into it later and
+        // use a fallback pool here.
+        let mut selected_pool = None;
+        let mut selected_size = info.size() as u32;
+        let mut selected_min = 0;
+        let mut selected_max = 0;
 
-        // FIXME: What's the minimum dav1d needs?
-        if max != 0 && max < 32 {
-            // Need to use a default pool
+        // For usage with the fallback buffer pool if none of the ones in the query
+        // actually worked
+        let mut first_pool_min = None;
+        let mut first_pool_max = None;
+        for (pool, size, min, max) in query.allocation_pools() {
+            if first_pool_min.is_none() {
+                first_pool_min = Some(min);
+            }
+
+            if max != 0 && max < 32 {
+                // if there is an allocator, also drop it, as it might be the reason we
+                // have this limit. Default will be used
+                allocator = None;
+                continue;
+            }
+
+            if first_pool_max.is_none() {
+                first_pool_max = Some(max);
+            }
+
+            let Some(pool) = pool else {
+                continue;
+            };
+
+            selected_size = size;
+            selected_min = min;
+            selected_max = max;
+            if self.try_pool(
+                &caps,
+                &info,
+                &pool,
+                &mut selected_size,
+                selected_min,
+                selected_max,
+                allocator.as_ref(),
+                &params,
+                &downstream_align,
+                state.video_meta_supported,
+            ) {
+                selected_pool = Some(pool);
+            }
+        }
+
+        if selected_pool.is_none() {
+            let pool = gst_video::VideoBufferPool::new().upcast();
+            let selected_min = first_pool_min.unwrap_or(0);
+            let selected_max = first_pool_max.unwrap_or(0);
+
+            selected_size = info.size() as u32;
+            if self.try_pool(
+                &caps,
+                &info,
+                &pool,
+                &mut selected_size,
+                selected_min,
+                selected_max,
+                allocator.as_ref(),
+                &params,
+                &downstream_align,
+                state.video_meta_supported,
+            ) {
+                selected_pool = Some(pool);
+            }
+        };
+
+        if let Some(ref selected_pool) = selected_pool {
             gst::debug!(
                 CAT,
                 imp = self,
-                "Negotiated pool limit too low ({max} < 32)"
+                "Selected pool {} and allocator {} (video meta: {}, video alignment: {})",
+                selected_pool.name(),
+                allocator
+                    .as_ref()
+                    .map(|a| a.name())
+                    .as_deref()
+                    .unwrap_or("None"),
+                selected_pool.has_option(gst_video::BUFFER_POOL_OPTION_VIDEO_META),
+                selected_pool.has_option(gst_video::BUFFER_POOL_OPTION_VIDEO_ALIGNMENT),
             );
-            return Ok(());
+
+            // Can only use the pool directly if video meta and video alignment are supported,
+            // otherwise we have to copy to this pool.
+            if state.video_meta_supported
+                && selected_pool.has_option(gst_video::BUFFER_POOL_OPTION_VIDEO_META)
+                && selected_pool.has_option(gst_video::BUFFER_POOL_OPTION_VIDEO_ALIGNMENT)
+            {
+                state.output_pool = Some(selected_pool.clone());
+            }
+        } else {
+            gst::debug!(CAT, imp = self, "Couldn't select any pool");
         }
 
+        // Update first pool / allocator in the query for the base class to
+        // remember for its use
+        if query.allocation_pools().next().is_some() {
+            query.set_nth_allocation_pool(
+                0,
+                selected_pool.as_ref(),
+                selected_size,
+                selected_min,
+                selected_max,
+            );
+        } else {
+            query.add_allocation_pool(
+                selected_pool.as_ref(),
+                selected_size,
+                selected_min,
+                selected_max,
+            );
+        }
+
+        if query.allocation_params().next().is_some() {
+            query.set_nth_allocation_param(0, allocator.as_ref(), params);
+        } else {
+            query.add_allocation_param(allocator.as_ref(), params);
+        }
+
+        Ok(())
+    }
+}
+
+impl Dav1dDec {
+    #[allow(clippy::too_many_arguments)]
+    fn try_pool(
+        &self,
+        caps: &gst::Caps,
+        info: &gst_video::VideoInfo,
+        pool: &gst::BufferPool,
+        size: &mut u32,
+        min: u32,
+        max: u32,
+        allocator: Option<&gst::Allocator>,
+        params: &gst::AllocationParams,
+        downstream_align: &gst_video::VideoAlignment,
+        video_meta_supported: bool,
+    ) -> bool {
+        gst::debug!(
+            CAT,
+            imp = self,
+            "Trying pool {} and allocator {}",
+            pool.name(),
+            allocator
+                .as_ref()
+                .map(|a| a.name())
+                .as_deref()
+                .unwrap_or("None"),
+        );
+
         let mut config = pool.config();
-        config.set_allocator(allocator.as_ref(), Some(&params));
+
+        let video_meta_supported =
+            video_meta_supported && pool.has_option(gst_video::BUFFER_POOL_OPTION_VIDEO_META);
+        let video_alignment_supported =
+            video_meta_supported && pool.has_option(gst_video::BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
+
         if video_meta_supported {
             config.add_option(gst_video::BUFFER_POOL_OPTION_VIDEO_META);
         }
 
-        let video_alignment_supported =
-            pool.has_option(gst_video::BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
+        let mut aligned_info = info.clone();
+        let mut aligned_params = *params;
+        let mut aligned_size = cmp::max(*size, info.size() as u32);
+        if video_alignment_supported {
+            config.add_option(gst_video::BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
 
-        if !video_meta_supported || !video_alignment_supported {
-            // Need to use a default pool
-            gst::debug!(
-                CAT,
-                imp = self,
-                "Video meta or alignment not supported by negotiated pool"
+            let aligned_width = info.width().next_multiple_of(128);
+            let aligned_height = info.height().next_multiple_of(128);
+            let mut align = gst_video::VideoAlignment::new(
+                cmp::max(0, downstream_align.padding_top()),
+                cmp::max(
+                    aligned_height - info.height(),
+                    downstream_align.padding_bottom(),
+                ),
+                cmp::max(
+                    aligned_width - info.width(),
+                    downstream_align.padding_left(),
+                ),
+                cmp::max(0, downstream_align.padding_right()),
+                &std::array::from_fn(|i| {
+                    downstream_align.stride_align()[i] | params.align() as u32
+                }),
             );
-            return Ok(());
-        }
 
-        let mut info = output_state.info().clone();
-        let aligned_width = info.width().next_multiple_of(128);
-        let aligned_height = info.height().next_multiple_of(128);
-
-        let stride_align = [params.align() as u32; gst_video::VIDEO_MAX_PLANES];
-
-        let mut align = gst_video::VideoAlignment::new(
-            0,
-            aligned_height - info.height(),
-            aligned_width - info.width(),
-            0,
-            &stride_align,
-        );
-
-        config.add_option(gst_video::BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
-
-        if info.align(&mut align).is_err() {
-            // Need to use a default pool
-            gst::debug!(CAT, imp = self, "Failed to align video info");
-            return Ok(());
-        }
-
-        config.set_video_alignment(&align);
-
-        config.set_params(
-            output_state.caps_owned().as_ref(),
-            cmp::max(size, info.size() as u32),
-            min,
-            max,
-        );
-
-        if pool.set_config(config.clone()).is_err() {
-            let updated_config = pool.config();
-            if updated_config
-                .validate_params(output_state.caps_owned().as_ref(), size, min, max)
-                .is_ok()
-                && pool.set_config(updated_config).is_err()
-            {
+            if aligned_info.align(&mut align).is_err() {
                 // Need to use a default pool
-                gst::debug!(
-                    CAT,
-                    imp = self,
-                    "Configuration not accepted by negotiated pool"
-                );
-                return Ok(());
+                gst::debug!(CAT, imp = self, "Failed to align video info");
+                return false;
+            }
+            config.set_video_alignment(&align);
+            aligned_size = cmp::max(aligned_size, aligned_info.size() as u32);
+            let max_align =
+                params.align() | align.stride_align().iter().copied().max().unwrap_or(0) as usize;
+            aligned_params.set_align(max_align);
+        }
+
+        config.set_allocator(allocator, Some(&aligned_params));
+        config.set_params(Some(caps), aligned_size, min, max);
+
+        if pool.set_config(config).is_err() {
+            let config = pool.config();
+            if config
+                .validate_params(Some(caps), aligned_size, min, max)
+                .is_ok()
+                && pool.set_config(config).is_err()
+            {
+                return false;
             }
         }
 
-        state.output_pool = Some(pool);
-
-        Ok(())
+        *size = aligned_size;
+        true
     }
 }
