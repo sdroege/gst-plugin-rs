@@ -627,8 +627,6 @@ impl BaseSinkImpl for PaintableSink {
     ) -> Result<(), gst::LoggableError> {
         gst::debug!(CAT, imp = self, "Proposing Allocation query");
 
-        self.parent_propose_allocation(query)?;
-
         query.add_allocation_meta::<gst_video::VideoMeta>(None);
 
         let s = {
@@ -666,6 +664,49 @@ impl BaseSinkImpl for PaintableSink {
                     || wrapped_context.check_feature("GL_EXT_EGL_sync")
                 {
                     query.add_allocation_meta::<gst_gl::GLSyncMeta>(None)
+                }
+            }
+        }
+
+        #[cfg(all(target_os = "linux", feature = "dmabuf", feature = "v1_28"))]
+        {
+            if let Some((query_caps, video_info)) = query.get().0.and_then(|caps| {
+                gst_video::VideoInfo::from_caps(caps)
+                    .ok()
+                    .map(|info| (caps, info))
+            }) {
+                // Offer a dmabuf pool with udmabuf allocator if upstream wants system memory
+                // to allow direct imports by GL/Vulkan or the compositor
+                if query_caps.features(0).is_none_or(|features| {
+                    features.contains(gst::CAPS_FEATURE_MEMORY_SYSTEM_MEMORY)
+                }) {
+                    // FIXME: Use safe bindings
+                    let (allocator, pool) = unsafe {
+                        use glib::translate::*;
+
+                        extern "C" {
+                            fn gst_udmabuf_allocator_get() -> *mut gst::ffi::GstAllocator;
+                            fn gst_video_dmabuf_pool_new() -> *mut gst::ffi::GstBufferPool;
+                        }
+
+                        (
+                            Option::<gst::Allocator>::from_glib_full(gst_udmabuf_allocator_get()),
+                            Option::<gst::BufferPool>::from_glib_full(gst_video_dmabuf_pool_new()),
+                        )
+                    };
+
+                    if let Some((allocator, pool)) = Option::zip(allocator, pool) {
+                        gst::debug!(
+                            CAT,
+                            imp = self,
+                            "Proposing udmabuf allocator and buffer pool"
+                        );
+                        query.add_allocation_pool(Some(&pool), video_info.size() as u32, 2, 0);
+                        query.add_allocation_param(
+                            Some(&allocator),
+                            gst::AllocationParams::default(),
+                        );
+                    }
                 }
             }
         }
