@@ -237,7 +237,7 @@ impl AudioRNNoise {
         }
 
         let rms = output_plane.iter().copied().map(|x| x * x).sum::<f32>();
-        let level = (20.0 * f32::log10(rms + f32::EPSILON)) as u8;
+        let level = (-20.0 * f32::log10(rms + f32::EPSILON)).clamp(0.0, 255.0) as u8;
 
         gst::trace!(
             CAT,
