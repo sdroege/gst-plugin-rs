@@ -43,7 +43,7 @@
  *
  * By default this is not set.
  */
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -138,6 +138,7 @@ struct State {
     pads: HashMap<usize, Pad>,
     log: Vec<LogLine>,
     settings: Settings,
+    logs_written: HashSet<PathBuf>,
 }
 
 struct Pad {
@@ -183,50 +184,26 @@ impl ObjectImpl for PadPushTimings {
         self.register_hook(TracerHook::ObjectDestroyed);
     }
 
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
+            vec![glib::subclass::Signal::builder("write-log")
+                .action()
+                .param_types([Option::<String>::static_type()])
+                .class_handler(|args| {
+                    let obj = args[0].get::<super::PadPushTimings>().unwrap();
+
+                    obj.imp().write_log(args[1].get::<Option<&str>>().unwrap());
+
+                    None
+                })
+                .build()]
+        });
+
+        SIGNALS.as_ref()
+    }
+
     fn dispose(&self) {
-        use std::io::prelude::*;
-
-        let state = self.state.lock().unwrap();
-
-        let mut file = match std::fs::File::create(&state.settings.file) {
-            Ok(file) => file,
-            Err(err) => {
-                gst::error!(CAT, imp = self, "Failed to create file: {err}");
-                return;
-            }
-        };
-
-        gst::debug!(
-            CAT,
-            imp = self,
-            "Writing file {}",
-            state.settings.file.display()
-        );
-
-        for LogLine {
-            timestamp,
-            parent_name,
-            pad_name,
-            ptr,
-            push_duration,
-        } in &state.log
-        {
-            let res = if let Some(parent_name) = parent_name {
-                writeln!(
-                    &mut file,
-                    "{timestamp},{parent_name}:{pad_name},0x{ptr:08x},{push_duration}"
-                )
-            } else {
-                writeln!(
-                    &mut file,
-                    "{timestamp},:{pad_name},0x{ptr:08x},{push_duration}"
-                )
-            };
-            if let Err(err) = res {
-                gst::error!(CAT, imp = self, "Failed to write to file: {err}");
-                return;
-            }
-        }
+        self.write_log(None);
     }
 }
 
@@ -341,5 +318,58 @@ impl PadPushTimings {
             ptr,
             push_duration: ts - push_start,
         });
+    }
+
+    fn write_log(&self, file_path: Option<&str>) {
+        use std::io::prelude::*;
+
+        let mut state = self.state.lock().unwrap();
+        let path = file_path.map_or_else(|| state.settings.file.clone(), PathBuf::from);
+        let first_write = !state.logs_written.contains(&path);
+
+        let mut file = match std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(first_write)
+            .append(!first_write)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(err) => {
+                gst::error!(CAT, imp = self, "Failed to open file: {err}");
+                return;
+            }
+        };
+
+        let log = std::mem::take(&mut state.log);
+        state.logs_written.insert(path);
+        drop(state);
+
+        gst::debug!(CAT, imp = self, "Writing file {:?}", file);
+
+        for LogLine {
+            timestamp,
+            parent_name,
+            pad_name,
+            ptr,
+            push_duration,
+        } in &log
+        {
+            let res = if let Some(parent_name) = parent_name {
+                writeln!(
+                    &mut file,
+                    "{timestamp},{parent_name}:{pad_name},0x{ptr:08x},{push_duration}"
+                )
+            } else {
+                writeln!(
+                    &mut file,
+                    "{timestamp},:{pad_name},0x{ptr:08x},{push_duration}"
+                )
+            };
+            if let Err(err) = res {
+                gst::error!(CAT, imp = self, "Failed to write to file: {err}");
+                return;
+            }
+        }
     }
 }
