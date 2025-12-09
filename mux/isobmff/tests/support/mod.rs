@@ -21,6 +21,8 @@ pub struct ExpectedConfiguration {
     pub audio_channel_count: u16,
     pub audio_sample_rate: mp4_atom::FixedPoint<u16>,
     pub audio_sample_size: u16,
+    pub codecs_len: u32,
+    pub codecs: Vec<mp4_atom::Codec>,
 }
 
 impl Default for ExpectedConfiguration {
@@ -39,9 +41,12 @@ impl Default for ExpectedConfiguration {
             audio_channel_count: 0,
             audio_sample_rate: 0.into(),
             audio_sample_size: 0,
+            codecs_len: 1,
+            codecs: Vec::new(),
         }
     }
 }
+
 pub fn check_ftyp_output(
     expected_major_brand: mp4_atom::FourCC,
     expected_minor_version: u32,
@@ -248,94 +253,126 @@ fn check_stsc_sanity(stsc: &mp4_atom::Stsc, expected_config: &ExpectedConfigurat
 }
 
 fn check_stsd_sanity(stsd: &mp4_atom::Stsd, expected_config: &ExpectedConfiguration) {
-    assert_eq!(stsd.codecs.len(), 1);
-    let codec = &stsd.codecs[0];
-    match codec {
-        mp4_atom::Codec::Avc1(avc1) => {
-            assert_eq!(avc1.visual.width, expected_config.width as u16);
-            assert_eq!(avc1.visual.height, expected_config.height as u16);
-            assert_eq!(avc1.visual.depth, 24);
-            if expected_config.has_taic {
-                assert!(avc1.taic.as_ref().is_some_and(|taic| {
-                    assert_eq!(taic.clock_type, expected_config.taic_clock_type.into());
-                    assert_eq!(taic.time_uncertainty, expected_config.taic_time_uncertainty);
-                    assert_eq!(taic.clock_drift_rate, 2147483647);
-                    assert_eq!(taic.clock_resolution, 1000);
-                    true
-                }));
-            } else {
-                assert!(avc1.taic.is_none());
-            }
+    assert_eq!(stsd.codecs.len(), expected_config.codecs_len as usize);
 
-            assert!(avc1
-                .pasp
-                .as_ref()
-                .is_some_and(|pasp| { pasp.h_spacing == 1 && pasp.v_spacing == 1 }));
-            assert!(avc1.colr.as_ref().is_some_and(|colr| {
-                match colr {
-                    mp4_atom::Colr::Nclx {
-                        colour_primaries,
-                        transfer_characteristics,
-                        matrix_coefficients: _,
-                        full_range_flag,
-                    } => {
-                        assert_eq!(*colour_primaries, 6);
-                        assert_eq!(*transfer_characteristics, 6);
-                        assert!(!(*full_range_flag));
+    if expected_config.codecs.is_empty() {
+        let codec = &stsd.codecs[0];
+        match codec {
+            mp4_atom::Codec::Avc1(avc1) => {
+                assert_eq!(avc1.visual.width, expected_config.width as u16);
+                assert_eq!(avc1.visual.height, expected_config.height as u16);
+                assert_eq!(avc1.visual.depth, 24);
+                if expected_config.has_taic {
+                    assert!(avc1.taic.as_ref().is_some_and(|taic| {
+                        assert_eq!(taic.clock_type, expected_config.taic_clock_type.into());
+                        assert_eq!(taic.time_uncertainty, expected_config.taic_time_uncertainty);
+                        assert_eq!(taic.clock_drift_rate, 2147483647);
+                        assert_eq!(taic.clock_resolution, 1000);
                         true
-                    }
-                    mp4_atom::Colr::Ricc { profile: _ } => {
-                        panic!("Incorrect colr type: ricc")
-                    }
-                    mp4_atom::Colr::Prof { profile: _ } => {
-                        panic!("Incorrect colr type: prof")
-                    }
+                    }));
+                } else {
+                    assert!(avc1.taic.is_none());
                 }
-            }));
+
+                assert!(avc1
+                    .pasp
+                    .as_ref()
+                    .is_some_and(|pasp| { pasp.h_spacing == 1 && pasp.v_spacing == 1 }));
+                assert!(avc1.colr.as_ref().is_some_and(|colr| {
+                    match colr {
+                        mp4_atom::Colr::Nclx {
+                            colour_primaries,
+                            transfer_characteristics,
+                            matrix_coefficients: _,
+                            full_range_flag,
+                        } => {
+                            assert_eq!(*colour_primaries, 6);
+                            assert_eq!(*transfer_characteristics, 6);
+                            assert!(!(*full_range_flag));
+                            true
+                        }
+                        mp4_atom::Colr::Ricc { profile: _ } => {
+                            panic!("Incorrect colr type: ricc")
+                        }
+                        mp4_atom::Colr::Prof { profile: _ } => {
+                            panic!("Incorrect colr type: prof")
+                        }
+                    }
+                }));
+            }
+            mp4_atom::Codec::Hev1(_hev1) => {
+                // TODO: check HEVC codec (maybe shared?)
+            }
+            mp4_atom::Codec::Hvc1(_hvc1) => {
+                // TODO: check HEVC codec (maybe shared?)
+            }
+            mp4_atom::Codec::Vp08(_vp08) => {
+                // TODO: check VP8 codec
+            }
+            mp4_atom::Codec::Vp09(_vp09) => {
+                // TODO: check VP9 codec
+            }
+            mp4_atom::Codec::Av01(_av01) => {
+                // TODO: check AV1 codec
+            }
+            mp4_atom::Codec::Mp4a(_mp4a) => {
+                // TODO: check MPEG Audio codec
+            }
+            mp4_atom::Codec::Tx3g(_tx3g) => {
+                // TODO: check subtitles / text codec
+            }
+            mp4_atom::Codec::Opus(_opus) => {
+                // TODO: check OPUS codec
+            }
+            mp4_atom::Codec::Flac(flac) => {
+                check_flac_codec_sanity(flac, expected_config);
+            }
+            mp4_atom::Codec::Uncv(uncv) => {
+                check_uncv_codec_sanity(uncv, expected_config);
+            }
+            mp4_atom::Codec::Ac3(ac3) => {
+                check_ac3_codec_sanity(ac3, expected_config);
+            }
+            mp4_atom::Codec::Eac3(eac3) => {
+                check_eac3_codec_sanity(eac3, expected_config);
+            }
+            mp4_atom::Codec::Unknown(four_cc) => {
+                let ipcm = mp4_atom::FourCC::new(b"ipcm");
+                let fpcm = mp4_atom::FourCC::new(b"fpcm");
+                if expected_config.is_audio && (*four_cc == ipcm || *four_cc == fpcm) {
+                    // Do nothing for now, mp4-atom does not support these yet.
+                } else {
+                    todo!("Unsupported codec type: {:?}", four_cc);
+                }
+            }
         }
-        mp4_atom::Codec::Hev1(_hev1) => {
-            // TODO: check HEVC codec (maybe shared?)
-        }
-        mp4_atom::Codec::Hvc1(_hvc1) => {
-            // TODO: check HEVC codec (maybe shared?)
-        }
-        mp4_atom::Codec::Vp08(_vp08) => {
-            // TODO: check VP8 codec
-        }
-        mp4_atom::Codec::Vp09(_vp09) => {
-            // TODO: check VP9 codec
-        }
-        mp4_atom::Codec::Av01(_av01) => {
-            // TODO: check AV1 codec
-        }
-        mp4_atom::Codec::Mp4a(_mp4a) => {
-            // TODO: check MPEG Audio codec
-        }
-        mp4_atom::Codec::Tx3g(_tx3g) => {
-            // TODO: check subtitles / text codec
-        }
-        mp4_atom::Codec::Opus(_opus) => {
-            // TODO: check OPUS codec
-        }
-        mp4_atom::Codec::Flac(flac) => {
-            check_flac_codec_sanity(flac, expected_config);
-        }
-        mp4_atom::Codec::Uncv(uncv) => {
-            check_uncv_codec_sanity(uncv, expected_config);
-        }
-        mp4_atom::Codec::Ac3(ac3) => {
-            check_ac3_codec_sanity(ac3, expected_config);
-        }
-        mp4_atom::Codec::Eac3(eac3) => {
-            check_eac3_codec_sanity(eac3, expected_config);
-        }
-        mp4_atom::Codec::Unknown(four_cc) => {
-            let ipcm = mp4_atom::FourCC::new(b"ipcm");
-            let fpcm = mp4_atom::FourCC::new(b"fpcm");
-            if expected_config.is_audio && (*four_cc == ipcm || *four_cc == fpcm) {
-                // Do nothing for now, mp4-atom does not support these yet.
-            } else {
-                todo!("Unsupported codec type: {:?}", four_cc);
+    }
+
+    for (idx, codec) in expected_config.codecs.iter().enumerate() {
+        let stsd_codec = stsd.codecs.get(idx);
+
+        match (stsd_codec, codec) {
+            (Some(mp4_atom::Codec::Avc1(avc_found)), mp4_atom::Codec::Avc1(avc_expected)) => {
+                assert_eq!(avc_found.visual.width, avc_expected.visual.width);
+                assert_eq!(avc_found.visual.height, avc_expected.visual.height);
+            }
+            (Some(mp4_atom::Codec::Hvc1(hvc_found)), mp4_atom::Codec::Hvc1(hvc_expected)) => {
+                assert_eq!(hvc_found.visual.width, hvc_expected.visual.width);
+                assert_eq!(hvc_found.visual.height, hvc_expected.visual.height);
+            }
+            (Some(mp4_atom::Codec::Vp08(vp_found)), mp4_atom::Codec::Vp08(vp_expected)) => {
+                assert_eq!(vp_found.visual.width, vp_expected.visual.width);
+                assert_eq!(vp_found.visual.height, vp_expected.visual.height);
+            }
+            (Some(mp4_atom::Codec::Vp09(vp_found)), mp4_atom::Codec::Vp09(vp_expected)) => {
+                assert_eq!(vp_found.visual.width, vp_expected.visual.width);
+                assert_eq!(vp_found.visual.height, vp_expected.visual.height);
+            }
+            // TODO: Implement other codecs if required
+            (found, expected) => {
+                println!("found: {found:?}");
+                println!("expected: {expected:?}");
+                unimplemented!()
             }
         }
     }

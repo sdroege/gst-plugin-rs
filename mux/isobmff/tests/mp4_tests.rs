@@ -7,7 +7,11 @@
 // SPDX-License-Identifier: MPL-2.0
 //
 
-use std::{fs::File, path::Path};
+use std::{
+    fs::File,
+    path::Path,
+    sync::{Arc, Mutex},
+};
 #[cfg(feature = "v1_28")]
 use std::{io::Seek as _, sync::LazyLock};
 
@@ -1193,6 +1197,348 @@ fn test_taic_stai_x264_not_enabled() {
 fn test_taic_x264_no_sync() {
     init();
     test_taic_encode_cannot_sync("x264enc");
+}
+
+fn build_codecs(encoder: &gst::Element) -> Vec<mp4_atom::Codec> {
+    [(320, 240), (640, 480), (1080, 720), (1920, 1080)]
+        .iter()
+        .map(|(width, height)| {
+            if encoder
+                .factory()
+                .is_some_and(|f| f.name().starts_with("vp8"))
+            {
+                mp4_atom::Codec::Vp08(mp4_atom::Vp08 {
+                    visual: mp4_atom::Visual {
+                        width: *width as u16,
+                        height: *height as u16,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                })
+            } else if encoder
+                .factory()
+                .is_some_and(|f| f.name().starts_with("vp9"))
+            {
+                mp4_atom::Codec::Vp09(mp4_atom::Vp09 {
+                    visual: mp4_atom::Visual {
+                        width: *width as u16,
+                        height: *height as u16,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                })
+            } else if encoder
+                .factory()
+                .is_some_and(|f| f.name().starts_with("x265"))
+            {
+                mp4_atom::Codec::Hvc1(mp4_atom::Hvc1 {
+                    visual: mp4_atom::Visual {
+                        width: *width as u16,
+                        height: *height as u16,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                })
+            } else {
+                mp4_atom::Codec::Avc1(mp4_atom::Avc1 {
+                    visual: mp4_atom::Visual {
+                        width: *width as u16,
+                        height: *height as u16,
+                        ..Default::default()
+                    },
+                    avcc: mp4_atom::Avcc::default(),
+                    ..Default::default()
+                })
+            }
+        })
+        .collect::<Vec<mp4_atom::Codec>>()
+}
+
+fn test_video_caps_change_with_encoder(
+    encoder: gst::Element,
+    parser: gst::Element,
+    mux_caps: gst::Caps,
+) {
+    let get_caps = |width: i32, height: i32| -> gst::Caps {
+        gst::Caps::builder("video/x-raw")
+            .field("format", "I420")
+            .field("width", width)
+            .field("height", height)
+            .field("framerate", gst::Fraction::new(30, 1))
+            .field("pixel-aspect-ratio", gst::Fraction::new(1, 1))
+            .field("multiview-mode", "mono")
+            .field("interlace-mode", "progressive")
+            .build()
+    };
+
+    let filename = "caps_change_mp4.mp4".to_string();
+    let temp_dir = tempdir().unwrap();
+    let temp_file_path = temp_dir.path().join(filename);
+    let location = temp_file_path.as_path();
+    let number_of_frames = 60i32;
+
+    let pipeline = gst::Pipeline::builder().name("caps-change-test").build();
+
+    let videotestsrc = gst::ElementFactory::make("videotestsrc")
+        .property("num-buffers", number_of_frames)
+        .property("is-live", true)
+        .build()
+        .unwrap();
+
+    let capsfilter = gst::ElementFactory::make("capsfilter")
+        .name("capsf")
+        .property("caps", get_caps(320, 240))
+        .property_from_str("caps-change-mode", "delayed")
+        .build()
+        .unwrap();
+
+    // This is primarily used for H265/x265enc. x265enc gives
+    // stream-format as byte-stream and while we have h265parse
+    // downstream to provide isomp4mux with stream-format as
+    // hvc1 or hev1, we seem to need this without which we get
+    // a not-negotiated error.
+    let caps_for_mux = gst::ElementFactory::make("capsfilter")
+        .name("capsf-mux")
+        .property("caps", mux_caps)
+        .property_from_str("caps-change-mode", "delayed")
+        .build()
+        .unwrap();
+
+    let mux = gst::ElementFactory::make("isomp4mux").build().unwrap();
+    let sink = gst::ElementFactory::make("filesink")
+        .property("location", location)
+        .build()
+        .unwrap();
+
+    pipeline
+        .add_many([
+            &videotestsrc,
+            &capsfilter,
+            &encoder,
+            &parser,
+            &caps_for_mux,
+            &mux,
+            &sink,
+        ])
+        .unwrap();
+
+    gst::Element::link_many([
+        &videotestsrc,
+        &capsfilter,
+        &encoder,
+        &parser,
+        &caps_for_mux,
+        &mux,
+        &sink,
+    ])
+    .unwrap();
+
+    let pipeline_weak = pipeline.downgrade();
+    let buffer_count = Arc::new(Mutex::new(1u32));
+    let next_resolutions = [(640, 480), (1080, 720), (1920, 1080)];
+
+    videotestsrc.static_pad("src").unwrap().add_probe(
+        gst::PadProbeType::BUFFER,
+        move |_pad, _info| {
+            let mut buffer_count = buffer_count.lock().unwrap();
+
+            // Check if we need to change resolution (every 10 buffers)
+            if (*buffer_count).is_multiple_of(10) {
+                let resolution_index = (*buffer_count / 10 - 1) as usize;
+
+                if let Some(&(w, h)) = next_resolutions.get(resolution_index) {
+                    let pipeline = pipeline_weak.upgrade().unwrap();
+                    let capsfilter = pipeline.by_name("capsf").unwrap();
+                    let caps = get_caps(w, h);
+
+                    capsfilter.set_property("caps", caps);
+                }
+            }
+
+            *buffer_count += 1;
+
+            gst::PadProbeReturn::Ok
+        },
+    );
+
+    pipeline
+        .set_state(gst::State::Playing)
+        .expect("Unable to set the pipeline to the `Playing` state");
+
+    for msg in pipeline.bus().unwrap().iter_timed(gst::ClockTime::NONE) {
+        use gst::MessageView;
+
+        match msg.view() {
+            MessageView::Eos(..) => break,
+            MessageView::Error(err) => {
+                panic!(
+                    "Error from {:?}: {} ({:?})",
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
+                );
+            }
+            _ => (),
+        }
+    }
+
+    pipeline
+        .set_state(gst::State::Null)
+        .expect("Unable to set the pipeline to the `Null` state");
+
+    let codecs = build_codecs(&encoder);
+    let has_ctts = encoder
+        .factory()
+        .is_some_and(|f| f.name().starts_with("x265"));
+
+    let with_avc1 = !encoder
+        .factory()
+        .is_some_and(|f| f.name().starts_with("vp") || f.name().starts_with("x265"));
+    let is_raw = encoder
+        .factory()
+        .is_some_and(|f| f.name().starts_with("identity"));
+
+    let compatible_brands = if with_avc1 && !is_raw {
+        vec![
+            b"avc1".into(),
+            b"iso4".into(),
+            b"isom".into(),
+            b"mp41".into(),
+            b"mp42".into(),
+        ]
+    } else {
+        vec![
+            b"iso4".into(),
+            b"isom".into(),
+            b"mp41".into(),
+            b"mp42".into(),
+        ]
+    };
+
+    check_generic_single_trak_file_structure(
+        location,
+        b"iso4".into(),
+        0,
+        compatible_brands,
+        ExpectedConfiguration {
+            is_audio: false,
+            width: 1920,
+            height: 1080,
+            has_ctts,
+            has_stss: true,
+            is_fragmented: false,
+            codecs_len: 4,
+            codecs,
+            ..Default::default()
+        },
+    );
+}
+
+#[test]
+fn test_caps_change_with_h264() {
+    init();
+
+    let Ok(encoder) = gst::ElementFactory::make("x264enc")
+        .name("video_encoder")
+        .property_from_str("speed-preset", "ultrafast")
+        .property("bframes", 0u32)
+        .build()
+    else {
+        println!("could not find encoder");
+        return;
+    };
+
+    let Ok(parser) = gst::ElementFactory::make("h264parse")
+        .name("video_parser")
+        .build()
+    else {
+        println!("could not find parser");
+        return;
+    };
+
+    let caps = gst::Caps::builder("video/x-h264").build();
+
+    test_video_caps_change_with_encoder(encoder, parser, caps);
+}
+
+#[test]
+fn test_caps_change_with_h265() {
+    init();
+
+    let Ok(encoder) = gst::ElementFactory::make("x265enc")
+        .name("video_encoder")
+        .property_from_str("speed-preset", "ultrafast")
+        .build()
+    else {
+        println!("could not find encoder");
+        return;
+    };
+
+    let Ok(parser) = gst::ElementFactory::make("h265parse")
+        .name("video_parser")
+        .property("disable-passthrough", true)
+        .property("config-interval", -1)
+        .build()
+    else {
+        println!("could not find parser");
+        return;
+    };
+
+    let caps = gst::Caps::builder("video/x-h265")
+        .field("stream-format", "hvc1")
+        .build();
+
+    test_video_caps_change_with_encoder(encoder, parser, caps);
+}
+
+#[test]
+fn test_caps_change_with_vp8() {
+    init();
+
+    let Ok(encoder) = gst::ElementFactory::make("vp8enc")
+        .name("video_encoder")
+        .build()
+    else {
+        println!("could not find encoder");
+        return;
+    };
+
+    let Ok(parser) = gst::ElementFactory::make("identity")
+        .name("video_parser")
+        .build()
+    else {
+        println!("could not find parser");
+        return;
+    };
+
+    let caps = gst::Caps::builder("video/x-vp8").build();
+
+    test_video_caps_change_with_encoder(encoder, parser, caps);
+}
+
+#[test]
+fn test_caps_change_with_vp9() {
+    init();
+
+    let Ok(encoder) = gst::ElementFactory::make("vp9enc")
+        .name("video_encoder")
+        .build()
+    else {
+        println!("could not find encoder");
+        return;
+    };
+
+    let Ok(parser) = gst::ElementFactory::make("vp9parse")
+        .name("video_parser")
+        .build()
+    else {
+        println!("could not find parser");
+        return;
+    };
+
+    let caps = gst::Caps::builder("video/x-vp9").build();
+
+    test_video_caps_change_with_encoder(encoder, parser, caps);
 }
 
 fn test_uncompressed_audio_with(format: &str, rate: u16, channels: u16, cb: impl FnOnce(&Path)) {
