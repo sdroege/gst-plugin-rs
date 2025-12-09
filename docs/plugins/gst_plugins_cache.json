@@ -14141,7 +14141,20 @@
                     "GstObject",
                     "GInitiallyUnowned",
                     "GObject"
-                ]
+                ],
+                "signals": {
+                    "write-log": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    }
+                }
             },
             "pcap-writer": {
                 "hierarchy": [
