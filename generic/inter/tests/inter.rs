@@ -193,6 +193,83 @@ fn test_event_forwarding() {
     assert!(found);
 }
 
+#[test]
+#[serial]
+fn test_intersrc_upstream_event_forwarding() {
+    init();
+
+    let pipe_up = gst::parse::launch("fakesrc name=src ! intersink producer-name=p")
+        .unwrap()
+        .downcast::<gst::Pipeline>()
+        .unwrap();
+
+    let pipe_down =
+        gst::parse::launch("intersrc name=intersrc producer-name=p ! fakesink name=sink")
+            .unwrap()
+            .downcast::<gst::Pipeline>()
+            .unwrap();
+
+    let sink_pad = pipe_down
+        .by_name("sink")
+        .unwrap()
+        .static_pad("sink")
+        .unwrap();
+
+    let intersrc = pipe_down.by_name("intersrc").unwrap();
+    intersrc.set_property(
+        "event-types",
+        gst::Array::new(vec![
+            gst::EventType::Navigation,
+            gst::EventType::CustomUpstream,
+        ]),
+    );
+
+    let src_pad = pipe_up.by_name("src").unwrap().static_pad("src").unwrap();
+
+    pipe_up.set_state(gst::State::Playing).unwrap();
+    pipe_down.set_state(gst::State::Playing).unwrap();
+
+    let got_custom_upstream = Arc::new(AtomicBool::new(false));
+    let got_custom_upstream_clone = got_custom_upstream.clone();
+    let srcpad_clone = src_pad.clone();
+
+    src_pad.add_probe(gst::PadProbeType::EVENT_UPSTREAM, move |_pad, info| {
+        if let Some(e) = info.event() {
+            #[allow(clippy::single_match)]
+            match e.type_() {
+                gst::EventType::CustomUpstream => {
+                    got_custom_upstream_clone.store(true, Ordering::SeqCst);
+                    srcpad_clone.push_event(gst::event::Eos::new());
+                }
+                _ => {}
+            }
+        }
+        gst::PadProbeReturn::Ok
+    });
+
+    let s = gst::Structure::builder("MyEvent")
+        .field("unsigned", 100u64)
+        .build();
+
+    sink_pad.push_event(gst::event::CustomUpstream::new(s));
+
+    let bus = pipe_down.bus().unwrap();
+    while let Some(msg) = bus.timed_pop(gst::ClockTime::NONE) {
+        use gst::MessageView;
+        match msg.view() {
+            MessageView::Eos(..) => {
+                break;
+            }
+            MessageView::Error(..) => unreachable!(),
+            _ => (),
+        }
+    }
+
+    assert!(got_custom_upstream.load(Ordering::SeqCst));
+    pipe_up.set_state(gst::State::Null).unwrap();
+    pipe_down.set_state(gst::State::Null).unwrap();
+}
+
 fn test_latency_propagation_with(sync: bool) {
     init();
 

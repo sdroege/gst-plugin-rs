@@ -11316,6 +11316,17 @@
                     }
                 },
                 "properties": {
+                    "event-types": {
+                        "blurb": "Forward upstream event types to the producer. force-key-unit events are always forwarded from within the StreamProducer",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    },
                     "max-buffers": {
                         "blurb": "Maximum number of buffers to queue (0=unlimited)",
                         "conditionally-available": false,

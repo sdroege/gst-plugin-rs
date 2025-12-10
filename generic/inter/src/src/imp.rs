@@ -41,7 +41,11 @@ impl InterSrc {
     fn prepare(&self) -> Result<(), Error> {
         let settings = self.settings.lock().unwrap();
 
-        InterStreamProducer::subscribe(&settings.producer_name, &self.appsrc, settings.consumer);
+        InterStreamProducer::subscribe(
+            &settings.producer_name,
+            &self.appsrc,
+            settings.consumer.clone(),
+        );
 
         Ok(())
     }
@@ -106,6 +110,11 @@ impl ObjectImpl for InterSrc {
                     .default_value(DEFAULT_CONSUMER_MAX_TIME.nseconds())
                     .mutable_ready()
                     .build(),
+                gst::ParamSpecArray::builder("event-types")
+                    .nick("Forward Event Types")
+                    .blurb("Forward upstream event types to the producer. force-key-unit events are always forwarded from within the StreamProducer")
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -125,7 +134,7 @@ impl ObjectImpl for InterSrc {
                     InterStreamProducer::subscribe(
                         &settings.producer_name,
                         &self.appsrc,
-                        settings.consumer,
+                        settings.consumer.clone(),
                     );
                 }
             }
@@ -140,6 +149,17 @@ impl ObjectImpl for InterSrc {
                 self.settings.lock().unwrap().consumer.max_time =
                     gst::ClockTime::from_nseconds(value.get::<u64>().unwrap());
             }
+            "event-types" => {
+                let mut settings = self.settings.lock().unwrap();
+                let types = value
+                    .get::<gst::Array>()
+                    .expect("type checked upstream")
+                    .iter()
+                    .map(|v| v.get::<gst::EventType>().expect("type checked upstream"))
+                    .collect::<Vec<_>>();
+                settings.consumer.event_types = types;
+            }
+
             _ => unimplemented!(),
         };
     }
@@ -153,6 +173,16 @@ impl ObjectImpl for InterSrc {
             "max-buffers" => self.settings.lock().unwrap().consumer.max_buffer.to_value(),
             "max-bytes" => self.settings.lock().unwrap().consumer.max_bytes.to_value(),
             "max-time" => self.settings.lock().unwrap().consumer.max_time.to_value(),
+            "event-types" => {
+                let settings = self.settings.lock().unwrap();
+                settings
+                    .consumer
+                    .event_types
+                    .iter()
+                    .map(|x| x.to_send_value())
+                    .collect::<gst::Array>()
+                    .to_value()
+            }
             _ => unimplemented!(),
         }
     }
@@ -169,7 +199,7 @@ impl ObjectImpl for InterSrc {
             .set_property("name", format!("{}-appsrc", self.obj().name()));
         gst_utils::StreamProducer::configure_consumer_with(
             &self.appsrc,
-            self.settings.lock().unwrap().consumer,
+            self.settings.lock().unwrap().consumer.clone(),
         );
         obj.add(&self.appsrc).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
