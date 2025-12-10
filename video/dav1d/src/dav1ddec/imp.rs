@@ -1440,6 +1440,7 @@ impl VideoDecoderImpl for Dav1dDec {
                 state.video_meta_supported,
             ) {
                 selected_pool = Some(pool);
+                break;
             }
         }
 
