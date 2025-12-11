@@ -373,7 +373,7 @@ fn cropped_size_from_info(info: &gst_video::VideoInfo) -> (u32, u32) {
     let w_sub = 1 << info.format_info().w_sub()[(info.n_components() as usize) - 1];
     let h_sub = 1 << info.format_info().h_sub()[(info.n_components() as usize) - 1];
     let cropped_width = info.width() - (info.width() % w_sub);
-    let cropped_height = info.height() - (info.width() % h_sub);
+    let cropped_height = info.height() - (info.height() % h_sub);
     (cropped_width, cropped_height)
 }
 
