@@ -1629,21 +1629,21 @@ pub async fn create_tls_connector<P: AsRef<Path>>(
 ) -> Result<TlsConnector, std::io::Error> {
     let ring_provider = rustls::crypto::ring::default_provider();
 
-    if insecure_tls || certificate_file.is_none() {
+    if let Some(certificate_file) = (!insecure_tls).then_some(certificate_file).flatten() {
+        let root_cert_store = get_root_certstore(certificate_file).await?;
+        let config = rustls::ClientConfig::builder_with_provider(ring_provider.into())
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_root_certificates(root_cert_store)
+            .with_no_client_auth();
+
+        Ok(TlsConnector::from(Arc::new(config)))
+    } else {
         let config = rustls::ClientConfig::builder_with_provider(ring_provider.into())
             .with_safe_default_protocol_versions()
             .unwrap()
             .dangerous()
             .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_no_client_auth();
-
-        Ok(TlsConnector::from(Arc::new(config)))
-    } else {
-        let root_cert_store = get_root_certstore(certificate_file.unwrap()).await?;
-        let config = rustls::ClientConfig::builder_with_provider(ring_provider.into())
-            .with_safe_default_protocol_versions()
-            .unwrap()
-            .with_root_certificates(root_cert_store)
             .with_no_client_auth();
 
         Ok(TlsConnector::from(Arc::new(config)))
