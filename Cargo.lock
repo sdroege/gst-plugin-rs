@@ -4276,6 +4276,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-debugseimetainserter"
+version = "0.15.0-alpha.2"
+dependencies = [
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-base",
+ "gstreamer-check",
+ "gstreamer-video",
+ "uuid",
+]
+
+[[package]]
 name = "gst-plugin-deepgram"
 version = "0.15.0-alpha.2"
 dependencies = [

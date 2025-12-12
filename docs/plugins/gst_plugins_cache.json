@@ -2973,6 +2973,70 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "debugseimetainserter": {
+        "description": "GStreamer Debug SEI Meta Inserter Plugin",
+        "elements": {
+            "debugseimetainserter": {
+                "author": "Thibault Saunier <tsaunier@igalia.com>",
+                "description": "Adds GstVideoSEIUserDataUnregisteredMeta to video buffers for testing",
+                "hierarchy": [
+                    "GstDebugSeiMetaInserter",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Debug/Video",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-raw:\nvideo/x-h264:\nvideo/x-h265:\nvideo/x-h266:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\nvideo/x-h264:\nvideo/x-h265:\nvideo/x-h266:\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "data": {
+                        "blurb": "Payload data to insert as SEI user data",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "uuid": {
+                        "blurb": "16-byte UUID as hex string (e.g., 12345678-1234-1234-1234-123456789abc)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "deb95e10-deb9-5e10-deb9-5e10deb95e10",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstdebugseimetainserter",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-debugseimetainserter",
+        "source": "gst-plugin-debugseimetainserter",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "deepgram": {
         "description": "GStreamer Deepgram plugin",
         "elements": {

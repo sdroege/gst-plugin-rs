@@ -56,6 +56,7 @@ members = [
 
     "utils/fallbackswitch",
     "utils/livesync",
+    "utils/debugseimetainserter",
     "utils/togglerecord",
     "utils/tracers",
     "utils/uriplaylistbin",
@@ -121,6 +122,7 @@ default-members = [
 
     "utils/fallbackswitch",
     "utils/livesync",
+    "utils/debugseimetainserter",
     "utils/togglerecord",
     "utils/tracers",
     "utils/uriplaylistbin",

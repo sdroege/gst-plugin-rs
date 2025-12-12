@@ -234,6 +234,9 @@ You will find the following plugins in this repository:
 
     - `uriplaylistbin`: Helper bin to gaplessly play a list of URIs.
 
+    - `debugseimetainserter`: Element to insert SEI metadata into a video stream
+      for debugging purposes.
+
   * `analytics`
 
     - `analytics`:

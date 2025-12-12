@@ -136,6 +136,10 @@ plugins = {
 
   'fallbackswitch': { }, # fallbackswitch can have gtk4 examples, see below
   'livesync': { },     # livesync can have gtk4 examples, see below
+  'debugseimetainserter': {
+    'library': 'libgstdebugseimetainserter',
+    'features': ['gst-video/v1_22'],
+  },
   'togglerecord': { }, # togglerecord can have gtk4 examples, see below
 
   'tracers': {'library': 'libgstrstracers'},
