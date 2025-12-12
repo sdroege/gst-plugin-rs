@@ -72,8 +72,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpLinearAudioDepay {
         };
 
         if (pt == Some(10) || pt == Some(11))
-            && encoding_name.is_some()
-            && encoding_name != Some("L16")
+            && encoding_name.is_some_and(|encoding_name| encoding_name != "L16")
         {
             self.post_error_message(gst::error_msg!(
                 gst::StreamError::Format,

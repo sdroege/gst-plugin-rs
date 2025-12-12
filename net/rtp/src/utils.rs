@@ -57,7 +57,7 @@ macro_rules! define_wrapping_comparable_u32 {
 
             #[inline]
             pub const fn new(val: u32) -> Self {
-                Self(std::num::Wrapping((val)))
+                Self(std::num::Wrapping(val))
             }
 
             #[inline]
