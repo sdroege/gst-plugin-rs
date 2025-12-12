@@ -829,6 +829,10 @@ impl UdpSink {
                 SocketFamily::Ipv6 => &settings.bind_address_v6,
             };
 
+            if bind_addr.is_empty() {
+                return Ok(None);
+            }
+
             let bind_addr: IpAddr = bind_addr.parse().map_err(|err| {
                 error_msg!(
                     gst::ResourceError::Settings,
@@ -928,6 +932,12 @@ impl UdpSink {
 
         let socket = self.prepare_socket(&ts_ctx, &mut settings, SocketFamily::Ipv4)?;
         let socket_v6 = self.prepare_socket(&ts_ctx, &mut settings, SocketFamily::Ipv6)?;
+        if socket.is_none() && socket_v6.is_none() {
+            error_msg!(
+                gst::ResourceError::Settings,
+                ["Failed to prepare any socket, check the configured bind addresses"]
+            );
+        }
 
         self.sink_pad_handler
             .prepare(self, socket, socket_v6, &settings)?;
