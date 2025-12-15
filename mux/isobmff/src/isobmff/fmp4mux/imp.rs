@@ -3910,6 +3910,7 @@ impl FMP4Mux {
                     image_sequence: false,
                     tai_clock_info: None,
                     auxiliary_info: vec![],
+                    chnl_layout_info: None,
                 }
             })
             .collect::<Vec<_>>();

@@ -1194,3 +1194,127 @@ fn test_taic_x264_no_sync() {
     init();
     test_taic_encode_cannot_sync("x264enc");
 }
+
+fn test_uncompressed_audio_with(format: &str, rate: u16, channels: u16, cb: impl FnOnce(&Path)) {
+    let Ok(pipeline) = gst::parse::launch(&format!(
+        "audiotestsrc num-buffers=34 ! audio/x-raw,format={format},rate={rate},channels={channels} ! mux. \
+         isomp4mux name=mux ! filesink name=sink"
+    )) else {
+        println!("could not build encoding pipeline");
+        return;
+    };
+    let pipeline = Pipeline(pipeline.downcast::<gst::Pipeline>().unwrap());
+
+    let dir = tempdir().unwrap();
+    let mut location = dir.path().to_owned();
+    location.push("test.mp4");
+
+    let sink = pipeline.by_name("sink").unwrap();
+    sink.set_property("location", location.to_str().expect("Non-UTF8 filename"));
+    pipeline.into_completion();
+
+    cb(&location)
+}
+
+fn test_roundtrip_uncompressed_audio(audio_format: &str, rate: u16, channels: u16) {
+    test_uncompressed_audio_with(audio_format, rate, channels, |location| {
+        let Ok(pipeline) = gst::parse::launch(
+            "filesrc name=src ! qtdemux name=demux \
+             demux.audio_0 ! queue ! fakesink",
+        ) else {
+            panic!("could not build decoding pipeline")
+        };
+        let pipeline = Pipeline(pipeline.downcast::<gst::Pipeline>().unwrap());
+        pipeline
+            .by_name("src")
+            .unwrap()
+            .set_property("location", location.display().to_string());
+        pipeline.into_completion();
+    })
+}
+
+fn test_encode_uncompressed_audio(audio_format: &str, rate: u16, channels: u16) {
+    let filename = format!("{audio_format}_{rate}x{channels}.mp4");
+    let temp_dir = tempdir().unwrap();
+    let temp_file_path = temp_dir.path().join(filename);
+    let location = temp_file_path.as_path();
+    let pipeline_text = format!("audiotestsrc num-buffers=34 ! audio/x-raw,format={audio_format},rate={rate},channels={channels} ! isomp4mux ! filesink location={location:?}");
+
+    let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
+        panic!("could not build encoding pipeline")
+    };
+    pipeline
+        .set_state(gst::State::Playing)
+        .expect("Unable to set the pipeline to the `Playing` state");
+    for msg in pipeline.bus().unwrap().iter_timed(gst::ClockTime::NONE) {
+        use gst::MessageView;
+
+        match msg.view() {
+            MessageView::Eos(..) => break,
+            MessageView::Error(err) => {
+                panic!(
+                    "Error from {:?}: {} ({:?})",
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
+                );
+            }
+            _ => (),
+        }
+    }
+    pipeline
+        .set_state(gst::State::Null)
+        .expect("Unable to set the pipeline to the `Null` state");
+
+    test_expected_uncompressed_audio_output(location, rate, channels);
+}
+
+fn test_expected_uncompressed_audio_output(location: &Path, rate: u16, channels: u16) {
+    check_generic_single_trak_file_structure(
+        location,
+        b"iso4".into(),
+        0,
+        vec![b"iso4".into()],
+        ExpectedConfiguration {
+            is_audio: true,
+            audio_channel_count: channels,
+            audio_sample_rate: rate.into(),
+            ..Default::default()
+        },
+    );
+}
+
+#[test]
+fn encode_uncompressed_audio_s16() {
+    init();
+    test_encode_uncompressed_audio("S16LE", 8000, 2);
+    test_roundtrip_uncompressed_audio("S16LE", 8000, 2);
+}
+
+#[test]
+fn encode_uncompressed_audio_s24() {
+    init();
+    test_encode_uncompressed_audio("S24LE", 44100, 8);
+    test_roundtrip_uncompressed_audio("S24LE", 44100, 8);
+}
+
+#[test]
+fn encode_uncompressed_audio_s32() {
+    init();
+    test_encode_uncompressed_audio("S32LE", 48000, 8);
+    test_roundtrip_uncompressed_audio("S32LE", 48000, 16);
+}
+
+#[test]
+fn encode_uncompressed_audio_f32() {
+    init();
+    test_encode_uncompressed_audio("F32LE", 44100, 8);
+    test_roundtrip_uncompressed_audio("F32LE", 44100, 8);
+}
+
+#[test]
+fn encode_uncompressed_audio_f64() {
+    init();
+    test_encode_uncompressed_audio("F64LE", 48000, 8);
+    test_roundtrip_uncompressed_audio("F64LE", 48000, 16);
+}

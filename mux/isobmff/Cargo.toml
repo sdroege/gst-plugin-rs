@@ -12,7 +12,7 @@ rust-version.workspace = true
 anyhow = "1"
 gst = { workspace = true,  features = ["v1_18"] }
 gst-base = { workspace = true, features = ["v1_18"] }
-gst-audio = { workspace = true, features = ["v1_18"] }
+gst-audio = { workspace = true, features = ["v1_26"] }
 gst-video = { workspace = true, features = ["v1_18"] }
 gst-pbutils = { workspace = true, features = ["v1_20"] }
 gst-tag = { workspace = true, features = ["v1_20"] }

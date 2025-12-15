@@ -10,7 +10,7 @@ use crate::av1::util::{av1_seq_level_idx, av1_tier};
 use crate::isobmff::flac::parse_flac_stream_header;
 use crate::isobmff::fmp4mux::boxes::write_mvex;
 use crate::isobmff::uncompressed::write_uncompressed_sample_entries;
-use crate::isobmff::{ac3, eac3, Variant, CAT};
+use crate::isobmff::{ac3, eac3, ChnlLayoutInfo, Variant, CAT};
 use crate::isobmff::{
     transform_matrix::IDENTITY_MATRIX, PresentationConfiguration, TrackConfiguration,
 };
@@ -261,7 +261,7 @@ fn write_minf(
             write_full_box(v, b"vmhd", FULL_BOX_VERSION_0, 1, write_vmhd)?
         }
         "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
-        | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" => write_full_box(
+        | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" | "audio/x-raw" => write_full_box(
             v,
             b"smhd",
             FULL_BOX_VERSION_0,
@@ -952,7 +952,7 @@ fn write_hdlr_for_stream(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result
             }
         }
         "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
-        | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" => {
+        | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" | "audio/x-raw" => {
             (b"soun", b"SoundHandler\0".as_slice())
         }
         "application/x-onvif-metadata" => (b"meta", b"MetadataHandler\0".as_slice()),
@@ -1004,7 +1004,9 @@ fn write_tkhd(
     let s = stream.caps.structure(0).unwrap();
     match s.name().as_str() {
         "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
-        | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" => v.extend((1u16 << 8).to_be_bytes()),
+        | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" | "audio/x-raw" => {
+            v.extend((1u16 << 8).to_be_bytes())
+        }
         _ => v.extend(0u16.to_be_bytes()),
     }
 
@@ -1295,7 +1297,9 @@ pub(crate) fn write_stsd(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result
         "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
         | "image/jpeg" | "video/x-raw" => write_visual_sample_entry(v, stream)?,
         "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
-        | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" => write_audio_sample_entry(v, stream)?,
+        | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" | "audio/x-raw" => {
+            write_audio_sample_entry(v, stream)?
+        }
         "application/x-onvif-metadata" => write_xml_meta_data_sample_entry(v, stream)?,
         _ => unreachable!(),
     }
@@ -1711,7 +1715,279 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
     Ok(())
 }
 
+fn find_speaker_position(pos: gst_audio::AudioChannelPosition) -> Option<u8> {
+    // As per ISO/IEC 23091-3
+    const CHNL_POSITIONS: [gst_audio::AudioChannelPosition; 43] = [
+        // 0
+        gst_audio::AudioChannelPosition::FrontLeft,
+        gst_audio::AudioChannelPosition::FrontRight,
+        gst_audio::AudioChannelPosition::FrontCenter,
+        gst_audio::AudioChannelPosition::Lfe1,
+        gst_audio::AudioChannelPosition::SideLeft,
+        gst_audio::AudioChannelPosition::SideRight,
+        gst_audio::AudioChannelPosition::FrontLeftOfCenter,
+        gst_audio::AudioChannelPosition::FrontRightOfCenter,
+        gst_audio::AudioChannelPosition::RearLeft,
+        gst_audio::AudioChannelPosition::RearRight,
+        // 10
+        gst_audio::AudioChannelPosition::RearCenter,
+        gst_audio::AudioChannelPosition::SurroundLeft,
+        gst_audio::AudioChannelPosition::SurroundRight,
+        gst_audio::AudioChannelPosition::SideLeft,
+        gst_audio::AudioChannelPosition::SideRight,
+        gst_audio::AudioChannelPosition::WideLeft,
+        gst_audio::AudioChannelPosition::WideRight,
+        gst_audio::AudioChannelPosition::TopFrontLeft,
+        gst_audio::AudioChannelPosition::TopFrontRight,
+        gst_audio::AudioChannelPosition::TopFrontCenter,
+        // 20
+        gst_audio::AudioChannelPosition::TopRearLeft,
+        gst_audio::AudioChannelPosition::TopRearRight,
+        gst_audio::AudioChannelPosition::TopRearCenter,
+        gst_audio::AudioChannelPosition::TopSideLeft,
+        gst_audio::AudioChannelPosition::TopSideRight,
+        gst_audio::AudioChannelPosition::TopCenter,
+        gst_audio::AudioChannelPosition::Lfe2,
+        gst_audio::AudioChannelPosition::BottomFrontLeft,
+        gst_audio::AudioChannelPosition::BottomFrontRight,
+        gst_audio::AudioChannelPosition::BottomFrontCenter,
+        // 30
+        gst_audio::AudioChannelPosition::TopSurroundLeft,
+        gst_audio::AudioChannelPosition::TopSurroundRight,
+        gst_audio::AudioChannelPosition::Invalid, // reserved
+        gst_audio::AudioChannelPosition::Invalid, // reserved
+        gst_audio::AudioChannelPosition::Invalid, // reserved
+        gst_audio::AudioChannelPosition::Invalid, // reserved
+        gst_audio::AudioChannelPosition::Invalid, // low frequency enhancement 3
+        gst_audio::AudioChannelPosition::Invalid, // left edge of screen
+        gst_audio::AudioChannelPosition::Invalid, // right edge of screen
+        gst_audio::AudioChannelPosition::Invalid, // half-way between centre of screen and
+        // left edge of screen
+        // 40
+        gst_audio::AudioChannelPosition::Invalid, // half-way between centre of screen and
+        // right edge of screen
+        gst_audio::AudioChannelPosition::Invalid, // left back surround
+        gst_audio::AudioChannelPosition::Invalid, // right back surround
+                                                  // 43-125 reserved
+                                                  // 126 explicit position
+                                                  // 127 unknown / undefined
+    ];
+
+    CHNL_POSITIONS
+        .iter()
+        .position(|&p| p == pos)
+        .map(|idx| idx as u8)
+}
+
+pub(crate) fn generate_audio_channel_layout_info(
+    audio_info: gst_audio::AudioInfo,
+) -> Result<Option<ChnlLayoutInfo>, Error> {
+    use gst_audio::{AudioChannelPosition, AudioChannelPosition::*};
+
+    // Pre-defined channel layouts
+    const CHNL_LAYOUTS: &[&[AudioChannelPosition]] = &[
+        // 0
+        &[],
+        // 1
+        &[FrontCenter],
+        // 2
+        &[FrontLeft, FrontRight],
+        // 3
+        &[FrontCenter, FrontLeft, FrontRight],
+        // 4
+        &[FrontCenter, FrontLeft, FrontRight, RearCenter],
+        // 5
+        &[FrontCenter, FrontLeft, FrontRight, SideLeft, SideRight],
+        // 6
+        &[
+            FrontCenter,
+            FrontLeft,
+            FrontRight,
+            SideLeft,
+            SideRight,
+            Lfe1,
+        ],
+        // 7
+        &[
+            FrontCenter,
+            FrontLeftOfCenter,
+            FrontRightOfCenter,
+            FrontLeft,
+            FrontRight,
+            SideLeft,
+            SideRight,
+            Lfe1,
+        ],
+        // 8
+        &[],
+        // 9
+        &[FrontLeft, FrontRight, RearCenter],
+        // 10
+        &[FrontLeft, FrontRight, SideLeft, SideRight],
+        // 11
+        &[
+            FrontCenter,
+            FrontLeft,
+            FrontRight,
+            SideLeft,
+            SideRight,
+            RearCenter,
+            Lfe1,
+        ],
+        // 12
+        &[
+            FrontCenter,
+            FrontLeft,
+            FrontRight,
+            SideLeft,
+            SideRight,
+            RearLeft,
+            RearRight,
+            Lfe1,
+        ],
+        // 13
+        &[
+            FrontCenter,
+            FrontLeftOfCenter,
+            FrontRightOfCenter,
+            FrontLeft,
+            FrontRight,
+            SurroundLeft,
+            SurroundRight,
+            RearLeft,
+            RearRight,
+            RearCenter,
+            Lfe1,
+            Lfe2,
+            TopFrontCenter,
+            TopFrontLeft,
+            TopFrontRight,
+            TopSideLeft,
+            TopSideRight,
+            TopCenter,
+            TopRearLeft,
+            TopRearRight,
+            TopRearCenter,
+            BottomFrontCenter,
+            BottomFrontLeft,
+            BottomFrontRight,
+        ],
+        // 14
+        &[
+            FrontCenter,
+            FrontLeft,
+            FrontRight,
+            SideLeft,
+            SideRight,
+            Lfe1,
+            TopFrontLeft,
+            TopFrontRight,
+        ],
+    ];
+
+    let n_channels = audio_info.channels() as usize;
+    let Some(positions) = audio_info.positions() else {
+        return Ok(Option::None);
+    };
+
+    for (idx, layout_positions) in CHNL_LAYOUTS.iter().enumerate() {
+        if layout_positions.is_empty() {
+            continue;
+        }
+
+        let mut omitted_channels_map = 0u64;
+        let mut prefined_layout = Vec::new();
+
+        for (i, &layout_pos) in layout_positions.iter().enumerate() {
+            if positions.contains(&layout_pos) {
+                prefined_layout.push(layout_pos);
+            } else {
+                // The omitted channel map defines which of the channels
+                // of the pre-defined layout are *not* included.
+                omitted_channels_map |= 1u64 << i;
+            }
+        }
+
+        // Check if we found all channels from positions and no extras
+        if prefined_layout.len() == positions.len() {
+            let reorder_map = if positions != prefined_layout {
+                let mut reorder_map = vec![0usize; n_channels];
+                gst_audio::channel_reorder_map(positions, &prefined_layout, &mut reorder_map)
+                    .context("channel reorder map failed")?;
+                Some(reorder_map)
+            } else {
+                Option::None
+            };
+
+            return Ok(Some(ChnlLayoutInfo {
+                audio_info,
+                layout_idx: idx as u8,
+                omitted_channels_map,
+                reorder_map,
+            }));
+        }
+    }
+
+    Ok(Option::None)
+}
+
+pub(crate) fn write_chnl(
+    v: &mut Vec<u8>,
+    stream: &TrackConfiguration,
+    audio_info: &gst_audio::AudioInfo,
+) -> Result<(), Error> {
+    let n_channels = audio_info.channels() as usize;
+
+    // Handle cases where positions are not available or are unpositioned
+    let (positions, is_unpositioned) = match audio_info.positions() {
+        Some(pos) => (pos.to_vec(), false),
+        None => (vec![], true),
+    };
+
+    // stream structure
+    v.extend(1u8.to_be_bytes());
+
+    if is_unpositioned {
+        // defined layout
+        v.extend(0u8.to_be_bytes());
+
+        for _ in 0..n_channels {
+            // As per ISO/IEC 23091-3, speaker_position = 127 (unknown/undefined)
+            v.extend(127u8.to_be_bytes());
+        }
+    } else if let Some(ChnlLayoutInfo {
+        layout_idx,
+        omitted_channels_map,
+        ..
+    }) = stream.chnl_layout_info
+    {
+        gst::debug!(
+            CAT,
+            "Using predefined layout: {layout_idx}, omitted channels map: {omitted_channels_map} "
+        );
+
+        // Use predefined layout with omitted channels
+        v.extend(layout_idx.to_be_bytes());
+        v.extend_from_slice(&omitted_channels_map.to_be_bytes());
+    } else {
+        // Use explicit channel positions (defined_layout = 0)
+        v.extend(0u8.to_be_bytes());
+
+        for pos in positions {
+            if let Some(speaker_pos) = find_speaker_position(pos) {
+                v.extend(speaker_pos.to_be_bytes());
+            } else {
+                // As per ISO/IEC 23091-3, speaker_position = 127 (unknown/undefined)
+                v.extend(127u8.to_be_bytes());
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn write_audio_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error> {
+    let audio_info = gst_audio::AudioInfo::from_caps(&stream.caps).context("failed AudioInfo")?;
     let s = stream.caps.structure(0).unwrap();
     let fourcc = match s.name().as_str() {
         "audio/mpeg" => b"mp4a",
@@ -1729,6 +2005,13 @@ fn write_audio_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Res
         }
         "audio/x-ac3" => b"ac-3",
         "audio/x-eac3" => b"ec-3",
+        "audio/x-raw" => {
+            if audio_info.is_float() {
+                b"fpcm"
+            } else {
+                b"ipcm"
+            }
+        }
         _ => unreachable!(),
     };
 
@@ -1742,6 +2025,7 @@ fn write_audio_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Res
                 parse_flac_stream_header(&stream.caps).context("FLAC streamheader")?;
             streamheader.stream_info.bits_per_sample as u16
         }
+        "audio/x-raw" => audio_info.width() as u16,
         _ => 16u16,
     };
 
@@ -1800,7 +2084,19 @@ fn write_audio_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Res
                 assert!(&stream.codec_specific_boxes[4..8] == b"dec3");
                 v.extend_from_slice(&stream.codec_specific_boxes);
             }
+            "audio/x-raw" => {
+                assert!(!stream.codec_specific_boxes.is_empty());
+                assert!(&stream.codec_specific_boxes[4..8] == b"pcmC");
+                v.extend_from_slice(&stream.codec_specific_boxes);
+            }
             _ => unreachable!(),
+        }
+
+        if s.name().as_str() == "audio/x-raw" && audio_info.channels() > 1 {
+            // ChannelLayout is mandatory if PCM channel count > 1.
+            write_full_box(v, b"chnl", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
+                write_chnl(v, stream, &audio_info)
+            })?;
         }
 
         // If rate did not fit into 16 bits write a full `srat` box
@@ -1837,7 +2133,7 @@ fn write_audio_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Res
             })?;
         }
 
-        // TODO: chnl box for channel ordering? probably not needed for AAC
+        // TODO: `chnl` box for channel ordering? Probably not needed for AAC
 
         Ok(())
     })?;
@@ -1978,4 +2274,32 @@ pub(crate) fn create_dec3(buffer: &gst::BufferRef) -> Result<Vec<u8>, Error> {
         .context("Writing dec3 box")?;
 
     Ok(dec3)
+}
+
+/// Create `pcmC` box for raw audio.
+pub(crate) fn create_pcmc(audio_info: &gst_audio::AudioInfo) -> Result<Vec<u8>, Error> {
+    let mut v = Vec::<u8>::new();
+
+    write_full_box(
+        &mut v,
+        b"pcmC",
+        FULL_BOX_VERSION_0,
+        FULL_BOX_FLAGS_NONE,
+        move |v| {
+            // As per ISO/IEC 23003-5
+            if audio_info.is_little_endian() {
+                // format_flags, 0x01 if little endian
+                v.extend(1u8.to_be_bytes());
+            } else {
+                v.extend(0u8.to_be_bytes());
+            }
+
+            // Sample size
+            v.extend((audio_info.width() as u8).to_be_bytes());
+
+            Ok(())
+        },
+    )?;
+
+    Ok(v)
 }

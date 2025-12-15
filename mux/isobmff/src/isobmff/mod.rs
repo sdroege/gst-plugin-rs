@@ -399,6 +399,9 @@ pub(crate) struct TrackConfiguration {
 
     /// Sample auxiliary information (ISO/IEC 14496-12:2022 Section 8.7.8 and 8.7.9)
     pub(crate) auxiliary_info: Vec<AuxiliaryInformation>,
+
+    /// Information needed for creating `chnl` box
+    chnl_layout_info: Option<ChnlLayoutInfo>,
 }
 
 pub(crate) fn caps_to_timescale(caps: &gst::CapsRef) -> u32 {
@@ -591,4 +594,12 @@ pub(crate) enum ChunkMode {
      * Chunk on key frame boundaries.
      */
     Keyframe,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ChnlLayoutInfo {
+    audio_info: gst_audio::AudioInfo,
+    layout_idx: u8, /* Must be u8 for `chnl` box */
+    reorder_map: Option<Vec<usize>>,
+    omitted_channels_map: u64,
 }
