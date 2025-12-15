@@ -24,7 +24,7 @@
  *
  * ## Usage
  *
- * |[<!-- language="rust" -->
+ * ```ignore
  * use futures::prelude::*;
  * use gst::prelude::*;
  *
@@ -127,7 +127,7 @@
  *
  * pipe_up.set_state(gst::State::Null).unwrap();
  * pipe_down.set_state(gst::State::Null).unwrap();
- * ]|
+ * ```
  *
  * Since: plugins-rs-0.14.0
  */
