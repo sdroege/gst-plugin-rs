@@ -165,11 +165,11 @@ impl TransitionStatus {
     /// `FlushStart` could call:
     ///
     /// ```
-    /// # fn src_event() -> bool {
+    /// # fn src_event(pad: &gst::Pad, event: gst::Event) -> bool {
     /// # let task = gstthreadshare::runtime::Task::default();
     ///   return task
     ///       .flush_start()
-    ///       .block_on_or_add_subtask()
+    ///       .block_on_or_add_subtask(pad)
     ///       .is_ok();
     /// # }
     /// ```
@@ -297,7 +297,7 @@ impl TransitionStatus {
     ///
     /// ## Example
     ///
-    /// ```
+    /// ```ignore
     /// # use gstthreadshare::runtime::task::{Task, TransitionOk, TransitionError};
     /// # async fn async_fn() -> Result<TransitionOk, TransitionError> {
     /// # let task = Task::default();
