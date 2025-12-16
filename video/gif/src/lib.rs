@@ -16,10 +16,14 @@
  */
 use gst::glib;
 
+mod gifdec;
 mod gifenc;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gifenc::register(plugin)
+    gifenc::register(plugin)?;
+    gifdec::register(plugin)?;
+
+    Ok(())
 }
 
 gst::plugin_define!(
