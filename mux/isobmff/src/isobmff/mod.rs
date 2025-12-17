@@ -340,6 +340,9 @@ pub(crate) struct Sample {
 
     /// Size
     pub(crate) size: u32,
+
+    /// Whether the sample should point to the next sample description
+    pub(crate) sample_desc_idx: u32,
 }
 
 #[derive(Debug)]

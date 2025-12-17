@@ -10,7 +10,7 @@ use crate::av1::util::{av1_seq_level_idx, av1_tier};
 use crate::isobmff::flac::parse_flac_stream_header;
 use crate::isobmff::fmp4mux::boxes::write_mvex;
 use crate::isobmff::uncompressed::write_uncompressed_sample_entries;
-use crate::isobmff::{ac3, eac3, ChnlLayoutInfo, Variant, CAT};
+use crate::isobmff::{ac3, eac3, ChnlLayoutInfo, Chunk, Variant, CAT};
 use crate::isobmff::{
     transform_matrix::IDENTITY_MATRIX, PresentationConfiguration, TrackConfiguration,
 };
@@ -151,6 +151,7 @@ fn write_moov(v: &mut Vec<u8>, cfg: &PresentationConfiguration) -> Result<(), Er
     write_full_box(v, b"mvhd", FULL_BOX_VERSION_1, FULL_BOX_FLAGS_NONE, |v| {
         write_mvhd(v, cfg, creation_time)
     })?;
+
     for (idx, stream) in cfg.tracks.iter().enumerate() {
         write_box(v, b"trak", |v| {
             let mut references = Vec::new();
@@ -179,6 +180,7 @@ fn write_moov(v: &mut Vec<u8>, cfg: &PresentationConfiguration) -> Result<(), Er
             write_trak(v, cfg, idx, stream, creation_time, &references)
         })?;
     }
+
     if cfg.variant.is_fragmented() {
         write_box(v, b"mvex", |v| write_mvex(v, cfg))?;
     }
@@ -317,6 +319,7 @@ pub(crate) fn write_stbl(
             }
         }
     }
+
     if let Some(need_ctts) = need_ctts {
         let version = if need_ctts == 0 {
             FULL_BOX_VERSION_0
@@ -649,6 +652,57 @@ fn write_stsz(
     Ok(())
 }
 
+fn split_by_sample_length_or_desc_idx(
+    chunks: &[Chunk],
+) -> impl Iterator<Item = std::ops::Range<usize>> + '_ {
+    let mut current_idx = 0;
+
+    std::iter::from_fn(move || {
+        if current_idx >= chunks.len() {
+            return None;
+        }
+
+        let group_start = current_idx;
+        let first_chunk = &chunks[current_idx];
+        let current_samples_len = first_chunk.samples.len();
+        let current_desc_idx = first_chunk.samples.first().map(|s| s.sample_desc_idx);
+
+        // Check if first chunk has uniform sample description index.
+        // Sample description index cannot change in the middle of a
+        // chunk, each chunk must have a single sample description
+        // index.
+        assert!(first_chunk
+            .samples
+            .windows(2)
+            .all(|w| w[0].sample_desc_idx == w[1].sample_desc_idx));
+
+        current_idx += 1;
+
+        // Find the end of this group
+        while current_idx < chunks.len() {
+            let chunk = &chunks[current_idx];
+            let chunk_samples_len = chunk.samples.len();
+
+            let all_same_desc_idx = chunk
+                .samples
+                .windows(2)
+                .all(|w| w[0].sample_desc_idx == w[1].sample_desc_idx);
+            let chunk_desc_idx = chunk.samples.first().map(|s| s.sample_desc_idx);
+
+            if !all_same_desc_idx
+                || current_desc_idx != chunk_desc_idx
+                || current_samples_len != chunk_samples_len
+            {
+                break;
+            }
+
+            current_idx += 1;
+        }
+
+        Some(group_start..current_idx)
+    })
+}
+
 fn write_stsc(
     v: &mut Vec<u8>,
     stream: &TrackConfiguration,
@@ -664,27 +718,21 @@ fn write_stsc(
 
         let mut num_entries = 0u32;
         let mut first_chunk = 1u32;
-        let mut samples_per_chunk: Option<u32> = None;
-        for (idx, chunk) in stream.chunks.iter().enumerate() {
-            if samples_per_chunk != Some(chunk.samples.len() as u32) {
-                if let Some(samples_per_chunk) = samples_per_chunk {
-                    v.extend(first_chunk.to_be_bytes());
-                    v.extend(samples_per_chunk.to_be_bytes());
-                    // sample description index
-                    v.extend(1u32.to_be_bytes());
-                    num_entries += 1;
-                }
-                samples_per_chunk = Some(chunk.samples.len() as u32);
-                first_chunk = idx as u32 + 1;
-            }
-        }
 
-        if let Some(samples_per_chunk) = samples_per_chunk {
-            v.extend(first_chunk.to_be_bytes());
-            v.extend(samples_per_chunk.to_be_bytes());
-            // sample description index
-            v.extend(1u32.to_be_bytes());
-            num_entries += 1;
+        for range in split_by_sample_length_or_desc_idx(&stream.chunks) {
+            let chunks = &stream.chunks[range];
+
+            if let Some(first) = chunks.first() {
+                let samples_per_chunk = first.samples.len() as u32;
+                let sample_desc_idx = first.samples.first().unwrap().sample_desc_idx;
+
+                v.extend(first_chunk.to_be_bytes());
+                v.extend(samples_per_chunk.to_be_bytes());
+                v.extend(sample_desc_idx.to_be_bytes());
+
+                first_chunk += chunks.len() as u32;
+                num_entries += 1;
+            }
         }
 
         // Rewrite entry count
@@ -962,6 +1010,41 @@ fn write_hdlr_for_stream(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result
     write_hdlr_box(v, handler_type, name)
 }
 
+fn find_width_and_height(caps: &[gst::Caps]) -> (u32, u32) {
+    assert!(!caps.is_empty());
+
+    // The width/height in the track header for video tracks should
+    // be set to the one with the maximum number of pixels.
+    let (max_caps, max_width, max_height, _) = caps
+        .iter()
+        .map(|c| {
+            let s = c.structure(0).unwrap();
+            let width = s.get::<i32>("width").unwrap() as u32;
+            let height = s.get::<i32>("height").unwrap() as u32;
+            let pixels = width as u64 * height as u64;
+
+            (c, width, height, pixels)
+        })
+        .max_by_key(|(_, _, _, pixels)| *pixels)
+        .unwrap();
+
+    let par = max_caps
+        .structure(0)
+        .unwrap()
+        .get::<gst::Fraction>("pixel-aspect-ratio")
+        .unwrap_or_else(|_| gst::Fraction::new(1, 1));
+
+    let width = std::cmp::min(
+        max_width
+            .mul_div_round(par.numer() as u32, par.denom() as u32)
+            .unwrap_or(u16::MAX as u32),
+        u16::MAX as u32,
+    );
+    let height = std::cmp::min(max_height, u16::MAX as u32);
+
+    (width, height)
+}
+
 fn write_tkhd(
     v: &mut Vec<u8>,
     cfg: &PresentationConfiguration,
@@ -1025,21 +1108,7 @@ fn write_tkhd(
     match s.name().as_str() {
         "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
         | "image/jpeg" | "video/x-raw" => {
-            let width = s.get::<i32>("width").context("video caps without width")? as u32;
-            let height = s
-                .get::<i32>("height")
-                .context("video caps without height")? as u32;
-            let par = s
-                .get::<gst::Fraction>("pixel-aspect-ratio")
-                .unwrap_or_else(|_| gst::Fraction::new(1, 1));
-
-            let width = std::cmp::min(
-                width
-                    .mul_div_round(par.numer() as u32, par.denom() as u32)
-                    .unwrap_or(u16::MAX as u32),
-                u16::MAX as u32,
-            );
-            let height = std::cmp::min(height, u16::MAX as u32);
+            let (width, height) = find_width_and_height(&stream.caps);
 
             v.extend((width << 16).to_be_bytes());
             v.extend((height << 16).to_be_bytes());
@@ -1291,7 +1360,7 @@ fn write_elst(
 
 pub(crate) fn write_stsd(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error> {
     // Entry count
-    v.extend(1u32.to_be_bytes());
+    v.extend((stream.stream_entry_count() as u32).to_be_bytes());
 
     let s = stream.caps().structure(0).unwrap();
     match s.name().as_str() {
@@ -1308,8 +1377,40 @@ pub(crate) fn write_stsd(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result
     Ok(())
 }
 
-fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error> {
-    let s = stream.caps().structure(0).unwrap();
+fn get_audio_fourcc(
+    s: &gst::StructureRef,
+    audio_info: &gst_audio::AudioInfo,
+) -> Result<[u8; 4], Error> {
+    let fourcc = match s.name().as_str() {
+        "audio/mpeg" => b"mp4a",
+        "audio/x-opus" => b"Opus",
+        "audio/x-flac" => b"fLaC",
+        "audio/x-alaw" => b"alaw",
+        "audio/x-mulaw" => b"ulaw",
+        "audio/x-adpcm" => {
+            let layout = s.get::<&str>("layout").context("no ADPCM layout field")?;
+
+            match layout {
+                "g726" => b"ms\x00\x45",
+                _ => unreachable!(),
+            }
+        }
+        "audio/x-ac3" => b"ac-3",
+        "audio/x-eac3" => b"ec-3",
+        "audio/x-raw" => {
+            if audio_info.is_float() {
+                b"fpcm"
+            } else {
+                b"ipcm"
+            }
+        }
+        _ => unreachable!(),
+    };
+
+    Ok(*fourcc)
+}
+
+fn get_video_fourcc(s: &gst::StructureRef) -> Result<&[u8; 4], Error> {
     let fourcc = match s.name().as_str() {
         "video/x-h264" => {
             let stream_format = s.get::<&str>("stream-format").context("no stream-format")?;
@@ -1335,145 +1436,163 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
         _ => unreachable!(),
     };
 
-    write_sample_entry_box(v, fourcc, move |v| {
-        // pre-defined
-        v.extend([0u8; 2]);
-        // Reserved
-        v.extend([0u8; 2]);
-        // pre-defined
-        v.extend([0u8; 3 * 4]);
+    Ok(fourcc)
+}
 
-        // Width
-        let width =
-            u16::try_from(s.get::<i32>("width").context("no width")?).context("too big width")?;
-        v.extend(width.to_be_bytes());
+fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error> {
+    for idx in 0..stream.stream_entry_count() {
+        let caps = stream.caps.get(idx).unwrap();
+        let s = caps.structure(0).unwrap();
+        let fourcc = get_video_fourcc(s).context("failed fourcc")?;
 
-        // Height
-        let height = u16::try_from(s.get::<i32>("height").context("no height")?)
-            .context("too big height")?;
-        v.extend(height.to_be_bytes());
+        write_sample_entry_box(v, fourcc, move |v| {
+            // pre-defined
+            v.extend([0u8; 2]);
+            // Reserved
+            v.extend([0u8; 2]);
+            // pre-defined
+            v.extend([0u8; 3 * 4]);
 
-        // Horizontal resolution
-        v.extend(0x00480000u32.to_be_bytes());
+            // Width
+            let width = u16::try_from(s.get::<i32>("width").context("no width")?)
+                .context("too big width")?;
+            v.extend(width.to_be_bytes());
 
-        // Vertical resolution
-        v.extend(0x00480000u32.to_be_bytes());
+            // Height
+            let height = u16::try_from(s.get::<i32>("height").context("no height")?)
+                .context("too big height")?;
+            v.extend(height.to_be_bytes());
 
-        // Reserved
-        v.extend([0u8; 4]);
+            // Horizontal resolution
+            v.extend(0x00480000u32.to_be_bytes());
 
-        // Frame count
-        v.extend(1u16.to_be_bytes());
+            // Vertical resolution
+            v.extend(0x00480000u32.to_be_bytes());
 
-        // Compressor name
-        v.extend([0u8; 32]);
+            // Reserved
+            v.extend([0u8; 4]);
 
-        // Depth
-        v.extend(0x0018u16.to_be_bytes());
+            // Frame count
+            v.extend(1u16.to_be_bytes());
 
-        // Pre-defined
-        v.extend((-1i16).to_be_bytes());
+            // Compressor name
+            v.extend([0u8; 32]);
 
-        // Codec specific boxes
-        match s.name().as_str() {
-            "video/x-h264" => {
-                let codec_data = s
-                    .get::<&gst::BufferRef>("codec_data")
-                    .context("no codec_data")?;
-                let map = codec_data
-                    .map_readable()
-                    .context("codec_data not mappable")?;
-                write_box(v, b"avcC", move |v| {
-                    v.extend_from_slice(&map);
-                    Ok(())
-                })?;
-            }
-            "video/x-h265" => {
-                let codec_data = s
-                    .get::<&gst::BufferRef>("codec_data")
-                    .context("no codec_data")?;
-                let map = codec_data
-                    .map_readable()
-                    .context("codec_data not mappable")?;
-                write_box(v, b"hvcC", move |v| {
-                    v.extend_from_slice(&map);
-                    Ok(())
-                })?;
-            }
-            "video/x-vp9" => {
-                let profile: u8 = match s.get::<&str>("profile").expect("no vp9 profile") {
-                    "0" => Some(0),
-                    "1" => Some(1),
-                    "2" => Some(2),
-                    "3" => Some(3),
-                    _ => None,
+            // Depth
+            v.extend(0x0018u16.to_be_bytes());
+
+            // Pre-defined
+            v.extend((-1i16).to_be_bytes());
+
+            // Codec specific boxes
+            match s.name().as_str() {
+                "video/x-h264" => {
+                    let codec_data = s
+                        .get::<&gst::BufferRef>("codec_data")
+                        .context("no codec_data")?;
+                    let map = codec_data
+                        .map_readable()
+                        .context("codec_data not mappable")?;
+                    write_box(v, b"avcC", move |v| {
+                        v.extend_from_slice(&map);
+                        Ok(())
+                    })?;
                 }
-                .context("unsupported vp9 profile")?;
-                let colorimetry = gst_video::VideoColorimetry::from_str(
-                    s.get::<&str>("colorimetry").expect("no colorimetry"),
-                )
-                .context("failed to parse colorimetry")?;
-                let video_full_range =
-                    colorimetry.range() == gst_video::VideoColorRange::Range0_255;
-                let chroma_format: u8 =
-                    match s.get::<&str>("chroma-format").expect("no chroma-format") {
-                        "4:2:0" =>
-                        // chroma-site is optional
-                        {
-                            match s
-                                .get::<&str>("chroma-site")
-                                .ok()
-                                .and_then(|cs| gst_video::VideoChromaSite::from_str(cs).ok())
-                            {
-                                Some(gst_video::VideoChromaSite::V_COSITED) => Some(0),
-                                // COSITED
-                                _ => Some(1),
-                            }
-                        }
-                        "4:2:2" => Some(2),
-                        "4:4:4" => Some(3),
+                "video/x-h265" => {
+                    let codec_data = s
+                        .get::<&gst::BufferRef>("codec_data")
+                        .context("no codec_data")?;
+                    let map = codec_data
+                        .map_readable()
+                        .context("codec_data not mappable")?;
+                    write_box(v, b"hvcC", move |v| {
+                        v.extend_from_slice(&map);
+                        Ok(())
+                    })?;
+                }
+                "video/x-vp9" => {
+                    let profile: u8 = match s.get::<&str>("profile").expect("no vp9 profile") {
+                        "0" => Some(0),
+                        "1" => Some(1),
+                        "2" => Some(2),
+                        "3" => Some(3),
                         _ => None,
                     }
-                    .context("unsupported chroma-format")?;
-                let bit_depth: u8 = {
-                    let bit_depth_luma = s.get::<u32>("bit-depth-luma").expect("no bit-depth-luma");
-                    let bit_depth_chroma = s
-                        .get::<u32>("bit-depth-chroma")
-                        .expect("no bit-depth-chroma");
-                    if bit_depth_luma != bit_depth_chroma {
-                        return Err(anyhow!("bit-depth-luma and bit-depth-chroma have different values which is an unsupported configuration"));
-                    }
-                    bit_depth_luma as u8
-                };
-                write_full_box(v, b"vpcC", 1, 0, move |v| {
-                    v.push(profile);
-                    // XXX: hardcoded level 1
-                    v.push(10);
-                    let mut byte: u8 = 0;
-                    byte |= (bit_depth & 0xF) << 4;
-                    byte |= (chroma_format & 0x7) << 1;
-                    byte |= video_full_range as u8;
-                    v.push(byte);
-                    v.push(colorimetry.primaries().to_iso() as u8);
-                    v.push(colorimetry.transfer().to_iso() as u8);
-                    v.push(colorimetry.matrix().to_iso() as u8);
-                    // 16-bit length field for codec initialization, unused
-                    v.push(0);
-                    v.push(0);
-                    Ok(())
-                })?;
-            }
-            "video/x-av1" => {
-                write_box(v, b"av1C", move |v| {
-                    if let Ok(codec_data) = s.get::<&gst::BufferRef>("codec_data") {
-                        let map = codec_data
-                            .map_readable()
-                            .context("codec_data not mappable")?;
+                    .context("unsupported vp9 profile")?;
 
-                        v.extend_from_slice(&map);
-                    } else {
-                        let presentation_delay_minus_one =
-                            if let Ok(presentation_delay) = s.get::<i32>("presentation-delay") {
+                    let colorimetry = gst_video::VideoColorimetry::from_str(
+                        s.get::<&str>("colorimetry").expect("no colorimetry"),
+                    )
+                    .context("failed to parse colorimetry")?;
+
+                    let video_full_range =
+                        colorimetry.range() == gst_video::VideoColorRange::Range0_255;
+
+                    let chroma_format: u8 =
+                        match s.get::<&str>("chroma-format").expect("no chroma-format") {
+                            "4:2:0" =>
+                            // chroma-site is optional
+                            {
+                                match s
+                                    .get::<&str>("chroma-site")
+                                    .ok()
+                                    .and_then(|cs| gst_video::VideoChromaSite::from_str(cs).ok())
+                                {
+                                    Some(gst_video::VideoChromaSite::V_COSITED) => Some(0),
+                                    // COSITED
+                                    _ => Some(1),
+                                }
+                            }
+                            "4:2:2" => Some(2),
+                            "4:4:4" => Some(3),
+                            _ => None,
+                        }
+                        .context("unsupported chroma-format")?;
+
+                    let bit_depth: u8 = {
+                        let bit_depth_luma =
+                            s.get::<u32>("bit-depth-luma").expect("no bit-depth-luma");
+                        let bit_depth_chroma = s
+                            .get::<u32>("bit-depth-chroma")
+                            .expect("no bit-depth-chroma");
+
+                        if bit_depth_luma != bit_depth_chroma {
+                            return Err(anyhow!("bit-depth-luma and bit-depth-chroma have different values which is an unsupported configuration"));
+                        }
+
+                        bit_depth_luma as u8
+                    };
+
+                    write_full_box(v, b"vpcC", 1, 0, move |v| {
+                        v.push(profile);
+                        // XXX: hardcoded level 1
+                        v.push(10);
+                        let mut byte: u8 = 0;
+                        byte |= (bit_depth & 0xF) << 4;
+                        byte |= (chroma_format & 0x7) << 1;
+                        byte |= video_full_range as u8;
+                        v.push(byte);
+                        v.push(colorimetry.primaries().to_iso() as u8);
+                        v.push(colorimetry.transfer().to_iso() as u8);
+                        v.push(colorimetry.matrix().to_iso() as u8);
+                        // 16-bit length field for codec initialization, unused
+                        v.push(0);
+                        v.push(0);
+                        Ok(())
+                    })?;
+                }
+                "video/x-av1" => {
+                    write_box(v, b"av1C", move |v| {
+                        if let Ok(codec_data) = s.get::<&gst::BufferRef>("codec_data") {
+                            let map = codec_data
+                                .map_readable()
+                                .context("codec_data not mappable")?;
+
+                            v.extend_from_slice(&map);
+                        } else {
+                            let presentation_delay_minus_one = if let Ok(presentation_delay) =
+                                s.get::<i32>("presentation-delay")
+                            {
                                 Some(
                                     (1u8 << 5)
                                         | std::cmp::max(
@@ -1485,233 +1604,235 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                                 None
                             };
 
-                        let profile = match s.get::<&str>("profile").unwrap() {
-                            "main" => 0,
-                            "high" => 1,
-                            "professional" => 2,
-                            _ => unreachable!(),
-                        };
-                        let level = av1_seq_level_idx(s.get::<&str>("level").ok());
-                        let tier = av1_tier(s.get::<&str>("tier").ok());
-                        let (high_bitdepth, twelve_bit) =
-                            match s.get::<u32>("bit-depth-luma").unwrap() {
-                                8 => (false, false),
-                                10 => (true, false),
-                                12 => (true, true),
+                            let profile = match s.get::<&str>("profile").unwrap() {
+                                "main" => 0,
+                                "high" => 1,
+                                "professional" => 2,
                                 _ => unreachable!(),
                             };
-                        let (monochrome, chroma_sub_x, chroma_sub_y) =
-                            match s.get::<&str>("chroma-format").unwrap() {
-                                "4:0:0" => (true, true, true),
-                                "4:2:0" => (false, true, true),
-                                "4:2:2" => (false, true, false),
-                                "4:4:4" => (false, false, false),
-                                _ => unreachable!(),
+                            let level = av1_seq_level_idx(s.get::<&str>("level").ok());
+                            let tier = av1_tier(s.get::<&str>("tier").ok());
+                            let (high_bitdepth, twelve_bit) =
+                                match s.get::<u32>("bit-depth-luma").unwrap() {
+                                    8 => (false, false),
+                                    10 => (true, false),
+                                    12 => (true, true),
+                                    _ => unreachable!(),
+                                };
+                            let (monochrome, chroma_sub_x, chroma_sub_y) =
+                                match s.get::<&str>("chroma-format").unwrap() {
+                                    "4:0:0" => (true, true, true),
+                                    "4:2:0" => (false, true, true),
+                                    "4:2:2" => (false, true, false),
+                                    "4:4:4" => (false, false, false),
+                                    _ => unreachable!(),
+                                };
+
+                            let chrome_sample_position = match s.get::<&str>("chroma-site") {
+                                Ok("v-cosited") => 1,
+                                Ok("v-cosited+h-cosited") => 2,
+                                _ => 0,
                             };
 
-                        let chrome_sample_position = match s.get::<&str>("chroma-site") {
-                            Ok("v-cosited") => 1,
-                            Ok("v-cosited+h-cosited") => 2,
-                            _ => 0,
-                        };
+                            let codec_data = [
+                                0x80 | 0x01,            // marker | version
+                                (profile << 5) | level, // profile | level
+                                (tier << 7)
+                                    | ((high_bitdepth as u8) << 6)
+                                    | ((twelve_bit as u8) << 5)
+                                    | ((monochrome as u8) << 4)
+                                    | ((chroma_sub_x as u8) << 3)
+                                    | ((chroma_sub_y as u8) << 2)
+                                    | chrome_sample_position, // tier | high bitdepth | twelve bit | monochrome | chroma sub x |
+                                // chroma sub y | chroma sample position
+                                if let Some(presentation_delay_minus_one) =
+                                    presentation_delay_minus_one
+                                {
+                                    0x10 | presentation_delay_minus_one // reserved | presentation delay present | presentation delay
+                                } else {
+                                    0
+                                },
+                            ];
 
-                        let codec_data = [
-                            0x80 | 0x01,            // marker | version
-                            (profile << 5) | level, // profile | level
-                            (tier << 7)
-                                | ((high_bitdepth as u8) << 6)
-                                | ((twelve_bit as u8) << 5)
-                                | ((monochrome as u8) << 4)
-                                | ((chroma_sub_x as u8) << 3)
-                                | ((chroma_sub_y as u8) << 2)
-                                | chrome_sample_position, // tier | high bitdepth | twelve bit | monochrome | chroma sub x |
-                            // chroma sub y | chroma sample position
-                            if let Some(presentation_delay_minus_one) = presentation_delay_minus_one
-                            {
-                                0x10 | presentation_delay_minus_one // reserved | presentation delay present | presentation delay
-                            } else {
-                                0
-                            },
-                        ];
+                            v.extend_from_slice(&codec_data);
+                        }
 
-                        v.extend_from_slice(&codec_data);
-                    }
+                        if let Some(extra_data) = &stream.extra_header_data {
+                            // unsigned int(8) configOBUs[];
+                            v.extend_from_slice(extra_data.as_slice());
+                        }
+                        Ok(())
+                    })?;
+                }
+                "video/x-vp8" | "image/jpeg" => {
+                    // Nothing to do here
+                }
+                "video/x-raw" => {
+                    let video_info = gst_video::VideoInfo::from_caps(stream.caps()).unwrap();
+                    write_uncompressed_sample_entries(v, video_info)?
+                }
+                _ => unreachable!(),
+            }
 
-                    if let Some(extra_data) = &stream.extra_header_data {
-                        // unsigned int(8) configOBUs[];
-                        v.extend_from_slice(extra_data.as_slice());
-                    }
+            if let Ok(par) = s.get::<gst::Fraction>("pixel-aspect-ratio") {
+                write_box(v, b"pasp", move |v| {
+                    v.extend((par.numer() as u32).to_be_bytes());
+                    v.extend((par.denom() as u32).to_be_bytes());
                     Ok(())
                 })?;
             }
-            "video/x-vp8" | "image/jpeg" => {
-                // Nothing to do here
-            }
-            "video/x-raw" => {
-                let video_info = gst_video::VideoInfo::from_caps(stream.caps()).unwrap();
-                write_uncompressed_sample_entries(v, video_info)?
-            }
-            _ => unreachable!(),
-        }
 
-        if let Ok(par) = s.get::<gst::Fraction>("pixel-aspect-ratio") {
-            write_box(v, b"pasp", move |v| {
-                v.extend((par.numer() as u32).to_be_bytes());
-                v.extend((par.denom() as u32).to_be_bytes());
-                Ok(())
-            })?;
-        }
-
-        if let Some(colorimetry) = s
-            .get::<&str>("colorimetry")
-            .ok()
-            .and_then(|c| c.parse::<gst_video::VideoColorimetry>().ok())
-        {
-            write_box(v, b"colr", move |v| {
-                v.extend(b"nclx");
-                let (primaries, transfer, matrix) = {
-                    (
-                        (colorimetry.primaries().to_iso() as u16),
-                        (colorimetry.transfer().to_iso() as u16),
-                        (colorimetry.matrix().to_iso() as u16),
-                    )
-                };
-
-                let full_range = match colorimetry.range() {
-                    gst_video::VideoColorRange::Range0_255 => 0x80u8,
-                    gst_video::VideoColorRange::Range16_235 => 0x00u8,
-                    _ => 0x00,
-                };
-
-                v.extend(primaries.to_be_bytes());
-                v.extend(transfer.to_be_bytes());
-                v.extend(matrix.to_be_bytes());
-                v.push(full_range);
-
-                Ok(())
-            })?;
-        }
-
-        if let Ok(cll) = gst_video::VideoContentLightLevel::from_caps(stream.caps()) {
-            write_box(v, b"clli", move |v| {
-                v.extend((cll.max_content_light_level()).to_be_bytes());
-                v.extend((cll.max_frame_average_light_level()).to_be_bytes());
-                Ok(())
-            })?;
-        }
-
-        if let Ok(mastering) = gst_video::VideoMasteringDisplayInfo::from_caps(stream.caps()) {
-            write_box(v, b"mdcv", move |v| {
-                for primary in mastering.display_primaries() {
-                    v.extend(primary.x.to_be_bytes());
-                    v.extend(primary.y.to_be_bytes());
-                }
-                v.extend(mastering.white_point().x.to_be_bytes());
-                v.extend(mastering.white_point().y.to_be_bytes());
-                v.extend(mastering.max_display_mastering_luminance().to_be_bytes());
-                v.extend(mastering.max_display_mastering_luminance().to_be_bytes());
-                Ok(())
-            })?;
-        }
-
-        // Write fiel box for codecs that require it
-        if ["image/jpeg"].contains(&s.name().as_str()) {
-            let interlace_mode = s
-                .get::<&str>("interlace-mode")
+            if let Some(colorimetry) = s
+                .get::<&str>("colorimetry")
                 .ok()
-                .map(gst_video::VideoInterlaceMode::from_string)
-                .unwrap_or(gst_video::VideoInterlaceMode::Progressive);
-            let field_order = s
-                .get::<&str>("field-order")
-                .ok()
-                .map(gst_video::VideoFieldOrder::from_string)
-                .unwrap_or(gst_video::VideoFieldOrder::Unknown);
+                .and_then(|c| c.parse::<gst_video::VideoColorimetry>().ok())
+            {
+                write_box(v, b"colr", move |v| {
+                    v.extend(b"nclx");
+                    let (primaries, transfer, matrix) = {
+                        (
+                            (colorimetry.primaries().to_iso() as u16),
+                            (colorimetry.transfer().to_iso() as u16),
+                            (colorimetry.matrix().to_iso() as u16),
+                        )
+                    };
 
-            write_box(v, b"fiel", move |v| {
-                let (interlace, field_order) = match interlace_mode {
-                    gst_video::VideoInterlaceMode::Progressive => (1, 0),
-                    gst_video::VideoInterlaceMode::Interleaved
-                        if field_order == gst_video::VideoFieldOrder::TopFieldFirst =>
-                    {
-                        (2, 9)
+                    let full_range = match colorimetry.range() {
+                        gst_video::VideoColorRange::Range0_255 => 0x80u8,
+                        gst_video::VideoColorRange::Range16_235 => 0x00u8,
+                        _ => 0x00,
+                    };
+
+                    v.extend(primaries.to_be_bytes());
+                    v.extend(transfer.to_be_bytes());
+                    v.extend(matrix.to_be_bytes());
+                    v.push(full_range);
+
+                    Ok(())
+                })?;
+            }
+
+            if let Ok(cll) = gst_video::VideoContentLightLevel::from_caps(stream.caps()) {
+                write_box(v, b"clli", move |v| {
+                    v.extend((cll.max_content_light_level()).to_be_bytes());
+                    v.extend((cll.max_frame_average_light_level()).to_be_bytes());
+                    Ok(())
+                })?;
+            }
+
+            if let Ok(mastering) = gst_video::VideoMasteringDisplayInfo::from_caps(stream.caps()) {
+                write_box(v, b"mdcv", move |v| {
+                    for primary in mastering.display_primaries() {
+                        v.extend(primary.x.to_be_bytes());
+                        v.extend(primary.y.to_be_bytes());
                     }
-                    gst_video::VideoInterlaceMode::Interleaved => (2, 14),
-                    _ => (0, 0),
-                };
+                    v.extend(mastering.white_point().x.to_be_bytes());
+                    v.extend(mastering.white_point().y.to_be_bytes());
+                    v.extend(mastering.max_display_mastering_luminance().to_be_bytes());
+                    v.extend(mastering.max_display_mastering_luminance().to_be_bytes());
+                    Ok(())
+                })?;
+            }
 
-                v.push(interlace);
-                v.push(field_order);
-                Ok(())
-            })?;
-        }
+            // Write fiel box for codecs that require it
+            if ["image/jpeg"].contains(&s.name().as_str()) {
+                let interlace_mode = s
+                    .get::<&str>("interlace-mode")
+                    .ok()
+                    .map(gst_video::VideoInterlaceMode::from_string)
+                    .unwrap_or(gst_video::VideoInterlaceMode::Progressive);
+                let field_order = s
+                    .get::<&str>("field-order")
+                    .ok()
+                    .map(gst_video::VideoFieldOrder::from_string)
+                    .unwrap_or(gst_video::VideoFieldOrder::Unknown);
 
-        if stream.image_sequence {
-            match s.name().as_str() {
-                // intra formats
-                "video/x-vp9" | "video/x-vp8" | "image/jpeg" => {
-                    let all_ref_pics_intra = 1u32; // 0 = don't know, 1 = reference pictures are only intra
-                    let intra_pred_used = 1u32; // 0 = no, 1 = yes, or maybe
-                    let max_ref_per_pic = 0u32; // none number
-                    let packed_bits = (all_ref_pics_intra << 31)
-                        | (intra_pred_used << 30)
-                        | (max_ref_per_pic << 26);
-                    write_full_box(v, b"ccst", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-                        v.extend(packed_bits.to_be_bytes());
-                        Ok(())
-                    })?;
-                }
-                // uncompressed
-                "video/x-raw" => {
-                    let all_ref_pics_intra = 1u32; // 0 = don't know, 1 = reference pictures are only intra
-                    let intra_pred_used = 0u32; // 0 = no, 1 = yes, or maybe
-                    let max_ref_per_pic = 0u32; // none
-                    let packed_bits = (all_ref_pics_intra << 31)
-                        | (intra_pred_used << 30)
-                        | (max_ref_per_pic << 26);
-                    write_full_box(v, b"ccst", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-                        v.extend(packed_bits.to_be_bytes());
-                        Ok(())
-                    })?;
-                }
-                _ => {
-                    let all_ref_pics_intra = 0u32; // 0 = don't know, 1 = reference pictures are only intra
-                    let intra_pred_used = 1u32; // 0 = no, 1 = yes, or maybe
-                    let max_ref_per_pic = 15u32; // any number
-                    let packed_bits = (all_ref_pics_intra << 31)
-                        | (intra_pred_used << 30)
-                        | (max_ref_per_pic << 26);
-                    write_full_box(v, b"ccst", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-                        v.extend(packed_bits.to_be_bytes());
-                        Ok(())
-                    })?;
+                write_box(v, b"fiel", move |v| {
+                    let (interlace, field_order) = match interlace_mode {
+                        gst_video::VideoInterlaceMode::Progressive => (1, 0),
+                        gst_video::VideoInterlaceMode::Interleaved
+                            if field_order == gst_video::VideoFieldOrder::TopFieldFirst =>
+                        {
+                            (2, 9)
+                        }
+                        gst_video::VideoInterlaceMode::Interleaved => (2, 14),
+                        _ => (0, 0),
+                    };
+
+                    v.push(interlace);
+                    v.push(field_order);
+                    Ok(())
+                })?;
+            }
+
+            if stream.image_sequence {
+                match s.name().as_str() {
+                    // intra formats
+                    "video/x-vp9" | "video/x-vp8" | "image/jpeg" => {
+                        let all_ref_pics_intra = 1u32; // 0 = don't know, 1 = reference pictures are only intra
+                        let intra_pred_used = 1u32; // 0 = no, 1 = yes, or maybe
+                        let max_ref_per_pic = 0u32; // none number
+                        let packed_bits = (all_ref_pics_intra << 31)
+                            | (intra_pred_used << 30)
+                            | (max_ref_per_pic << 26);
+                        write_full_box(v, b"ccst", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
+                            v.extend(packed_bits.to_be_bytes());
+                            Ok(())
+                        })?;
+                    }
+                    // uncompressed
+                    "video/x-raw" => {
+                        let all_ref_pics_intra = 1u32; // 0 = don't know, 1 = reference pictures are only intra
+                        let intra_pred_used = 0u32; // 0 = no, 1 = yes, or maybe
+                        let max_ref_per_pic = 0u32; // none
+                        let packed_bits = (all_ref_pics_intra << 31)
+                            | (intra_pred_used << 30)
+                            | (max_ref_per_pic << 26);
+                        write_full_box(v, b"ccst", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
+                            v.extend(packed_bits.to_be_bytes());
+                            Ok(())
+                        })?;
+                    }
+                    _ => {
+                        let all_ref_pics_intra = 0u32; // 0 = don't know, 1 = reference pictures are only intra
+                        let intra_pred_used = 1u32; // 0 = no, 1 = yes, or maybe
+                        let max_ref_per_pic = 15u32; // any number
+                        let packed_bits = (all_ref_pics_intra << 31)
+                            | (intra_pred_used << 30)
+                            | (max_ref_per_pic << 26);
+                        write_full_box(v, b"ccst", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
+                            v.extend(packed_bits.to_be_bytes());
+                            Ok(())
+                        })?;
+                    }
                 }
             }
-        }
 
-        if stream.avg_bitrate.is_some() || stream.max_bitrate.is_some() {
-            write_box(v, b"btrt", |v| {
-                // Buffer size DB
-                // TODO
-                v.extend(0u32.to_be_bytes());
+            if stream.avg_bitrate.is_some() || stream.max_bitrate.is_some() {
+                write_box(v, b"btrt", |v| {
+                    // Buffer size DB
+                    // TODO
+                    v.extend(0u32.to_be_bytes());
 
-                // Maximum bitrate
-                let max_bitrate = stream.max_bitrate.or(stream.avg_bitrate).unwrap();
-                v.extend(max_bitrate.to_be_bytes());
+                    // Maximum bitrate
+                    let max_bitrate = stream.max_bitrate.or(stream.avg_bitrate).unwrap();
+                    v.extend(max_bitrate.to_be_bytes());
 
-                // Average bitrate
-                let avg_bitrate = stream.avg_bitrate.or(stream.max_bitrate).unwrap();
-                v.extend(avg_bitrate.to_be_bytes());
+                    // Average bitrate
+                    let avg_bitrate = stream.avg_bitrate.or(stream.max_bitrate).unwrap();
+                    v.extend(avg_bitrate.to_be_bytes());
 
-                Ok(())
-            })?;
-        }
+                    Ok(())
+                })?;
+            }
 
-        if let Some(taic) = &stream.tai_clock_info {
-            taic.write_taic_box(v)?;
-        }
+            if let Some(taic) = &stream.tai_clock_info {
+                taic.write_taic_box(v)?;
+            }
 
-        Ok(())
-    })?;
+            Ok(())
+        })?;
+    }
 
     Ok(())
 }
@@ -1988,33 +2109,9 @@ pub(crate) fn write_chnl(
 }
 
 fn write_audio_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error> {
-    let audio_info = gst_audio::AudioInfo::from_caps(&stream.caps).context("failed AudioInfo")?;
+    let audio_info = gst_audio::AudioInfo::from_caps(stream.caps()).context("failed AudioInfo")?;
     let s = stream.caps().structure(0).unwrap();
-    let fourcc = match s.name().as_str() {
-        "audio/mpeg" => b"mp4a",
-        "audio/x-opus" => b"Opus",
-        "audio/x-flac" => b"fLaC",
-        "audio/x-alaw" => b"alaw",
-        "audio/x-mulaw" => b"ulaw",
-        "audio/x-adpcm" => {
-            let layout = s.get::<&str>("layout").context("no ADPCM layout field")?;
-
-            match layout {
-                "g726" => b"ms\x00\x45",
-                _ => unreachable!(),
-            }
-        }
-        "audio/x-ac3" => b"ac-3",
-        "audio/x-eac3" => b"ec-3",
-        "audio/x-raw" => {
-            if audio_info.is_float() {
-                b"fpcm"
-            } else {
-                b"ipcm"
-            }
-        }
-        _ => unreachable!(),
-    };
+    let fourcc = get_audio_fourcc(s, &audio_info).context("failed fourcc")?;
 
     let sample_size = match s.name().as_str() {
         "audio/x-adpcm" => {

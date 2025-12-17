@@ -153,7 +153,11 @@ struct Stream {
     pre_queue: VecDeque<(gst::FormattedSegment<gst::ClockTime>, gst::Buffer)>,
 
     /// Currently configured caps for this stream.
-    caps: gst::Caps,
+    caps: Vec<gst::Caps>,
+
+    /// Current sample description index.
+    sample_desc_idx: u32,
+
     /// Whether this stream is intra-only and has frame reordering.
     delta_frames: DeltaFrames,
     /// Whether this stream might have header frames without timestamps that should be ignored.
@@ -276,21 +280,19 @@ impl Stream {
         Ok(elst_infos)
     }
 
-    fn timescale(&self) -> u32 {
-        let trak_timescale = { self.sinkpad.imp().settings.lock().unwrap().trak_timescale };
-
-        if trak_timescale > 0 {
-            return trak_timescale;
-        }
-
-        let s = self.caps.structure(0).unwrap();
+    fn calculate_caps_timescale(&self, s: &gst::StructureRef) -> u32 {
+        const DEFAULT_TIMESCALE: u32 = 10_000;
 
         if let Ok(fps) = s.get::<gst::Fraction>("framerate") {
             if fps.numer() == 0 {
-                return 10_000;
+                return DEFAULT_TIMESCALE;
             }
 
-            if fps.denom() != 1 && fps.denom() != 1001 {
+            if fps.denom() == 1001 {
+                return fps.numer() as u32;
+            }
+
+            if fps.denom() != 1 {
                 if let Some(fps) = (fps.denom() as u64)
                     .nseconds()
                     .mul_div_round(1_000_000_000, fps.numer() as u64)
@@ -298,22 +300,40 @@ impl Stream {
                 {
                     return (fps.numer() as u32)
                         .mul_div_round(100, fps.denom() as u32)
-                        .unwrap_or(10_000);
+                        .unwrap_or(DEFAULT_TIMESCALE);
                 }
             }
 
-            if fps.denom() == 1001 {
-                fps.numer() as u32
-            } else {
-                (fps.numer() as u32)
-                    .mul_div_round(100, fps.denom() as u32)
-                    .unwrap_or(10_000)
-            }
+            (fps.numer() as u32)
+                .mul_div_round(100, fps.denom() as u32)
+                .unwrap_or(DEFAULT_TIMESCALE)
         } else if let Ok(rate) = s.get::<i32>("rate") {
             rate as u32
         } else {
-            10_000
+            DEFAULT_TIMESCALE
         }
+    }
+
+    fn timescale(&self) -> u32 {
+        let trak_timescale = { self.sinkpad.imp().settings.lock().unwrap().trak_timescale };
+        if trak_timescale > 0 {
+            return trak_timescale;
+        }
+
+        // Determine the best timescale for *each* set of Caps
+        let individual_timescales = self
+            .caps
+            .iter()
+            .filter_map(|caps| caps.structure(0))
+            .map(|s| self.calculate_caps_timescale(s))
+            .collect::<Vec<u32>>();
+
+        // Select the highest timescale from the calculated values
+        individual_timescales
+            .iter()
+            .cloned()
+            .reduce(|a, b| a.lcm(&b))
+            .unwrap()
     }
 
     fn image_sequence_mode(&self) -> bool {
@@ -344,6 +364,13 @@ impl Stream {
             None
         }
     }
+
+    fn caps(&self) -> &gst::Caps {
+        // Use the most recent caps for this Stream. These should be
+        // equivalent considering what we allow for renegotiation and
+        // return for a caps query.
+        self.caps.last().unwrap()
+    }
 }
 
 #[derive(Default)]
@@ -366,6 +393,17 @@ struct State {
     #[cfg(feature = "v1_28")]
     /// The last TAI timestamp value, in nanoseconds after epoch
     last_tai_timestamp: u64,
+}
+
+impl State {
+    #[allow(unused)]
+    fn stream_from_pad(&self, pad: &gst_base::AggregatorPad) -> Option<&Stream> {
+        self.streams.iter().find(|s| *pad == s.sinkpad)
+    }
+
+    fn mut_stream_from_pad(&mut self, pad: &gst_base::AggregatorPad) -> Option<&mut Stream> {
+        self.streams.iter_mut().find(|s| *pad == s.sinkpad)
+    }
 }
 
 #[derive(Default)]
@@ -416,7 +454,7 @@ impl MP4Mux {
         };
 
         let timescale = stream
-            .caps
+            .caps()
             .structure(0)
             .unwrap()
             .get::<i32>("rate")
@@ -833,7 +871,7 @@ impl MP4Mux {
 
                     // If the stream is AV1, we need  to parse the SequenceHeader OBU to include in the
                     // extra data of the 'av1C' box. It makes the stream playable in some browsers.
-                    let s = stream.caps.structure(0).unwrap();
+                    let s = stream.caps().structure(0).unwrap();
                     if !buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
                         && s.name().as_str() == "video/x-av1"
                     {
@@ -1325,11 +1363,19 @@ impl MP4Mux {
             stream.queued_chunk_time += duration;
             stream.queued_chunk_bytes += buffer.size() as u64;
 
+            gst::trace!(
+                CAT,
+                obj = stream.sinkpad,
+                "Pushing sample with sample description index {}",
+                stream.sample_desc_idx,
+            );
+
             stream.chunks.last_mut().unwrap().samples.push(Sample {
                 sync_point: !buffer.flags().contains(gst::BufferFlags::DELTA_UNIT),
                 duration,
                 composition_time_offset,
                 size: buffer.size() as u32,
+                sample_desc_idx: stream.sample_desc_idx,
             });
 
             {
@@ -1659,7 +1705,8 @@ impl MP4Mux {
             state.streams.push(Stream {
                 sinkpad: pad,
                 pre_queue: VecDeque::new(),
-                caps,
+                caps: vec![caps],
+                sample_desc_idx: 1,
                 delta_frames,
                 discard_header_buffers,
                 chunks: Vec::new(),
@@ -1706,8 +1753,8 @@ impl MP4Mux {
                 }
             };
 
-            let st_a = order_of_caps(&a.caps);
-            let st_b = order_of_caps(&b.caps);
+            let st_a = order_of_caps(a.caps());
+            let st_b = order_of_caps(b.caps());
 
             if st_a == st_b {
                 return a.sinkpad.name().cmp(&b.sinkpad.name());
@@ -1747,6 +1794,107 @@ impl MP4Mux {
         }
 
         Ok(buffer)
+    }
+
+    // Adapted from `gst_qt_mux_can_renegotiate`
+    fn can_renegotiate(
+        &self,
+        aggregator_pad: &gst_base::AggregatorPad,
+        sup_caps: &gst::CapsRef,
+    ) -> bool {
+        let mut state = self.state.lock().unwrap();
+
+        if let Some(stream) = state.mut_stream_from_pad(aggregator_pad) {
+            let stream_caps = stream.caps();
+            let sub_s = stream_caps.structure(0).unwrap();
+            let sup_s = sup_caps.structure(0).unwrap();
+
+            if sub_s.name() != sup_s.name() {
+                gst::warning!(
+                    CAT,
+                    obj = aggregator_pad,
+                    "Refusing negotiation from {:?} to {:?}",
+                    stream_caps,
+                    sup_caps,
+                );
+                return false;
+            }
+
+            let compatible_caps = self.get_compatible_caps(aggregator_pad, stream_caps);
+
+            if !sup_caps.can_intersect(&compatible_caps) {
+                gst::warning!(
+                    CAT,
+                    obj = aggregator_pad,
+                    "Refusing negotiation from {:?} to {:?}",
+                    stream_caps,
+                    sup_caps,
+                );
+                return false;
+            }
+
+            gst::debug!(
+                CAT,
+                obj = aggregator_pad,
+                "Re-negotiating from {:?} to {:?}",
+                stream_caps,
+                sup_caps,
+            );
+        }
+
+        true
+    }
+
+    /// Gets caps compatible with the provided current caps.
+    fn get_compatible_caps(
+        &self,
+        aggregator_pad: &gst_base::AggregatorPad,
+        current_caps: &gst::Caps,
+    ) -> gst::Caps {
+        // We don't support changing codecs. `qtdemux` does not have
+        // support for the same. FFmpeg reports not supporting multiple
+        // `fourcc` when using `ffplay` and VLC does not play the file
+        // when different sample descriptions are present like avc1 and
+        // vp08.
+        gst::debug!(
+            CAT,
+            obj = aggregator_pad,
+            "Getting compatible caps for {:?}",
+            current_caps,
+        );
+
+        let mut compatible_caps = current_caps.clone();
+        let structure = compatible_caps.structure(0).unwrap();
+        let name = structure.name().to_string();
+
+        let variable_fields = get_variable_fields_for_media_type(name.as_str());
+
+        for s in compatible_caps.make_mut().iter_mut() {
+            let fields_to_process = s
+                .iter()
+                .map(|(fieldname, _)| fieldname.to_string())
+                .collect::<Vec<String>>();
+
+            for fieldname in fields_to_process {
+                if variable_fields.contains(&fieldname.as_str()) {
+                    s.remove_field(&fieldname);
+                }
+            }
+        }
+
+        compatible_caps = compatible_caps.intersect_with_mode(
+            &aggregator_pad.pad_template_caps(),
+            gst::CapsIntersectMode::First,
+        );
+
+        gst::debug!(
+            CAT,
+            obj = aggregator_pad,
+            "Compatible caps: {:?}",
+            compatible_caps,
+        );
+
+        compatible_caps
     }
 }
 
@@ -1955,10 +2103,7 @@ impl AggregatorImpl for MP4Mux {
                     .current_caps()
                     .unwrap_or_else(|| aggregator_pad.pad_template_caps());
 
-                // Allow framerate change
-                for s in allowed_caps.make_mut().iter_mut() {
-                    s.remove_field("framerate");
-                }
+                allowed_caps = self.get_compatible_caps(aggregator_pad, &allowed_caps);
 
                 if let Some(filter_caps) = q.filter() {
                     let res = filter_caps
@@ -1996,6 +2141,13 @@ impl AggregatorImpl for MP4Mux {
                         .seqnum(event.seqnum())
                         .build();
                 }
+                self.parent_sink_event_pre_queue(aggregator_pad, event)
+            }
+            EventView::Caps(ev) => {
+                if !self.can_renegotiate(aggregator_pad, ev.caps()) {
+                    return Err(gst::FlowError::NotNegotiated);
+                }
+
                 self.parent_sink_event_pre_queue(aggregator_pad, event)
             }
             _ => self.parent_sink_event_pre_queue(aggregator_pad, event),
@@ -2118,6 +2270,34 @@ impl AggregatorImpl for MP4Mux {
                         }
                     }
                 }
+
+                self.parent_sink_event(aggregator_pad, event)
+            }
+            EventView::Caps(caps) => {
+                let new_caps = caps.caps_owned();
+
+                gst::trace!(CAT, obj = aggregator_pad, "Received caps {}", new_caps);
+
+                let mut state = self.state.lock().unwrap();
+                let current_offset = state.current_offset;
+
+                if let Some(stream) = state.mut_stream_from_pad(aggregator_pad) {
+                    stream.caps.push(new_caps);
+                    stream.sample_desc_idx += 1;
+
+                    gst::debug!(
+                        CAT,
+                        obj = stream.sinkpad,
+                        "Starting new chunk at offset {} on caps change",
+                        current_offset,
+                    );
+
+                    stream.chunks.push(Chunk {
+                        offset: current_offset,
+                        samples: Vec::new(),
+                    });
+                }
+                drop(state);
 
                 self.parent_sink_event(aggregator_pad, event)
             }
@@ -2246,7 +2426,7 @@ impl AggregatorImpl for MP4Mux {
             let mut have_image_sequence = false; // we'll mark true if an image sequence
             let mut have_only_image_sequence = true; // we'll mark false if video found
             for stream in state.streams.iter().as_ref() {
-                let caps_structure = stream.caps.structure(0).unwrap();
+                let caps_structure = stream.caps().structure(0).unwrap();
 
                 if stream.image_sequence_mode() {
                     compatible_brands.insert(*b"iso8");
@@ -2362,7 +2542,7 @@ impl AggregatorImpl for MP4Mux {
                 };
 
                 streams.push(TrackConfiguration {
-                    caps: vec![stream.caps.clone()],
+                    caps: stream.caps.clone(),
                     delta_frames: stream.delta_frames,
                     trak_timescale: stream.timescale(),
                     earliest_pts,
@@ -2923,5 +3103,46 @@ impl ChildProxyImpl for MP4Mux {
             .into_iter()
             .nth(index as usize)
             .map(|p| p.upcast())
+    }
+}
+
+fn get_variable_fields_for_media_type(media_type: &str) -> &'static [&'static str] {
+    // For audio and also video a lot more is allowed to change. This
+    // is quite conservative. In principle, everything that only shows
+    // up in the sample description entry can change (including codec
+    // changes!), plus width/height. It's in the track header but the
+    // one there is only the "canvas size".
+
+    const VIDEO_FIELDS: &[&str] = &[
+        // Common video fields that can vary
+        "width",
+        "height",
+        "framerate",
+        "pixel-aspect-ratio",
+        "interlace-mode",
+        "field-order",
+        "multiview-mode",
+        "multiview-flags",
+        // Codec-specific variable fields
+        "codec_data",
+        "streamheader",
+        "profile",
+        "level",
+        "tier",
+        "colorimetry",
+        "chroma-format",
+        "chroma-site",
+        "bit-depth-luma",
+        "bit-depth-chroma",
+    ];
+
+    const AUDIO_FIELDS: &[&str] = &["channels", "rate"];
+
+    if media_type.starts_with("video/") {
+        VIDEO_FIELDS
+    } else if media_type.starts_with("audio/") {
+        AUDIO_FIELDS
+    } else {
+        &[]
     }
 }
