@@ -1510,15 +1510,15 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                         Ok(())
                     })?;
                 }
-                "video/x-vp9" => {
-                    let profile: u8 = match s.get::<&str>("profile").expect("no vp9 profile") {
+                "video/x-vp8" | "video/x-vp9" => {
+                    let profile: u8 = match s.get::<&str>("profile").expect("no vpX profile") {
                         "0" => Some(0),
                         "1" => Some(1),
                         "2" => Some(2),
                         "3" => Some(3),
                         _ => None,
                     }
-                    .context("unsupported vp9 profile")?;
+                    .context("unsupported vpX profile")?;
 
                     let colorimetry = gst_video::VideoColorimetry::from_str(
                         s.get::<&str>("colorimetry").expect("no colorimetry"),
@@ -1529,38 +1529,50 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                         colorimetry.range() == gst_video::VideoColorRange::Range0_255;
 
                     let chroma_format: u8 =
-                        match s.get::<&str>("chroma-format").expect("no chroma-format") {
-                            "4:2:0" =>
-                            // chroma-site is optional
-                            {
-                                match s
-                                    .get::<&str>("chroma-site")
-                                    .ok()
-                                    .and_then(|cs| gst_video::VideoChromaSite::from_str(cs).ok())
+                        if s.name() == "video/x-vp8" {
+                            // VP8 only supports a profile value of 0
+                            // which is chroma-format 4:2:0 and 8-bits
+                            // per sample.
+                            0
+                        } else {
+                            match s.get::<&str>("chroma-format").expect("no chroma-format") {
+                                "4:2:0" =>
+                                // chroma-site is optional
                                 {
-                                    Some(gst_video::VideoChromaSite::V_COSITED) => Some(0),
-                                    // COSITED
-                                    _ => Some(1),
+                                    match s.get::<&str>("chroma-site").ok().and_then(|cs| {
+                                        gst_video::VideoChromaSite::from_str(cs).ok()
+                                    }) {
+                                        Some(gst_video::VideoChromaSite::V_COSITED) => Some(0),
+                                        // COSITED
+                                        _ => Some(1),
+                                    }
                                 }
+                                "4:2:2" => Some(2),
+                                "4:4:4" => Some(3),
+                                _ => None,
                             }
-                            "4:2:2" => Some(2),
-                            "4:4:4" => Some(3),
-                            _ => None,
-                        }
-                        .context("unsupported chroma-format")?;
+                            .context("unsupported chroma-format")?
+                        };
 
                     let bit_depth: u8 = {
-                        let bit_depth_luma =
-                            s.get::<u32>("bit-depth-luma").expect("no bit-depth-luma");
-                        let bit_depth_chroma = s
-                            .get::<u32>("bit-depth-chroma")
-                            .expect("no bit-depth-chroma");
+                        if s.name() == "video/x-vp8" {
+                            // VP8 only supports a profile value of 0
+                            // which is chroma-format 4:2:0 and 8-bits
+                            // per sample.
+                            8
+                        } else {
+                            let bit_depth_luma =
+                                s.get::<u32>("bit-depth-luma").expect("no bit-depth-luma");
+                            let bit_depth_chroma = s
+                                .get::<u32>("bit-depth-chroma")
+                                .expect("no bit-depth-chroma");
 
-                        if bit_depth_luma != bit_depth_chroma {
-                            return Err(anyhow!("bit-depth-luma and bit-depth-chroma have different values which is an unsupported configuration"));
+                            if bit_depth_luma != bit_depth_chroma {
+                                return Err(anyhow!("bit-depth-luma and bit-depth-chroma have different values which is an unsupported configuration"));
+                            }
+
+                            bit_depth_luma as u8
                         }
-
-                        bit_depth_luma as u8
                     };
 
                     write_full_box(v, b"vpcC", 1, 0, move |v| {
@@ -1664,7 +1676,7 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                         Ok(())
                     })?;
                 }
-                "video/x-vp8" | "image/jpeg" => {
+                "image/jpeg" => {
                     // Nothing to do here
                 }
                 "video/x-raw" => {
