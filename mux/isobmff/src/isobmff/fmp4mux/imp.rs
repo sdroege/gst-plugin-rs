@@ -23,10 +23,13 @@ use std::sync::Mutex;
 use crate::av1::obu::read_seq_header_obu_bytes;
 use crate::isobmff::boxes::create_dac3;
 use crate::isobmff::boxes::create_dec3;
+use crate::isobmff::boxes::create_pcmc;
+use crate::isobmff::boxes::generate_audio_channel_layout_info;
 use crate::isobmff::fmp4mux::boxes::create_fmp4_fragment_header;
 use crate::isobmff::fmp4mux::boxes::create_fmp4_header;
 use crate::isobmff::fmp4mux::boxes::create_mfra;
 use crate::isobmff::transform_matrix::TransformMatrix;
+use crate::isobmff::ChnlLayoutInfo;
 use crate::isobmff::ChunkMode;
 use crate::isobmff::DeltaFrames;
 use crate::isobmff::ElstInfo;
@@ -342,6 +345,9 @@ struct Stream {
     /// This will be processed on the next aggregate call once
     /// the conditions are met.
     pending_split_now: Vec<SplitNowEvent>,
+
+    /// Information needed for creating `chnl` box
+    chnl_layout_info: Option<ChnlLayoutInfo>,
 }
 
 impl Stream {
@@ -1023,7 +1029,7 @@ impl FMP4Mux {
             ]
             .as_slice(),
             "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
-            | "audio/x-ac3" | "audio/x-eac3" | "audio/x-adpcm" => {
+            | "audio/x-ac3" | "audio/x-eac3" | "audio/x-adpcm" | "audio/x-raw" => {
                 ["channels", "rate", "layout", "bitrate", "codec_data"].as_slice()
             }
             "application/x-onvif-metadata" => [].as_slice(),
@@ -1435,7 +1441,16 @@ impl FMP4Mux {
         while let Some(stream) =
             self.find_earliest_stream(&mut state.streams, timeout, settings.fragment_duration)?
         {
-            let pre_queued_buffer = Self::pop_buffer(self, stream);
+            let mut pre_queued_buffer = Self::pop_buffer(self, stream);
+
+            if let Some(info) = &stream.chnl_layout_info {
+                gst::error!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Reordering channels using {info:?}",
+                );
+                self.reorder_audio_channels(&mut pre_queued_buffer.buffer, info)?;
+            };
 
             // Queue up the buffer and update GOP tracking state
             self.queue_gops(stream, pre_queued_buffer)?;
@@ -3676,6 +3691,8 @@ impl FMP4Mux {
             let mut delta_frames = DeltaFrames::IntraOnly;
             let mut discard_header_buffers = false;
             let mut codec_specific_boxes = Vec::new();
+            let mut chnl_layout_info = None;
+
             match s.name().as_str() {
                 "video/x-h264" | "video/x-h265" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
@@ -3763,6 +3780,34 @@ impl FMP4Mux {
                         _ => unreachable!(),
                     }
                 }
+                "audio/x-raw" => {
+                    let audio_info = gst_audio::AudioInfo::from_caps(&caps).map_err(|err| {
+                        gst::error!(CAT, obj = pad, "Failed to get audio info: {err}");
+
+                        gst::FlowError::NotNegotiated
+                    })?;
+                    codec_specific_boxes = match create_pcmc(&audio_info) {
+                        Ok(boxes) => boxes,
+                        Err(err) => {
+                            gst::error!(
+                                CAT,
+                                obj = pad,
+                                "Failed to create raw audio specific box: {err}"
+                            );
+                            return Err(gst::FlowError::NotNegotiated);
+                        }
+                    };
+                    chnl_layout_info =
+                        generate_audio_channel_layout_info(audio_info).map_err(|err| {
+                            gst::error!(
+                                CAT,
+                                obj = pad,
+                                "Failed to get audio channel layout info: {err}"
+                            );
+
+                            gst::FlowError::NotNegotiated
+                        })?;
+                }
                 "audio/x-alaw" | "audio/x-mulaw" => (),
                 "audio/x-adpcm" => (),
                 "application/x-onvif-metadata" => (),
@@ -3795,6 +3840,7 @@ impl FMP4Mux {
                 max_bitrate,
                 elst_infos: Vec::new(),
                 pending_split_now: Vec::new(),
+                chnl_layout_info,
             });
         }
 
@@ -3910,7 +3956,7 @@ impl FMP4Mux {
                     image_sequence: false,
                     tai_clock_info: None,
                     auxiliary_info: vec![],
-                    chnl_layout_info: None,
+                    chnl_layout_info: s.chnl_layout_info.clone(),
                 }
             })
             .collect::<Vec<_>>();
@@ -4039,6 +4085,36 @@ impl FMP4Mux {
 
         // Need to output new headers if started again after EOS
         self.state.lock().unwrap().sent_headers = false;
+    }
+
+    fn reorder_audio_channels(
+        &self,
+        buffer: &mut gst::Buffer,
+        chnl_layout_info: &ChnlLayoutInfo,
+    ) -> Result<(), gst::FlowError> {
+        if let Some(reorder_map) = &chnl_layout_info.reorder_map {
+            let buffer_mut = buffer.make_mut();
+
+            let Ok(mut map) = buffer_mut.map_writable() else {
+                gst::warning!(CAT, imp = self, "Failed to map buffer as writable");
+                return Ok(());
+            };
+
+            let audio_info = &chnl_layout_info.audio_info;
+
+            gst_audio::reorder_channels_with_reorder_map(
+                map.as_mut_slice(),
+                audio_info.bps() as usize,
+                audio_info.channels(),
+                reorder_map,
+            )
+            .map_err(|err| {
+                gst::error!(CAT, imp = self, "Channel reordering failed, {err}");
+                gst::FlowError::Error
+            })?;
+        }
+
+        Ok(())
     }
 }
 
@@ -5272,6 +5348,26 @@ impl ElementImpl for ISOFMP4Mux {
                         .field("channels", gst::IntRange::<i32>::new(1, u16::MAX as i32))
                         .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
                         .build(),
+                    gst::Structure::builder("audio/x-raw")
+                        .field(
+                            "format",
+                            gst::List::new([
+                                gst_audio::AudioFormat::S16le.to_str(),
+                                gst_audio::AudioFormat::S24le.to_str(),
+                                gst_audio::AudioFormat::S32le.to_str(),
+                                gst_audio::AudioFormat::F32le.to_str(),
+                                gst_audio::AudioFormat::F64le.to_str(),
+                                gst_audio::AudioFormat::S16be.to_str(),
+                                gst_audio::AudioFormat::S24be.to_str(),
+                                gst_audio::AudioFormat::S32be.to_str(),
+                                gst_audio::AudioFormat::F32be.to_str(),
+                                gst_audio::AudioFormat::F64be.to_str(),
+                            ]),
+                        )
+                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .field("channels", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .field("layout", "interleaved")
+                        .build(),
                 ]
                 .into_iter()
                 .collect::<gst::Caps>(),
@@ -5378,6 +5474,26 @@ impl ElementImpl for CMAFMux {
                         .field("alignment", "iec61937")
                         .field("channels", gst::IntRange::<i32>::new(1, u16::MAX as i32))
                         .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .build(),
+                    gst::Structure::builder("audio/x-raw")
+                        .field(
+                            "format",
+                            gst::List::new([
+                                gst_audio::AudioFormat::S16le.to_str(),
+                                gst_audio::AudioFormat::S24le.to_str(),
+                                gst_audio::AudioFormat::S32le.to_str(),
+                                gst_audio::AudioFormat::F32le.to_str(),
+                                gst_audio::AudioFormat::F64le.to_str(),
+                                gst_audio::AudioFormat::S16be.to_str(),
+                                gst_audio::AudioFormat::S24be.to_str(),
+                                gst_audio::AudioFormat::S32be.to_str(),
+                                gst_audio::AudioFormat::F32be.to_str(),
+                                gst_audio::AudioFormat::F64be.to_str(),
+                            ]),
+                        )
+                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .field("channels", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .field("layout", "interleaved")
                         .build(),
                 ]
                 .into_iter()
@@ -5503,6 +5619,26 @@ impl ElementImpl for DASHMP4Mux {
                         .field("alignment", "iec61937")
                         .field("channels", gst::IntRange::<i32>::new(1, u16::MAX as i32))
                         .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .build(),
+                    gst::Structure::builder("audio/x-raw")
+                        .field(
+                            "format",
+                            gst::List::new([
+                                gst_audio::AudioFormat::S16le.to_str(),
+                                gst_audio::AudioFormat::S24le.to_str(),
+                                gst_audio::AudioFormat::S32le.to_str(),
+                                gst_audio::AudioFormat::F32le.to_str(),
+                                gst_audio::AudioFormat::F64le.to_str(),
+                                gst_audio::AudioFormat::S16be.to_str(),
+                                gst_audio::AudioFormat::S24be.to_str(),
+                                gst_audio::AudioFormat::S32be.to_str(),
+                                gst_audio::AudioFormat::F32be.to_str(),
+                                gst_audio::AudioFormat::F64be.to_str(),
+                            ]),
+                        )
+                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .field("channels", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .field("layout", "interleaved")
                         .build(),
                 ]
                 .into_iter()
