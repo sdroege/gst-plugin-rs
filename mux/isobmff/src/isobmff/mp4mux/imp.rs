@@ -2282,8 +2282,21 @@ impl AggregatorImpl for MP4Mux {
                 let current_offset = state.current_offset;
 
                 if let Some(stream) = state.mut_stream_from_pad(aggregator_pad) {
-                    stream.caps.push(new_caps);
-                    stream.sample_desc_idx += 1;
+                    match stream
+                        .caps
+                        .iter()
+                        .position(|c| c.is_strictly_equal(&new_caps))
+                    {
+                        Some(idx) => {
+                            // Reuse existing sample description
+                            stream.sample_desc_idx = idx as u32 + 1;
+                        }
+                        None => {
+                            // Add new sample description
+                            stream.caps.push(new_caps);
+                            stream.sample_desc_idx = stream.caps.len() as u32;
+                        }
+                    }
 
                     gst::debug!(
                         CAT,
