@@ -1444,7 +1444,7 @@ impl FMP4Mux {
             let mut pre_queued_buffer = Self::pop_buffer(self, stream);
 
             if let Some(info) = &stream.chnl_layout_info {
-                gst::error!(
+                gst::debug!(
                     CAT,
                     obj = stream.sinkpad,
                     "Reordering channels using {info:?}",
