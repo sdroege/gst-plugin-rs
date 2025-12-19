@@ -13,7 +13,7 @@ gst.workspace = true
 gst-base.workspace = true
 gst-video.workspace = true
 gst-validate.workspace = true
-rqrr = { version = "0.7", default-features = false, features = ["img"] }
+rqrr = { version = "0.10", default-features = false, features = ["img"] }
 image = { version = "0.25", default-features = false }
 serde_json = "1.0"
 
