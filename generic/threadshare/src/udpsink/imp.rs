@@ -932,6 +932,10 @@ impl UdpSink {
     fn unprepare(&self) {
         gst::debug!(CAT, imp = self, "Unpreparing");
         self.sink_pad_handler.unprepare();
+
+        let mut settings = self.settings.lock().unwrap();
+        settings.used_socket = None;
+        settings.used_socket_v6 = None;
         *self.ts_ctx.lock().unwrap() = None;
         gst::debug!(CAT, imp = self, "Unprepared");
     }
