@@ -40,11 +40,14 @@ impl InterSink {
     fn prepare(&self) -> Result<(), Error> {
         let settings = self.settings.lock().unwrap();
 
-        InterStreamProducer::acquire(&settings.producer_name, &self.appsink, settings.producer).map(
-            |producer| {
-                producer.set_forward_events(settings.event_types.clone());
-            },
+        InterStreamProducer::acquire(
+            &settings.producer_name,
+            &self.appsink,
+            settings.producer.clone(),
         )
+        .map(|producer| {
+            producer.set_forward_events(settings.event_types.clone());
+        })
     }
 
     fn unprepare(&self) {
@@ -128,7 +131,7 @@ impl ObjectImpl for InterSink {
                     if let Err(err) = InterStreamProducer::acquire(
                         &settings.producer_name,
                         &appsink,
-                        settings.producer,
+                        settings.producer.clone(),
                     ) {
                         drop(settings);
                         gst::error!(CAT, imp = self, "{err}");
