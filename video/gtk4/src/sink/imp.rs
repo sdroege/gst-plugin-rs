@@ -680,20 +680,8 @@ impl BaseSinkImpl for PaintableSink {
                 if query_caps.features(0).is_none_or(|features| {
                     features.contains(gst::CAPS_FEATURE_MEMORY_SYSTEM_MEMORY)
                 }) {
-                    // FIXME: Use safe bindings
-                    let (allocator, pool) = unsafe {
-                        use glib::translate::*;
-
-                        extern "C" {
-                            fn gst_udmabuf_allocator_get() -> *mut gst::ffi::GstAllocator;
-                            fn gst_video_dmabuf_pool_new() -> *mut gst::ffi::GstBufferPool;
-                        }
-
-                        (
-                            Option::<gst::Allocator>::from_glib_full(gst_udmabuf_allocator_get()),
-                            Option::<gst::BufferPool>::from_glib_full(gst_video_dmabuf_pool_new()),
-                        )
-                    };
+                    let allocator = gst_allocators::UdmabufAllocator::get();
+                    let pool = gst_video::VideoDmabufPool::new();
 
                     if let Some((allocator, pool)) = Option::zip(allocator, pool) {
                         gst::debug!(
