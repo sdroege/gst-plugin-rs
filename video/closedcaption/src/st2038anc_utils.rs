@@ -55,7 +55,7 @@ impl AncDataHeader {
         }
 
         let len = r.position_in_bits().unwrap();
-        assert!(len % 8 == 0);
+        assert!(len.is_multiple_of(8));
         let len = len as usize / 8;
 
         Ok(AncDataHeader {

@@ -237,7 +237,7 @@ impl Cea708State {
         }
         self.writer.push_packet(packet);
 
-        assert!(s334_1a_data.len() % 3 == 0);
+        assert!(s334_1a_data.len().is_multiple_of(3));
         for triple in s334_1a_data.chunks(3) {
             if (triple[0] & 0x80) > 0 {
                 self.writer

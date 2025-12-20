@@ -194,11 +194,13 @@ impl S3PutObjectSink {
         #[allow(clippy::needless_bool)]
         // Verbose if/else form for readability
         if settings.flush_interval_buffers > 0
-            && (state.num_buffers % settings.flush_interval_buffers) == 0
+            && state
+                .num_buffers
+                .is_multiple_of(settings.flush_interval_buffers)
         {
             true
         } else if settings.flush_interval_bytes > 0
-            && (state.buffer.len() as u64 % settings.flush_interval_bytes) == 0
+            && (state.buffer.len() as u64).is_multiple_of(settings.flush_interval_bytes)
         {
             true
         } else if settings.flush_interval_time.is_some()

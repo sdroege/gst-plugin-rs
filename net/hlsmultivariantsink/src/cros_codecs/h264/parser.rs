@@ -806,7 +806,7 @@ impl Parser {
 
     fn fill_default_scaling_list_8x8(scaling_list8x8: &mut [u8; 64], i: usize) {
         assert!(i < 6);
-        if i % 2 == 0 {
+        if i.is_multiple_of(2) {
             *scaling_list8x8 = DEFAULT_8X8_INTRA;
         } else {
             *scaling_list8x8 = DEFAULT_8X8_INTER;

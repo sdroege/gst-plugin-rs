@@ -1218,7 +1218,10 @@ impl Transcriber {
                             let mut state = self.state.lock().unwrap();
 
                             state.n_non_empty_transcripts += 1;
-                            if state.n_non_empty_transcripts % get_speakers_interval == 0 {
+                            if state
+                                .n_non_empty_transcripts
+                                .is_multiple_of(get_speakers_interval)
+                            {
                                 state.send_get_speakers = true;
                             }
                         }

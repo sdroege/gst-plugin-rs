@@ -218,7 +218,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpLinearAudioDepay {
             return Ok(gst::FlowSuccess::Ok);
         }
 
-        if packet.payload().len() % (bpf as usize) != 0 {
+        if !packet.payload().len().is_multiple_of(bpf as usize) {
             gst::warning!(
                 CAT,
                 imp = self,

@@ -51,7 +51,7 @@ fn make_mp2t_buffer(
     while ts_packet.len() < (n_packets * PACKET_SIZE) {
         ts_packet.extend_from_slice(&[0x47, 0x1f, 0xff, 0x10]);
 
-        while ts_packet.len() % PACKET_SIZE != 0 {
+        while !ts_packet.len().is_multiple_of(PACKET_SIZE) {
             ts_packet.extend_from_slice(&[0, 0, 0, 0]);
         }
     }

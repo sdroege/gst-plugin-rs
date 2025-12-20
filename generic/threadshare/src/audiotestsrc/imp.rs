@@ -504,7 +504,7 @@ impl TaskImpl for AudioTestSrcTask {
         #[cfg(feature = "tuning")]
         if self.is_main_elem {
             if let Some(parked_duration_init) = self.parked_duration_init {
-                if self.buffer_count % LOG_BUFFER_INTERVAL == 0 {
+                if self.buffer_count.is_multiple_of(LOG_BUFFER_INTERVAL) {
                     let parked_duration = runtime::Context::current().unwrap().parked_duration()
                         - parked_duration_init;
 

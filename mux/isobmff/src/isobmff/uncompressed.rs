@@ -324,7 +324,7 @@ fn get_sampling_type_for_uncc_format(video_info: &gst_video::VideoInfo) -> u8 {
             return 1;
         } else if vert_subsampling == 1 {
             // 4:2:0 or similar
-            if video_info.height() % 2 != 0 {
+            if !video_info.height().is_multiple_of(2) {
                 unreachable!("4:2:0 images must have an even number of rows in 23001-17, should have failed caps negotiation");
             }
             return 2;
@@ -482,7 +482,7 @@ fn get_row_align_size_for_uncc_format(video_info: &gst_video::VideoInfo) -> u32 
     {
         // ISO/IEC 23001-17 5.2.1.5 requires alignment to be be done with halved row alignment for 4:2:2, 4:2:0, 4:1:1
         // GStreamer uses the same row stride for subsampling (not halved). So we don't support that in general.
-        if video_info.width() % 4 == 0 {
+        if video_info.width().is_multiple_of(4) {
             // However we can handle it if everything is a multiple of 4, which requires no alignment.
             return 0;
         } else {

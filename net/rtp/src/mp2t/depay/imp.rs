@@ -299,7 +299,7 @@ impl RtpMP2TDepay {
 
             // Try exact size match for the payload first
             if payload.len() >= size
-                && payload.len() % size == 0
+                && payload.len().is_multiple_of(size)
                 && payload
                     .chunks_exact(size)
                     .all(|packet| packet[offset] == TS_PACKET_SYNC)
@@ -329,7 +329,7 @@ impl RtpMP2TDepay {
             );
 
             if payload.len() >= size
-                && payload.len() % size != 0
+                && !payload.len().is_multiple_of(size)
                 && payload
                     .chunks_exact(size)
                     .all(|packet| packet[offset] == TS_PACKET_SYNC)

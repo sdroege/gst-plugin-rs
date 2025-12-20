@@ -72,7 +72,7 @@ struct CCPacketContents {
 
 impl CCDetect {
     fn detect_cc_data(&self, data: &[u8]) -> Result<CCPacketContents, ParseError> {
-        if data.len() % 3 != 0 {
+        if !data.len().is_multiple_of(3) {
             gst::warning!(
                 CAT,
                 imp = self,

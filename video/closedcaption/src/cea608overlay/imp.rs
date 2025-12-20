@@ -157,7 +157,7 @@ impl Cea608Overlay {
     }
 
     fn decode_cc_data(&self, state: &mut State, data: &[u8], pts: gst::ClockTime) {
-        if data.len() % 3 != 0 {
+        if !data.len().is_multiple_of(3) {
             gst::warning!(CAT, "cc_data length is not a multiple of 3, truncating");
         }
 
@@ -203,7 +203,7 @@ impl Cea608Overlay {
     }
 
     fn decode_s334_1a(&self, state: &mut State, data: &[u8], pts: gst::ClockTime) {
-        if data.len() % 3 != 0 {
+        if !data.len().is_multiple_of(3) {
             gst::warning!(CAT, "cc_data length is not a multiple of 3, truncating");
         }
 

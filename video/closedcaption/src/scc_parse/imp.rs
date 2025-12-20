@@ -97,7 +97,7 @@ fn parse_timecode(
     // Every full minute the first two timecodes are skipped, except for every tenth minute.
     if tc.drop_frame
         && tc.seconds == 0
-        && tc.minutes % 10 != 0
+        && !tc.minutes.is_multiple_of(10)
         && (tc.frames == 0 || tc.frames == 1)
     {
         tc.frames = 2;
