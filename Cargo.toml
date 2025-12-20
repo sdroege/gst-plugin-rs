@@ -142,7 +142,7 @@ lto = "off"
 version = "0.15.0-alpha.1"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 edition = "2021"
-rust-version = "1.86"
+rust-version = "1.92"
 
 [workspace.dependencies]
 glib = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "main" }
