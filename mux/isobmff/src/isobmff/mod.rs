@@ -15,6 +15,7 @@ use gst::tags;
 mod ac3;
 mod aux_info;
 mod boxes;
+mod brands;
 mod eac3;
 mod flac;
 mod fmp4mux;

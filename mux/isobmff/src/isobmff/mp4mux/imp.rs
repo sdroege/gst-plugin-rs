@@ -19,6 +19,7 @@ use crate::isobmff::boxes::create_mdat_header_non_frag;
 use crate::isobmff::boxes::create_moov;
 use crate::isobmff::boxes::create_pcmc;
 use crate::isobmff::boxes::generate_audio_channel_layout_info;
+use crate::isobmff::brands::brands_from_variant_and_caps;
 use crate::isobmff::AuxiliaryInformation;
 use crate::isobmff::AuxiliaryInformationEntry;
 use crate::isobmff::ChnlLayoutInfo;
@@ -2430,71 +2431,29 @@ impl AggregatorImpl for MP4Mux {
                 state.current_offset
             );
 
-            // ... and then create the ftyp box plus mdat box header so we can start outputting
-            // actual data
+            // ... and then create the ftyp box plus mdat box header so
+            // we can start outputting actual data
 
+            let extra_brands = &settings.extra_brands;
             let mut major_brand = *b"iso4";
             let mut minor_version = 0u32;
             let mut compatible_brands: BTreeSet<[u8; 4]> = BTreeSet::new();
-            let mut have_image_sequence = false; // we'll mark true if an image sequence
-            let mut have_only_image_sequence = true; // we'll mark false if video found
+
             for stream in state.streams.iter().as_ref() {
-                let caps_structure = stream.caps().structure(0).unwrap();
+                let (minor_ver, maj_brand, brands) = brands_from_variant_and_caps(
+                    self.obj().class().as_ref().variant,
+                    stream.caps.iter(),
+                    stream.image_sequence_mode(),
+                    settings.with_precision_timestamps,
+                    extra_brands,
+                );
 
-                if stream.image_sequence_mode() {
-                    compatible_brands.insert(*b"iso8");
-                    compatible_brands.insert(*b"unif");
-                    compatible_brands.insert(*b"msf1");
-                    have_image_sequence = true;
-                } else {
-                    match caps_structure.name().as_str() {
-                        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9"
-                        | "video/x-av1" | "image/jpeg" | "video/x-raw" => {
-                            have_only_image_sequence = false;
-                        }
-                        _ => {}
-                    }
-                    match caps_structure.name().as_str() {
-                        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9"
-                        | "image/jpeg" | "video/x-raw" | "audio/mpeg" | "audio/x-opus"
-                        | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm"
-                        | "audio/x-ac3" | "audio/x-eac3" => {
-                            compatible_brands.insert(*b"mp41");
-                            compatible_brands.insert(*b"mp42");
-                            compatible_brands.insert(*b"isom");
-                        }
-                        _ => {}
-                    }
-                }
+                major_brand = maj_brand;
+                minor_version = minor_ver;
 
-                match caps_structure.name().as_str() {
-                    "video/x-av1" => {
-                        minor_version = 1;
-                        compatible_brands.insert(*b"av01");
-                    }
-                    "video/x-h264" => {
-                        compatible_brands.insert(*b"avc1");
-                    }
-                    "audio/x-ac3" | "audio/x-eac3" => {
-                        compatible_brands.insert(*b"dby1");
-                    }
-                    "audio/x-opus" => {
-                        compatible_brands.insert(*b"opus");
-                    }
-                    _ => {}
-                }
-                if settings.with_precision_timestamps {
-                    compatible_brands.insert(*b"iso6"); // required for saiz/saio support
-                }
+                compatible_brands.extend(brands);
             }
-            if have_image_sequence && have_only_image_sequence {
-                major_brand = *b"msf1";
-            }
-            let settings = self.settings.lock().unwrap();
-            for brand in &settings.extra_brands {
-                compatible_brands.insert(*brand);
-            }
-            compatible_brands.insert(major_brand);
+
             // Convert BTreeSet to Vector
             let compatible_brands_vec: Vec<[u8; 4]> = compatible_brands.into_iter().collect();
             let ftyp =
