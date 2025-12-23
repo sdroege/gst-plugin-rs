@@ -1,3 +1,7 @@
+if get_option('doc').disabled()
+  subdir_done()
+endif
+
 build_hotdoc = false
 
 if meson.is_cross_build()
