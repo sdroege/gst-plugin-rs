@@ -357,6 +357,161 @@ impl VorbisInfo {
 }
 
 #[derive(Clone, Debug)]
+pub(crate) struct VorbisComment {
+    vendor: String,
+    comments: Vec<String>,
+}
+
+impl VorbisComment {
+    const MIN_SIZE: usize = 7 + 4 + 4 + 1;
+
+    pub(crate) fn decimate(&mut self, max_size: usize) {
+        let mut round = 0;
+
+        loop {
+            let current_size = self.size();
+
+            gst::log!(
+                CAT,
+                "current size: {current_size}, round {round}, target size {max_size}"
+            );
+
+            if current_size <= max_size || current_size <= Self::MIN_SIZE {
+                break;
+            }
+
+            // Find largest comment tag and remove it
+
+            let biggest = self.comments.iter().map(|c| c.len()).enumerate().fold(
+                (None, 0),
+                |(biggest_idx, biggest_len), (cur_idx, cur_len)| {
+                    if biggest_idx.is_none() || biggest_len <= cur_len {
+                        (Some(cur_idx), cur_len)
+                    } else {
+                        (biggest_idx, biggest_len)
+                    }
+                },
+            );
+
+            match biggest {
+                // Remove biggest comment
+                (Some(idx), len) => {
+                    gst::info!(
+                        CAT,
+                        "removing comment {} @ {idx}, len={len}",
+                        self.get_tag_name_for_index(idx)
+                    );
+
+                    self.comments.remove(idx);
+                }
+
+                // If no more comments are left, there's just the vendor string left to remove
+                _ => {
+                    gst::info!(CAT, "clearing vendor string");
+                    self.vendor
+                        .truncate(max_size.saturating_sub(Self::MIN_SIZE));
+                }
+            }
+
+            round += 1;
+        }
+
+        gst::info!(CAT, "decimated size: {}", self.size());
+        gst::log!(CAT, "{self:?}");
+    }
+
+    pub fn to_vec(&self) -> Vec<u8> {
+        let mut vec = vec![];
+
+        vec.extend_from_slice("\x03vorbis".as_bytes());
+
+        // Vendor string
+        vec.extend_from_slice(&(self.vendor.len() as u32).to_le_bytes());
+        vec.extend_from_slice(self.vendor.as_bytes());
+
+        // Comments
+        vec.extend_from_slice(&(self.comments.len() as u32).to_le_bytes());
+        for comment in &self.comments {
+            vec.extend_from_slice(&(comment.len() as u32).to_le_bytes());
+            vec.extend_from_slice(comment.as_bytes());
+        }
+
+        // Framing bit
+        vec.push(0x01);
+
+        vec
+    }
+
+    fn size(&self) -> usize {
+        7 + 4 + self.vendor.len() + 4 + self.comments.iter().fold(0, |acc, c| acc + 4 + c.len()) + 1
+    }
+
+    fn get_tag_name_for_index(&self, idx: usize) -> &str {
+        match self.comments.get(idx).and_then(|s| s.split_once('=')) {
+            Some((left, _right)) => left,
+            _ => "<Unknown>",
+        }
+    }
+}
+
+impl FromByteStream for VorbisComment {
+    type Error = anyhow::Error;
+
+    fn from_reader<R: ByteRead + ?Sized>(r: &mut R) -> anyhow::Result<Self> {
+        use VorbisConfigParseError::*;
+        use anyhow::Context;
+
+        // https://xiph.org/vorbis/doc/Vorbis_I_spec.html#x1-620004.2.1
+
+        let mut vorbis_marker = [0u8; 7];
+
+        r.read_bytes(&mut vorbis_marker).context("id header")?;
+
+        if vorbis_marker != "\x03vorbis".as_bytes() {
+            Err(InvalidHeader {
+                name: "comment",
+                reason: "wrong header prefix",
+            })?;
+        }
+
+        // https://xiph.org/vorbis/doc/Vorbis_I_spec.html#x1-820005
+
+        let vendor_len = r.read::<u32>().context("vendor_length")? as usize;
+        let vendor_bytes = r.read_to_vec(vendor_len).context("vendor_string")?;
+        let vendor = String::from_utf8(vendor_bytes).context("vendor_string into utf-8")?;
+
+        gst::trace!(CAT, "vendor: {vendor}");
+
+        let list_len = r.read::<u32>().context("user_comment_list_length")? as usize;
+
+        // Not pre-allocating capacity on purpose here since it comes from external data
+        let mut comments = vec![];
+
+        for i in 0..list_len {
+            let comment_len = r.read::<u32>().context("user_comment_list_length")? as usize;
+            let comment_bytes = r.read_to_vec(comment_len).context("comment".to_string())?;
+            let comment = String::from_utf8(comment_bytes).context("comment into utf-8")?;
+
+            gst::trace!(
+                CAT,
+                "comment {i}: {comment:.200} {}",
+                if comment.len() >= 200 { "..." } else { "" }
+            );
+
+            comments.push(comment);
+        }
+
+        let framing_bit = r.read::<u8>().context("framing_bit")?;
+
+        if framing_bit != 0x01 {
+            anyhow::bail!("framing bit unset");
+        }
+
+        Ok(VorbisComment { vendor, comments })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct VorbisHeaders {
     headers: [Vec<u8>; 3],
     info: VorbisInfo,
@@ -519,7 +674,10 @@ impl VorbisConfig {
     }
 
     // Return a single packed header config encoded as base64 string, for use in SDPs
-    pub(crate) fn configuration_string(&self) -> Result<String, ()> {
+    pub(crate) fn configuration_string(&self) -> anyhow::Result<String> {
+        // Max size of the three headers minus some bytes for the variable-sized preamble
+        const MAX_HEADERS_LEN: usize = u16::MAX as usize - (4 * 16);
+
         use data_encoding::Encoding;
 
         let mut output = String::new();
@@ -532,26 +690,57 @@ impl VorbisConfig {
         // packed header
         encoder.append(&self.ident.to_be_bytes()[1..4]); // 24-bit ident
 
-        let id_len = self.headers.headers[0].len();
-        let comment_len = self.headers.headers[1].len();
-        let setup_len = self.headers.headers[2].len();
+        let id_hdr = &self.headers.headers[0];
+        let mut comment_hdr = &self.headers.headers[1]; // comment header to use
+        let setup_hdr = &self.headers.headers[2];
 
-        let total_len = id_len + comment_len + setup_len;
+        let total_len = id_hdr.len() + comment_hdr.len() + setup_hdr.len();
 
-        if total_len > u16::MAX as usize {
-            // Todo: could decimate the comment header (e.g. remove cover art) until everything fits
-            return Err(());
+        gst::log!(CAT, "total len: {total_len}");
+        gst::log!(CAT, "id len: {}", id_hdr.len());
+        gst::log!(CAT, "comment len: {}", comment_hdr.len());
+        gst::log!(CAT, "setup len: {}", setup_hdr.len());
+
+        let mut comment_vec = None; // decimated comment header (storage to keep it alive)
+
+        if total_len >= MAX_HEADERS_LEN {
+            // Decimate the comment header (e.g. remove cover art) until everything fits
+            let mut br = ByteReader::endian(Cursor::new(&comment_hdr), LittleEndian);
+            let mut comment = br.parse::<VorbisComment>()?;
+            let max_size = MAX_HEADERS_LEN.saturating_sub(id_hdr.len() + setup_hdr.len());
+            comment.decimate(max_size);
+            comment_vec = Some(comment.to_vec());
+            comment_hdr = comment_vec.as_ref().unwrap();
+        }
+
+        // Recalculate, might have changed if we decimated the comment header
+        let total_len = id_hdr.len() + comment_hdr.len() + setup_hdr.len();
+
+        // Final check just to be sure, shouldn't happen
+        if total_len >= MAX_HEADERS_LEN {
+            anyhow::bail!(
+                "Vorbis comment too long, \
+                can't be packed into RTP vorbis configuration, \
+                and failed to decimate it"
+            );
+        }
+
+        if comment_vec.is_some() {
+            gst::log!(CAT, "New total len: {total_len}");
+            gst::log!(CAT, "New id len: {}", id_hdr.len());
+            gst::log!(CAT, "New comment len: {}", comment_hdr.len());
+            gst::log!(CAT, "New setup len: {}", setup_hdr.len());
         }
 
         encoder.append(&(total_len as u16).to_be_bytes());
         encoder.append(&write_xiph_length(3 - 1)); // n_headers - 1
-        encoder.append(&write_xiph_length(id_len));
-        encoder.append(&write_xiph_length(comment_len));
+        encoder.append(&write_xiph_length(id_hdr.len()));
+        encoder.append(&write_xiph_length(comment_hdr.len()));
         // setup_len is implicit
 
-        encoder.append(&self.headers.headers[0]);
-        encoder.append(&self.headers.headers[1]);
-        encoder.append(&self.headers.headers[2]);
+        encoder.append(id_hdr);
+        encoder.append(comment_hdr);
+        encoder.append(setup_hdr);
 
         encoder.finalize();
 

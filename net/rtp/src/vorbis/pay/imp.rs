@@ -303,13 +303,16 @@ impl RtpBasePay2Impl for RtpVorbisPay {
 
         let new_config = VorbisConfig::new(ident, headers);
 
-        let Ok(config_string) = new_config.configuration_string() else {
-            gst::error!(
-                CAT,
-                imp = self,
-                "Could not create packed Vorbis configuration string, config probably too large"
-            );
-            return false;
+        let config_string = match new_config.configuration_string() {
+            Ok(config_string) => config_string,
+            Err(err) => {
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Could not create packed Vorbis configuration string: {err}"
+                );
+                return false;
+            }
         };
 
         let channels = new_config.channels();
