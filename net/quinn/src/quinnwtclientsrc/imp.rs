@@ -412,6 +412,8 @@ impl BaseSrcImpl for QuinnWebTransportClientSrc {
             state
                 .session
                 .close(CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG.as_bytes());
+
+            SharedConnection::remove(state.socket_addr);
         }
 
         *state = State::Stopped;

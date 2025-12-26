@@ -57,6 +57,12 @@ impl SharedConnection {
             .clone()
     }
 
+    pub fn remove(addr: SocketAddr) {
+        if let Some(state) = SHARED_CONNECTION_STATE.get() {
+            state.lock().unwrap().remove(&addr);
+        }
+    }
+
     pub fn set_endpoint_config(&mut self, endpoint_config: QuinnQuicEndpointConfig) {
         if self.endpoint_config.is_some() {
             return;

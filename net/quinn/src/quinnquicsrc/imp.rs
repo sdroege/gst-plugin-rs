@@ -594,6 +594,8 @@ impl BaseSrcImpl for QuinnQuicSrc {
                 CONNECTION_CLOSE_CODE.into(),
                 CONNECTION_CLOSE_MSG.as_bytes(),
             );
+
+            SharedConnection::remove(state.socket_addr);
         }
 
         *state = State::Stopped;
