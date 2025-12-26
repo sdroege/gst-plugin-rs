@@ -373,7 +373,12 @@ pub(crate) fn brands_from_variant_and_caps<'a>(
                 compatible_brands.insert(*b"av01");
             }
             "video/x-h264" => {
-                compatible_brands.insert(*b"avc1");
+                // See ISO/IEC 14496-12 Section E.3.
+                // avc1 brand is not used, since the specific
+                // extensions indicated by it are not used like
+                // sample groupings etc. Support for the boxes
+                // sdtp, sbgp, sgpd is also required which we
+                // currently do not support.
             }
             "audio/x-ac3" | "audio/x-eac3" => {
                 compatible_brands.insert(*b"dby1");

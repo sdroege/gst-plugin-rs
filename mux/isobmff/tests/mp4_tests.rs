@@ -737,7 +737,6 @@ fn test_taic_encode(video_enc: &str) {
         b"iso4".into(),
         0,
         vec![
-            b"avc1".into(),
             b"iso4".into(),
             b"isom".into(),
             b"mp41".into(),
@@ -851,7 +850,6 @@ fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
         0,
         if enabled {
             vec![
-                b"avc1".into(),
                 b"iso4".into(),
                 b"isom".into(),
                 b"mp41".into(),
@@ -860,7 +858,6 @@ fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
             ]
         } else {
             vec![
-                b"avc1".into(),
                 b"iso4".into(),
                 b"isom".into(),
                 b"mp41".into(),
@@ -974,7 +971,6 @@ fn test_taic_encode_cannot_sync(video_enc: &str) {
         b"iso4".into(),
         0,
         vec![
-            b"avc1".into(),
             b"iso4".into(),
             b"isom".into(),
             b"mp41".into(),
@@ -1391,29 +1387,12 @@ fn test_video_caps_change_with_encoder(
         .factory()
         .is_some_and(|f| f.name().starts_with("x265"));
 
-    let with_avc1 = !encoder
-        .factory()
-        .is_some_and(|f| f.name().starts_with("vp") || f.name().starts_with("x265"));
-    let is_raw = encoder
-        .factory()
-        .is_some_and(|f| f.name().starts_with("identity"));
-
-    let compatible_brands = if with_avc1 && !is_raw {
-        vec![
-            b"avc1".into(),
-            b"iso4".into(),
-            b"isom".into(),
-            b"mp41".into(),
-            b"mp42".into(),
-        ]
-    } else {
-        vec![
-            b"iso4".into(),
-            b"isom".into(),
-            b"mp41".into(),
-            b"mp42".into(),
-        ]
-    };
+    let compatible_brands = vec![
+        b"iso4".into(),
+        b"isom".into(),
+        b"mp41".into(),
+        b"mp42".into(),
+    ];
 
     check_generic_single_trak_file_structure(
         location,
