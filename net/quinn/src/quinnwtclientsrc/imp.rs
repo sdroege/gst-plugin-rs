@@ -65,6 +65,7 @@ struct Started {
     // implement clone.
     data_rx: Option<Receiver<QuinnData>>,
     thread_quit: Option<oneshot::Sender<()>>,
+    socket_addr: SocketAddr,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -297,7 +298,15 @@ impl BaseSrcImpl for QuinnWebTransportClientSrc {
                     return true;
                 }
 
-                match self.setup_session() {
+                let (url, endpoint_config) = match self.get_url_and_epconfig() {
+                    Ok(config) => config,
+                    Err(err) => {
+                        gst::error!(CAT, imp = self, "Failed to get endpoint config: {}", err);
+                        return false;
+                    }
+                };
+
+                match self.setup_session(url, endpoint_config) {
                     Ok(session) => {
                         let mut conn_guard = self.session.lock().unwrap();
                         *conn_guard = Some(session);
@@ -332,6 +341,9 @@ impl BaseSrcImpl for QuinnWebTransportClientSrc {
         }
         drop(state);
 
+        let (url, endpoint_config) = self.get_url_and_epconfig()?;
+        let server_addr = endpoint_config.server_addr;
+
         let sess_guard = self.session.lock().unwrap();
         let session = match *sess_guard {
             Some(ref s) => {
@@ -346,7 +358,7 @@ impl BaseSrcImpl for QuinnWebTransportClientSrc {
                 );
                 s.clone()
             }
-            None => self.setup_session()?,
+            None => self.setup_session(url, endpoint_config)?,
         };
         drop(sess_guard);
 
@@ -369,6 +381,7 @@ impl BaseSrcImpl for QuinnWebTransportClientSrc {
             data_handler: Some(data_handler),
             data_rx: Some(data_rx),
             thread_quit: Some(tx_quit),
+            socket_addr: server_addr,
         });
         drop(state);
 
@@ -519,7 +532,9 @@ impl QuinnWebTransportClientSrc {
         }
     }
 
-    fn get_epconfig(&self) -> Result<(url::Url, QuinnQuicEndpointConfig), gst::ErrorMessage> {
+    fn get_url_and_epconfig(
+        &self,
+    ) -> Result<(url::Url, QuinnQuicEndpointConfig), gst::ErrorMessage> {
         let settings = self.settings.lock().unwrap();
         let timeout = settings.timeout;
         let secure_conn = settings.secure_conn;
@@ -748,15 +763,16 @@ impl QuinnWebTransportClientSrc {
         gst::info!(CAT, imp = self, "Quit data handler thread");
     }
 
-    fn setup_session(&self) -> Result<Session, gst::ErrorMessage> {
+    fn setup_session(
+        &self,
+        url: url::Url,
+        endpoint_config: QuinnQuicEndpointConfig,
+    ) -> Result<Session, gst::ErrorMessage> {
         let settings = self.settings.lock().unwrap();
         let timeout = settings.timeout;
         drop(settings);
 
-        let (url, endpoint_config) = self.get_epconfig()?;
-
         let mut shared_connection = SharedConnection::get_or_init(endpoint_config.server_addr);
-
         shared_connection.set_endpoint_config(endpoint_config);
 
         let session = match shared_connection.connection() {

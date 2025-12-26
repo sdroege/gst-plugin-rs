@@ -58,6 +58,7 @@ struct Started {
     // implement clone.
     data_rx: Option<Receiver<QuinnData>>,
     thread_quit: Option<oneshot::Sender<()>>,
+    socket_addr: SocketAddr,
 }
 
 #[derive(Default)]
@@ -519,6 +520,9 @@ impl BaseSrcImpl for QuinnQuicSrc {
         }
         drop(state);
 
+        let (role, endpoint_config) = self.get_role_and_epconfig()?;
+        let socket_addr = self.get_socket_address(role, &endpoint_config);
+
         let conn_guard = self.connection.lock().unwrap();
         let connection = match *conn_guard {
             Some(ref c) => {
@@ -533,7 +537,7 @@ impl BaseSrcImpl for QuinnQuicSrc {
                 );
                 c.clone()
             }
-            None => self.setup_connection()?,
+            None => self.setup_connection(socket_addr, role, endpoint_config)?,
         };
         drop(conn_guard);
 
@@ -556,6 +560,7 @@ impl BaseSrcImpl for QuinnQuicSrc {
             data_handler: Some(data_handler),
             data_rx: Some(data_rx),
             thread_quit: Some(tx_quit),
+            socket_addr,
         });
         drop(state);
 
@@ -654,7 +659,16 @@ impl BaseSrcImpl for QuinnQuicSrc {
                     return true;
                 }
 
-                match self.setup_connection() {
+                let (role, endpoint_config) = match self.get_role_and_epconfig() {
+                    Ok(config) => config,
+                    Err(err) => {
+                        gst::error!(CAT, imp = self, "Failed to get endpoint config: {}", err);
+                        return false;
+                    }
+                };
+                let addr = self.get_socket_address(role, &endpoint_config);
+
+                match self.setup_connection(addr, role, endpoint_config) {
                     Ok(connection) => {
                         let mut conn_guard = self.connection.lock().unwrap();
                         *conn_guard = Some(connection);
@@ -972,20 +986,30 @@ impl QuinnQuicSrc {
         gst::info!(CAT, imp = self, "Quit data handler thread");
     }
 
-    fn setup_connection(&self) -> Result<Connection, gst::ErrorMessage> {
-        let settings = self.settings.lock().unwrap();
-        let timeout = settings.timeout;
-        drop(settings);
-
-        let (role, endpoint_config) = self.get_role_and_epconfig()?;
-        let addr = match role {
+    fn get_socket_address(
+        &self,
+        role: QuinnQuicRole,
+        endpoint_config: &QuinnQuicEndpointConfig,
+    ) -> SocketAddr {
+        match role {
             QuinnQuicRole::Client => endpoint_config.server_addr,
             QuinnQuicRole::Server => endpoint_config
                 .client_addr
                 .expect("Client address should be valid"),
-        };
-        let mut shared_connection = SharedConnection::get_or_init(addr);
+        }
+    }
 
+    fn setup_connection(
+        &self,
+        addr: SocketAddr,
+        role: QuinnQuicRole,
+        endpoint_config: QuinnQuicEndpointConfig,
+    ) -> Result<Connection, gst::ErrorMessage> {
+        let settings = self.settings.lock().unwrap();
+        let timeout = settings.timeout;
+        drop(settings);
+
+        let mut shared_connection = SharedConnection::get_or_init(addr);
         shared_connection.set_endpoint_config(endpoint_config);
 
         let connection = match shared_connection.connection() {
