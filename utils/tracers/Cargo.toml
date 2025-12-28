@@ -26,7 +26,7 @@ url = "2"
 futures = "0.3"
 
 [target.'cfg(unix)'.dependencies]
-signal-hook = "0.3"
+signal-hook = "0.4"
 
 [lib]
 name = "gstrstracers"
