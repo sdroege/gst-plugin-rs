@@ -204,3 +204,73 @@ fn test_l16_marker_bit() {
         expected_depay,
     );
 }
+
+#[test]
+fn test_l16_audio_level_hdrext() {
+    init();
+
+    let src =
+        "audiotestsrc num-buffers=2 samplesperbuffer=1024 ! capsfilter caps=audio/x-raw,rate=48000";
+    let pay = "rtpL16pay2 ! capsfilter caps=application/x-rtp,extmap-1=(string)\\<\\\"\\\",\\ urn:ietf:params:rtp-hdrext:ssrc-audio-level,\\\"vad=on\\\"\\>";
+    let depay = "rtpL16depay2";
+
+    let expected_pay = vec![
+        vec![ExpectedPacket::builder()
+            .pts(gst::ClockTime::from_nseconds(0))
+            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
+            .pt(96)
+            .rtp_time(0)
+            .marker_bit(true)
+            .size(1400)
+            .build()],
+        vec![ExpectedPacket::builder()
+            .pts(gst::ClockTime::from_nseconds(14375000))
+            .flags(gst::BufferFlags::empty())
+            .pt(96)
+            .rtp_time(690)
+            .marker_bit(false)
+            .size(688)
+            .build()],
+        vec![ExpectedPacket::builder()
+            .pts(gst::ClockTime::from_nseconds(21333334))
+            .flags(gst::BufferFlags::empty())
+            .pt(96)
+            .rtp_time(690 + 334)
+            .marker_bit(false)
+            .size(1400)
+            .build()],
+        vec![ExpectedPacket::builder()
+            .pts(gst::ClockTime::from_nseconds(35708334))
+            .flags(gst::BufferFlags::empty())
+            .pt(96)
+            .rtp_time(690 + 334 + 690)
+            .marker_bit(false)
+            .size(688)
+            .build()],
+    ];
+
+    let expected_depay = vec![
+        vec![ExpectedBuffer::builder()
+            .pts(gst::ClockTime::from_mseconds(0))
+            .size(1380)
+            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+            .build()],
+        vec![ExpectedBuffer::builder()
+            .pts(gst::ClockTime::from_nseconds(14375000))
+            .size(668)
+            .flags(gst::BufferFlags::empty())
+            .build()],
+        vec![ExpectedBuffer::builder()
+            .pts(gst::ClockTime::from_nseconds(21333334))
+            .size(1380)
+            .flags(gst::BufferFlags::empty())
+            .build()],
+        vec![ExpectedBuffer::builder()
+            .pts(gst::ClockTime::from_nseconds(35708334))
+            .size(668)
+            .flags(gst::BufferFlags::empty())
+            .build()],
+    ];
+
+    run_test_pipeline(Source::Bin(src), pay, depay, expected_pay, expected_depay);
+}

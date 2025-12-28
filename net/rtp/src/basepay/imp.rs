@@ -195,19 +195,79 @@ impl RtpBasePay2 {
         self.settings.lock().unwrap().mtu
     }
 
+    fn calculate_extension_size(
+        &self,
+        buffer: &gst::Buffer,
+    ) -> (gst_rtp::RTPHeaderExtensionFlags, u16, usize) {
+        let extensions = self.extensions.lock().unwrap();
+
+        let mut extension_flags =
+            gst_rtp::RTPHeaderExtensionFlags::ONE_BYTE | gst_rtp::RTPHeaderExtensionFlags::TWO_BYTE;
+        let mut extension_size = 0;
+        for extension in extensions.values() {
+            extension_flags &= extension.supported_flags();
+
+            let max_size = extension.max_size(buffer);
+            let ext_id = extension.id();
+            if max_size > 16 || ext_id > 14 {
+                extension_flags -= gst_rtp::RTPHeaderExtensionFlags::ONE_BYTE;
+            }
+            if max_size > 255 || ext_id > 255 {
+                extension_flags -= gst_rtp::RTPHeaderExtensionFlags::TWO_BYTE;
+            }
+            extension_size += max_size;
+        }
+
+        let extension_pattern =
+            if extension_flags.contains(gst_rtp::RTPHeaderExtensionFlags::ONE_BYTE) {
+                extension_flags = gst_rtp::RTPHeaderExtensionFlags::ONE_BYTE;
+                extension_size += extensions.len();
+                0xBEDE
+            } else if extension_flags.contains(gst_rtp::RTPHeaderExtensionFlags::TWO_BYTE) {
+                extension_flags = gst_rtp::RTPHeaderExtensionFlags::TWO_BYTE;
+                extension_size += 2 * extensions.len();
+                0x1000
+            } else {
+                extension_flags = gst_rtp::RTPHeaderExtensionFlags::empty();
+                extension_size = 0;
+                0
+            };
+
+        // Round up to a multiple of 4 bytes
+        (
+            extension_flags,
+            extension_pattern,
+            extension_size.next_multiple_of(4),
+        )
+    }
+
     pub(super) fn max_payload_size(&self) -> u32 {
+        let state = self.state.borrow();
         let settings = self.settings.lock().unwrap();
 
-        // FIXME: This does not consider the space needed for header extensions. Doing so would
-        // require knowing the buffer id range so we can calculate the maximum here.
-        settings
+        let mut max_payload_size = settings
             .mtu
-            .saturating_sub(if settings.source_info {
-                rtp_types::RtpPacket::MAX_N_CSRCS as u32 * 4
-            } else {
-                0
-            })
-            .saturating_sub(rtp_types::RtpPacket::MIN_RTP_PACKET_LEN as u32)
+            .saturating_sub(rtp_types::RtpPacket::MIN_RTP_PACKET_LEN as u32);
+
+        if settings.source_info {
+            max_payload_size =
+                max_payload_size.saturating_sub(rtp_types::RtpPacket::MAX_N_CSRCS as u32 * 4);
+        }
+
+        // FIXME: Assume that the first pending buffer is going to be the one that is the
+        // start of the input range for the next packet.
+        // We only produce RTP header extensions for the first buffer.
+        if let Some(extension_input_buffer) = state.pending_buffers.front() {
+            let (_, _, extension_size) =
+                self.calculate_extension_size(&extension_input_buffer.buffer);
+            if extension_size > 0 {
+                max_payload_size = max_payload_size.saturating_sub(
+                    extension_size as u32 + 4, // extension pattern and length
+                );
+            }
+        }
+
+        max_payload_size
     }
 
     pub(super) fn set_src_caps(&self, src_caps: &gst::Caps) {
@@ -604,41 +664,8 @@ impl RtpBasePay2 {
             .next()
             .expect("no input buffer for this packet");
 
-        let extensions = self.extensions.lock().unwrap();
-        let mut extension_flags =
-            gst_rtp::RTPHeaderExtensionFlags::ONE_BYTE | gst_rtp::RTPHeaderExtensionFlags::TWO_BYTE;
-        let mut extension_size = 0;
-        for extension in extensions.values() {
-            extension_flags &= extension.supported_flags();
-
-            let max_size = extension.max_size(&extension_input_buffer.buffer);
-            let ext_id = extension.id();
-            if max_size > 16 || ext_id > 14 {
-                extension_flags -= gst_rtp::RTPHeaderExtensionFlags::ONE_BYTE;
-            }
-            if max_size > 255 || ext_id > 255 {
-                extension_flags -= gst_rtp::RTPHeaderExtensionFlags::TWO_BYTE;
-            }
-            extension_size += max_size;
-        }
-
-        let extension_pattern =
-            if extension_flags.contains(gst_rtp::RTPHeaderExtensionFlags::ONE_BYTE) {
-                extension_flags = gst_rtp::RTPHeaderExtensionFlags::ONE_BYTE;
-                extension_size += extensions.len();
-                0xBEDE
-            } else if extension_flags.contains(gst_rtp::RTPHeaderExtensionFlags::TWO_BYTE) {
-                extension_flags = gst_rtp::RTPHeaderExtensionFlags::TWO_BYTE;
-                extension_size += 2 * extensions.len();
-                0x1000
-            } else {
-                extension_flags = gst_rtp::RTPHeaderExtensionFlags::empty();
-                extension_size = 0;
-                0
-            };
-
-        // Round up to a multiple of 4 bytes
-        extension_size = extension_size.next_multiple_of(4);
+        let (extension_flags, extension_pattern, extension_size) =
+            self.calculate_extension_size(&extension_input_buffer.buffer);
 
         // If there are extensions, write an empty extension area of the required size. If this is
         // not filled then it would be considered as padding inside the extension because of the
@@ -663,9 +690,7 @@ impl RtpBasePay2 {
         })?;
         let packet_len = packet_buffer.len();
 
-        // FIXME: See comment in `max_payload_size()`. We currently don't provide a way to the
-        // subclass to know how much space will be used up by extensions.
-        if (settings.mtu as usize) < packet_len - extension_size {
+        if (settings.mtu as usize) < packet_len {
             gst::warning!(
                 CAT,
                 imp = self,
@@ -721,6 +746,7 @@ impl RtpBasePay2 {
 
         // Finally write extensions into the otherwise complete packet
         if extension_size != 0 && extension_pattern != 0 {
+            let extensions = self.extensions.lock().unwrap();
             let buffer = buffer.get_mut().unwrap();
             // FIXME Get a mutable reference to the output buffer via a pointer to
             // work around bug in the C API.
@@ -777,9 +803,8 @@ impl RtpBasePay2 {
                     );
                 }
             }
+            drop(extensions);
         }
-
-        drop(extensions);
 
         state.pending_packets.push_back(PendingPacket { buffer });
 
