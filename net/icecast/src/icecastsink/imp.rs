@@ -46,6 +46,7 @@ const DEFAULT_LOCATION: Option<Url> = None;
 const DEFAULT_TIMEOUT: u32 = 10_000; // in millisecs
 const DEFAULT_PUBLIC: bool = true;
 const DEFAULT_STREAM_NAME: Option<String> = None;
+const DEFAULT_AUTO_RECONNECT: bool = true;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -53,6 +54,7 @@ struct Settings {
     timeout: u32, // millisecs
     public: bool,
     stream_name: Option<String>,
+    auto_reconnect: bool,
 }
 
 impl Default for Settings {
@@ -62,6 +64,7 @@ impl Default for Settings {
             timeout: DEFAULT_TIMEOUT,
             public: DEFAULT_PUBLIC,
             stream_name: DEFAULT_STREAM_NAME,
+            auto_reconnect: DEFAULT_AUTO_RECONNECT,
         }
     }
 }
@@ -85,6 +88,7 @@ enum State {
 pub struct IcecastSink {
     settings: Mutex<Settings>,
     state: AtomicRefCell<State>,
+    format: AtomicRefCell<Option<MediaFormat>>, // could merge with State
     client: Mutex<Option<Arc<client::IceClient>>>,
 }
 
@@ -159,6 +163,12 @@ impl ObjectImpl for IcecastSink {
                     .blurb("Name of the stream (if not configured server-side for the mount point)")
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("auto-reconnect")
+                    .nick("Auto Reconnect")
+                    .blurb("Automatically re-connect if the connection with the server breaks")
+                    .default_value(DEFAULT_AUTO_RECONNECT)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -187,6 +197,12 @@ impl ObjectImpl for IcecastSink {
                 settings.stream_name = value
                     .get::<Option<String>>()
                     .expect("type checked upstream");
+                Ok(())
+            }
+            "auto-reconnect" => {
+                let mut settings = self.settings.lock().unwrap();
+                let auto_reconnect = value.get().expect("type checked upstream");
+                settings.auto_reconnect = auto_reconnect;
                 Ok(())
             }
             name => unimplemented!("Property '{name}'"),
@@ -222,6 +238,10 @@ impl ObjectImpl for IcecastSink {
             "stream-name" => {
                 let settings = self.settings.lock().unwrap();
                 settings.stream_name.to_value()
+            }
+            "auto-reconnect" => {
+                let settings = self.settings.lock().unwrap();
+                settings.auto_reconnect.to_value()
             }
             name => unimplemented!("Property '{name}'"),
         }
@@ -344,6 +364,10 @@ impl BaseSinkImpl for IcecastSink {
 
         *client_guard = None;
 
+        let mut format = self.format.borrow_mut();
+
+        *format = None;
+
         gst::info!(CAT, imp = self, "Stopped");
 
         Ok(())
@@ -365,6 +389,11 @@ impl BaseSinkImpl for IcecastSink {
         let media_format = MediaFormat::from_caps(caps)?;
 
         gst::info!(CAT, imp = self, "{media_format:?}");
+
+        // Save media format in case we need to re-connect later
+        let mut format = self.format.borrow_mut();
+
+        *format = Some(media_format.clone());
 
         let client = self.client();
 
@@ -437,22 +466,55 @@ impl BaseSinkImpl for IcecastSink {
 
         let client = self.client();
 
-        let timeout = self.settings.lock().unwrap().timeout;
+        let (timeout, auto_reconnect) = {
+            let settings = self.settings.lock().unwrap();
+
+            (settings.timeout, settings.auto_reconnect)
+        };
 
         let res = client.send_data(write_data, timeout);
 
-        if let Err(err) = res {
-            if let Some(err_msg) = err {
-                gst::info!(CAT, imp = self, "Error {err_msg:?}");
-                *state = State::Error;
-                self.post_error_message(err_msg);
-                return Err(gst::FlowError::Error);
-            } else {
+        match res {
+            Ok(_) => return Ok(gst::FlowSuccess::Ok),
+
+            Err(None) => {
                 gst::debug!(CAT, imp = self, "Cancelled, flushing");
                 *state = State::Cancelled;
                 return Err(gst::FlowError::Flushing);
             }
+
+            Err(Some(err_msg)) => {
+                gst::info!(CAT, imp = self, "Error {err_msg:?}");
+
+                if !auto_reconnect {
+                    *state = State::Error;
+                    self.post_error_message(err_msg);
+                    return Err(gst::FlowError::Error);
+                }
+
+                gst::element_imp_warning!(self, gst::ResourceError::Write, ["{}", err_msg]);
+            }
         }
+
+        // auto-reconnect after error
+        gst::info!(CAT, imp = self, "Re-connecting after error ...");
+
+        drop(client);
+        drop(state);
+
+        self.start().map_err(|_| gst::FlowError::Error)?;
+
+        gst::info!(CAT, imp = self, "Re-started.");
+
+        let client = self.client();
+
+        let format = self.format.borrow();
+
+        let media_format = format.as_ref().unwrap().clone();
+
+        client.set_media_format(media_format);
+
+        // drop buffer
 
         Ok(gst::FlowSuccess::Ok)
     }

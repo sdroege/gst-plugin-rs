@@ -5518,6 +5518,18 @@
                     }
                 },
                 "properties": {
+                    "auto-reconnect": {
+                        "blurb": "Automatically re-connect if the connection with the server breaks",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "location": {
                         "blurb": "Icecast server, credentials and mount path, e.g. ice+http://source:p4ssw0rd@ingest.smoothjazz.radio:8000/radio",
                         "conditionally-available": false,
