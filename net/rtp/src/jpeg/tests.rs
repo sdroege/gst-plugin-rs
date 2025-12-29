@@ -25,7 +25,7 @@ fn test_jpeg() {
 
     // Generates encoded frames of size 5409 bytes
     let src = "videotestsrc num-buffers=2 pattern=black ! video/x-raw,format=I420,width=640,height=480,framerate=25/1 ! jpegenc ! jpegparse";
-    let pay = "rtpjpegpay2";
+    let pay = "rtpjpegpay2 mtu=1400";
     let depay = "rtpjpegdepay2";
 
     let expected_pay = vec![

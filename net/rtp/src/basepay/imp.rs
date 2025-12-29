@@ -48,8 +48,7 @@ struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            // TODO: Should we use a different default here? libwebrtc uses 1200, for example
-            mtu: 1400,
+            mtu: 1200,
             pt: 96,
             pt_set: false,
             ssrc: None,
@@ -1845,6 +1844,7 @@ impl ObjectSubclass for RtpBasePay2 {
         class.allowed_meta_tags = &[];
         class.drop_header_buffers = false;
         class.default_pt = 96;
+        class.default_mtu = 1200;
     }
 
     fn with_class(class: &Self::Class) -> Self {
@@ -1896,6 +1896,7 @@ impl ObjectSubclass for RtpBasePay2 {
             .build();
 
         let settings = Settings {
+            mtu: class.default_mtu,
             pt: class.default_pt,
             ..Settings::default()
         };

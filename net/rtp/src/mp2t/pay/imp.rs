@@ -34,6 +34,9 @@ use std::num::NonZeroUsize;
 
 use crate::basepay::{PacketToBufferRelation, RtpBasePay2Ext};
 
+// 7 * 188 = 1316 bytes is a typical payload size for MPEG-TS over UDP
+const RTP_MP2T_DEFAULT_MTU: u32 = 1400;
+
 const RTP_MP2T_DEFAULT_PT: u8 = 33;
 
 const RTP_MP2T_DEFAULT_PACKET_SIZE: usize = 188;
@@ -176,6 +179,7 @@ impl ElementImpl for RtpMP2TPay {
 
 impl crate::basepay::RtpBasePay2Impl for RtpMP2TPay {
     const ALLOWED_META_TAGS: &'static [&'static str] = &[];
+    const DEFAULT_MTU: u32 = RTP_MP2T_DEFAULT_MTU;
     const DEFAULT_PT: u8 = RTP_MP2T_DEFAULT_PT;
 
     fn set_sink_caps(&self, caps: &gst::Caps) -> bool {

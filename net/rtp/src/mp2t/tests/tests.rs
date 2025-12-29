@@ -172,6 +172,7 @@ fn test_mp2t_pay_depay_single_ts_packets() {
 
     run_test_pipeline(
         Source::Buffers(input_caps, input_buffers),
+        // not setting mtu=1400 here to make sure the subclass-specific default mtu override works
         "rtpmp2tpay2",
         "rtpmp2tdepay2",
         expected_pay,
@@ -274,6 +275,7 @@ fn test_mp2t_pay_depay_7ts_packets() {
 
     run_test_pipeline(
         Source::Buffers(input_caps, input_buffers),
+        // not setting mtu=1400 here to make sure the subclass-specific default mtu override works
         "rtpmp2tpay2",
         "rtpmp2tdepay2",
         expected_pay,
@@ -508,6 +510,7 @@ fn test_mp2t_pay_depay_au_ts_packets() {
 
     run_test_pipeline(
         Source::Buffers(input_caps, input_buffers),
+        // not setting mtu=1400 here to make sure the subclass-specific default mtu override works
         "rtpmp2tpay2",
         "rtpmp2tdepay2",
         expected_pay,
@@ -602,6 +605,7 @@ fn test_mp2t_pay_depay_m2ts_variant() {
 
     run_test_pipeline(
         Source::Buffers(input_caps, input_buffers),
+        // not setting mtu=1400 here to make sure the subclass-specific default mtu override works
         "rtpmp2tpay2",
         "rtpmp2tdepay2",
         expected_pay,

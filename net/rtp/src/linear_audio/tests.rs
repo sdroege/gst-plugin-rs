@@ -251,7 +251,7 @@ fn test_l16_audio_level_hdrext() {
 
     let src =
         "audiotestsrc num-buffers=2 samplesperbuffer=1024 ! capsfilter caps=audio/x-raw,rate=48000";
-    let pay = "rtpL16pay2 ! capsfilter caps=application/x-rtp,extmap-1=(string)\\<\\\"\\\",\\ urn:ietf:params:rtp-hdrext:ssrc-audio-level,\\\"vad=on\\\"\\>";
+    let pay = "rtpL16pay2 mtu=1400 ! capsfilter caps=application/x-rtp,extmap-1=(string)\\<\\\"\\\",\\ urn:ietf:params:rtp-hdrext:ssrc-audio-level,\\\"vad=on\\\"\\>";
     let depay = "rtpL16depay2";
 
     let expected_pay = vec![

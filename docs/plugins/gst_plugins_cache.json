@@ -14951,7 +14951,7 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "1400",
+                        "default": "1200",
                         "max": "-1",
                         "min": "28",
                         "mutable": "playing",

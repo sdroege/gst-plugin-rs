@@ -25,7 +25,7 @@ fn test_vp8() {
 
     // Generates encoded frames of sizes 1915 (key), 110, 103, 100, 100
     let src = "videotestsrc num-buffers=5 pattern=smpte100 ! video/x-raw,format=I420,width=1280,height=720,framerate=25/1 ! vp8enc target-bitrate=4000000";
-    let pay = "rtpvp8pay2 picture-id-mode=7-bit";
+    let pay = "rtpvp8pay2 picture-id-mode=7-bit mtu=1400";
     let depay = "rtpvp8depay2";
 
     let expected_pay = vec![

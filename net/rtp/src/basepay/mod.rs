@@ -139,6 +139,9 @@ pub trait RtpBasePay2Impl: ElementImpl + ObjectSubclass<Type: IsA<RtpBasePay2>> 
     /// Default payload type for this subclass.
     const DEFAULT_PT: u8 = 96;
 
+    /// Default maximum payload size
+    const DEFAULT_MTU: u32 = 1200;
+
     /// Called when streaming starts (READY -> PAUSED state change)
     ///
     /// Optional, can be used to initialise streaming state.
@@ -389,6 +392,7 @@ pub struct Class {
     allowed_meta_tags: &'static [&'static str],
     drop_header_buffers: bool,
     default_pt: u8,
+    default_mtu: u32,
 }
 
 unsafe impl ClassStruct for Class {
@@ -472,6 +476,7 @@ unsafe impl<T: RtpBasePay2Impl> IsSubclassable<T> for RtpBasePay2 {
         class.allowed_meta_tags = T::ALLOWED_META_TAGS;
         class.drop_header_buffers = T::DROP_HEADER_BUFFERS;
         class.default_pt = T::DEFAULT_PT;
+        class.default_mtu = T::DEFAULT_MTU;
     }
 }
 
