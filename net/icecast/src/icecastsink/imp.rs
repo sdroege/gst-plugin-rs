@@ -123,7 +123,7 @@ impl IcecastSink {
             )
         })?;
 
-        if uri.scheme() != "ice+http" {
+        if uri.scheme() != "ice+http" && uri.scheme() != "ice+https" {
             return Err(glib::Error::new(
                 gst::URIError::UnsupportedProtocol,
                 &format!("Unsupported URI scheme '{}'", uri.scheme()),
@@ -524,7 +524,7 @@ impl URIHandlerImpl for IcecastSink {
     const URI_TYPE: gst::URIType = gst::URIType::Sink;
 
     fn protocols() -> &'static [&'static str] {
-        &["ice+http"] // TODO: add "ice+https"
+        &["ice+http", "ice+https"]
     }
 
     fn uri(&self) -> Option<String> {

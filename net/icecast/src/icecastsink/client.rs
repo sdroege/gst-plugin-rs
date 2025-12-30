@@ -22,33 +22,87 @@ use gst::glib;
 
 use httparse::Response;
 
-use std::sync::{LazyLock, Mutex};
+use std::pin::Pin;
+use std::sync::{Arc, LazyLock, Mutex};
+use std::task::{Context, Poll};
+
+use rustls_pki_types::ServerName;
 
 use tokio::io::AsyncBufReadExt;
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
+use tokio::io::{AsyncRead, AsyncReadExt, ReadBuf};
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::runtime;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
 
+use rustls::ClientConfig;
+use rustls_platform_verifier::BuilderVerifierExt;
+use tokio_rustls::TlsConnector;
+
 use url::Url;
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug)]
+enum TcpOrTlsStream {
+    Plain(tokio::net::TcpStream),
+    Tls(tokio_rustls::client::TlsStream<tokio::net::TcpStream>),
+}
+
+impl AsyncWrite for TcpOrTlsStream {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        match self.get_mut() {
+            TcpOrTlsStream::Plain(ref mut s) => Pin::new(s).poll_write(cx, buf),
+            TcpOrTlsStream::Tls(ref mut s) => Pin::new(s).poll_write(cx, buf),
+        }
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        match self.get_mut() {
+            TcpOrTlsStream::Plain(ref mut s) => Pin::new(s).poll_flush(cx),
+            TcpOrTlsStream::Tls(ref mut s) => Pin::new(s).poll_flush(cx),
+        }
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        match self.get_mut() {
+            TcpOrTlsStream::Plain(ref mut s) => Pin::new(s).poll_shutdown(cx),
+            TcpOrTlsStream::Tls(ref mut s) => Pin::new(s).poll_shutdown(cx),
+        }
+    }
+}
+
+impl AsyncRead for TcpOrTlsStream {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        match self.get_mut() {
+            TcpOrTlsStream::Plain(ref mut s) => Pin::new(s).poll_read(cx, buf),
+            TcpOrTlsStream::Tls(ref mut s) => Pin::new(s).poll_read(cx, buf),
+        }
+    }
+}
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 enum State {
     // Initiated TCP connection to server
     Connecting {
-        join_handle: JoinHandle<Result<tokio::net::TcpStream, gst::ErrorMessage>>,
+        join_handle: JoinHandle<Result<TcpOrTlsStream, gst::ErrorMessage>>,
     },
     // Streaming thread is waiting for connection + initial handshakes to complete
     WaitingForConnect,
     // Streaming data
     Streaming {
-        stream: tokio::net::TcpStream,
-        // FIXME: stream: Box<dyn AsyncRead + AsyncWrite>, - alternative enum + dispatch or enum + impl both traits on it
+        stream: TcpOrTlsStream,
     },
     Error,
 }
@@ -123,13 +177,18 @@ impl IceClient {
         let join_handle = RUNTIME.spawn(async move {
             let public = public as i32;
 
+            let scheme = url.scheme();
             let host_name = url.host_str().unwrap();
             let port = url.port().unwrap_or(8000);
             let path = url.path();
             let username = url.username();
             let password = url.password().unwrap_or("");
 
-            gst::info!(CAT, id = &log_id, "Connecting to server {host_name}:{port}..");
+            gst::info!(
+                CAT,
+                id = &log_id,
+                "Connecting via {scheme} to server {host_name}:{port}.."
+            );
 
             let stream = TcpStream::connect(format!("{host_name}:{port}"))
                 .await
@@ -141,6 +200,44 @@ impl IceClient {
                 })?;
 
             gst::info!(CAT, id = &log_id, "Connected to server {host_name}:{port}");
+
+            let stream = match (scheme, stream) {
+                // TLS
+                ("ice+https", stream) => {
+                    let provider = Arc::new(rustls::crypto::ring::default_provider());
+
+                    let config = ClientConfig::builder_with_provider(provider)
+                        .with_safe_default_protocol_versions()
+                        .unwrap()
+                        .with_platform_verifier()
+                        .unwrap()
+                        .with_no_client_auth();
+
+                    let connector = TlsConnector::from(Arc::new(config));
+                    let dnsname = ServerName::try_from(host_name.to_string()).map_err(|err| {
+                        gst::error_msg!(
+                            gst::ResourceError::Write,
+                            ["Server name failed for '{host_name}': {err}"]
+                        )
+                    })?;
+
+                    gst::info!(CAT, id = &log_id, "TLS connect..");
+
+                    let stream = connector.connect(dnsname, stream).await.map_err(|err| {
+                        gst::error_msg!(
+                            gst::ResourceError::Write,
+                            ["TLS handshake with server failed: {err}"]
+                        )
+                    })?;
+
+                    gst::info!(CAT, id = &log_id, "TLS setup done");
+
+                    TcpOrTlsStream::Tls(stream)
+                }
+                // Nothing to do for plain TCP
+                ("ice+http", stream) => TcpOrTlsStream::Plain(stream),
+                _ => unreachable!(),
+            };
 
             let mut stream = BufReader::new(stream);
 
