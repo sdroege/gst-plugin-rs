@@ -520,21 +520,35 @@ impl SessionInner {
                 .get::<&str>("media")
                 .expect("Only caps with a `media` field are expected when creating the pad");
 
-            let raw_caps = if media_type == "video" {
-                VIDEO_CAPS.to_owned()
+            let settings = element.imp().settings.lock().unwrap();
+
+            let (raw_caps, encoded_caps) = if media_type == "video" {
+                let encoded_video_caps = settings
+                    .video_codecs
+                    .iter()
+                    .map(|c| c.caps.clone())
+                    .collect::<gst::Caps>();
+                (VIDEO_CAPS.clone(), encoded_video_caps)
             } else if media_type == "audio" {
-                AUDIO_CAPS.to_owned()
+                let encoded_audio_caps = settings
+                    .audio_codecs
+                    .iter()
+                    .map(|c| c.caps.clone())
+                    .collect::<gst::Caps>();
+                (AUDIO_CAPS.clone(), encoded_audio_caps)
             } else {
                 unreachable!()
             };
+            drop(settings);
 
-            let caps_with_raw = [caps.clone(), raw_caps.clone()]
+            let caps_with_raw = [caps.clone(), raw_caps.clone(), encoded_caps.clone()]
                 .into_iter()
                 .collect::<gst::Caps>();
 
             let downstream_caps = srcpad.peer_query_caps(Some(&caps_with_raw));
             if let Some(first_struct) = downstream_caps.structure(0)
-                && first_struct.has_name(raw_caps.structure(0).unwrap().name())
+                && (first_struct.has_name(raw_caps.structure(0).unwrap().name())
+                    || !first_struct.has_name("application/x-rtp"))
             {
                 srcpad.imp().set_needs_decoding(true)
             }
@@ -705,6 +719,16 @@ impl SessionInner {
                 let decodebin = gst::ElementFactory::make("decodebin3")
                     .build()
                     .expect("decodebin3 needs to be present!");
+
+                let downstream_caps = srcpad.peer_query_caps(None);
+                gst::debug!(
+                    CAT,
+                    obj = element,
+                    "Stopping decoding at caps {downstream_caps:#?}"
+                );
+
+                decodebin.set_property("caps", &downstream_caps);
+
                 bin.add(&decodebin).unwrap();
                 decodebin.sync_state_with_parent().unwrap();
                 decodebin.connect_pad_added(glib::clone!(
