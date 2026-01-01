@@ -274,6 +274,8 @@ fn configure_client(ep_config: &QuinnQuicEndpointConfig) -> Result<ClientConfig,
 fn read_certs_from_file(
     certificate_file: Option<PathBuf>,
 ) -> Result<Vec<rustls_pki_types::CertificateDer<'static>>, Box<dyn Error>> {
+    use rustls_pki_types::pem::PemObject;
+
     /*
      * NOTE:
      *
@@ -288,44 +290,21 @@ fn read_certs_from_file(
      * chain in a single file. For example, this is the case of modern day
      * Apache and nginx.
      */
-    let cert_file = certificate_file
-        .clone()
-        .expect("Expected path to certificates be valid");
+    let cert_file = certificate_file.expect("Expected path to certificates be valid");
 
-    let certs: Vec<rustls_pki_types::CertificateDer<'static>> = {
-        let cert_file = File::open(cert_file.as_path())?;
-        let mut cert_file_rdr = BufReader::new(cert_file);
-        let cert_vec = rustls_pemfile::certs(&mut cert_file_rdr);
-        cert_vec.into_iter().map(|c| c.unwrap()).collect()
-    };
-    Ok(certs)
+    Ok(rustls_pki_types::CertificateDer::pem_file_iter(cert_file)?
+        .map(|c| c.unwrap())
+        .collect())
 }
 
 fn read_private_key_from_file(
     private_key_file: Option<PathBuf>,
 ) -> Result<rustls_pki_types::PrivateKeyDer<'static>, Box<dyn Error>> {
+    use rustls_pki_types::pem::PemObject;
+
     let key_file = private_key_file.expect("Expected path to private key to be valid");
 
-    let key: rustls_pki_types::PrivateKeyDer<'static> = {
-        let key_file = File::open(key_file.as_path())?;
-        let mut key_file_rdr = BufReader::new(key_file);
-
-        let keys_iter = rustls_pemfile::read_all(&mut key_file_rdr);
-        let key_item = keys_iter
-            .into_iter()
-            .map(|c| c.unwrap())
-            .next()
-            .ok_or("Certificate should have at least one private key")?;
-
-        match key_item {
-            rustls_pemfile::Item::Pkcs1Key(key) => rustls_pki_types::PrivateKeyDer::from(key),
-            rustls_pemfile::Item::Pkcs8Key(key) => rustls_pki_types::PrivateKeyDer::from(key),
-            rustls_pemfile::Item::Sec1Key(key) => rustls_pki_types::PrivateKeyDer::from(key),
-            _ => unimplemented!(),
-        }
-    };
-
-    Ok(key)
+    Ok(rustls_pki_types::PrivateKeyDer::from_pem_file(key_file)?)
 }
 
 fn configure_server(

@@ -9,7 +9,7 @@ use tokio::{net::TcpListener, task};
 use tracing::{info, warn};
 use tracing_subscriber::prelude::*;
 
-use std::{fs::File, io::BufReader, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 use tokio_rustls::{rustls, TlsAcceptor};
 
 const TLS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -100,13 +100,11 @@ async fn main() -> Result<(), Error> {
 fn read_certs_from_file(
     certificate_file: PathBuf,
 ) -> Result<Vec<rustls_pki_types::CertificateDer<'static>>, Box<dyn std::error::Error>> {
-    let cert_file = File::open(&certificate_file)?;
-    let mut cert_file_rdr = BufReader::new(cert_file);
+    use rustls_pki_types::pem::PemObject;
 
-    let certs_result = rustls_pemfile::certs(&mut cert_file_rdr);
+    let certs_iter = rustls_pki_types::CertificateDer::pem_file_iter(&certificate_file)?;
     let mut certs = Vec::new();
-
-    for cert_result in certs_result {
+    for cert_result in certs_iter {
         match cert_result {
             Ok(cert) => certs.push(cert),
             Err(e) => {
@@ -129,37 +127,11 @@ fn read_certs_from_file(
 fn read_private_key_from_file(
     private_key_file: PathBuf,
 ) -> Result<rustls_pki_types::PrivateKeyDer<'static>, Box<dyn std::error::Error>> {
-    let key_file = File::open(&private_key_file)?;
-    let mut key_file_rdr = BufReader::new(key_file);
-    let items_result = rustls_pemfile::read_all(&mut key_file_rdr);
+    use rustls_pki_types::pem::PemObject;
 
-    for item_result in items_result {
-        let item = item_result.map_err(|e| {
-            format!(
-                "Failed to parse PEM item in {}: {e}",
-                private_key_file.display(),
-            )
-        })?;
-
-        match item {
-            rustls_pemfile::Item::Pkcs1Key(key) => {
-                return Ok(rustls_pki_types::PrivateKeyDer::from(key));
-            }
-            rustls_pemfile::Item::Pkcs8Key(key) => {
-                return Ok(rustls_pki_types::PrivateKeyDer::from(key));
-            }
-            rustls_pemfile::Item::Sec1Key(key) => {
-                return Ok(rustls_pki_types::PrivateKeyDer::from(key));
-            }
-            _ => continue,
-        }
-    }
-
-    Err(format!(
-        "No valid private key found in {}",
-        private_key_file.display()
-    )
-    .into())
+    Ok(rustls_pki_types::PrivateKeyDer::from_pem_file(
+        &private_key_file,
+    )?)
 }
 
 pub async fn create_tls_acceptor(
