@@ -1,7 +1,5 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    fs::File,
-    io::{BufReader, Cursor},
     ops::Deref,
     path::{Path, PathBuf},
     sync::{
@@ -1462,13 +1460,11 @@ mod tests {
 fn read_certs_from_file(
     certificate_file: PathBuf,
 ) -> Result<Vec<rustls_pki_types::CertificateDer<'static>>, Box<dyn std::error::Error>> {
-    let cert_file = File::open(&certificate_file)?;
-    let mut cert_file_rdr = BufReader::new(cert_file);
+    use rustls_pki_types::pem::PemObject;
 
-    let certs_result = rustls_pemfile::certs(&mut cert_file_rdr);
+    let certs_iter = rustls_pki_types::CertificateDer::pem_file_iter(&certificate_file)?;
     let mut certs = Vec::new();
-
-    for cert_result in certs_result {
+    for cert_result in certs_iter {
         match cert_result {
             Ok(cert) => certs.push(cert),
             Err(e) => {
@@ -1491,37 +1487,11 @@ fn read_certs_from_file(
 fn read_private_key_from_file(
     private_key_file: PathBuf,
 ) -> Result<rustls_pki_types::PrivateKeyDer<'static>, Box<dyn std::error::Error>> {
-    let key_file = File::open(&private_key_file)?;
-    let mut key_file_rdr = BufReader::new(key_file);
-    let items_result = rustls_pemfile::read_all(&mut key_file_rdr);
+    use rustls_pki_types::pem::PemObject;
 
-    for item_result in items_result {
-        let item = item_result.map_err(|e| {
-            format!(
-                "Failed to parse PEM item in {}: {e}",
-                private_key_file.display(),
-            )
-        })?;
-
-        match item {
-            rustls_pemfile::Item::Pkcs1Key(key) => {
-                return Ok(rustls_pki_types::PrivateKeyDer::from(key));
-            }
-            rustls_pemfile::Item::Pkcs8Key(key) => {
-                return Ok(rustls_pki_types::PrivateKeyDer::from(key));
-            }
-            rustls_pemfile::Item::Sec1Key(key) => {
-                return Ok(rustls_pki_types::PrivateKeyDer::from(key));
-            }
-            _ => continue,
-        }
-    }
-
-    Err(format!(
-        "No valid private key found in {}",
-        private_key_file.display()
-    )
-    .into())
+    Ok(rustls_pki_types::PrivateKeyDer::from_pem_file(
+        &private_key_file,
+    )?)
 }
 
 #[derive(Debug)]
@@ -1584,10 +1554,14 @@ async fn get_root_certstore<P: AsRef<Path>>(
     let mut root_cert_store = rustls::RootCertStore::empty();
 
     let certs = {
+        use rustls_pki_types::pem::PemObject;
+
         let cert_file = tokio::fs::read(&cafile_path).await?;
-        let mut cert_file_rdr = BufReader::new(Cursor::new(cert_file));
-        let cert_vec = rustls_pemfile::certs(&mut cert_file_rdr);
-        cert_vec.into_iter().map(|c| c.unwrap()).collect::<Vec<_>>()
+        let cert_iter = rustls_pki_types::CertificateDer::pem_slice_iter(&cert_file);
+        cert_iter
+            .into_iter()
+            .map(|c| c.unwrap())
+            .collect::<Vec<_>>()
     };
 
     let _ = root_cert_store.add_parsable_certificates(certs);
