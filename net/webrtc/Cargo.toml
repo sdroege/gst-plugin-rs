@@ -32,8 +32,8 @@ async-tungstenite = { version = "0.32", features = ["tokio-runtime", "tokio-rust
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 fastrand = "2.0"
-gst_plugin_webrtc_protocol = { path="protocol", package = "gst-plugin-webrtc-signalling-protocol" }
-gst_plugin_webrtc_signalling = { path="signalling", package = "gst-plugin-webrtc-signalling" }
+gst-plugin-webrtc-protocol.workspace = true
+gst-plugin-webrtc-signalling.workspace = true
 human_bytes = "0.4"
 rand = "0.9"
 url = "2"
@@ -72,7 +72,7 @@ tracing-log = "0.2"
 bytes = "1"
 
 [dev-dependencies]
-gst-plugin-rtp = { path = "../rtp" }
+gst-plugin-rtp.workspace = true
 tokio = { version = "1", features = ["signal"] }
 clap = { version = "4", features = ["derive"] }
 regex = "1"

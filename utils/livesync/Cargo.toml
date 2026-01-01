@@ -9,16 +9,16 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-gio = { workspace = true, optional = true }
 gst.workspace = true
 gst-audio.workspace = true
-gst-plugin-gtk4 = { path = "../../video/gtk4", optional = true }
-gtk = { workspace = true, optional = true }
 num-rational = { version = "0.4", default-features = false, features = [] }
 parking_lot = "0.12"
 
 [dev-dependencies]
 gst-check.workspace = true
+gst-plugin-gtk4.workspace = true
+gtk.workspace = true
+gio.workspace = true
 
 [lib]
 name = "gstlivesync"

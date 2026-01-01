@@ -12,14 +12,14 @@ rust-version.workspace = true
 gst.workspace = true
 gst-audio.workspace = true
 gst-video.workspace = true
-gst-plugin-gtk4 = { path = "../../video/gtk4", optional = true }
-gtk = { workspace = true, optional = true }
-gio = { workspace = true, optional = true }
 parking_lot = "0.12"
 
 [dev-dependencies]
 either = "1.0"
 gst-check.workspace = true
+gst-plugin-gtk4.workspace = true
+gtk.workspace = true
+gio.workspace = true
 
 [lib]
 name = "gsttogglerecord"

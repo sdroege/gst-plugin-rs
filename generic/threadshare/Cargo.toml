@@ -42,7 +42,7 @@ gst-check.workspace = true
 gst-app = { workspace = true, features = [ "v1_20" ] }
 # Used by examples
 clap = { version = "4", features = ["derive"] }
-gst-plugin-rtp = { path = "../../net/rtp" }
+gst-plugin-rtp.workspace = true
 
 [lib]
 name = "gstthreadshare"

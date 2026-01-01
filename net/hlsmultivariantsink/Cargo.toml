@@ -28,8 +28,8 @@ gst-video.workspace = true
 gst-check.workspace = true
 m3u8-rs = "6.0"
 anyhow = "1"
-gst-plugin-hlssink3 = { path = "../hlssink3" }
-gst-plugin-isobmff = { path = "../../mux/isobmff" }
+gst-plugin-hlssink3.workspace = true
+gst-plugin-isobmff.workspace = true
 serial_test = "3"
 
 [build-dependencies]
