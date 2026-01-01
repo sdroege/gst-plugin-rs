@@ -2219,18 +2219,21 @@ pub(super) mod livekit {
             .field("can-publish-data", participant_permission.can_publish_data)
             .field_from_iter::<gst::Array, _>(
                 "can-publish-sources",
-                participant_permission
-                    .can_publish_sources
-                    .iter()
-                    .map(|v| v.to_send_value()),
+                participant_permission.can_publish_sources.iter().map(|f| {
+                    livekit_protocol::TrackSource::try_from(*f)
+                        .map(|s| s.as_str_name())
+                        .unwrap_or("unknown")
+                }),
             )
             .field("hidden", participant_permission.hidden)
-            .field("recorder", participant_permission.recorder)
             .field(
                 "can-update-metadata",
                 participant_permission.can_update_metadata,
             )
-            .field("agent", participant_permission.agent)
+            .field(
+                "can-subscribe-metrics",
+                participant_permission.can_subscribe_metrics,
+            )
             .build()
     }
 
@@ -2247,8 +2250,6 @@ pub(super) mod livekit {
             .field("muted", track_info.muted)
             .field("width", track_info.width)
             .field("height", track_info.height)
-            .field("simulcast", track_info.simulcast)
-            .field("disable-dtx", track_info.disable_dtx)
             .field(
                 "source",
                 livekit_protocol::TrackSource::try_from(track_info.source)
@@ -2259,7 +2260,6 @@ pub(super) mod livekit {
             .field("mime-type", &track_info.mime_type)
             .field("mid", &track_info.mid)
             //.field_from_iter::<gst::Array>("codecs", track_info.codecs.iter().todo!())
-            .field("stereo", track_info.stereo)
             .field("disable-red", track_info.disable_red)
             .field(
                 "encryption",
@@ -2269,6 +2269,20 @@ pub(super) mod livekit {
             )
             .field("stream", &track_info.stream)
             //.field("version", todo!())
+            .field_from_iter::<gst::Array, _>(
+                "audio-features",
+                track_info.audio_features.iter().map(|f| {
+                    livekit_protocol::AudioTrackFeature::try_from(*f)
+                        .map(|s| s.as_str_name())
+                        .unwrap_or("unknown")
+                }),
+            )
+            .field(
+                "backup-codec-policy",
+                livekit_protocol::BackupCodecPolicy::try_from(track_info.backup_codec_policy)
+                    .map(|s| s.as_str_name())
+                    .unwrap_or("unknown"),
+            )
             .build()
     }
 
@@ -2306,6 +2320,20 @@ pub(super) mod livekit {
                 livekit_protocol::participant_info::Kind::try_from(participant_info.kind)
                     .map(|k| k.as_str_name())
                     .unwrap_or("unknown"),
+            )
+            .field(
+                "disconnect-reason",
+                livekit_protocol::DisconnectReason::try_from(participant_info.disconnect_reason)
+                    .map(|d| d.as_str_name())
+                    .unwrap_or("unknown"),
+            )
+            .field_from_iter::<gst::Array, _>(
+                "kind-details",
+                participant_info.kind_details.iter().map(|k| {
+                    livekit_protocol::participant_info::KindDetail::try_from(*k)
+                        .map(|s| s.as_str_name())
+                        .unwrap_or("unknown")
+                }),
             )
             .build()
     }

@@ -58,8 +58,8 @@ reqwest = { version = "0.12", default-features = false, features = ["charset", "
 rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
 parse_link_header = {version = "0.4", features = ["url"]}
 
-livekit-protocol = { version = "0.3, < 0.3.4", optional = true }
-livekit-api = { version = "0.3", default-features = false, features = ["signal-client", "access-token", "native-tls"], optional = true }
+livekit-protocol = { version = "0.6", optional = true }
+livekit-api = { version = "0.4", default-features = false, features = ["signal-client-tokio", "services-tokio", "access-token", "rustls-tls-native-roots"], optional = true }
 
 warp = {version = "0.4", optional = true, features = ["server"] }
 ctrlc = {version = "3.4.0", optional = true }

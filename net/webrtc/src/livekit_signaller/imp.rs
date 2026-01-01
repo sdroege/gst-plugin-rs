@@ -193,6 +193,7 @@ impl Signaller {
                 proto::TrickleRequest {
                     candidate_init: candidate_init.to_string(),
                     target: target as i32,
+                    r#final: false,
                 },
             ))
             .await;
@@ -422,6 +423,11 @@ impl Signaller {
                         proto::SessionDescription {
                             r#type: "answer".to_string(),
                             sdp: sdp.to_string(),
+                            // TODO: 0 means ignore/legacy but ideally we should
+                            // make sure to use the same value for matching offer/answers
+                            id: 0,
+                            // TODO: Fill mapping correctly
+                            mid_to_track_id: Default::default(),
                         },
                     ))
                     .await;
@@ -510,7 +516,6 @@ impl Signaller {
                             r#type: mtype as i32,
                             muted: false,
                             source: msource,
-                            disable_dtx: true,
                             disable_red,
                             layers,
                             ..Default::default()
@@ -562,6 +567,11 @@ impl Signaller {
                         proto::SessionDescription {
                             r#type: "offer".to_string(),
                             sdp: sessdesc.sdp().to_string(),
+                            // TODO: 0 means ignore/legacy but ideally we should
+                            // make sure to use the same value for matching offer/answers
+                            id: 0,
+                            // TODO: Fill mapping correctly
+                            mid_to_track_id: Default::default(),
                         },
                     ))
                     .await;
@@ -774,10 +784,9 @@ impl SignallableImpl for Signaller {
                 return;
             };
 
-            let options = signal_client::SignalOptions {
-                auto_subscribe: imp.auto_subscribe(),
-                ..Default::default()
-            };
+            let mut options = signal_client::SignalOptions::default();
+            options.auto_subscribe = imp.auto_subscribe();
+
             gst::debug!(CAT, imp = imp, "Connecting to {}", wsurl);
 
             let res = signal_client::SignalClient::connect(&wsurl, &auth_token, options).await;
