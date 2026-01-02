@@ -9,7 +9,10 @@ ignore = [
     # https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/530
     "RUSTSEC-2021-0137",
     # paste is no longer maintained but there's no alternative
-    "RUSTSEC-2024-0436"
+    "RUSTSEC-2024-0436",
+    # rustls-pemfile is no longer maintained and livekit / librespot
+    # indirectly depend on it
+    "RUSTSEC-2025-0134",
 ]
 
 [licenses]
@@ -21,12 +24,14 @@ allow = [
   "BSD-3-Clause-Clear",
   "ISC",
   "Zlib",
+  "bzip2-1.0.6",
   "Unicode-3.0",
   "Apache-2.0",
   "Apache-2.0 WITH LLVM-exception",
   "MPL-2.0",
   "NCSA",
   "CDLA-Permissive-2.0",
+  "CC0-1.0",
 ]
 confidence-threshold = 0.8
 
@@ -68,9 +73,6 @@ version = "1.0"
 name = "itertools"
 version = "0.11"
 [[bans.skip]]
-name = "sync_wrapper"
-version = "0.1"
-[[bans.skip]]
 name = "rustls-native-certs"
 version = "0.7"
 [[bans.skip]]
@@ -104,43 +106,28 @@ name = "windows_x86_64_msvc"
 version = "0.42"
 [[bans.skip]]
 name = "windows_x86_64_msvc"
-version = "0.48"
-[[bans.skip]]
-name = "windows_x86_64_msvc"
 version = "0.52"
 [[bans.skip]]
 name = "windows_x86_64_gnullvm"
 version = "0.42"
 [[bans.skip]]
 name = "windows_x86_64_gnullvm"
-version = "0.48"
-[[bans.skip]]
-name = "windows_x86_64_gnullvm"
 version = "0.52"
 [[bans.skip]]
 name = "windows_x86_64_gnu"
 version = "0.42"
-[[bans.skip]]
-name = "windows_x86_64_gnu"
-version = "0.48"
 [[bans.skip]]
 name = "windows_x86_64_gnu"
 version = "0.52"
 [[bans.skip]]
 name = "windows_i686_msvc"
 version = "0.42"
-[[bans.skip]]
-name = "windows_i686_msvc"
-version = "0.48"
 [[bans.skip]]
 name = "windows_i686_msvc"
 version = "0.52"
 [[bans.skip]]
 name = "windows_i686_gnu"
 version = "0.42"
-[[bans.skip]]
-name = "windows_i686_gnu"
-version = "0.48"
 [[bans.skip]]
 name = "windows_i686_gnu"
 version = "0.52"
@@ -149,9 +136,6 @@ name = "windows_i686_gnullvm"
 version = "0.52"
 [[bans.skip]]
 name = "windows_aarch64_msvc"
-version = "0.48"
-[[bans.skip]]
-name = "windows_aarch64_msvc"
 version = "0.42"
 [[bans.skip]]
 name = "windows_aarch64_msvc"
@@ -161,25 +145,16 @@ name = "windows_aarch64_gnullvm"
 version = "0.42"
 [[bans.skip]]
 name = "windows_aarch64_gnullvm"
-version = "0.48"
-[[bans.skip]]
-name = "windows_aarch64_gnullvm"
 version = "0.52"
 [[bans.skip]]
 name = "windows-targets"
 version = "0.42"
-[[bans.skip]]
-name = "windows-targets"
-version = "0.48"
 [[bans.skip]]
 name = "windows-targets"
 version = "0.52"
 [[bans.skip]]
 name = "windows-sys"
 version = "0.45"
-[[bans.skip]]
-name = "windows-sys"
-version = "0.48"
 [[bans.skip]]
 name = "windows-sys"
 version = "0.52"
@@ -191,7 +166,13 @@ name = "windows-sys"
 version = "0.60"
 [[bans.skip]]
 name = "windows-strings"
+version = "0.1"
+[[bans.skip]]
+name = "windows-strings"
 version = "0.4"
+[[bans.skip]]
+name = "windows-result"
+version = "0.2"
 [[bans.skip]]
 name = "windows-result"
 version = "0.3"
@@ -200,7 +181,19 @@ name = "windows-link"
 version = "0.1"
 [[bans.skip]]
 name = "windows-core"
+version = "0.58"
+[[bans.skip]]
+name = "windows-core"
 version = "0.61"
+[[bans.skip]]
+name = "windows"
+version = "0.58"
+[[bans.skip]]
+name = "windows-implement"
+version = "0.58"
+[[bans.skip]]
+name = "windows-interface"
+version = "0.58"
 
 # Various crates depend on an older version of crypto-bigint
 [[bans.skip]]
@@ -214,6 +207,17 @@ version = "0.20"
 [[bans.skip]]
 name = "tungstenite"
 version = "0.20"
+
+# deepgram depends on an old version of tokio-tungstenite
+[[bans.skip]]
+name = "tokio-tungstenite"
+version = "0.27"
+[[bans.skip]]
+name = "tungstenite"
+version = "0.27"
+[[bans.skip]]
+name = "webpki-roots"
+version = "0.26"
 
 # Various crates depend on an older version of http
 [[bans.skip]]
@@ -236,17 +240,8 @@ version = "0.4"
 name = "h2"
 version = "0.3"
 [[bans.skip]]
-name = "reqwest"
-version = "0.11"
-[[bans.skip]]
 name = "rustls-pemfile"
 version = "1.0"
-[[bans.skip]]
-name = "system-configuration"
-version = "0.5"
-[[bans.skip]]
-name = "system-configuration-sys"
-version = "0.5"
 
 # The AWS SDK uses old versions of rustls and related crates
 [[bans.skip]]
@@ -276,11 +271,6 @@ version = "1.0"
 [[bans.skip]]
 name = "tokio-rustls"
 version = "0.24"
-
-# Some AWS crates depend on old aws-smithy-http
-[[bans.skip]]
-name = "aws-smithy-http"
-version = "0.60"
 
 # aws SDK depends on older version of various crypto crates
 [[bans.skip]]
@@ -321,11 +311,6 @@ version = "2"
 name = "core-foundation"
 version = "0.9"
 
-# Various crates depend on old wasi
-[[bans.skip]]
-name = "wasi"
-version = "0.11"
-
 # Various crates depend on old rand
 [[bans.skip]]
 name = "rand_core"
@@ -355,17 +340,71 @@ version = "0.5"
 
 # various crates depend on an old version of toml
 [[bans.skip]]
-name = "toml_datetime"
-version = "0.6"
-[[bans.skip]]
 name = "toml_edit"
-version = "0.22"
+version = "0.23"
+
+# hyphenation depends on an old version of bincode
 [[bans.skip]]
-name = "toml"
+name = "bincode"
+version = "1"
+
+# Various crates depends on an old version of darling
+[[bans.skip]]
+name = "darling_core"
+version = "0.20"
+[[bans.skip]]
+name = "darling_macro"
+version = "0.20"
+[[bans.skip]]
+name = "darling"
+version = "0.20"
+
+# cubecl/burn depend on an old version of embedded-hal and other crates
+[[bans.skip]]
+name = "embedded-hal"
+version = "0.2"
+[[bans.skip]]
+name = "foldhash"
+version = "0.1"
+[[bans.skip]]
+name = "hashbrown"
+version = "0.13"
+[[bans.skip]]
+name = "hashbrown"
+version = "0.15"
+[[bans.skip]]
+name = "prettyplease"
+version = "0.1"
+
+# ash, bindgen and others depend on an old version of libloading
+[[bans.skip]]
+name = "libloading"
 version = "0.8"
+
+# Many crates depend on an old version of nom
 [[bans.skip]]
-name = "serde_spanned"
-version = "0.6"
+name = "nom"
+version = "7"
+
+# Various rustls crates depend on an old version of openssl-probe
+[[bans.skip]]
+name = "openssl-probe"
+version = "0.1"
+
+# av-scenechange depends on an old version of pastey
+[[bans.skip]]
+name = "pastey"
+version = "0.1"
+
+# flume / lazy_static depend on an old version of spin
+[[bans.skip]]
+name = "spin"
+version = "0.9"
+
+# Old cfg-expr depends on an old version of target-lexicon
+[[bans.skip]]
+name = "target-lexicon"
+version = "0.12"
 
 [sources]
 unknown-registry = "deny"
