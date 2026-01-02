@@ -105,6 +105,7 @@ enum State {
         stream: TcpOrTlsStream,
     },
     Error,
+    Dropping,
 }
 
 #[derive(Default, Debug)]
@@ -161,8 +162,7 @@ impl IceClient {
         stream_name: Option<String>,
         log_id: glib::GString,
     ) -> Result<Self, gst::ErrorMessage> {
-        // FIXME: make connect and handshake abortable
-        let (abort_handle, _abort_registration) = future::AbortHandle::new_pair();
+        let (abort_handle, abort_registration) = future::AbortHandle::new_pair();
 
         let (caps_tx, caps_rx) = oneshot::channel();
 
@@ -174,7 +174,7 @@ impl IceClient {
             "Initiating connection to server (in new thread).. "
         );
 
-        let join_handle = RUNTIME.spawn(async move {
+        let future = async move {
             let public = public as i32;
 
             let scheme = url.scheme();
@@ -557,8 +557,17 @@ impl IceClient {
                 let _ = stream.read_exact(&mut buf).await.unwrap();
             }
 
-            Ok(stream.into_inner()) // Return TcpStream
-        });
+            Ok(stream.into_inner()) // return TcpOrTlsStream
+        };
+
+        // Make abortable
+        let future = async {
+            future::Abortable::new(future, abort_registration)
+                .await
+                .map_err(|err| gst::error_msg!(gst::LibraryError::Failed, ["{err}"]))?
+        };
+
+        let join_handle = RUNTIME.spawn(future);
 
         let client = IceClient {
             state: AtomicRefCell::new(State::Connecting { join_handle }),
@@ -726,5 +735,24 @@ impl IceClient {
         *canceller = Canceller::None;
 
         res
+    }
+}
+
+impl Drop for IceClient {
+    fn drop(&mut self) {
+        gst::log!(CAT, id = &self.log_id, "Dropping client");
+        let mut state = self.state.borrow_mut();
+
+        let mut temp = State::Dropping;
+        std::mem::swap(&mut *state, &mut temp);
+        if let State::Connecting { join_handle } = temp {
+            gst::info!(
+                CAT,
+                id = &self.log_id,
+                "Aborting join handle of thread doing the initial connection"
+            );
+
+            join_handle.abort();
+        };
     }
 }
