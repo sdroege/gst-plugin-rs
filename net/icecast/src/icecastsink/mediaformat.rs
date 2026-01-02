@@ -17,9 +17,7 @@ pub(super) struct AudioInfo {
     pub(super) channels: i32,
 }
 
-// Streamheaders are unused for now but will come in handy if we implement reconnecting
-// (or we could just drop them from the struct and assume they'll always be in the caps
-// which is what we do currently anyway)
+// Streamheaders are needed when reconnecting
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) enum MediaFormat {
     #[default]
@@ -100,6 +98,16 @@ impl MediaFormat {
                 "channels={};samplerate={}",
                 audio_info.channels, audio_info.rate
             )),
+        }
+    }
+
+    pub(super) fn stream_headers(&self) -> Vec<gst::Buffer> {
+        match self {
+            MediaFormat::None => vec![],
+            MediaFormat::Mpeg1Audio(..) => vec![],
+            MediaFormat::AacAudio(..) => vec![],
+            MediaFormat::FlacAudio(_, ref stream_headers) => stream_headers.clone(),
+            MediaFormat::OggAudio(_, _, ref stream_headers) => stream_headers.clone(),
         }
     }
 }

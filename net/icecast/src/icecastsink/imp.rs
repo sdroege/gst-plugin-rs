@@ -89,6 +89,7 @@ pub struct IcecastSink {
     settings: Mutex<Settings>,
     state: AtomicRefCell<State>,
     format: AtomicRefCell<Option<MediaFormat>>, // could merge with State
+    pending_streamheaders: AtomicRefCell<Vec<gst::Buffer>>,
     client: Mutex<Option<Arc<client::IceClient>>>,
 }
 
@@ -437,6 +438,39 @@ impl BaseSinkImpl for IcecastSink {
             }
         }
 
+        // Re-send stream headers after re-connect
+        let mut pending_streamheaders = self.pending_streamheaders.borrow_mut();
+
+        let stream_headers = std::mem::take(&mut *pending_streamheaders);
+
+        for header_buf in stream_headers {
+            let map = header_buf.map_readable().map_err(|_| {
+                gst::error_msg!(gst::CoreError::Failed, ["Failed to map buffer"]);
+                gst::FlowError::Error
+            })?;
+
+            let write_data = map.as_slice();
+
+            gst::info!(CAT, imp = self, "Re-sending stream header {header_buf:?}..");
+
+            match client.send_data(write_data, timeout) {
+                Ok(_) => {}
+
+                Err(None) => {
+                    gst::debug!(CAT, imp = self, "Cancelled, flushing");
+                    *state = State::Cancelled;
+                    return Err(gst::FlowError::Flushing);
+                }
+
+                Err(Some(err_msg)) => {
+                    gst::info!(CAT, imp = self, "Error {err_msg:?}");
+                    *state = State::Error;
+                    self.post_error_message(err_msg);
+                    return Err(gst::FlowError::Error);
+                }
+            }
+        }
+
         *state = State::Streaming;
         gst::info!(CAT, imp = self, "Ready to stream");
 
@@ -512,7 +546,16 @@ impl BaseSinkImpl for IcecastSink {
 
         let media_format = format.as_ref().unwrap().clone();
 
+        let stream_headers = media_format.stream_headers();
+
         client.set_media_format(media_format);
+
+        // We'll wait_for_connection_and_handshake() again on next prepare()
+
+        // Will have to re-send stream headers if there are any, which we'll also do in prepare()
+        let mut pending_streamheaders = self.pending_streamheaders.borrow_mut();
+
+        *pending_streamheaders = stream_headers;
 
         // drop buffer
 
