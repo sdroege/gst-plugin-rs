@@ -124,6 +124,13 @@ impl Canceller {
 
         *self = Canceller::Cancelled;
     }
+
+    // Clear Cancelled status
+    fn clear_cancel(&mut self) {
+        if matches!(*self, Canceller::Cancelled) {
+            *self = Canceller::None;
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -600,6 +607,15 @@ impl IceClient {
         canceller.cancel();
 
         gst::log!(CAT, id = &self.log_id, "Cancelled!");
+    }
+
+    // Called from unlock_stop
+    pub(super) fn clear_cancel(&self) {
+        let mut canceller = self.canceller.lock().unwrap();
+
+        canceller.clear_cancel();
+
+        gst::info!(CAT, id = &self.log_id, "Cancel cleared");
     }
 
     // Must only be called from streaming thread

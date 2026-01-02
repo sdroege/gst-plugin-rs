@@ -384,6 +384,16 @@ impl BaseSinkImpl for IcecastSink {
         Ok(())
     }
 
+    fn unlock_stop(&self) -> Result<(), gst::ErrorMessage> {
+        gst::debug!(CAT, imp = self, "Unlock done");
+
+        let client = self.client();
+
+        client.clear_cancel();
+
+        Ok(())
+    }
+
     fn set_caps(&self, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
         gst::info!(CAT, imp = self, "Got caps {caps}");
 
