@@ -330,11 +330,7 @@ impl ObjectImpl for QuinnQuicSink {
                     .expect("type checked upstream")
                     .as_slice()
                     .iter()
-                    .map(|alpn| {
-                        alpn.get::<&str>()
-                            .expect("type checked upstream")
-                            .to_string()
-                    })
+                    .map(|alpn| alpn.get::<String>().expect("type checked upstream"))
                     .collect::<Vec<_>>();
             }
             "role" => {
@@ -411,12 +407,12 @@ impl ObjectImpl for QuinnQuicSink {
 
         match pspec.name() {
             "server-name" => settings.server_name.to_value(),
-            "address" => settings.address.to_string().to_value(),
+            "address" => settings.address.to_value(),
             "port" => {
                 let port = settings.port as u32;
                 port.to_value()
             }
-            "bind-address" => settings.bind_address.to_string().to_value(),
+            "bind-address" => settings.bind_address.to_value(),
             "bind-port" => {
                 let port = settings.bind_port as u32;
                 port.to_value()
@@ -458,8 +454,7 @@ impl ObjectImpl for QuinnQuicSink {
                 let state = self.state.lock().unwrap();
                 match *state {
                     State::Started(ref state) => {
-                        let connection = state.connection.clone();
-                        get_stats(Some(connection.stats())).to_value()
+                        get_stats(Some(state.connection.stats())).to_value()
                     }
                     State::Stopped => get_stats(None).to_value(),
                 }

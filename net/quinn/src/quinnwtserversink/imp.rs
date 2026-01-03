@@ -364,7 +364,7 @@ impl ObjectImpl for QuinnWebTransportSink {
 
         match pspec.name() {
             "server-name" => settings.server_name.to_value(),
-            "address" => settings.address.to_string().to_value(),
+            "address" => settings.address.to_value(),
             "port" => {
                 let port = settings.port as u32;
                 port.to_value()
