@@ -390,7 +390,7 @@ impl QuinnRoqMux {
     fn rtp_datagram_sink_chain(
         &self,
         pad: &super::QuinnRoqMuxPad,
-        buffer: gst::Buffer,
+        mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         /*
          * As per section 5.2.1 of RTP over QUIC specification.
@@ -417,32 +417,31 @@ impl QuinnRoqMux {
         let flow_id = mux_pad_settings.flow_id;
         drop(mux_pad_settings);
 
-        let size = get_varint_size(flow_id);
-        let mut outbuf = gst::Buffer::with_size(size).unwrap();
         {
-            let outbuffer = outbuf.get_mut().unwrap();
+            let size = get_varint_size(flow_id);
+            let mut flow_id_mem = gst::Memory::with_size(size);
             {
-                let mut map = outbuffer.map_writable().unwrap();
+                let flow_id_mem_mut = flow_id_mem.get_mut().unwrap();
+                let mut map = flow_id_mem_mut.map_writable().unwrap();
                 let mut data = map.as_mut_slice();
 
                 set_varint(&mut data, flow_id);
             }
 
-            outbuffer.set_pts(buffer.pts());
-            outbuffer.set_dts(buffer.dts());
+            let buffer_mut = buffer.make_mut();
 
-            QuinnQuicMeta::add(outbuffer, 0, true);
+            buffer_mut.prepend_memory(flow_id_mem);
+
+            QuinnQuicMeta::add(buffer_mut, 0, true);
         }
 
-        outbuf.append(buffer);
-
-        self.obj().finish_buffer(outbuf)
+        self.obj().finish_buffer(buffer)
     }
 
     fn rtp_stream_sink_chain(
         &self,
         pad: &super::QuinnRoqMuxPad,
-        buffer: gst::Buffer,
+        mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         /*
          * As per section 5.2.1 of RTP over QUIC specification.
@@ -513,9 +512,6 @@ impl QuinnRoqMux {
 
         drop(pad_state);
 
-        let buf_sz_len = get_varint_size(buffer.size() as u64);
-        let mut outbuf = gst::Buffer::with_size(buf_sz_len).unwrap();
-
         gst::trace!(
             CAT,
             obj = pad,
@@ -526,29 +522,30 @@ impl QuinnRoqMux {
         );
 
         {
-            let outbuf = outbuf.get_mut().unwrap();
+            let buf_sz_len = get_varint_size(buffer.size() as u64);
+            let mut buf_sz_mem = gst::Memory::with_size(buf_sz_len);
             {
-                let mut obuf = outbuf.map_writable().unwrap();
-                let mut obuf_slice = obuf.as_mut_slice();
-                set_varint(&mut obuf_slice, buffer.size() as u64);
+                let buf_sz_mem_mut = buf_sz_mem.get_mut().unwrap();
+                let mut map = buf_sz_mem_mut.map_writable().unwrap();
+                let mut data = map.as_mut_slice();
+                set_varint(&mut data, buffer.size() as u64);
             }
 
-            QuinnQuicMeta::add(outbuf, stream_id, false);
+            let buffer_mut = buffer.make_mut();
 
-            outbuf.set_pts(buffer.pts());
-            outbuf.set_dts(buffer.dts());
+            buffer_mut.prepend_memory(buf_sz_mem);
+
+            QuinnQuicMeta::add(buffer_mut, stream_id, false);
         }
-
-        outbuf.append(buffer);
 
         gst::trace!(
             CAT,
             obj = pad,
             "Pushing buffer of {} bytes for stream: {stream_id}",
-            outbuf.size(),
+            buffer.size(),
         );
 
-        self.obj().finish_buffer(outbuf)
+        self.obj().finish_buffer(buffer)
     }
 
     fn close_stream_for_pad(&self, pad: &gst::Pad) {

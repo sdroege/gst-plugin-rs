@@ -492,7 +492,7 @@ impl QuinnWebTransportClientSrc {
             };
         }
 
-        CreateSuccess::NewBuffer(buffer.to_owned())
+        CreateSuccess::NewBuffer(buffer)
     }
 
     fn get(&self) -> Result<Option<QuinnData>, Option<gst::ErrorMessage>> {
@@ -555,7 +555,7 @@ impl QuinnWebTransportClientSrc {
                 ["Cannot parse host for URL"]
             ));
         }
-        let host = url.host_str().unwrap().to_owned();
+        let host = url.host_str().unwrap();
 
         // Look up the DNS entry.
         let mut remotes = match wait(&self.canceller, lookup_host((host, server_port)), timeout) {
@@ -864,7 +864,7 @@ impl QuinnWebTransportClientSrc {
                     .build(),
             );
 
-            return Some(context.to_owned());
+            return Some(context);
         }
 
         None

@@ -59,20 +59,16 @@ impl Reassembler {
     fn build_buffer(&mut self, packet_sz: u64) -> gst::Buffer {
         let packet = self.buffer.split_to(packet_sz as usize);
 
-        let mut buffer = gst::Buffer::with_size(packet_sz as usize).unwrap();
+        let mut buffer = gst::Buffer::from_mut_slice(packet);
         {
             let buffer_mut = buffer.get_mut().unwrap();
-            {
-                let mut buf_mut = buffer_mut.map_writable().unwrap();
-                buf_mut.clone_from_slice(&packet);
-            }
 
             // Set DTS and let downstream manage PTS using jitterbuffer
             // as jitterbuffer will do the DTS -> PTS work.
             buffer_mut.set_dts(self.last_ts);
         }
 
-        buffer.to_owned()
+        buffer
     }
 
     fn push_buffer(
@@ -151,7 +147,7 @@ impl Reassembler {
                     self.buffer.len()
                 );
 
-                return Some(buffer.to_owned());
+                return Some(buffer);
             } else {
                 // Do not have enough data yet to reassemble the packet
                 return None;
@@ -196,7 +192,7 @@ impl Reassembler {
             self.buffer.len()
         );
 
-        Some(buffer.to_owned())
+        Some(buffer)
     }
 }
 

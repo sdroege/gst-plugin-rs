@@ -1125,7 +1125,7 @@ impl QuinnQuicSink {
                     .build(),
             );
 
-            return Some(context.to_owned());
+            return Some(context);
         }
 
         None

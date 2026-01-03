@@ -135,7 +135,7 @@ pub fn get_varint(data: &[u8]) -> Option<(u64 /* VarInt value */, usize /* VarIn
     match tag {
         0b00 => {
             let mut slice = [0; 1];
-            slice.clone_from_slice(&data[..1]);
+            slice.copy_from_slice(&data[..1]);
             slice[0] &= 0b0011_1111;
 
             Some((u64::from(slice[0]), 1))
@@ -146,7 +146,7 @@ pub fn get_varint(data: &[u8]) -> Option<(u64 /* VarInt value */, usize /* VarIn
             }
 
             let mut buf = [0; 2];
-            buf.clone_from_slice(&data[..2]);
+            buf.copy_from_slice(&data[..2]);
             buf[0] &= 0b0011_1111;
 
             Some((
@@ -160,7 +160,7 @@ pub fn get_varint(data: &[u8]) -> Option<(u64 /* VarInt value */, usize /* VarIn
             }
 
             let mut buf = [0; 4];
-            buf.clone_from_slice(&data[..4]);
+            buf.copy_from_slice(&data[..4]);
             buf[0] &= 0b0011_1111;
 
             Some((
@@ -174,7 +174,7 @@ pub fn get_varint(data: &[u8]) -> Option<(u64 /* VarInt value */, usize /* VarIn
             }
 
             let mut buf = [0; 8];
-            buf.clone_from_slice(&data[..8]);
+            buf.copy_from_slice(&data[..8]);
             buf[0] &= 0b0011_1111;
 
             Some((u64::from_be_bytes(buf[..8].try_into().unwrap()), 8))

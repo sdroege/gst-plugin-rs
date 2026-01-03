@@ -759,7 +759,7 @@ impl QuinnQuicSrc {
             };
         }
 
-        CreateSuccess::NewBuffer(buffer.to_owned())
+        CreateSuccess::NewBuffer(buffer)
     }
 
     fn get(&self) -> Result<Option<QuinnData>, Option<gst::ErrorMessage>> {
@@ -1105,7 +1105,7 @@ impl QuinnQuicSrc {
                     .build(),
             );
 
-            return Some(context.to_owned());
+            return Some(context);
         }
 
         None

@@ -73,7 +73,7 @@ pub fn wait<F, T>(
 ) -> Result<T, WaitError>
 where
     F: Send + Future<Output = T>,
-    T: Send + 'static,
+    T: Send,
 {
     let mut canceller = canceller_mutex.lock().unwrap();
     if matches!(*canceller, Canceller::Cancelled) {
@@ -199,9 +199,8 @@ fn create_transport_config(
     ep_config: &QuinnQuicEndpointConfig,
     set_keep_alive: bool,
 ) -> TransportConfig {
-    let mtu_config = MtuDiscoveryConfig::default()
-        .upper_bound(ep_config.transport_config.upper_bound_mtu)
-        .to_owned();
+    let mut mtu_config = MtuDiscoveryConfig::default();
+    mtu_config.upper_bound(ep_config.transport_config.upper_bound_mtu);
     let mut transport_config = TransportConfig::default();
 
     if ep_config.keep_alive_interval > 0 && set_keep_alive {
@@ -262,9 +261,8 @@ fn configure_client(ep_config: &QuinnQuicEndpointConfig) -> Result<ClientConfig,
     crypto.key_log = Arc::new(rustls::KeyLogFile::new());
 
     let transport_config = create_transport_config(ep_config, true);
-    let client_config = ClientConfig::new(Arc::new(QuicClientConfig::try_from(crypto)?))
-        .transport_config(Arc::new(transport_config))
-        .to_owned();
+    let mut client_config = ClientConfig::new(Arc::new(QuicClientConfig::try_from(crypto)?));
+    client_config.transport_config(Arc::new(transport_config));
 
     Ok(client_config)
 }
@@ -365,9 +363,9 @@ fn configure_server(
     crypto.key_log = Arc::new(rustls::KeyLogFile::new());
 
     let transport_config = create_transport_config(ep_config, false);
-    let server_config = ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(crypto)?))
-        .transport_config(Arc::new(transport_config))
-        .to_owned();
+    let mut server_config =
+        ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(crypto)?));
+    server_config.transport_config(Arc::new(transport_config));
 
     Ok((server_config, certs))
 }
@@ -375,10 +373,11 @@ fn configure_server(
 pub fn server_endpoint(ep_config: &QuinnQuicEndpointConfig) -> Result<Endpoint, Box<dyn Error>> {
     let (server_config, _) = configure_server(ep_config)?;
     let socket = std::net::UdpSocket::bind(ep_config.server_addr)?;
-    let endpoint_config = EndpointConfig::default()
+    let mut endpoint_config = EndpointConfig::default();
+    endpoint_config
         .max_udp_payload_size(ep_config.transport_config.max_udp_payload_size)
-        .unwrap()
-        .to_owned();
+        .unwrap();
+
     let endpoint = Endpoint::new(
         endpoint_config,
         Some(server_config),

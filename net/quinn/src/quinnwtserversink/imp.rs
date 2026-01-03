@@ -684,7 +684,7 @@ impl QuinnWebTransportSink {
                     ["Cannot parse host for URL"]
                 ));
             }
-            let host = url.host_str().unwrap().to_owned();
+            let host = url.host_str().unwrap();
 
             // Look up the DNS entry.
             let mut remotes = match wait(&self.canceller, lookup_host((host, server_port)), timeout)
@@ -1042,7 +1042,7 @@ impl QuinnWebTransportSink {
                     .build(),
             );
 
-            return Some(context.to_owned());
+            return Some(context);
         }
 
         None
