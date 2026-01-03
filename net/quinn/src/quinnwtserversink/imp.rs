@@ -15,21 +15,18 @@ use crate::quinnconnection::*;
 use crate::quinnquicmeta::*;
 use crate::quinnquicquery::*;
 use crate::utils::{
-    client_endpoint, get_stats, make_socket_addr, server_endpoint, wait, WaitError,
-    CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG,
+    get_stats, make_socket_addr, wait, WaitError, CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG,
 };
 use crate::{common::*, utils};
 use bytes::Bytes;
-use futures::future;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_base::subclass::prelude::*;
-use quinn::{Connection, TransportConfig};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::{LazyLock, Mutex};
 use tokio::net::lookup_host;
-use web_transport_quinn::{Request, SendStream, Session};
+use web_transport_quinn::{SendStream, Session};
 
 const DEFAULT_ROLE: QuinnQuicRole = QuinnQuicRole::Server;
 

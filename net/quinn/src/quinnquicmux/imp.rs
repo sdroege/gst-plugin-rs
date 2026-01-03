@@ -14,7 +14,6 @@ use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 use itertools::Itertools;
 use std::collections::HashMap;
-use std::io::Read;
 use std::sync::{LazyLock, Mutex};
 
 const DEFAULT_STREAM_PRIORITY: i32 = 0;

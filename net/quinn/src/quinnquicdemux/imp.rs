@@ -7,7 +7,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::common::*;
 use crate::quinnquicmeta::QuinnQuicMeta;
 use crate::quinnquicquery::*;
 use gst::{glib, prelude::*, subclass::prelude::*};
