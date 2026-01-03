@@ -944,20 +944,17 @@ impl QuinnWebTransportSink {
         match wait(&self.canceller, stream.stopped(), timeout) {
             Ok(r) => {
                 if let Err(e) = r {
-                    let err_msg = format!("Stream finish request error: {e}");
-                    gst::error!(CAT, imp = self, "{}", err_msg);
+                    gst::error!(CAT, imp = self, "Stream finish request error: {e}");
                 } else {
                     gst::info!(CAT, imp = self, "Stream {:?} finished", stream);
                 }
             }
             Err(e) => match e {
                 WaitError::FutureAborted => {
-                    let err_msg = "Stream finish request aborted".to_string();
-                    gst::warning!(CAT, imp = self, "{}", err_msg);
+                    gst::warning!(CAT, imp = self, "Stream finish request aborted");
                 }
                 WaitError::FutureError(e) => {
-                    let err_msg = format!("Stream finish request future error: {e}");
-                    gst::error!(CAT, imp = self, "{}", err_msg);
+                    gst::error!(CAT, imp = self, "Stream finish request future error: {e}");
                 }
             },
         }
