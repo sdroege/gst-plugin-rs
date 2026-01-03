@@ -186,7 +186,7 @@ fn test_amr_nb_bit_packed() {
     init();
 
     let (caps, buffers) = get_amr_nb_data();
-    let pay = "rtpamrpay2 aggregate-mode=zero-latency ! application/x-rtp,octet-align=(string)0";
+    let pay = "rtpamrpay2 aggregate-mode=zero-latency ! capsfilter caps=application/x-rtp,octet-align=(string)0";
     let depay = "rtpamrdepay2";
 
     let expected_pay = vec![
@@ -196,7 +196,7 @@ fn test_amr_nb_bit_packed() {
             .pt(96)
             .rtp_time(0)
             .marker_bit(true)
-            .size(45)
+            .size(44)
             .build()],
         vec![ExpectedPacket::builder()
             .pts(gst::ClockTime::from_mseconds(20))
@@ -204,7 +204,7 @@ fn test_amr_nb_bit_packed() {
             .pt(96)
             .rtp_time(160)
             .marker_bit(false)
-            .size(45)
+            .size(44)
             .build()],
         vec![ExpectedPacket::builder()
             .pts(gst::ClockTime::from_mseconds(40))
@@ -212,7 +212,7 @@ fn test_amr_nb_bit_packed() {
             .pt(96)
             .rtp_time(320)
             .marker_bit(false)
-            .size(45)
+            .size(44)
             .build()],
         vec![ExpectedPacket::builder()
             .pts(gst::ClockTime::from_mseconds(60))
@@ -220,7 +220,7 @@ fn test_amr_nb_bit_packed() {
             .pt(96)
             .rtp_time(480)
             .marker_bit(false)
-            .size(45)
+            .size(44)
             .build()],
         vec![ExpectedPacket::builder()
             .pts(gst::ClockTime::from_mseconds(80))
@@ -228,7 +228,7 @@ fn test_amr_nb_bit_packed() {
             .pt(96)
             .rtp_time(640)
             .marker_bit(false)
-            .size(45)
+            .size(44)
             .build()],
         vec![ExpectedPacket::builder()
             .pts(gst::ClockTime::from_mseconds(100))
@@ -236,7 +236,7 @@ fn test_amr_nb_bit_packed() {
             .pt(96)
             .rtp_time(800)
             .marker_bit(false)
-            .size(45)
+            .size(44)
             .build()],
     ];
 
@@ -424,7 +424,7 @@ fn test_amr_wb_bit_packed() {
     init();
 
     let (caps, buffers) = get_amr_wb_data();
-    let pay = "rtpamrpay2 aggregate-mode=zero-latency ! application/x-rtp,octet-align=(string)0";
+    let pay = "rtpamrpay2 aggregate-mode=zero-latency ! capsfilter caps=application/x-rtp,octet-align=(string)0";
     let depay = "rtpamrdepay2";
 
     let expected_pay = vec![
