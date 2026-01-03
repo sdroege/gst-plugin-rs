@@ -98,7 +98,7 @@ where
                 Ok(r) => Ok(r),
                 Err(e) => Err(gst::error_msg!(
                     gst::ResourceError::Read,
-                    ["Request timeout, elapsed: {}", e.to_string()]
+                    ["Request timeout, elapsed: {e}"]
                 )),
             }
         }
@@ -423,14 +423,14 @@ pub fn get_stats(stats: Option<ConnectionStats>) -> gst::Structure {
     match stats {
         Some(stats) => {
             // See quinn_proto::ConnectionStats
-            let udp_stats = |udp: UdpStats, name: String| -> gst::Structure {
+            let udp_stats = |udp: UdpStats, name: &str| -> gst::Structure {
                 gst::Structure::builder(name)
                     .field("datagrams", udp.datagrams)
                     .field("bytes", udp.bytes)
                     .field("ios", udp.ios)
                     .build()
             };
-            let frame_stats = |frame: FrameStats, name: String| -> gst::Structure {
+            let frame_stats = |frame: FrameStats, name: &str| -> gst::Structure {
                 gst::Structure::builder(name)
                     .field("acks", frame.acks)
                     .field("ack-frequency", frame.ack_frequency)
@@ -470,17 +470,11 @@ pub fn get_stats(stats: Option<ConnectionStats>) -> gst::Structure {
                 .build();
 
             gst::Structure::builder("stats")
-                .field("udp-tx", udp_stats(stats.udp_tx, "udp-tx".to_string()))
-                .field("udp-rx", udp_stats(stats.udp_rx, "udp-rx".to_string()))
+                .field("udp-tx", udp_stats(stats.udp_tx, "udp-tx"))
+                .field("udp-rx", udp_stats(stats.udp_rx, "udp-rx"))
                 .field("path", path_stats)
-                .field(
-                    "frame-tx",
-                    frame_stats(stats.frame_tx, "frame-tx".to_string()),
-                )
-                .field(
-                    "frame-rx",
-                    frame_stats(stats.frame_rx, "frame-rx".to_string()),
-                )
+                .field("frame-tx", frame_stats(stats.frame_tx, "frame-tx"))
+                .field("frame-rx", frame_stats(stats.frame_rx, "frame-rx"))
                 .build()
         }
         None => gst::Structure::new_empty("stats"),

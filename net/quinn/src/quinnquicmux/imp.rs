@@ -166,13 +166,13 @@ impl ElementImpl for QuinnQuicMux {
                     pad_name.to_string()
                 } else {
                     state.stream_uni_conns += 1;
-                    format!("stream_{}", state.stream_uni_conns).to_string()
+                    format!("stream_{}", state.stream_uni_conns)
                 };
 
-                gst::debug!(CAT, imp = self, "Requesting pad {}", stream_pad_name);
+                gst::debug!(CAT, imp = self, "Requesting pad {stream_pad_name}");
 
                 let stream_pad = gst::PadBuilder::<super::QuinnQuicMuxPad>::from_template(templ)
-                    .name(stream_pad_name)
+                    .name(&stream_pad_name)
                     .flags(gst::PadFlags::FIXED_CAPS)
                     .build();
 
@@ -182,7 +182,7 @@ impl ElementImpl for QuinnQuicMux {
 
                 drop(state);
 
-                self.obj().child_added(&stream_pad, &stream_pad.name());
+                self.obj().child_added(&stream_pad, &stream_pad_name);
 
                 Some(stream_pad.upcast())
             }
@@ -210,7 +210,7 @@ impl ElementImpl for QuinnQuicMux {
 
                 drop(state);
 
-                self.obj().child_added(&datagram_pad, &datagram_pad.name());
+                self.obj().child_added(&datagram_pad, "datagram");
 
                 Some(datagram_pad.upcast())
             }

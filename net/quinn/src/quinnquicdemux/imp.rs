@@ -156,7 +156,7 @@ impl QuinnQuicDemux {
             if !started.datagram_pad_added {
                 self.datagram_pad.set_active(true).unwrap();
 
-                let stream_start_evt = gst::event::StreamStart::builder(&0.to_string())
+                let stream_start_evt = gst::event::StreamStart::builder("0")
                     .group_id(gst::GroupId::next())
                     .build();
                 self.datagram_pad.push_event(stream_start_evt);
@@ -206,7 +206,7 @@ impl QuinnQuicDemux {
                     let stream_pad_name = format!("stream_{stream_id}");
 
                     let srcpad = gst::Pad::builder_from_template(&templ)
-                        .name(stream_pad_name.clone())
+                        .name(&stream_pad_name)
                         .build();
 
                     srcpad.set_active(true).unwrap();

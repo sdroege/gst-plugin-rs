@@ -356,7 +356,7 @@ impl QuinnRoqDemux {
         let src_pad_name = format!("src_{flow_id}");
         let templ = self.obj().pad_template("src_%u").unwrap();
         let srcpad = gst::Pad::builder_from_template(&templ)
-            .name(src_pad_name.clone())
+            .name(&src_pad_name)
             .build();
 
         srcpad.set_active(true).unwrap();

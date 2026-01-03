@@ -722,7 +722,7 @@ impl QuinnQuicSink {
                 )));
             }
         };
-        let connection = started.connection.clone();
+        let connection = &started.connection;
 
         if let Some(m) = meta {
             if m.is_datagram() {
@@ -774,7 +774,7 @@ impl QuinnQuicSink {
 
         let mut state = self.state.lock().unwrap();
         if let State::Started(ref mut state) = *state {
-            let connection = state.connection.clone();
+            let connection = &state.connection;
 
             gst::debug!(
                 CAT,
@@ -837,7 +837,7 @@ impl QuinnQuicSink {
 
     fn open_stream(
         &self,
-        connection: Connection,
+        connection: &Connection,
         timeout: u32,
     ) -> Result<SendStream, gst::ErrorMessage> {
         match wait(&self.canceller, connection.open_uni(), timeout) {
@@ -881,7 +881,7 @@ impl QuinnQuicSink {
 
     fn write_datagram(
         &self,
-        conn: Connection,
+        conn: &Connection,
         src: &[u8],
         drop_buffer_for_datagram: bool,
     ) -> Result<(), Option<gst::ErrorMessage>> {

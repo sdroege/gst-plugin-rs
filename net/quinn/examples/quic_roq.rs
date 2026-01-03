@@ -49,9 +49,9 @@ fn connect_overrun(pipeline: &gst::Pipeline, queue: &gst::Element, is_receiver: 
         );
 
         let dot_name = if is_receiver {
-            format!("{}-overrun-receive", queue.name()).to_string()
+            format!("{}-overrun-receive", queue.name())
         } else {
-            format!("{}-overrun-send", queue.name()).to_string()
+            format!("{}-overrun-send", queue.name())
         };
 
         pipeline.debug_to_dot_file_with_ts(gst::DebugGraphDetails::all(), dot_name);
@@ -60,7 +60,7 @@ fn connect_overrun(pipeline: &gst::Pipeline, queue: &gst::Element, is_receiver: 
     });
 }
 
-fn video_bin(pipeline: &gst::Pipeline, text: String, use_vp8: bool) -> gst::Bin {
+fn video_bin(pipeline: &gst::Pipeline, text: &str, use_vp8: bool) -> gst::Bin {
     let videosrc = gst::ElementFactory::make("videotestsrc").build().unwrap();
     let capsf = gst::ElementFactory::make("capsfilter").build().unwrap();
     let overlay = gst::ElementFactory::make("clockoverlay").build().unwrap();
@@ -82,7 +82,7 @@ fn video_bin(pipeline: &gst::Pipeline, text: String, use_vp8: bool) -> gst::Bin 
     connect_overrun(pipeline, &queue_src, false);
     connect_overrun(pipeline, &queue, false);
 
-    let bin = gst::Bin::builder().name(text.clone()).build();
+    let bin = gst::Bin::builder().name(text).build();
 
     if use_vp8 {
         enc.set_property("deadline", 2i64);
@@ -162,7 +162,7 @@ fn video_bin(pipeline: &gst::Pipeline, text: String, use_vp8: bool) -> gst::Bin 
     bin
 }
 
-fn depay_bin(pipeline: &gst::Pipeline, bin_name: String) -> gst::Bin {
+fn depay_bin(pipeline: &gst::Pipeline, bin_name: &str) -> gst::Bin {
     let bin = gst::Bin::builder().name(bin_name).build();
 
     let queue = gst::ElementFactory::make("queue").build().unwrap();
@@ -393,7 +393,7 @@ fn receive_pipeline(pipeline: &gst::Pipeline, use_vp8: bool) {
             return None;
         }
 
-        let bin = depay_bin(&pipeline, pad.name().to_string());
+        let bin = depay_bin(&pipeline, &pad.name());
 
         pipeline.add(&bin).unwrap();
 
@@ -458,10 +458,10 @@ fn receive_pipeline(pipeline: &gst::Pipeline, use_vp8: bool) {
 }
 
 fn send_pipeline(pipeline: &gst::Pipeline, use_vp8: bool) {
-    let video1 = video_bin(pipeline, "Stream 1".to_string(), use_vp8);
-    let video2 = video_bin(pipeline, "Stream 2".to_string(), use_vp8);
-    let video3 = video_bin(pipeline, "Datagram 1".to_string(), use_vp8);
-    let video4 = video_bin(pipeline, "Datagram 2".to_string(), use_vp8);
+    let video1 = video_bin(pipeline, "Stream 1", use_vp8);
+    let video2 = video_bin(pipeline, "Stream 2", use_vp8);
+    let video3 = video_bin(pipeline, "Datagram 1", use_vp8);
+    let video4 = video_bin(pipeline, "Datagram 2", use_vp8);
     let roq = gst::ElementFactory::make("quinnroqmux")
         .name("roq-mux")
         .build()

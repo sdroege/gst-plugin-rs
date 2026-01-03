@@ -23,7 +23,7 @@ struct Cli {
     webtransport: bool,
 }
 
-fn video_bin(text: String) -> gst::Bin {
+fn video_bin(text: &str) -> gst::Bin {
     let videosrc = gst::ElementFactory::make("videotestsrc").build().unwrap();
     let overlay = gst::ElementFactory::make("clockoverlay").build().unwrap();
     let convert = gst::ElementFactory::make("videoconvert").build().unwrap();
@@ -34,7 +34,7 @@ fn video_bin(text: String) -> gst::Bin {
     )
     .unwrap();
 
-    let bin = gst::Bin::builder().name(text.clone()).build();
+    let bin = gst::Bin::builder().name(text).build();
 
     capsf.set_property("caps", caps);
 
@@ -62,7 +62,7 @@ fn video_bin(text: String) -> gst::Bin {
     bin
 }
 
-fn depay_bin(pipeline: &gst::Pipeline, bin_name: String) -> gst::Bin {
+fn depay_bin(pipeline: &gst::Pipeline, bin_name: &str) -> gst::Bin {
     let bin = gst::Bin::builder().name(bin_name).build();
 
     let queue = gst::ElementFactory::make("queue").build().unwrap();
@@ -184,7 +184,7 @@ fn receive_pipeline(pipeline: &gst::Pipeline, use_webtransport: bool) {
             .expect("Second argument to demux pad-added must be pad");
         gst::info!(CAT, "QUIC demuxer pad {} added", pad.name());
 
-        let bin = depay_bin(&pipeline, pad.name().to_string());
+        let bin = depay_bin(&pipeline, &pad.name());
 
         pipeline.add(&bin).unwrap();
 
@@ -253,10 +253,10 @@ fn receive_pipeline(pipeline: &gst::Pipeline, use_webtransport: bool) {
 }
 
 fn send_pipeline(pipeline: &gst::Pipeline, use_webtransport: bool) {
-    let video1 = video_bin("Stream 1".to_string());
-    let video2 = video_bin("Stream 2".to_string());
-    let video3 = video_bin("Stream 3".to_string());
-    let video4 = video_bin("Stream 4".to_string());
+    let video1 = video_bin("Stream 1");
+    let video2 = video_bin("Stream 2");
+    let video3 = video_bin("Stream 3");
+    let video4 = video_bin("Stream 4");
     let mux = gst::ElementFactory::make("quinnquicmux")
         .name("quic-mux")
         .build()

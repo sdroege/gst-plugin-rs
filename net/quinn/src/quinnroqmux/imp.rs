@@ -203,7 +203,7 @@ impl ElementImpl for QuinnRoqMux {
                 gst::debug!(CAT, imp = self, "Requesting pad {}", sink_pad_name);
 
                 let sinkpad = gst::PadBuilder::<super::QuinnRoqMuxPad>::from_template(templ)
-                    .name(sink_pad_name.clone())
+                    .name(&sink_pad_name)
                     .flags(gst::PadFlags::FIXED_CAPS)
                     .build();
 
@@ -215,7 +215,7 @@ impl ElementImpl for QuinnRoqMux {
 
                 drop(state);
 
-                self.obj().child_added(&sinkpad, &sinkpad.name());
+                self.obj().child_added(&sinkpad, &sink_pad_name);
 
                 Some(sinkpad.upcast())
             }
@@ -232,7 +232,7 @@ impl ElementImpl for QuinnRoqMux {
                 gst::debug!(CAT, imp = self, "Requesting pad {}", sink_pad_name);
 
                 let sinkpad = gst::PadBuilder::<super::QuinnRoqMuxPad>::from_template(templ)
-                    .name(sink_pad_name.clone())
+                    .name(&sink_pad_name)
                     .flags(gst::PadFlags::FIXED_CAPS)
                     .build();
 
@@ -244,7 +244,7 @@ impl ElementImpl for QuinnRoqMux {
 
                 drop(state);
 
-                self.obj().child_added(&sinkpad, &sinkpad.name());
+                self.obj().child_added(&sinkpad, &sink_pad_name);
 
                 Some(sinkpad.upcast())
             }

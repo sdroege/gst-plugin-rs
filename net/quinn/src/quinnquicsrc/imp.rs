@@ -933,7 +933,7 @@ impl QuinnQuicSrc {
             }
         };
 
-        let tx_send = |sender: Sender<QuinnData>, data: QuinnData| async move {
+        let tx_send = |data: QuinnData| async {
             if let Err(err) = sender.send(data).await {
                 gst::error!(CAT, imp = self, "Error sending data: {err:?}");
             }
@@ -958,23 +958,23 @@ impl QuinnQuicSrc {
             while let Some(stream) = tasks.next().await {
                 match stream {
                     QuinnFuture::Stop => {
-                        tx_send(sender.clone(), QuinnData::Eos).await;
+                        tx_send(QuinnData::Eos).await;
                         break;
                     }
                     QuinnFuture::StreamData(s, data) => match data {
                         d @ QuinnData::Stream(stream_id, _) => {
                             gst::trace!(CAT, imp = self, "Sending data for stream: {stream_id}");
-                            tx_send(sender.clone(), d).await;
+                            tx_send(d).await;
                             tasks.push(Box::pin(recv_stream(s)));
                         }
                         eos @ QuinnData::Eos => {
-                            tx_send(sender.clone(), eos).await;
+                            tx_send(eos).await;
                             drop(s);
                             break;
                         }
                         c @ QuinnData::Closed(stream_id) => {
                             gst::trace!(CAT, imp = self, "Stream closed: {stream_id}");
-                            tx_send(sender.clone(), c).await;
+                            tx_send(c).await;
                             drop(s);
                         }
                         QuinnData::Datagram(_) => unreachable!(),
@@ -986,7 +986,7 @@ impl QuinnQuicSrc {
                     }
                     QuinnFuture::Datagram(b) => {
                         gst::trace!(CAT, imp = self, "Received {} bytes on datagram", b.len());
-                        tx_send(sender.clone(), QuinnData::Datagram(b)).await;
+                        tx_send(QuinnData::Datagram(b)).await;
                         tasks.push(Box::pin(datagram(connection.clone())));
                     }
                 }
