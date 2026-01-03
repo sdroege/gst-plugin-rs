@@ -741,8 +741,7 @@ impl PushSrcImpl for QuinnQuicSrc {
                 Ok(Some(QuinnData::Closed(stream_id))) => {
                     // Send custom downstream event for demuxer to close
                     // and remove the stream.
-                    let srcpad = self.obj().static_pad("src").expect("source pad expected");
-                    close_stream(&srcpad, stream_id);
+                    close_stream(self.obj().src_pad(), stream_id);
                 }
             }
         }
