@@ -331,7 +331,24 @@ impl BaseSinkImpl for IcecastSink {
             ));
         };
 
+        let Some(host_str) = url.host_str() else {
+            return Err(gst::error_msg!(
+                gst::ResourceError::Settings,
+                ["No hostname or IP set"]
+            ));
+        };
+
         gst::info!(CAT, imp = self, "Location: {url}",);
+
+        self.post_message(
+            gst::message::Progress::builder(
+                gst::ProgressType::Start,
+                "connect",
+                &format!("Connecting to {host_str}"),
+            )
+            .src(&*self.obj())
+            .build(),
+        );
 
         let client = client::IceClient::new(
             url.clone(),
@@ -439,14 +456,47 @@ impl BaseSinkImpl for IcecastSink {
             if let Some(err_msg) = err {
                 gst::info!(CAT, imp = self, "Error {err_msg:?}");
                 *state = State::Error;
+
+                self.post_message(
+                    gst::message::Progress::builder(
+                        gst::ProgressType::Error,
+                        "connect",
+                        "Could not connect to host",
+                    )
+                    .src(&*self.obj())
+                    .build(),
+                );
+
                 self.post_error_message(err_msg);
+
                 return Err(gst::FlowError::Error);
             } else {
                 gst::debug!(CAT, imp = self, "Cancelled, flushing");
                 *state = State::Cancelled;
+
+                self.post_message(
+                    gst::message::Progress::builder(
+                        gst::ProgressType::Canceled,
+                        "connect",
+                        "Connect cancelled",
+                    )
+                    .src(&*self.obj())
+                    .build(),
+                );
+
                 return Err(gst::FlowError::Flushing);
             }
         }
+
+        self.post_message(
+            gst::message::Progress::builder(
+                gst::ProgressType::Complete,
+                "connect",
+                "Connected to host",
+            )
+            .src(&*self.obj())
+            .build(),
+        );
 
         // Re-send stream headers after re-connect
         let mut pending_streamheaders = self.pending_streamheaders.borrow_mut();
