@@ -62,9 +62,9 @@ pub struct QuinnQuicEndpointConfig {
     pub alpns: Vec<String>,
     pub certificate_file: Option<PathBuf>,
     pub private_key_file: Option<PathBuf>,
+    pub certificate_database_file: Option<PathBuf>,
     pub keep_alive_interval: u64,
     pub transport_config: QuinnQuicTransportConfig,
-    pub with_client_auth: bool,
     pub webtransport: bool,
 }
 

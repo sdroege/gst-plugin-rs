@@ -7003,8 +7003,20 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "certificate-database-file": {
+                        "blurb": "Path to a certificate database file in PEM format used for certificate validation",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "certificate-file": {
-                        "blurb": "Path to certificate chain in single file",
+                        "blurb": "Path to certificate chain for the private key file in PEM format",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -7166,7 +7178,7 @@
                         "writable": true
                     },
                     "private-key-file": {
-                        "blurb": "Path to a PKCS8 or RSA private key file",
+                        "blurb": "Path to a PKCS1, PKCS8 or SEC1 private key file in PEM format",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -7390,8 +7402,20 @@
                         "type": "GstCaps",
                         "writable": true
                     },
+                    "certificate-database-file": {
+                        "blurb": "Path to a certificate database file in PEM format used for certificate validation",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "certificate-file": {
-                        "blurb": "Path to certificate chain in single file",
+                        "blurb": "Path to certificate chain for the private key file in PEM format",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -7515,7 +7539,7 @@
                         "writable": true
                     },
                     "private-key-file": {
-                        "blurb": "Path to a PKCS8 or RSA private key file",
+                        "blurb": "Path to a PKCS1, PKCS8 or SEC1 private key file in PEM format",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -7765,8 +7789,20 @@
                     }
                 },
                 "properties": {
+                    "certificate-database-file": {
+                        "blurb": "Path to a certificate database file in PEM format used for certificate validation",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "certificate-file": {
-                        "blurb": "Path to certificate chain in single file",
+                        "blurb": "Path to certificate chain for the private key file in PEM format",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -7789,6 +7825,18 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "guint64",
+                        "writable": true
+                    },
+                    "private-key-file": {
+                        "blurb": "Path to a PKCS1, PKCS8 or SEC1 private key file in PEM format",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
                         "writable": true
                     },
                     "secure-connection": {
@@ -7876,8 +7924,20 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "certificate-database-file": {
+                        "blurb": "Path to a certificate database file in PEM format used for certificate validation",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "certificate-file": {
-                        "blurb": "Path to certificate chain in single file",
+                        "blurb": "Path to certificate chain for the private key file in PEM format",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -7985,7 +8045,7 @@
                         "writable": true
                     },
                     "private-key-file": {
-                        "blurb": "Path to a PKCS8 or RSA private key file",
+                        "blurb": "Path to a PKCS1, PKCS8 or SEC1 private key file in PEM format",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,

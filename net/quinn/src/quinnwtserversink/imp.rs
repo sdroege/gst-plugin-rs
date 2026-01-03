@@ -64,6 +64,7 @@ struct Settings {
     use_datagram: bool,
     certificate_file: Option<PathBuf>,
     private_key_file: Option<PathBuf>,
+    certificate_database_file: Option<PathBuf>,
     secure_conn: bool,
     transport_config: QuinnQuicTransportConfig,
     drop_buffer_for_datagram: bool,
@@ -90,6 +91,7 @@ impl Default for Settings {
             use_datagram: DEFAULT_USE_DATAGRAM,
             certificate_file: None,
             private_key_file: None,
+            certificate_database_file: None,
             secure_conn: DEFAULT_SECURE_CONNECTION,
             transport_config,
             drop_buffer_for_datagram: DEFAULT_DROP_BUFFER_FOR_DATAGRAM,
@@ -206,11 +208,15 @@ impl ObjectImpl for QuinnWebTransportSink {
                     .build(),
                 glib::ParamSpecString::builder("certificate-file")
                     .nick("Certificate file")
-                    .blurb("Path to certificate chain in single file")
+                    .blurb("Path to certificate chain for the private key file in PEM format")
                     .build(),
                 glib::ParamSpecString::builder("private-key-file")
                     .nick("Private key file")
-                    .blurb("Path to a PKCS8 or RSA private key file")
+                    .blurb("Path to a PKCS1, PKCS8 or SEC1 private key file in PEM format")
+                    .build(),
+                glib::ParamSpecString::builder("certificate-database-file")
+                    .nick("Certificate database file")
+                    .blurb("Path to a certificate database file in PEM format used for certificate validation")
                     .build(),
                 glib::ParamSpecBoolean::builder("use-datagram")
                     .nick("Use datagram")
@@ -304,6 +310,10 @@ impl ObjectImpl for QuinnWebTransportSink {
                 let value: String = value.get().unwrap();
                 settings.private_key_file = Some(value.into());
             }
+            "certificate-database-file" => {
+                let value: String = value.get().unwrap();
+                settings.certificate_database_file = Some(value.into());
+            }
             "use-datagram" => {
                 settings.use_datagram = value.get().expect("type checked upstream");
             }
@@ -362,11 +372,15 @@ impl ObjectImpl for QuinnWebTransportSink {
             "timeout" => settings.timeout.to_value(),
             "certificate-file" => {
                 let certfile = settings.certificate_file.as_ref();
-                certfile.and_then(|file| file.to_str()).to_value()
+                certfile.to_value()
             }
             "private-key-file" => {
                 let privkey = settings.private_key_file.as_ref();
-                privkey.and_then(|file| file.to_str()).to_value()
+                privkey.to_value()
+            }
+            "certificate-database-file" => {
+                let certfile = settings.certificate_database_file.as_ref();
+                certfile.to_value()
             }
             "use-datagram" => settings.use_datagram.to_value(),
             "initial-mtu" => (settings.transport_config.initial_mtu as u32).to_value(),
@@ -658,6 +672,7 @@ impl QuinnWebTransportSink {
         let server_name = settings.server_name.clone();
         let certificate_file = settings.certificate_file.clone();
         let private_key_file = settings.private_key_file.clone();
+        let certificate_database_file = settings.certificate_database_file.clone();
         let transport_config = settings.transport_config;
 
         let client_addr = if role == QuinnQuicRole::Client {
@@ -742,9 +757,9 @@ impl QuinnWebTransportSink {
                 alpns: vec![HTTP3_ALPN.to_string()],
                 certificate_file,
                 private_key_file,
+                certificate_database_file,
                 keep_alive_interval: 0,
                 transport_config,
-                with_client_auth: role == QuinnQuicRole::Client,
                 webtransport: true,
             },
         ))

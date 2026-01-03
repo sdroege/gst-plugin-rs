@@ -84,6 +84,7 @@ struct Settings {
     use_datagram: bool,
     certificate_file: Option<PathBuf>,
     private_key_file: Option<PathBuf>,
+    certificate_database_file: Option<PathBuf>,
     transport_config: QuinnQuicTransportConfig,
 }
 
@@ -104,6 +105,7 @@ impl Default for Settings {
             use_datagram: DEFAULT_USE_DATAGRAM,
             certificate_file: None,
             private_key_file: None,
+            certificate_database_file: None,
             transport_config: QuinnQuicTransportConfig::default(),
         }
     }
@@ -251,11 +253,15 @@ impl ObjectImpl for QuinnQuicSrc {
                     .build(),
                 glib::ParamSpecString::builder("certificate-file")
                     .nick("Certificate file")
-                    .blurb("Path to certificate chain in single file")
+                    .blurb("Path to certificate chain for the private key file in PEM format")
                     .build(),
                 glib::ParamSpecString::builder("private-key-file")
                     .nick("Private key file")
-                    .blurb("Path to a PKCS8 or RSA private key file")
+                    .blurb("Path to a PKCS1, PKCS8 or SEC1 private key file in PEM format")
+                    .build(),
+                glib::ParamSpecString::builder("certificate-database-file")
+                    .nick("Certificate database file")
+                    .blurb("Path to a certificate database file in PEM format used for certificate validation")
                     .build(),
                 glib::ParamSpecBoxed::builder::<gst::Caps>("caps")
                     .nick("caps")
@@ -390,6 +396,10 @@ impl ObjectImpl for QuinnQuicSrc {
                 let value: String = value.get().unwrap();
                 settings.private_key_file = Some(value.into());
             }
+            "certificate-database-file" => {
+                let value: String = value.get().unwrap();
+                settings.certificate_database_file = Some(value.into());
+            }
             "use-datagram" => {
                 settings.use_datagram = value.get().expect("type checked upstream");
             }
@@ -464,11 +474,15 @@ impl ObjectImpl for QuinnQuicSrc {
             "secure-connection" => settings.secure_conn.to_value(),
             "certificate-file" => {
                 let certfile = settings.certificate_file.as_ref();
-                certfile.and_then(|file| file.to_str()).to_value()
+                certfile.to_value()
             }
             "private-key-file" => {
                 let privkey = settings.private_key_file.as_ref();
-                privkey.and_then(|file| file.to_str()).to_value()
+                privkey.to_value()
+            }
+            "certificate-database-file" => {
+                let certfile = settings.certificate_database_file.as_ref();
+                certfile.to_value()
             }
             "use-datagram" => settings.use_datagram.to_value(),
             "initial-mtu" => (settings.transport_config.initial_mtu as u32).to_value(),
@@ -815,6 +829,7 @@ impl QuinnQuicSrc {
         let secure_conn = settings.secure_conn;
         let certificate_file = settings.certificate_file.clone();
         let private_key_file = settings.private_key_file.clone();
+        let certificate_database_file = settings.certificate_database_file.clone();
         let transport_config = settings.transport_config;
 
         Ok((
@@ -827,9 +842,9 @@ impl QuinnQuicSrc {
                 alpns,
                 certificate_file,
                 private_key_file,
+                certificate_database_file,
                 keep_alive_interval,
                 transport_config,
-                with_client_auth: false,
                 webtransport: false,
             },
         ))

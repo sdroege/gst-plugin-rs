@@ -77,6 +77,8 @@ struct Settings {
     bind_address: String,
     bind_port: u16,
     certificate_file: Option<PathBuf>,
+    private_key_file: Option<PathBuf>,
+    certificate_database_file: Option<PathBuf>,
     keep_alive_interval: u64,
     secure_conn: bool,
     timeout: u32,
@@ -91,6 +93,8 @@ impl Default for Settings {
             bind_address: DEFAULT_BIND_ADDR.to_string(),
             bind_port: DEFAULT_BIND_PORT,
             certificate_file: None,
+            private_key_file: None,
+            certificate_database_file: None,
             keep_alive_interval: 0,
             secure_conn: DEFAULT_SECURE_CONNECTION,
             timeout: DEFAULT_TIMEOUT,
@@ -186,7 +190,15 @@ impl ObjectImpl for QuinnWebTransportClientSrc {
             vec![
                 glib::ParamSpecString::builder("certificate-file")
                     .nick("Certificate file")
-                    .blurb("Path to certificate chain in single file")
+                    .blurb("Path to certificate chain for the private key file in PEM format")
+                    .build(),
+                glib::ParamSpecString::builder("private-key-file")
+                    .nick("Private key file")
+                    .blurb("Path to a PKCS1, PKCS8 or SEC1 private key file in PEM format")
+                    .build(),
+                glib::ParamSpecString::builder("certificate-database-file")
+                    .nick("Certificate database file")
+                    .blurb("Path to a certificate database file in PEM format used for certificate validation")
                     .build(),
 		glib::ParamSpecUInt64::builder("keep-alive-interval")
                     .nick("QUIC connection keep alive interval in ms")
@@ -229,6 +241,14 @@ impl ObjectImpl for QuinnWebTransportClientSrc {
                 let value: String = value.get().unwrap();
                 settings.certificate_file = Some(value.into());
             }
+            "private-key-file" => {
+                let value: String = value.get().unwrap();
+                settings.private_key_file = Some(value.into());
+            }
+            "certificate-database-file" => {
+                let value: String = value.get().unwrap();
+                settings.certificate_database_file = Some(value.into());
+            }
             "keep-alive-interval" => {
                 settings.keep_alive_interval = value.get().expect("type checked upstream");
             }
@@ -251,7 +271,15 @@ impl ObjectImpl for QuinnWebTransportClientSrc {
         match pspec.name() {
             "certificate-file" => {
                 let certfile = settings.certificate_file.as_ref();
-                certfile.and_then(|file| file.to_str()).to_value()
+                certfile.to_value()
+            }
+            "private-key-file" => {
+                let privkey = settings.private_key_file.as_ref();
+                privkey.to_value()
+            }
+            "certificate-database-file" => {
+                let certfile = settings.certificate_database_file.as_ref();
+                certfile.to_value()
             }
             "keep-alive-interval" => settings.keep_alive_interval.to_value(),
             "timeout" => settings.timeout.to_value(),
@@ -537,6 +565,8 @@ impl QuinnWebTransportClientSrc {
         let timeout = settings.timeout;
         let secure_conn = settings.secure_conn;
         let certificate_file = settings.certificate_file.clone();
+        let private_key_file = settings.private_key_file.clone();
+        let certificate_database_file = settings.certificate_database_file.clone();
         let keep_alive_interval = settings.keep_alive_interval;
         let transport_config = settings.transport_config;
 
@@ -601,10 +631,10 @@ impl QuinnWebTransportClientSrc {
                 secure_conn,
                 alpns: vec![HTTP3_ALPN.to_string()],
                 certificate_file,
-                private_key_file: None,
+                private_key_file,
+                certificate_database_file,
                 keep_alive_interval,
                 transport_config,
-                with_client_auth: false,
                 webtransport: true,
             },
         ))

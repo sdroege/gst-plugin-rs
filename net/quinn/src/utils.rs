@@ -21,7 +21,6 @@ use quinn_proto::{ConnectionStats, FrameStats, UdpStats};
 use std::error::Error;
 use std::net::SocketAddr;
 use std::path::Path;
-use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -225,18 +224,18 @@ fn create_transport_config(
 }
 
 fn configure_client(ep_config: &QuinnQuicEndpointConfig) -> Result<ClientConfig, Box<dyn Error>> {
-    let ring_provider = rustls::crypto::ring::default_provider();
+    let ring_provider = Arc::new(rustls::crypto::ring::default_provider());
+
+    let builder = rustls::ClientConfig::builder_with_provider(ring_provider)
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .unwrap();
 
     let mut crypto = if ep_config.secure_conn {
-        let builder = rustls::ClientConfig::builder_with_provider(ring_provider.into())
-            .with_protocol_versions(&[&rustls::version::TLS13])
-            .unwrap();
-
-        let builder = match ep_config.certificate_file {
-            Some(ref certificate_file) => {
-                let certs = read_certs_from_file(certificate_file)?;
+        let builder = match ep_config.certificate_database_file {
+            Some(ref certificate_database_file) => {
+                let certs = read_certs_from_file(certificate_database_file)?;
                 let mut cert_store = rustls::RootCertStore::empty();
-                cert_store.add_parsable_certificates(certs.clone());
+                cert_store.add_parsable_certificates(certs);
                 builder.with_root_certificates(Arc::new(cert_store))
             }
             None => {
@@ -246,17 +245,19 @@ fn configure_client(ep_config: &QuinnQuicEndpointConfig) -> Result<ClientConfig,
             }
         };
 
-        match ep_config.private_key_file {
-            Some(ref private_key_file) => {
+        match Option::zip(
+            ep_config.certificate_file.as_ref(),
+            ep_config.private_key_file.as_ref(),
+        ) {
+            Some((certificate_file, private_key_file)) => {
+                let certs = read_certs_from_file(certificate_file)?;
                 let key = read_private_key_from_file(private_key_file)?;
                 builder.with_client_auth_cert(certs, key).unwrap()
             }
             None => builder.with_no_client_auth(),
         }
     } else {
-        rustls::ClientConfig::builder_with_provider(ring_provider.into())
-            .with_protocol_versions(&[&rustls::version::TLS13])
-            .unwrap()
+        builder
             .dangerous()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth()
@@ -314,55 +315,55 @@ fn read_private_key_from_file(
     )?)
 }
 
-fn configure_server(
-    ep_config: &QuinnQuicEndpointConfig,
-) -> Result<(ServerConfig, Vec<rustls_pki_types::CertificateDer<'_>>), Box<dyn Error>> {
-    let (certs, key) = if ep_config.secure_conn {
-        (
-            read_certs_from_file(ep_config.certificate_file.clone())?,
-            read_private_key_from_file(ep_config.private_key_file.clone())?,
-        )
-    } else {
-        let rcgen::CertifiedKey { cert, signing_key } =
-            rcgen::generate_simple_self_signed(vec![ep_config.server_name.clone()]).unwrap();
-        let priv_key =
-            rustls_pki_types::PrivateKeyDer::try_from(signing_key.serialize_der()).unwrap();
-        let cert_chain = vec![rustls_pki_types::CertificateDer::from(cert)];
+fn configure_server(ep_config: &QuinnQuicEndpointConfig) -> Result<ServerConfig, Box<dyn Error>> {
+    let ring_provider = Arc::new(rustls::crypto::ring::default_provider());
 
-        (cert_chain, priv_key)
+    let (certs, key) = match Option::zip(
+        ep_config.certificate_file.as_ref(),
+        ep_config.private_key_file.as_ref(),
+    ) {
+        Some((certificate_file, private_key_file)) => {
+            let certs = read_certs_from_file(certificate_file)?;
+            let key = read_private_key_from_file(private_key_file)?;
+            (certs, key)
+        }
+        None => {
+            let rcgen::CertifiedKey { cert, signing_key } =
+                rcgen::generate_simple_self_signed(vec![ep_config.server_name.clone()]).unwrap();
+            let key =
+                rustls_pki_types::PrivateKeyDer::try_from(signing_key.serialize_der()).unwrap();
+            let certs = vec![rustls_pki_types::CertificateDer::from(cert)];
+
+            (certs, key)
+        }
     };
 
-    let ring_provider = rustls::crypto::ring::default_provider();
+    let builder = rustls::ServerConfig::builder_with_provider(ring_provider.clone())
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .unwrap();
 
     let mut crypto = if ep_config.secure_conn {
-        let mut cert_store = rustls::RootCertStore::empty();
-        cert_store.add_parsable_certificates(certs.clone());
+        let builder = match ep_config.certificate_database_file {
+            Some(ref certificate_database_file) => {
+                let cert_database = read_certs_from_file(certificate_database_file)?;
+                let mut cert_store = rustls::RootCertStore::empty();
+                cert_store.add_parsable_certificates(cert_database);
 
-        let config_builder =
-            rustls::ServerConfig::builder_with_provider(ring_provider.clone().into())
-                .with_protocol_versions(&[&rustls::version::TLS13])
+                let auth_client = rustls::server::WebPkiClientVerifier::builder_with_provider(
+                    Arc::new(cert_store),
+                    ring_provider,
+                )
+                .build()
                 .unwrap();
-        if ep_config.with_client_auth {
-            let auth_client = rustls::server::WebPkiClientVerifier::builder_with_provider(
-                Arc::new(cert_store),
-                ring_provider.into(),
-            )
-            .build()
-            .unwrap();
-            config_builder
-                .with_client_cert_verifier(auth_client)
-                .with_single_cert(certs.clone(), key)
-        } else {
-            config_builder
-                .with_no_client_auth()
-                .with_single_cert(certs.clone(), key)
-        }
+
+                builder.with_client_cert_verifier(auth_client)
+            }
+            None => builder.with_no_client_auth(),
+        };
+
+        builder.with_single_cert(certs, key)
     } else {
-        rustls::ServerConfig::builder_with_provider(ring_provider.into())
-            .with_protocol_versions(&[&rustls::version::TLS13])
-            .unwrap()
-            .with_no_client_auth()
-            .with_single_cert(certs.clone(), key)
+        builder.with_no_client_auth().with_single_cert(certs, key)
     }?;
 
     let alpn_protocols: Vec<Vec<u8>> = ep_config
@@ -379,11 +380,11 @@ fn configure_server(
         ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(crypto)?));
     server_config.transport_config(Arc::new(transport_config));
 
-    Ok((server_config, certs))
+    Ok(server_config)
 }
 
 pub fn server_endpoint(ep_config: &QuinnQuicEndpointConfig) -> Result<Endpoint, Box<dyn Error>> {
-    let (server_config, _) = configure_server(ep_config)?;
+    let server_config = configure_server(ep_config)?;
     let socket = std::net::UdpSocket::bind(ep_config.server_addr)?;
     let mut endpoint_config = EndpointConfig::default();
     endpoint_config
