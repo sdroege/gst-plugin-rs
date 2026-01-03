@@ -5048,6 +5048,7 @@ dependencies = [
  "rcgen",
  "rustls 0.23.35",
  "rustls-pki-types",
+ "rustls-platform-verifier",
  "thiserror 2.0.17",
  "tokio",
  "url",

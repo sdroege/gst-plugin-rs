@@ -20,6 +20,7 @@ use quinn::{
 use quinn_proto::{ConnectionStats, FrameStats, UdpStats};
 use std::error::Error;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::sync::{Arc, Mutex};
@@ -227,18 +228,27 @@ fn configure_client(ep_config: &QuinnQuicEndpointConfig) -> Result<ClientConfig,
     let ring_provider = rustls::crypto::ring::default_provider();
 
     let mut crypto = if ep_config.secure_conn {
-        let certs = read_certs_from_file(ep_config.certificate_file.clone())?;
-
-        let mut cert_store = rustls::RootCertStore::empty();
-        cert_store.add_parsable_certificates(certs.clone());
-
         let builder = rustls::ClientConfig::builder_with_provider(ring_provider.into())
             .with_protocol_versions(&[&rustls::version::TLS13])
-            .unwrap()
-            .with_root_certificates(Arc::new(cert_store));
-        match ep_config.private_key_file.clone() {
-            Some(key_file) => {
-                let key = read_private_key_from_file(Some(key_file))?;
+            .unwrap();
+
+        let builder = match ep_config.certificate_file {
+            Some(ref certificate_file) => {
+                let certs = read_certs_from_file(certificate_file)?;
+                let mut cert_store = rustls::RootCertStore::empty();
+                cert_store.add_parsable_certificates(certs.clone());
+                builder.with_root_certificates(Arc::new(cert_store))
+            }
+            None => {
+                use rustls_platform_verifier::BuilderVerifierExt;
+
+                builder.with_platform_verifier().unwrap()
+            }
+        };
+
+        match ep_config.private_key_file {
+            Some(ref private_key_file) => {
+                let key = read_private_key_from_file(private_key_file)?;
                 builder.with_client_auth_cert(certs, key).unwrap()
             }
             None => builder.with_no_client_auth(),
@@ -259,6 +269,7 @@ fn configure_client(ep_config: &QuinnQuicEndpointConfig) -> Result<ClientConfig,
         .collect::<Vec<_>>();
     crypto.alpn_protocols = alpn_protocols;
     crypto.key_log = Arc::new(rustls::KeyLogFile::new());
+    crypto.enable_early_data = true;
 
     let transport_config = create_transport_config(ep_config, true);
     let mut client_config = ClientConfig::new(Arc::new(QuicClientConfig::try_from(crypto)?));
@@ -268,7 +279,7 @@ fn configure_client(ep_config: &QuinnQuicEndpointConfig) -> Result<ClientConfig,
 }
 
 fn read_certs_from_file(
-    certificate_file: Option<PathBuf>,
+    certificate_file: &Path,
 ) -> Result<Vec<rustls_pki_types::CertificateDer<'static>>, Box<dyn Error>> {
     use rustls_pki_types::pem::PemObject;
 
@@ -286,21 +297,21 @@ fn read_certs_from_file(
      * chain in a single file. For example, this is the case of modern day
      * Apache and nginx.
      */
-    let cert_file = certificate_file.expect("Expected path to certificates be valid");
-
-    Ok(rustls_pki_types::CertificateDer::pem_file_iter(cert_file)?
-        .map(|c| c.unwrap())
-        .collect())
+    Ok(
+        rustls_pki_types::CertificateDer::pem_file_iter(certificate_file)?
+            .map(|c| c.unwrap())
+            .collect(),
+    )
 }
 
 fn read_private_key_from_file(
-    private_key_file: Option<PathBuf>,
+    private_key_file: &Path,
 ) -> Result<rustls_pki_types::PrivateKeyDer<'static>, Box<dyn Error>> {
     use rustls_pki_types::pem::PemObject;
 
-    let key_file = private_key_file.expect("Expected path to private key to be valid");
-
-    Ok(rustls_pki_types::PrivateKeyDer::from_pem_file(key_file)?)
+    Ok(rustls_pki_types::PrivateKeyDer::from_pem_file(
+        private_key_file,
+    )?)
 }
 
 fn configure_server(
@@ -361,6 +372,7 @@ fn configure_server(
         .collect::<Vec<_>>();
     crypto.alpn_protocols = alpn_protocols;
     crypto.key_log = Arc::new(rustls::KeyLogFile::new());
+    crypto.max_early_data_size = u32::MAX;
 
     let transport_config = create_transport_config(ep_config, false);
     let mut server_config =
