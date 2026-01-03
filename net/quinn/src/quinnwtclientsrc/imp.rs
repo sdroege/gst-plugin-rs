@@ -52,7 +52,7 @@ enum QuinnData {
 }
 
 struct Started {
-    session: Session,
+    session: Arc<Session>,
     data_handler: Option<JoinHandle<()>>,
     // TODO: Use tokio channel
     //
@@ -108,7 +108,7 @@ pub struct QuinnWebTransportClientSrc {
     settings: Mutex<Settings>,
     state: Mutex<State>,
     canceller: Mutex<utils::Canceller>,
-    session: Mutex<Option<Session>>,
+    session: Mutex<Option<Arc<Session>>>,
 }
 
 impl Default for QuinnWebTransportClientSrc {
@@ -656,7 +656,7 @@ impl QuinnWebTransportClientSrc {
 
     fn handle_data(
         &self,
-        session: Session,
+        session: Arc<Session>,
         sender: Sender<QuinnData>,
         receiver: oneshot::Receiver<()>,
     ) {
@@ -673,7 +673,7 @@ impl QuinnWebTransportClientSrc {
 
         let stream_idx = AtomicU64::new(0);
 
-        let incoming_stream = |sess: Session, sidx: u64| async move {
+        let incoming_stream = |sess: Arc<Session>, sidx: u64| async move {
             match sess.accept_uni().await {
                 Ok(recv_stream) => QuinnFuture::Stream(recv_stream, sidx),
                 Err(err) => {
@@ -683,7 +683,7 @@ impl QuinnWebTransportClientSrc {
             }
         };
 
-        let datagram = |sess: Session| async move {
+        let datagram = |sess: Arc<Session>| async move {
             match sess.read_datagram().await {
                 Ok(bytes) => QuinnFuture::Datagram(bytes),
                 Err(err) => {
@@ -795,7 +795,7 @@ impl QuinnWebTransportClientSrc {
         &self,
         url: url::Url,
         endpoint_config: QuinnQuicEndpointConfig,
-    ) -> Result<Session, gst::ErrorMessage> {
+    ) -> Result<Arc<Session>, gst::ErrorMessage> {
         let settings = self.settings.lock().unwrap();
         let timeout = settings.timeout;
         drop(settings);

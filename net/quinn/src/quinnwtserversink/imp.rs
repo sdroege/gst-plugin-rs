@@ -39,7 +39,7 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 });
 
 struct Started {
-    session: Session,
+    session: Arc<Session>,
     stream: Option<SendStream>,
     stream_map: HashMap<u64, SendStream>,
     stream_idx: u64,
@@ -105,7 +105,7 @@ pub struct QuinnWebTransportSink {
     settings: Mutex<Settings>,
     state: Mutex<State>,
     canceller: Mutex<utils::Canceller>,
-    session: Mutex<Option<Session>>,
+    session: Mutex<Option<Arc<Session>>>,
 }
 
 impl Default for QuinnWebTransportSink {
@@ -623,7 +623,7 @@ impl QuinnWebTransportSink {
                 )));
             }
         };
-        let session = started.session.clone();
+        let session = &started.session;
 
         if let Some(m) = meta {
             if m.is_datagram() {
@@ -786,7 +786,7 @@ impl QuinnWebTransportSink {
 
         let mut state = self.state.lock().unwrap();
         if let State::Started(ref mut state) = *state {
-            let session = state.session.clone();
+            let session = &state.session;
 
             gst::debug!(
                 CAT,
@@ -849,7 +849,11 @@ impl QuinnWebTransportSink {
         false
     }
 
-    fn open_stream(&self, session: Session, timeout: u32) -> Result<SendStream, gst::ErrorMessage> {
+    fn open_stream(
+        &self,
+        session: &Session,
+        timeout: u32,
+    ) -> Result<SendStream, gst::ErrorMessage> {
         match wait(&self.canceller, session.open_uni(), timeout) {
             Ok(Ok(stream)) => {
                 gst::debug!(CAT, imp = self, "Opened stream: {:?}", stream);
@@ -875,7 +879,7 @@ impl QuinnWebTransportSink {
 
     fn write_datagram(
         &self,
-        session: Session,
+        session: &Session,
         src: &[u8],
         drop_buffer_for_datagram: bool,
     ) -> Result<(), Option<gst::ErrorMessage>> {
@@ -960,7 +964,7 @@ impl QuinnWebTransportSink {
         }
     }
 
-    fn setup_session(&self) -> Result<Session, gst::ErrorMessage> {
+    fn setup_session(&self) -> Result<Arc<Session>, gst::ErrorMessage> {
         let settings = self.settings.lock().unwrap();
         let timeout = settings.timeout;
         drop(settings);

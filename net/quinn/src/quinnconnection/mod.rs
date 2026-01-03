@@ -17,7 +17,7 @@ pub struct QuinnConnectionContext(pub Arc<QuinnConnectionContextInner>);
 
 #[derive(Clone, Debug)]
 pub enum QuinnConnection {
-    WebTransport(Session),
+    WebTransport(Arc<Session>),
     Quic(Connection),
 }
 
@@ -140,7 +140,7 @@ impl SharedConnection {
                 session.remote_address(),
             );
 
-            QuinnConnection::WebTransport(session)
+            QuinnConnection::WebTransport(Arc::new(session))
         } else {
             let connection = match role {
                 QuinnQuicRole::Server => {
