@@ -12,6 +12,9 @@ use tokio_rustls::{rustls, TlsAcceptor, TlsConnector};
 use anyhow::{anyhow, Context, Error};
 use gst::{glib, prelude::*};
 
+pub(crate) const INPUT_DATA_CHANNEL_LABEL: &str = "input";
+pub(crate) const CONTROL_DATA_CHANNEL_LABEL: &str = "control";
+
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "webrtcutils",
