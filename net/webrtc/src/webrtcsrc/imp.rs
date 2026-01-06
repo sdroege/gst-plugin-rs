@@ -3,7 +3,10 @@
 use gst::prelude::*;
 
 use crate::signaller::{prelude::*, Signallable, Signaller};
-use crate::utils::{self, Codec, Codecs, NavigationEvent, AUDIO_CAPS, RTP_CAPS, VIDEO_CAPS};
+use crate::utils::{
+    self, Codec, Codecs, NavigationEvent, AUDIO_CAPS, CONTROL_DATA_CHANNEL_LABEL,
+    INPUT_DATA_CHANNEL_LABEL, RTP_CAPS, VIDEO_CAPS,
+};
 use crate::webrtcsrc::WebRTCSrcPad;
 use crate::RUNTIME;
 use anyhow::{Context, Error};
@@ -348,7 +351,8 @@ impl SessionInner {
         Ok(Self {
             id: session_id.to_string(),
             webrtcbin,
-            data_channel: None,
+            navigation_data_channel: None,
+            control_data_channel: None,
             n_video_pads: AtomicU16::new(0),
             n_audio_pads: AtomicU16::new(0),
             flow_combiner: Mutex::new(gst_base::UniqueFlowCombiner::new()),
@@ -412,7 +416,7 @@ impl SessionInner {
         evt: gst_video::NavigationEvent,
         element: &super::BaseWebRTCSrc,
     ) {
-        if let Some(data_channel) = &self.data_channel.borrow_mut() {
+        if let Some(data_channel) = &self.navigation_data_channel.borrow_mut() {
             let nav_event = NavigationEvent {
                 mid: None,
                 event: evt,
@@ -452,7 +456,7 @@ impl SessionInner {
         element: &super::BaseWebRTCSrc,
         mid: Option<String>,
     ) {
-        if let Some(data_channel) = &self.data_channel.borrow_mut() {
+        if let Some(data_channel) = &self.control_data_channel.borrow_mut() {
             let msg = utils::ControlRequestMessage {
                 id: self.request_counter,
                 mid,
@@ -1069,7 +1073,24 @@ impl SessionInner {
 
     fn on_data_channel(&mut self, data_channel: glib::Object, element: &super::BaseWebRTCSrc) {
         gst::info!(CAT, obj = element, "Received data channel {data_channel:?}");
-        self.data_channel = data_channel.dynamic_cast::<WebRTCDataChannel>().ok();
+        let Ok(data_channel) = data_channel.dynamic_cast::<WebRTCDataChannel>() else {
+            return;
+        };
+        let Some(label) = data_channel.label() else {
+            return;
+        };
+
+        if label == INPUT_DATA_CHANNEL_LABEL {
+            self.navigation_data_channel = Some(data_channel);
+        } else if label == CONTROL_DATA_CHANNEL_LABEL {
+            self.control_data_channel = Some(data_channel);
+        } else {
+            gst::debug!(
+                CAT,
+                obj = element,
+                "Not adding data channel with unknown label: {label}"
+            )
+        }
     }
 
     fn on_ice_candidate(
@@ -1762,7 +1783,8 @@ enum SignallerState {
 struct SessionInner {
     id: String,
     webrtcbin: gst::Element,
-    data_channel: Option<WebRTCDataChannel>,
+    navigation_data_channel: Option<WebRTCDataChannel>,
+    control_data_channel: Option<WebRTCDataChannel>,
     n_video_pads: AtomicU16,
     n_audio_pads: AtomicU16,
     flow_combiner: Mutex<gst_base::UniqueFlowCombiner>,

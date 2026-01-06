@@ -2,6 +2,7 @@
 
 use crate::utils::{
     cleanup_codec_caps, has_raw_caps, make_element, Codec, Codecs, NavigationEvent,
+    CONTROL_DATA_CHANNEL_LABEL, INPUT_DATA_CHANNEL_LABEL,
 };
 use anyhow::Context;
 use gst::glib;
@@ -1599,7 +1600,7 @@ impl NavigationEventHandler {
         let channel = webrtcbin.emit_by_name::<WebRTCDataChannel>(
             "create-data-channel",
             &[
-                &"input",
+                &INPUT_DATA_CHANNEL_LABEL,
                 &gst::Structure::builder("config")
                     .field("priority", gst_webrtc::WebRTCPriorityType::High)
                     .build(),
@@ -1639,7 +1640,7 @@ impl ControlRequestHandler {
         let channel = webrtcbin.emit_by_name::<WebRTCDataChannel>(
             "create-data-channel",
             &[
-                &"control",
+                &CONTROL_DATA_CHANNEL_LABEL,
                 &gst::Structure::builder("config")
                     .field("priority", gst_webrtc::WebRTCPriorityType::High)
                     .build(),
