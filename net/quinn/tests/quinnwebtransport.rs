@@ -34,12 +34,9 @@ fn send_receive(src_pipeline_props: &str, sink_pipeline_props: &str) {
     let content = "Hello, world!\n".as_bytes();
 
     let src_pipeline = format!("quinnwtsrc {src_pipeline_props} secure-connection=false");
-    let sink_pipeline = format!(
-        "quinnwtsink {sink_pipeline_props} server-name=localhost \
-            address=127.0.0.1 secure-connection=false"
-    );
-    let h1_orig = Arc::new(Mutex::new(gst_check::Harness::new_empty()));
+    let sink_pipeline = format!("quinnwtsink {sink_pipeline_props} secure-connection=false");
 
+    let h1_orig = Arc::new(Mutex::new(gst_check::Harness::new_empty()));
     let h11 = h1_orig.clone();
 
     thread::spawn(move || {
@@ -85,16 +82,16 @@ fn send_receive(src_pipeline_props: &str, sink_pipeline_props: &str) {
 
 #[test]
 fn test_send_receive_without_datagram() {
-    send_receive("url=https://127.0.0.1:7770", "port=7770");
+    send_receive("port=7770", "url=https://127.0.0.1:7770");
 }
 
 #[test]
 fn test_send_receive_with_datagram() {
-    send_receive("url=https://127.0.0.1:7771", "use-datagram=true port=7771");
+    send_receive("port=7771", "use-datagram=true url=https://127.0.0.1:7771");
 }
 
 #[test]
 #[ignore = "CI runners resolve localhost to an IPv6 address only which are not handled correctly yet"]
 fn test_send_receive_with_hostname() {
-    send_receive("url=https://localhost:7772", "port=7772");
+    send_receive("port=7772", "url=https://localhost:7772");
 }

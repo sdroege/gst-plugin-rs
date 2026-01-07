@@ -137,9 +137,7 @@ fn depay_bin(pipeline: &gst::Pipeline, bin_name: &str) -> gst::Bin {
 
 fn receive_pipeline(pipeline: &gst::Pipeline, use_webtransport: bool) {
     let quicsrc = if use_webtransport {
-        gst::ElementFactory::make("quinnwtclientsrc")
-            .build()
-            .unwrap()
+        gst::ElementFactory::make("quinnwtsrc").build().unwrap()
     } else {
         gst::ElementFactory::make("quinnquicsrc").build().unwrap()
     };
@@ -154,7 +152,8 @@ fn receive_pipeline(pipeline: &gst::Pipeline, use_webtransport: bool) {
         .unwrap();
 
     if use_webtransport {
-        quicsrc.set_property("url", "https://127.0.0.1:4445");
+        quicsrc.set_property("address", "127.0.0.1");
+        quicsrc.set_property("port", 4445u32);
     } else {
         quicsrc.set_property("initial-mtu", 1200u32);
         quicsrc.set_property("min-mtu", 1200u32);
@@ -262,7 +261,7 @@ fn send_pipeline(pipeline: &gst::Pipeline, use_webtransport: bool) {
         .build()
         .unwrap();
     let sink = if use_webtransport {
-        gst::ElementFactory::make("quinnwtserversink")
+        gst::ElementFactory::make("quinnwtsink")
             .name("wt-sink")
             .build()
             .unwrap()
@@ -283,8 +282,7 @@ fn send_pipeline(pipeline: &gst::Pipeline, use_webtransport: bool) {
     sink.set_property("server-name", "quinnmux-test");
 
     if use_webtransport {
-        sink.set_property("address", "127.0.0.1");
-        sink.set_property("port", 4445u32);
+        sink.set_property("url", "https://127.0.0.1:4445");
     }
 
     pipeline
