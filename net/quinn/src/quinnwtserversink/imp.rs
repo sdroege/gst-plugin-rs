@@ -77,7 +77,7 @@ impl Default for Settings {
         let transport_config = QuinnQuicTransportConfig {
             // Required for the WebTransport handshake
             max_concurrent_bidi_streams: 2u32.into(),
-            max_concurrent_uni_streams: 1u32.into(),
+            max_concurrent_uni_streams: 3u32.into(),
             ..Default::default()
         };
 
