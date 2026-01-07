@@ -33,7 +33,7 @@ fn send_receive(src_pipeline_props: &str, sink_pipeline_props: &str) {
 
     let content = "Hello, world!\n".as_bytes();
 
-    let src_pipeline = format!("quinnwtclientsrc {src_pipeline_props} secure-connection=false");
+    let src_pipeline = format!("quinnwtsrc {src_pipeline_props} secure-connection=false");
     let sink_pipeline = format!(
         "quinnwtsink {sink_pipeline_props} server-name=localhost \
             address=127.0.0.1 secure-connection=false"

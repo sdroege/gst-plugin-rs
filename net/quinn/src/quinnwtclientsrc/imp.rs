@@ -39,7 +39,7 @@ const DEFAULT_ROLE: QuinnQuicRole = QuinnQuicRole::Server;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
-        "quinnwtclientsrc",
+        "quinnwtsrc",
         gst::DebugColorFlags::empty(),
         Some("Quinn WebTransport client source"),
     )
@@ -113,14 +113,14 @@ impl Default for Settings {
     }
 }
 
-pub struct QuinnWebTransportClientSrc {
+pub struct QuinnWebTransportSrc {
     settings: Mutex<Settings>,
     state: Mutex<State>,
     canceller: Mutex<utils::Canceller>,
     session: Mutex<Option<Arc<Session>>>,
 }
 
-impl Default for QuinnWebTransportClientSrc {
+impl Default for QuinnWebTransportSrc {
     fn default() -> Self {
         Self {
             settings: Mutex::new(Settings::default()),
@@ -131,13 +131,13 @@ impl Default for QuinnWebTransportClientSrc {
     }
 }
 
-impl GstObjectImpl for QuinnWebTransportClientSrc {}
+impl GstObjectImpl for QuinnWebTransportSrc {}
 
-impl ElementImpl for QuinnWebTransportClientSrc {
+impl ElementImpl for QuinnWebTransportSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
-                "Quinn WebTransport Client Source",
+                "Quinn WebTransport Source",
                 "Source/Network/QUIC",
                 "Receive data over the network via WebTransport",
                 "Andoni Morales Alastruey <amorales@fluendo.com>",
@@ -186,7 +186,7 @@ impl ElementImpl for QuinnWebTransportClientSrc {
     }
 }
 
-impl ObjectImpl for QuinnWebTransportClientSrc {
+impl ObjectImpl for QuinnWebTransportSrc {
     fn constructed(&self) {
         self.parent_constructed();
         self.obj().set_format(gst::Format::Time);
@@ -342,13 +342,13 @@ impl ObjectImpl for QuinnWebTransportClientSrc {
 }
 
 #[glib::object_subclass]
-impl ObjectSubclass for QuinnWebTransportClientSrc {
-    const NAME: &'static str = "GstQuinnWebTransportClientSrc";
-    type Type = super::QuinnWebTransportClientSrc;
+impl ObjectSubclass for QuinnWebTransportSrc {
+    const NAME: &'static str = "GstQuinnWebTransportSrc";
+    type Type = super::QuinnWebTransportSrc;
     type ParentType = gst_base::PushSrc;
 }
 
-impl BaseSrcImpl for QuinnWebTransportClientSrc {
+impl BaseSrcImpl for QuinnWebTransportSrc {
     fn is_seekable(&self) -> bool {
         false
     }
@@ -405,7 +405,7 @@ impl BaseSrcImpl for QuinnWebTransportClientSrc {
     fn start(&self) -> Result<(), gst::ErrorMessage> {
         let state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
-            unreachable!("QuinnWebTransportClientSrc already started");
+            unreachable!("QuinnWebTransportSrc already started");
         }
         drop(state);
 
@@ -504,7 +504,7 @@ impl BaseSrcImpl for QuinnWebTransportClientSrc {
     }
 }
 
-impl PushSrcImpl for QuinnWebTransportClientSrc {
+impl PushSrcImpl for QuinnWebTransportSrc {
     fn create(
         &self,
         _buffer: Option<&mut gst::BufferRef>,
@@ -546,7 +546,7 @@ impl PushSrcImpl for QuinnWebTransportClientSrc {
     }
 }
 
-impl QuinnWebTransportClientSrc {
+impl QuinnWebTransportSrc {
     fn create_buffer(&self, bytes: Bytes, stream_id: Option<u64>) -> CreateSuccess {
         gst::trace!(
             CAT,

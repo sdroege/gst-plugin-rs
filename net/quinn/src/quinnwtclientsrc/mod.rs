@@ -8,13 +8,13 @@
 // SPDX-License-Identifier: MPL-2.0
 
 /**
- * element-quinnwtclientsrc:
+ * element-quinnwtsrc:
  * @short-description: [WebTransport](https://www.w3.org/TR/webtransport/) client that receives
  * data over the network connecting to a WebTransport server
  *
  * ## Example receiver pipeline
  * ```bash
- * gst-launch-1.0 -v -e quinnwtclientsrc url="http://localhost:4443/" \
+ * gst-launch-1.0 -v -e quinnwtsrc url="http://localhost:4443/" \
  * certificate-file="certificates/fullchain.pem" caps=audio/x-opus ! \
  * ! opusparse ! opusdec ! audio/x-raw,format=S16LE,rate=48000,channels=2,layout=interleaved ! \
  * audioconvert ! autoaudiosink
@@ -26,14 +26,21 @@ use gst::prelude::*;
 mod imp;
 
 glib::wrapper! {
-    pub struct QuinnWebTransportClientSrc(ObjectSubclass<imp::QuinnWebTransportClientSrc>) @extends gst_base::PushSrc, gst_base::BaseSrc, gst::Element, gst::Object;
+    pub struct QuinnWebTransportSrc(ObjectSubclass<imp::QuinnWebTransportSrc>) @extends gst_base::PushSrc, gst_base::BaseSrc, gst::Element, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(not(feature = "doc"))]
     gst::Element::register(
         Some(plugin),
         "quinnwtclientsrc",
         gst::Rank::MARGINAL,
-        QuinnWebTransportClientSrc::static_type(),
+        QuinnWebTransportSrc::static_type(),
+    )?;
+    gst::Element::register(
+        Some(plugin),
+        "quinnwtsrc",
+        gst::Rank::MARGINAL,
+        QuinnWebTransportSrc::static_type(),
     )
 }

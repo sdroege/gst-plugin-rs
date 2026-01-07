@@ -7868,130 +7868,6 @@
                 },
                 "rank": "none"
             },
-            "quinnwtclientsrc": {
-                "author": "Andoni Morales Alastruey <amorales@fluendo.com>",
-                "description": "Receive data over the network via WebTransport",
-                "hierarchy": [
-                    "GstQuinnWebTransportClientSrc",
-                    "GstPushSrc",
-                    "GstBaseSrc",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Source/Network/QUIC",
-                "pad-templates": {
-                    "src": {
-                        "caps": "ANY",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "properties": {
-                    "certificate-database-file": {
-                        "blurb": "Path to a certificate database file in PEM format used for certificate validation",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "NULL",
-                        "mutable": "null",
-                        "readable": true,
-                        "type": "gchararray",
-                        "writable": true
-                    },
-                    "certificate-file": {
-                        "blurb": "Path to certificate chain for the private key file in PEM format",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "NULL",
-                        "mutable": "null",
-                        "readable": true,
-                        "type": "gchararray",
-                        "writable": true
-                    },
-                    "keep-alive-interval": {
-                        "blurb": "Keeps QUIC connection alive by periodically pinging the server. Value set in ms, 0 disables this feature",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "0",
-                        "max": "18446744073709551615",
-                        "min": "0",
-                        "mutable": "null",
-                        "readable": true,
-                        "type": "guint64",
-                        "writable": true
-                    },
-                    "private-key-file": {
-                        "blurb": "Path to a PKCS1, PKCS8 or SEC1 private key file in PEM format",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "NULL",
-                        "mutable": "null",
-                        "readable": true,
-                        "type": "gchararray",
-                        "writable": true
-                    },
-                    "secure-connection": {
-                        "blurb": "Use certificates for QUIC connection. False: Insecure connection, True: Secure connection.",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "true",
-                        "mutable": "null",
-                        "readable": true,
-                        "type": "gboolean",
-                        "writable": true
-                    },
-                    "stats": {
-                        "blurb": "Connection statistics",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "stats;",
-                        "mutable": "null",
-                        "readable": true,
-                        "type": "GstStructure",
-                        "writable": false
-                    },
-                    "timeout": {
-                        "blurb": "Value in seconds to timeout WebTransport endpoint requests (0 = No timeout).",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "15",
-                        "max": "3600",
-                        "min": "0",
-                        "mutable": "null",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": true
-                    },
-                    "url": {
-                        "blurb": "URL of the HTTP/3 server to connect to.",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "127.0.0.1",
-                        "mutable": "null",
-                        "readable": true,
-                        "type": "gchararray",
-                        "writable": true
-                    }
-                },
-                "rank": "marginal"
-            },
             "quinnwtsink": {
                 "author": "Ruben Gonzalez <rgonzalez@fluendo.com>",
                 "description": "Send data over the network via WebTransport",
@@ -8254,6 +8130,180 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "gboolean",
+                        "writable": true
+                    }
+                },
+                "rank": "marginal"
+            },
+            "quinnwtsrc": {
+                "author": "Andoni Morales Alastruey <amorales@fluendo.com>",
+                "description": "Receive data over the network via WebTransport",
+                "hierarchy": [
+                    "GstQuinnWebTransportSrc",
+                    "GstPushSrc",
+                    "GstBaseSrc",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Source/Network/QUIC",
+                "pad-templates": {
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "address": {
+                        "blurb": "Address of the QUIC server e.g. 127.0.0.1",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "127.0.0.1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "certificate-database-file": {
+                        "blurb": "Path to a certificate database file in PEM format used for certificate validation",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "certificate-file": {
+                        "blurb": "Path to certificate chain for the private key file in PEM format",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "keep-alive-interval": {
+                        "blurb": "Keeps QUIC connection alive by periodically pinging the server. Value set in ms, 0 disables this feature",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "port": {
+                        "blurb": "Port of the QUIC server e.g. 5000",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5000",
+                        "max": "65535",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "private-key-file": {
+                        "blurb": "Path to a PKCS1, PKCS8 or SEC1 private key file in PEM format",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "role": {
+                        "blurb": "WebTransport session role to use.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "server (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstQuinnQuicRole",
+                        "writable": true
+                    },
+                    "secure-connection": {
+                        "blurb": "Use certificates for QUIC connection. False: Insecure connection, True: Secure connection.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "server-name": {
+                        "blurb": "Name of the QUIC server which is in server certificate in case of server role",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "localhost",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "stats": {
+                        "blurb": "Connection statistics",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "stats;",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": false
+                    },
+                    "timeout": {
+                        "blurb": "Value in seconds to timeout WebTransport endpoint requests (0 = No timeout).",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "15",
+                        "max": "3600",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "url": {
+                        "blurb": "URL of the HTTP/3 server to connect to.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "127.0.0.1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
                         "writable": true
                     }
                 },
