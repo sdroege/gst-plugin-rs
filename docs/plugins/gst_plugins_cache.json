@@ -8038,7 +8038,7 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "server (0)",
+                        "default": "client (1)",
                         "mutable": "null",
                         "readable": true,
                         "type": "GstQuinnQuicRole",

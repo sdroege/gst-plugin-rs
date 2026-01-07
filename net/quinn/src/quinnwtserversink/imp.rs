@@ -22,13 +22,14 @@ use bytes::Bytes;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_base::subclass::prelude::*;
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::{LazyLock, Mutex};
 use tokio::net::lookup_host;
 use web_transport_quinn::{SendStream, Session};
 
-const DEFAULT_ROLE: QuinnQuicRole = QuinnQuicRole::Server;
+const DEFAULT_ROLE: QuinnQuicRole = QuinnQuicRole::Client;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -43,6 +44,7 @@ struct Started {
     stream: Option<SendStream>,
     stream_map: HashMap<u64, SendStream>,
     stream_idx: u64,
+    socket_addr: SocketAddr,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -425,8 +427,11 @@ impl BaseSinkImpl for QuinnWebTransportSink {
             unreachable!("QuinnWebTransportSink is already started");
         }
 
+        let (role, url, endpoint_config) = self.get_epconfig()?;
+        let server_addr = endpoint_config.server_addr;
+
         let sess_guard = self.session.lock().unwrap();
-        let session = match *sess_guard {
+        let (session, stream) = match *sess_guard {
             Some(ref s) => {
                 // We will end up here if upstream MoQ muxer
                 // requested for a Session before we could
@@ -437,17 +442,18 @@ impl BaseSinkImpl for QuinnWebTransportSink {
                     "Using existing connection with ID: {}",
                     s.stable_id()
                 );
-                s.clone()
+                (s.clone(), None)
             }
-            None => self.setup_session()?,
+            None => self.setup_session(role, url, endpoint_config)?,
         };
         drop(sess_guard);
 
         *state = State::Started(Started {
             session,
-            stream: None,
+            stream,
             stream_map: HashMap::new(),
             stream_idx: 0,
+            socket_addr: server_addr,
         });
 
         gst::info!(CAT, imp = self, "Started");
@@ -472,9 +478,15 @@ impl BaseSinkImpl for QuinnWebTransportSink {
                 self.close_stream(stream, timeout);
             }
 
+            if let Some(mut stream) = state.stream.take() {
+                self.close_stream(&mut stream, timeout);
+            }
+
             state
                 .session
                 .close(CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG.as_bytes());
+
+            SharedConnection::remove(state.socket_addr);
         }
 
         *state = State::Stopped;
@@ -527,8 +539,16 @@ impl BaseSinkImpl for QuinnWebTransportSink {
                     return true;
                 }
 
-                match self.setup_session() {
-                    Ok(session) => {
+                let (role, url, endpoint_config) = match self.get_epconfig() {
+                    Ok(config) => config,
+                    Err(err) => {
+                        gst::error!(CAT, imp = self, "Failed to get endpoint config: {}", err);
+                        return false;
+                    }
+                };
+
+                match self.setup_session(role, url, endpoint_config) {
+                    Ok((session, _)) => {
                         let mut conn_guard = self.session.lock().unwrap();
                         *conn_guard = Some(session);
                         drop(conn_guard);
@@ -669,15 +689,14 @@ impl QuinnWebTransportSink {
         let certificate_database_file = settings.certificate_database_file.clone();
         let transport_config = settings.transport_config;
 
-        let client_addr = if role == QuinnQuicRole::Client {
-            Some(
+        let client_addr = match role {
+            QuinnQuicRole::Client => Some(
                 make_socket_addr(
                     format!("{}:{}", settings.bind_address, settings.bind_port).as_str(),
                 )
                 .unwrap(),
-            )
-        } else {
-            None
+            ),
+            QuinnQuicRole::Server => None,
         };
 
         let (server_addr, url) = if role == QuinnQuicRole::Client {
@@ -958,15 +977,22 @@ impl QuinnWebTransportSink {
         }
     }
 
-    fn setup_session(&self) -> Result<Arc<Session>, gst::ErrorMessage> {
+    fn setup_session(
+        &self,
+        role: QuinnQuicRole,
+        url: Option<url::Url>,
+        endpoint_config: QuinnQuicEndpointConfig,
+    ) -> Result<(Arc<Session>, Option<SendStream>), gst::ErrorMessage> {
         let settings = self.settings.lock().unwrap();
         let timeout = settings.timeout;
+        let use_datagram = settings.use_datagram;
         drop(settings);
 
-        let (role, url, endpoint_config) = self.get_epconfig()?;
         let mut shared_connection = SharedConnection::get_or_init(endpoint_config.server_addr);
 
         shared_connection.set_endpoint_config(endpoint_config);
+
+        gst::info!(CAT, imp = self, "Setting up session");
 
         let session = match shared_connection.connection() {
             Some(c) => match c {
@@ -1024,7 +1050,19 @@ impl QuinnWebTransportSink {
             },
         };
 
-        Ok(session)
+        let send_stream = match (role, use_datagram) {
+            (QuinnQuicRole::Server, false) => {
+                wait(&self.canceller, session.clone().accept_bi(), timeout)
+                    .ok()
+                    .and_then(|result| result.ok())
+                    .map(|(send, _recv)| send)
+            }
+            _ => None,
+        };
+
+        gst::info!(CAT, imp = self, "Done setting up session");
+
+        Ok((session, send_stream))
     }
 
     fn set_session_context(&self) -> Option<gst::Context> {
