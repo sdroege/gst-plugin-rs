@@ -2839,7 +2839,7 @@
             }
         },
         "filename": "gstelevenlabs",
-        "license": "Proprietary",
+        "license": "MPL",
         "other-types": {
             "GstElevenLabsOverflow": {
                 "kind": "enum",
@@ -16198,7 +16198,7 @@
             }
         },
         "filename": "gstspeechmatics",
-        "license": "Proprietary",
+        "license": "MPL",
         "other-types": {
             "GstSpeechmaticsTranscriberDiarization": {
                 "kind": "enum",
