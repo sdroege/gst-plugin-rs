@@ -103,6 +103,8 @@ impl SharedConnection {
         let connection = if endpoint_config.webtransport {
             let session = match role {
                 QuinnQuicRole::Server => {
+                    gst::info!(CAT, "Waiting for incoming connections");
+
                     let mut incoming_conn = web_transport_quinn::Server::new(endpoint);
 
                     let request = incoming_conn.accept().await.ok_or_else(|| {
@@ -111,6 +113,8 @@ impl SharedConnection {
                             ["Connection error"]
                         ))
                     })?;
+
+                    gst::info!(CAT, "Accepted incoming connection from {}", request.url());
 
                     // FIXME: We now accept all request without verifying the URL
                     request.ok().await.unwrap()
