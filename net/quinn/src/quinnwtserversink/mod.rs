@@ -9,7 +9,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 /**
- * element-quinnwtserversink:
+ * element-quinnwtsink:
  * @short-description: [WebTransport](https://www.w3.org/TR/webtransport/) server that
  * sends data over the network.
  *
@@ -17,7 +17,7 @@
  * ```bash
  * gst-launch-1.0 -v -e audiotestsrc num-buffers=512 ! \
  * audio/x-raw,format=S16LE,rate=48000,channels=2,layout=interleaved ! opusenc ! \
- * quinnwtserversink address="127.0.0.1" port=4443 \
+ * quinnwtsink address="127.0.0.1" port=4443 \
  * certificate-file="certificates/fullchain.pem" \
  * private-key-file="certificates/privkey.pem"
  * ```

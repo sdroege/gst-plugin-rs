@@ -32,9 +32,9 @@ const DEFAULT_ROLE: QuinnQuicRole = QuinnQuicRole::Server;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
-        "quinnwtserversink",
+        "quinnwtsink",
         gst::DebugColorFlags::empty(),
-        Some("Quinn WebTransport Server Sink"),
+        Some("Quinn WebTransport Sink"),
     )
 });
 
