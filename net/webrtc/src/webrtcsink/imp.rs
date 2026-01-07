@@ -810,8 +810,12 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
             }
             "nvv4l2h264enc" => {
                 enc.set_property("bitrate", start_bitrate);
-                enc.set_property_from_str("preset-level", "UltraFastPreset");
-                enc.set_property("maxperf-enable", true);
+                if enc.has_property("preset-level") {
+                    enc.set_property_from_str("preset-level", "UltraFastPreset");
+                }
+                if enc.has_property("maxperf-enable") {
+                    enc.set_property("maxperf-enable", true);
+                }
                 enc.set_property("insert-vui", true);
                 enc.set_property("idrinterval", 256u32);
                 enc.set_property("insert-sps-pps", true);
@@ -821,8 +825,12 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
             }
             "nvv4l2vp8enc" | "nvv4l2vp9enc" => {
                 enc.set_property("bitrate", start_bitrate);
-                enc.set_property_from_str("preset-level", "UltraFastPreset");
-                enc.set_property("maxperf-enable", true);
+                if enc.has_property("preset-level") {
+                    enc.set_property_from_str("preset-level", "UltraFastPreset");
+                }
+                if enc.has_property("maxperf-enable") {
+                    enc.set_property("maxperf-enable", true);
+                }
                 enc.set_property("idrinterval", 256u32);
                 enc.set_property_from_str("control-rate", "constant_bitrate");
                 add_nv4l2enc_force_keyunit_workaround(enc);
