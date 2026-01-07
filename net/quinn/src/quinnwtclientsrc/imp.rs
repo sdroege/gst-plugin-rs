@@ -35,6 +35,7 @@ use tokio::sync::oneshot;
 use web_transport_quinn::*;
 
 const DATA_HANDLER_THREAD: &str = "data-handler";
+const DEFAULT_ROLE: QuinnQuicRole = QuinnQuicRole::Server;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -76,6 +77,9 @@ enum State {
 struct Settings {
     bind_address: String,
     bind_port: u16,
+    address: String,
+    port: u16,
+    server_name: String,
     certificate_file: Option<PathBuf>,
     private_key_file: Option<PathBuf>,
     certificate_database_file: Option<PathBuf>,
@@ -83,6 +87,7 @@ struct Settings {
     secure_conn: bool,
     timeout: u32,
     transport_config: QuinnQuicTransportConfig,
+    role: QuinnQuicRole,
     url: String,
 }
 
@@ -92,6 +97,9 @@ impl Default for Settings {
         Settings {
             bind_address: DEFAULT_BIND_ADDR.to_string(),
             bind_port: DEFAULT_BIND_PORT,
+            address: DEFAULT_ADDR.to_string(),
+            port: DEFAULT_PORT,
+            server_name: DEFAULT_SERVER_NAME.to_string(),
             certificate_file: None,
             private_key_file: None,
             certificate_database_file: None,
@@ -99,6 +107,7 @@ impl Default for Settings {
             secure_conn: DEFAULT_SECURE_CONNECTION,
             timeout: DEFAULT_TIMEOUT,
             transport_config,
+            role: DEFAULT_ROLE,
             url: DEFAULT_ADDR.to_string(),
         }
     }
@@ -227,6 +236,25 @@ impl ObjectImpl for QuinnWebTransportClientSrc {
                     .blurb("Use certificates for QUIC connection. False: Insecure connection, True: Secure connection.")
                     .default_value(DEFAULT_SECURE_CONNECTION)
                     .build(),
+                glib::ParamSpecEnum::builder_with_default("role", DEFAULT_ROLE)
+                    .nick("WebTransport role")
+                    .blurb("WebTransport session role to use.")
+                    .build(),
+                glib::ParamSpecString::builder("server-name")
+                    .nick("QUIC server name")
+                    .blurb("Name of the QUIC server which is in server certificate in case of server role")
+                    .build(),
+                glib::ParamSpecString::builder("address")
+                    .nick("QUIC server address")
+                    .blurb("Address of the QUIC server e.g. 127.0.0.1")
+                    .build(),
+                glib::ParamSpecUInt::builder("port")
+                    .nick("QUIC server port")
+                    .blurb("Port of the QUIC server e.g. 5000")
+                    .maximum(65535)
+                    .default_value(DEFAULT_PORT as u32)
+                    .readwrite()
+                    .build(),
             ]
         });
 
@@ -261,6 +289,18 @@ impl ObjectImpl for QuinnWebTransportClientSrc {
             "url" => {
                 settings.url = value.get::<String>().expect("type checked upstream");
             }
+            "role" => {
+                settings.role = value.get::<QuinnQuicRole>().expect("type checked upstream");
+            }
+            "server-name" => {
+                settings.server_name = value.get::<String>().expect("type checked upstream");
+            }
+            "address" => {
+                settings.address = value.get::<String>().expect("type checked upstream");
+            }
+            "port" => {
+                settings.port = value.get::<u32>().expect("type checked upstream") as u16;
+            }
             _ => unimplemented!(),
         }
     }
@@ -292,6 +332,10 @@ impl ObjectImpl for QuinnWebTransportClientSrc {
                     State::Stopped => get_stats(None).to_value(),
                 }
             }
+            "role" => settings.role.to_value(),
+            "server-name" => settings.server_name.to_value(),
+            "address" => settings.address.to_value(),
+            "port" => (settings.port as u32).to_value(),
             _ => unimplemented!(),
         }
     }
@@ -322,7 +366,7 @@ impl BaseSrcImpl for QuinnWebTransportClientSrc {
                     return true;
                 }
 
-                let (url, endpoint_config) = match self.get_url_and_epconfig() {
+                let (role, url, endpoint_config) = match self.get_epconfig() {
                     Ok(config) => config,
                     Err(err) => {
                         gst::error!(CAT, imp = self, "Failed to get endpoint config: {}", err);
@@ -330,7 +374,7 @@ impl BaseSrcImpl for QuinnWebTransportClientSrc {
                     }
                 };
 
-                match self.setup_session(url, endpoint_config) {
+                match self.setup_session(role, url, endpoint_config) {
                     Ok(session) => {
                         let mut conn_guard = self.session.lock().unwrap();
                         *conn_guard = Some(session);
@@ -365,7 +409,7 @@ impl BaseSrcImpl for QuinnWebTransportClientSrc {
         }
         drop(state);
 
-        let (url, endpoint_config) = self.get_url_and_epconfig()?;
+        let (role, url, endpoint_config) = self.get_epconfig()?;
         let server_addr = endpoint_config.server_addr;
 
         let sess_guard = self.session.lock().unwrap();
@@ -382,7 +426,7 @@ impl BaseSrcImpl for QuinnWebTransportClientSrc {
                 );
                 s.clone()
             }
-            None => self.setup_session(url, endpoint_config)?,
+            None => self.setup_session(role, url, endpoint_config)?,
         };
         drop(sess_guard);
 
@@ -558,76 +602,98 @@ impl QuinnWebTransportClientSrc {
         }
     }
 
-    fn get_url_and_epconfig(
+    fn get_epconfig(
         &self,
-    ) -> Result<(url::Url, QuinnQuicEndpointConfig), gst::ErrorMessage> {
+    ) -> Result<(QuinnQuicRole, Option<url::Url>, QuinnQuicEndpointConfig), gst::ErrorMessage> {
         let settings = self.settings.lock().unwrap();
+
+        let role = settings.role;
         let timeout = settings.timeout;
         let secure_conn = settings.secure_conn;
+        let server_name = settings.server_name.clone();
         let certificate_file = settings.certificate_file.clone();
         let private_key_file = settings.private_key_file.clone();
         let certificate_database_file = settings.certificate_database_file.clone();
         let keep_alive_interval = settings.keep_alive_interval;
         let transport_config = settings.transport_config;
 
-        let client_addr =
-            make_socket_addr(format!("{}:{}", settings.bind_address, settings.bind_port).as_str())?;
+        let client_addr = match role {
+            QuinnQuicRole::Client => Some(
+                make_socket_addr(
+                    format!("{}:{}", settings.bind_address, settings.bind_port).as_str(),
+                )
+                .unwrap(),
+            ),
+            QuinnQuicRole::Server => None,
+        };
 
-        let url = url::Url::parse(&settings.url).map_err(|err| {
-            gst::error_msg!(gst::ResourceError::Failed, ["Failed to parse URL: {}", err])
-        })?;
-        drop(settings);
+        let (server_addr, url) = if role == QuinnQuicRole::Client {
+            let url = url::Url::parse(&settings.url).map_err(|err| {
+                gst::error_msg!(gst::ResourceError::Failed, ["Failed to parse URL: {}", err])
+            })?;
+            drop(settings);
 
-        let server_port = url.port().unwrap_or(443);
-        if !url.has_host() {
-            return Err(gst::error_msg!(
-                gst::ResourceError::Failed,
-                ["Cannot parse host for URL"]
-            ));
-        }
-        let host = url.host_str().unwrap();
-
-        // Look up the DNS entry.
-        let mut remotes = match wait(&self.canceller, lookup_host((host, server_port)), timeout) {
-            Ok(Ok(remotes)) => remotes,
-            Ok(Err(err)) => {
+            let server_port = url.port().unwrap_or(443);
+            if !url.has_host() {
                 return Err(gst::error_msg!(
                     gst::ResourceError::Failed,
-                    ["Host lookup request failed: {err}"]
+                    ["Cannot parse host for URL"]
                 ));
             }
-            Err(err) => match err {
-                WaitError::FutureAborted => {
-                    return Err(gst::error_msg!(
-                        gst::ResourceError::Failed,
-                        ["Host lookup request aborted"]
-                    ));
-                }
-                WaitError::FutureError(err) => {
+            let host = url.host_str().unwrap();
+
+            // Look up the DNS entry.
+            let mut remotes = match wait(&self.canceller, lookup_host((host, server_port)), timeout)
+            {
+                Ok(Ok(remotes)) => remotes,
+                Ok(Err(err)) => {
                     return Err(gst::error_msg!(
                         gst::ResourceError::Failed,
                         ["Host lookup request failed: {err}"]
                     ));
                 }
-            },
+                Err(err) => match err {
+                    WaitError::FutureAborted => {
+                        return Err(gst::error_msg!(
+                            gst::ResourceError::Failed,
+                            ["Host lookup request aborted"]
+                        ));
+                    }
+                    WaitError::FutureError(err) => {
+                        return Err(gst::error_msg!(
+                            gst::ResourceError::Failed,
+                            ["Host lookup request failed: {err}"]
+                        ));
+                    }
+                },
+            };
+
+            let server_addr = match remotes.next() {
+                Some(remote) => Ok(remote),
+                None => Err(gst::error_msg!(
+                    gst::ResourceError::Failed,
+                    ["Cannot resolve host name for URL"]
+                )),
+            }?;
+
+            drop(remotes);
+
+            (server_addr, Some(url))
+        } else {
+            (
+                make_socket_addr(format!("{}:{}", settings.address, settings.port).as_str())
+                    .unwrap(),
+                None,
+            )
         };
 
-        let server_addr = match remotes.next() {
-            Some(remote) => Ok(remote),
-            None => Err(gst::error_msg!(
-                gst::ResourceError::Failed,
-                ["Cannot resolve host name for URL"]
-            )),
-        }?;
-
-        drop(remotes);
-
         Ok((
+            role,
             url,
             QuinnQuicEndpointConfig {
                 server_addr,
-                server_name: DEFAULT_SERVER_NAME.to_string(),
-                client_addr: Some(client_addr),
+                server_name,
+                client_addr,
                 secure_conn,
                 alpns: vec![HTTP3_ALPN.to_string()],
                 certificate_file,
@@ -793,7 +859,8 @@ impl QuinnWebTransportClientSrc {
 
     fn setup_session(
         &self,
-        url: url::Url,
+        role: QuinnQuicRole,
+        url: Option<url::Url>,
         endpoint_config: QuinnQuicEndpointConfig,
     ) -> Result<Arc<Session>, gst::ErrorMessage> {
         let settings = self.settings.lock().unwrap();
@@ -819,7 +886,7 @@ impl QuinnWebTransportClientSrc {
             },
             None => match wait(
                 &self.canceller,
-                shared_connection.connect(QuinnQuicRole::Client, Some(url)),
+                shared_connection.connect(role, url),
                 timeout,
             ) {
                 Ok(Ok(_)) => {
