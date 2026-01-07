@@ -1422,7 +1422,7 @@ impl MP4Mux {
         Ok(())
     }
 
-    fn create_streams(&self, state: &mut State) -> Result<(), gst::FlowError> {
+    fn create_streams(&self, settings: &Settings, state: &mut State) -> Result<(), gst::FlowError> {
         gst::info!(CAT, imp = self, "Creating streams");
 
         for pad in self
@@ -1440,7 +1440,6 @@ impl MP4Mux {
             let mut max_bitrate = None;
             let mut tai_clock_info = None;
             let mut clock_type = TaicClockType::Unknown;
-            let mut found_taic_part = false;
             let mut time_uncertainty = TAIC_TIME_UNCERTAINTY_UNKNOWN;
             pad.sticky_events_foreach(|ev| {
                 if let gst::EventView::Tag(ev) = ev.view() {
@@ -1527,10 +1526,7 @@ impl MP4Mux {
                             clock_type_str
                         );
                         clock_type = match clock_type_str.parse() {
-                            Ok(t) => {
-                                found_taic_part = true;
-                                t
-                            }
+                            Ok(t) => t,
                             Err(err) => {
                                 gst::warning!(CAT, imp = self, "error parsing TAIClockType tag value: {}", err);
                                 TaicClockType::Unknown
@@ -1571,7 +1567,6 @@ impl MP4Mux {
                                     "TAI clock tags scoped 'global' are treated as if they were stream tags.",
                                 );
                             }
-                            found_taic_part = true;
                         }
                     }
                 }
@@ -1586,8 +1581,7 @@ impl MP4Mux {
                 }
             };
 
-            // TODO: also set this when we have GIMI implemented
-            if found_taic_part {
+            if settings.with_precision_timestamps {
                 // TODO: set remaining parts if there are tags implemented
                 tai_clock_info = Some(TaiClockInfo::new(clock_type, time_uncertainty));
             }
@@ -2447,7 +2441,7 @@ impl AggregatorImpl for MP4Mux {
             }
 
             state = self.state.lock().unwrap();
-            self.create_streams(&mut state)?;
+            self.create_streams(&settings, &mut state)?;
 
             // Create caps now to be sent before any buffers
             caps = Some(

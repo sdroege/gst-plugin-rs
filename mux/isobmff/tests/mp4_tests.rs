@@ -704,13 +704,14 @@ fn test_audio_only_output(location: &Path) {
     );
 }
 
+#[cfg(feature = "v1_28")]
 fn test_taic_encode(video_enc: &str) {
     let filename = format!("taic_{video_enc}.mp4").to_string();
     let temp_dir = tempdir().unwrap();
     let temp_file_path = temp_dir.path().join(filename);
     let location = temp_file_path.as_path();
     let pipeline_text = format!(
-        "videotestsrc num-buffers=250 ! {video_enc} ! taginject tags=\"precision-clock-type=can-sync-to-TAI,precision-clock-time-uncertainty-nanoseconds=100000\" scope=stream ! isomp4mux ! filesink location={location:?}"
+        "videotestsrc num-buffers=250 ! {video_enc} ! taginject tags=\"precision-clock-type=can-sync-to-tai,precision-clock-time-uncertainty-nanoseconds=100000\" scope=stream ! isomp4mux tai-precision-timestamps=true ! filesink location={location:?}"
     );
 
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
@@ -746,6 +747,7 @@ fn test_taic_encode(video_enc: &str) {
         0,
         vec![
             b"iso4".into(),
+            b"iso6".into(),
             b"isom".into(),
             b"mp41".into(),
             b"mp42".into(),
@@ -756,7 +758,7 @@ fn test_taic_encode(video_enc: &str) {
             has_taic: true,
             taic_time_uncertainty: 100_000,
             taic_clock_type: 2,
-            num_tai_timestamps: 0,
+            num_tai_timestamps: 250,
             ..Default::default()
         },
     );
@@ -786,7 +788,7 @@ fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
         return;
     };
     let taginject = gst::ElementFactory::make("taginject")
-        .property_from_str("tags", "precision-clock-type=can-sync-to-TAI,precision-clock-time-uncertainty-nanoseconds=100000")
+        .property_from_str("tags", "precision-clock-type=can-sync-to-tai,precision-clock-time-uncertainty-nanoseconds=100000")
         .property_from_str("scope", "stream")
         .build().unwrap();
     let mux = gst::ElementFactory::make("isomp4mux")
@@ -878,7 +880,7 @@ fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
             height: 240,
             has_ctts: false,
             has_stss: true,
-            has_taic: true,
+            has_taic: enabled,
             taic_time_uncertainty: 100_000,
             taic_clock_type: 2,
             num_tai_timestamps: if enabled { number_of_frames } else { 0 },
@@ -941,13 +943,14 @@ fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
     }
 }
 
+#[cfg(feature = "v1_28")]
 fn test_taic_encode_cannot_sync(video_enc: &str) {
     let filename = format!("taic_{video_enc}_cannot_sync.mp4").to_string();
     let temp_dir = tempdir().unwrap();
     let temp_file_path = temp_dir.path().join(filename);
     let location = temp_file_path.as_path();
     let pipeline_text = format!(
-        "videotestsrc num-buffers=250 ! {video_enc} ! taginject tags=\"precision-clock-type=cannot-sync-to-TAI\" scope=stream ! isomp4mux ! filesink location={location:?}"
+        "videotestsrc num-buffers=250 ! {video_enc} ! taginject tags=\"precision-clock-type=cannot-sync-to-tai\" scope=stream ! isomp4mux tai-precision-timestamp=true ! filesink location={location:?}"
     );
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
         println!("could not build encoding pipeline");
@@ -982,6 +985,7 @@ fn test_taic_encode_cannot_sync(video_enc: &str) {
         0,
         vec![
             b"iso4".into(),
+            b"iso6".into(),
             b"isom".into(),
             b"mp41".into(),
             b"mp42".into(),
@@ -992,6 +996,7 @@ fn test_taic_encode_cannot_sync(video_enc: &str) {
             has_taic: true,
             taic_time_uncertainty: 0xFFFF_FFFF_FFFF_FFFF,
             taic_clock_type: 1,
+            num_tai_timestamps: 250,
             ..Default::default()
         },
     );
@@ -1180,6 +1185,7 @@ fn test_eac3_mux_boxes() {
 }
 
 #[test]
+#[cfg(feature = "v1_28")]
 fn test_taic_x264() {
     init();
     test_taic_encode("x264enc");
@@ -1200,6 +1206,7 @@ fn test_taic_stai_x264_not_enabled() {
 }
 
 #[test]
+#[cfg(feature = "v1_28")]
 fn test_taic_x264_no_sync() {
     init();
     test_taic_encode_cannot_sync("x264enc");
