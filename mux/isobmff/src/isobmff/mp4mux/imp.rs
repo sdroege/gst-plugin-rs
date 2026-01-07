@@ -1521,7 +1521,7 @@ impl MP4Mux {
                         let clock_type_str = tag_value.get();
                         gst::debug!(
                             CAT,
-                            imp = self,
+                            obj = pad,
                             "Received TAI clock type from tags: {:?}",
                             clock_type_str
                         );
@@ -1545,29 +1545,19 @@ impl MP4Mux {
                         .tag()
                         .get::<crate::isobmff::PrecisionClockTimeUncertaintyNanosecondsTag>()
                     {
-                        let time_uncertainty_from_tag = tag_value.get();
-                        if time_uncertainty_from_tag < 1 {
-                            gst::warning!(
-                                CAT,
-                                imp = self,
-                                "Ignoring non-positive TAI clock uncertainty from tags: {:?}",
-                                time_uncertainty_from_tag
-                            );
-                        } else {
-                            time_uncertainty = time_uncertainty_from_tag as u64;
-                            gst::debug!(
-                                CAT,
-                                imp = self,
-                                "Received TAI clock uncertainty from tags: {:?}",
-                                time_uncertainty
-                            );
-                            if tag.scope() == gst::TagScope::Global {
-                                gst::info!(
+                        time_uncertainty = tag_value.get();
+                        gst::debug!(
+                            CAT,
+                            obj = pad,
+                            "Received TAI clock uncertainty from tags: {:?}",
+                            time_uncertainty
+                        );
+                        if tag.scope() == gst::TagScope::Global {
+                            gst::info!(
                                     CAT,
-                                    obj = pad,
-                                    "TAI clock tags scoped 'global' are treated as if they were stream tags.",
-                                );
-                            }
+                                obj = pad,
+                                "TAI clock tags scoped 'global' are treated as if they were stream tags.",
+                            );
                         }
                     }
                 }

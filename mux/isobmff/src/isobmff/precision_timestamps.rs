@@ -31,7 +31,7 @@ impl CustomTag<'_> for PrecisionClockTypeTag {
 }
 
 impl Tag<'_> for PrecisionClockTimeUncertaintyNanosecondsTag {
-    type TagType = i32;
+    type TagType = u64;
     const TAG_NAME: &'static glib::GStr =
         glib::gstr!("precision-clock-time-uncertainty-nanoseconds");
 }

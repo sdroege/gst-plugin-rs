@@ -711,7 +711,7 @@ fn test_taic_encode(video_enc: &str) {
     let temp_file_path = temp_dir.path().join(filename);
     let location = temp_file_path.as_path();
     let pipeline_text = format!(
-        "videotestsrc num-buffers=250 ! {video_enc} ! taginject tags=\"precision-clock-type=can-sync-to-tai,precision-clock-time-uncertainty-nanoseconds=100000\" scope=stream ! isomp4mux tai-precision-timestamps=true ! filesink location={location:?}"
+        "videotestsrc num-buffers=250 ! {video_enc} ! taginject tags=\"precision-clock-type=can-sync-to-tai,precision-clock-time-uncertainty-nanoseconds=(guint64)100000\" scope=stream ! isomp4mux tai-precision-timestamps=true ! filesink location={location:?}"
     );
 
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
@@ -789,7 +789,7 @@ fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
         return;
     };
     let taginject = gst::ElementFactory::make("taginject")
-        .property_from_str("tags", "precision-clock-type=can-sync-to-tai,precision-clock-time-uncertainty-nanoseconds=100000")
+        .property_from_str("tags", "precision-clock-type=can-sync-to-tai,precision-clock-time-uncertainty-nanoseconds=(guint64)100000")
         .property_from_str("scope", "stream")
         .build().unwrap();
     let mux = gst::ElementFactory::make("isomp4mux")
