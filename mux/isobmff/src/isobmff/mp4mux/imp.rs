@@ -8,6 +8,7 @@ use gst_base::subclass::prelude::*;
 use num_integer::Integer;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
+#[cfg(feature = "v1_28")]
 use std::str::FromStr;
 use std::sync::Mutex;
 
@@ -20,8 +21,11 @@ use crate::isobmff::DeltaFrames;
 use crate::isobmff::ElstInfo;
 use crate::isobmff::PresentationConfiguration;
 use crate::isobmff::Sample;
+#[cfg(feature = "v1_28")]
 use crate::isobmff::TAIC_TIME_UNCERTAINTY_UNKNOWN;
+#[cfg(feature = "v1_28")]
 use crate::isobmff::TaiClockInfo;
+#[cfg(feature = "v1_28")]
 use crate::isobmff::TaicClockType;
 use crate::isobmff::TrackConfiguration;
 use crate::isobmff::Variant;
@@ -93,6 +97,7 @@ pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
+#[cfg(feature = "v1_28")]
 impl FromStr for TaicClockType {
     type Err = anyhow::Error;
 
@@ -209,6 +214,7 @@ struct Stream {
     max_bitrate: Option<u32>,
 
     /// TAI precision clock information
+    #[cfg(feature = "v1_28")]
     tai_clock_info: Option<TaiClockInfo>,
 
     /// The auxiliary information (saio/saiz) for the stream
@@ -1276,116 +1282,92 @@ impl MP4Mux {
             };
 
             #[cfg(feature = "v1_28")]
-            {
-                if settings.with_precision_timestamps {
-                    // Builds a TAITimestampPacket structure as defined in ISO/IEC 23001-17 Amendment 1, Section 8.1.2
-                    // That will be written out as `stai` aux info per Section 8.1.3.
-                    // See ISO/IEC 14496-12 Section 8.7.8 and 8.7.9 for more on aux info.
-                    if let Some(meta) = buffer
-                        .iter_meta::<gst::ReferenceTimestampMeta>()
-                        .find(|m| m.reference().can_intersect(&TAI1958_CAPS) && m.info().is_some())
+            if settings.with_precision_timestamps {
+                // Builds a TAITimestampPacket structure as defined in ISO/IEC 23001-17 Amendment 1, Section 8.1.2
+                // That will be written out as `stai` aux info per Section 8.1.3.
+                // See ISO/IEC 14496-12 Section 8.7.8 and 8.7.9 for more on aux info.
+                if let Some(meta) = buffer
+                    .iter_meta::<gst::ReferenceTimestampMeta>()
+                    .find(|m| m.reference().can_intersect(&TAI1958_CAPS) && m.info().is_some())
+                {
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "got TAI ReferenceTimestampMeta on the buffer"
+                    );
+                    let mut timestamp_packet = Vec::<u8>::with_capacity(9);
+                    timestamp_packet.extend(meta.timestamp().nseconds().to_be_bytes());
+                    state.last_tai_timestamp = meta.timestamp().nseconds();
+                    let iso23001_17_timestamp_info = meta.info().unwrap(); // checked in filter
+                    let mut timestamp_packet_flags = 0u8;
+                    if let Ok(synced) =
+                        iso23001_17_timestamp_info.get::<bool>("synchronization-state")
                     {
                         gst::trace!(
                             CAT,
                             imp = self,
-                            "got TAI ReferenceTimestampMeta on the buffer"
+                            "synchronized to atomic source: {:?}",
+                            synced
                         );
-                        let mut timestamp_packet = Vec::<u8>::with_capacity(9);
-                        timestamp_packet.extend(meta.timestamp().nseconds().to_be_bytes());
-                        state.last_tai_timestamp = meta.timestamp().nseconds();
-                        let iso23001_17_timestamp_info = meta.info().unwrap(); // checked in filter
-                        let mut timestamp_packet_flags = 0u8;
-                        match iso23001_17_timestamp_info.get::<bool>("synchronization-state") {
-                            Ok(synced) => {
-                                gst::trace!(
-                                    CAT,
-                                    imp = self,
-                                    "synchronized to atomic source: {:?}",
-                                    synced
-                                );
-                                if synced {
-                                    timestamp_packet_flags |= 0x80u8;
-                                }
-                            }
-                            _ => {
-                                gst::info!(
-                                    CAT,
-                                    imp = self,
-                                    "TAI ReferenceTimestampMeta did not contain expected synchronisation state, assuming not synchronised"
-                                );
-                            }
+                        if synced {
+                            timestamp_packet_flags |= 0x80u8;
                         }
-                        match iso23001_17_timestamp_info.get::<bool>("timestamp-generation-failure")
-                        {
-                            Ok(generation_failure) => {
-                                gst::trace!(
-                                    CAT,
-                                    imp = self,
-                                    "timestamp generation failure: {:?}",
-                                    generation_failure
-                                );
-                                if generation_failure {
-                                    timestamp_packet_flags |= 0x40u8;
-                                }
-                            }
-                            _ => {
-                                if meta.timestamp().nseconds() > state.last_tai_timestamp {
-                                    gst::info!(
-                                        CAT,
-                                        imp = self,
-                                        "TAI ReferenceTimestampMeta did not contain expected generation failure flag, timestamp looks OK, assuming OK"
-                                    );
-                                } else {
-                                    gst::warning!(
-                                        CAT,
-                                        imp = self,
-                                        "TAI ReferenceTimestampMeta did not contain expected generation failure flag and unexpected timestamp value, assuming generation failure"
-                                    );
-                                    timestamp_packet_flags |= 0x40u8;
-                                }
-                            }
-                        }
-                        match iso23001_17_timestamp_info.get::<bool>("timestamp-is-modified") {
-                            Ok(timestamp_is_modified) => {
-                                gst::trace!(
-                                    CAT,
-                                    imp = self,
-                                    "timestamp is modified: {:?}",
-                                    timestamp_is_modified
-                                );
-                                if timestamp_is_modified {
-                                    timestamp_packet_flags |= 0x20u8;
-                                }
-                            }
-                            _ => {
-                                gst::info!(
-                                    CAT,
-                                    imp = self,
-                                    "TAI ReferenceTimestampMeta did not contain expected modification state value, assuming not modified"
-                                );
-                            }
-                        }
-                        timestamp_packet.extend(timestamp_packet_flags.to_be_bytes());
-                        stream.pending_aux_info_data.push_back(PendingAuxInfoEntry {
-                            aux_info_type: Some(*b"stai"),
-                            aux_info_type_parameter: 0,
-                            data: timestamp_packet,
-                        });
                     } else {
-                        // generate a failure packet, because we always need aux info for a sample
-                        let mut timestamp_packet = Vec::<u8>::with_capacity(9);
-                        // The timestamp must monotonically increase
-                        let timestamp = state.last_tai_timestamp + 1;
-                        timestamp_packet.extend(timestamp.to_be_bytes());
-                        state.last_tai_timestamp = timestamp;
-                        let flags = 0x40u8; // not sync'd | generation failure | not modified,
-                        timestamp_packet.extend(flags.to_be_bytes());
-                        stream.pending_aux_info_data.push_back(PendingAuxInfoEntry {
-                            aux_info_type: Some(*b"stai"),
-                            aux_info_type_parameter: 0,
-                            data: timestamp_packet,
-                        });
+                        gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected synchronisation state, assuming not synchronised");
                     }
+                    if let Ok(generation_failure) =
+                        iso23001_17_timestamp_info.get::<bool>("timestamp-generation-failure")
+                    {
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "timestamp generation failure: {:?}",
+                            generation_failure
+                        );
+                        if generation_failure {
+                            timestamp_packet_flags |= 0x40u8;
+                        }
+                    } else if meta.timestamp().nseconds() > state.last_tai_timestamp {
+                        gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected generation failure flag, timestamp looks OK, assuming OK");
+                    } else {
+                        gst::warning!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected generation failure flag and unexpected timestamp value, assuming generation failure");
+                        timestamp_packet_flags |= 0x40u8;
+                    }
+                    if let Ok(timestamp_is_modified) =
+                        iso23001_17_timestamp_info.get::<bool>("timestamp-is-modified")
+                    {
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "timestamp is modified: {:?}",
+                            timestamp_is_modified
+                        );
+                        if timestamp_is_modified {
+                            timestamp_packet_flags |= 0x20u8;
+                        }
+                    } else {
+                        gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected modification state value, assuming not modified");
+                    }
+                    timestamp_packet.extend(timestamp_packet_flags.to_be_bytes());
+                    stream.pending_aux_info_data.push_back(PendingAuxInfoEntry {
+                        aux_info_type: Some(*b"stai"),
+                        aux_info_type_parameter: 0,
+                        data: timestamp_packet,
+                    });
+                } else {
+                    // generate a failure packet, because we always need aux info for a sample
+                    let mut timestamp_packet = Vec::<u8>::with_capacity(9);
+                    // The timestamp must monotonically increase
+                    let timestamp = state.last_tai_timestamp + 1;
+                    timestamp_packet.extend(timestamp.to_be_bytes());
+                    state.last_tai_timestamp = timestamp;
+                    let flags = 0x40u8; // not sync'd | generation failure | not modified,
+                    timestamp_packet.extend(flags.to_be_bytes());
+                    stream.pending_aux_info_data.push_back(PendingAuxInfoEntry {
+                        aux_info_type: Some(*b"stai"),
+                        aux_info_type_parameter: 0,
+                        data: timestamp_packet,
+                    });
                 }
             }
             stream.queued_chunk_time += duration;
@@ -1422,7 +1404,11 @@ impl MP4Mux {
         Ok(())
     }
 
-    fn create_streams(&self, settings: &Settings, state: &mut State) -> Result<(), gst::FlowError> {
+    fn create_streams(
+        &self,
+        _settings: &Settings,
+        state: &mut State,
+    ) -> Result<(), gst::FlowError> {
         gst::info!(CAT, imp = self, "Creating streams");
 
         for pad in self
@@ -1438,8 +1424,11 @@ impl MP4Mux {
             let mut language_code = None;
             let mut avg_bitrate = None;
             let mut max_bitrate = None;
+            #[cfg(feature = "v1_28")]
             let mut tai_clock_info = None;
+            #[cfg(feature = "v1_28")]
             let mut clock_type = TaicClockType::Unknown;
+            #[cfg(feature = "v1_28")]
             let mut time_uncertainty = TAIC_TIME_UNCERTAINTY_UNKNOWN;
             pad.sticky_events_foreach(|ev| {
                 if let gst::EventView::Tag(ev) = ev.view() {
@@ -1517,6 +1506,7 @@ impl MP4Mux {
                         }
                         avg_bitrate = Some(bitrate);
                     }
+		    #[cfg(feature = "v1_28")]
                     if let Some(tag_value) = ev.tag().get::<crate::isobmff::PrecisionClockTypeTag>() {
                         let clock_type_str = tag_value.get();
                         gst::debug!(
@@ -1540,6 +1530,7 @@ impl MP4Mux {
                             );
                         }
                     }
+		    #[cfg(feature = "v1_28")]
                     if let Some(tag_value) = ev
                         .tag()
                         .get::<crate::isobmff::PrecisionClockTimeUncertaintyNanosecondsTag>()
@@ -1581,7 +1572,8 @@ impl MP4Mux {
                 }
             };
 
-            if settings.with_precision_timestamps {
+            #[cfg(feature = "v1_28")]
+            if _settings.with_precision_timestamps {
                 // TODO: set remaining parts if there are tags implemented
                 tai_clock_info = Some(TaiClockInfo::new(clock_type, time_uncertainty));
             }
@@ -1752,6 +1744,7 @@ impl MP4Mux {
                 stream_orientation,
                 max_bitrate,
                 avg_bitrate,
+                #[cfg(feature = "v1_28")]
                 tai_clock_info,
                 aux_info: Vec::new(),
                 pending_aux_info_data: VecDeque::new(),
@@ -1964,6 +1957,7 @@ impl ObjectImpl for MP4Mux {
                     .blurb("Comma-separated list of 4-character brand codes (e.g. duke,sook)")
                     .mutable_ready()
                     .build(),
+                #[cfg(feature = "v1_28")]
                 glib::ParamSpecBoolean::builder("tai-precision-timestamps")
                     .nick("Precision Timestamps")
                     .blurb("Whether to encode ISO/IEC 23001-17 TAI timestamps as auxiliary data")
@@ -2025,6 +2019,7 @@ impl ObjectImpl for MP4Mux {
                 }
             }
 
+            #[cfg(feature = "v1_28")]
             "tai-precision-timestamps" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.with_precision_timestamps = value.get().expect("type checked upstream");
@@ -2063,6 +2058,7 @@ impl ObjectImpl for MP4Mux {
                 Some(brands_str).to_value()
             }
 
+            #[cfg(feature = "v1_28")]
             "tai-precision-timestamps" => {
                 let settings = self.settings.lock().unwrap();
                 settings.with_precision_timestamps.to_value()
@@ -2557,6 +2553,7 @@ impl AggregatorImpl for MP4Mux {
                     max_bitrate: stream.max_bitrate,
                     avg_bitrate: stream.avg_bitrate,
                     chunks: stream.chunks,
+                    #[cfg(feature = "v1_28")]
                     tai_clock_info: stream.tai_clock_info,
                     auxiliary_info: stream.aux_info,
                     codec_specific_boxes: stream.codec_specific_boxes.clone(),

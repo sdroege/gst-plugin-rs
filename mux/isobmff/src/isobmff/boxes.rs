@@ -1848,6 +1848,7 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                 })?;
             }
 
+            #[cfg(feature = "v1_28")]
             if let Some(taic) = &stream.tai_clock_info {
                 taic.write_taic_box(v)?;
             }

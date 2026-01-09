@@ -3966,6 +3966,7 @@ impl FMP4Mux {
                     end_pts: gst::ClockTime::from_seconds(0),
                     chunks: vec![],
                     image_sequence: false,
+                    #[cfg(feature = "v1_28")]
                     tai_clock_info: None,
                     auxiliary_info: vec![],
                     chnl_layout_info: s.chnl_layout_info.clone(),

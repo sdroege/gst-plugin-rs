@@ -10,6 +10,7 @@ use std::sync::LazyLock;
 
 use gst::glib;
 use gst::prelude::*;
+#[cfg(feature = "v1_28")]
 use gst::tags;
 
 mod ac3;
@@ -20,6 +21,7 @@ mod eac3;
 mod flac;
 mod fmp4mux;
 mod mp4mux;
+#[cfg(feature = "v1_28")]
 mod precision_timestamps;
 mod transform_matrix;
 mod uncompressed;
@@ -125,13 +127,18 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         ONVIFMP4Mux::static_type(),
     )?;
 
-    tags::register::<PrecisionClockTypeTag>();
-    tags::register::<PrecisionClockTimeUncertaintyNanosecondsTag>();
+    #[cfg(feature = "v1_28")]
+    {
+        tags::register::<PrecisionClockTypeTag>();
+        tags::register::<PrecisionClockTimeUncertaintyNanosecondsTag>();
+    }
     Ok(())
 }
 
+#[cfg(feature = "v1_28")]
 pub enum PrecisionClockTimeUncertaintyNanosecondsTag {}
 
+#[cfg(feature = "v1_28")]
 pub enum PrecisionClockTypeTag {}
 
 #[derive(Debug, Copy, Clone)]
@@ -229,6 +236,7 @@ pub(crate) enum WriteEdtsMode {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg(feature = "v1_28")]
 pub(crate) struct TaiClockInfo {
     // Set with the PrecisionClockTimeUncertaintyNanoseconds tag
     // Defaults to unknown
@@ -243,7 +251,9 @@ pub(crate) struct TaiClockInfo {
 }
 
 // Standard values for taic box (ISO/IEC 23001-17 Amd 1)
+#[cfg(feature = "v1_28")]
 pub(crate) const TAIC_TIME_UNCERTAINTY_UNKNOWN: u64 = 0xFFFF_FFFF_FFFF_FFFF;
+#[cfg(feature = "v1_28")]
 pub(crate) const TAIC_CLOCK_DRIFT_RATE_UNKNOWN: i32 = 0x7FFF_FFFF;
 
 // Data for auxiliary information, as used for per-sample timestamps and for protection schemes
@@ -399,6 +409,7 @@ pub(crate) struct TrackConfiguration {
     pub(crate) image_sequence: bool,
 
     /// TAI Clock information (ISO/IEC 23001-17 Amd 1)
+    #[cfg(feature = "v1_28")]
     pub(crate) tai_clock_info: Option<TaiClockInfo>,
 
     /// Sample auxiliary information (ISO/IEC 14496-12:2022 Section 8.7.8 and 8.7.9)
