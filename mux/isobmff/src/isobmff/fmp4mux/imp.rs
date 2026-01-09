@@ -15,6 +15,7 @@ use gst_base::subclass::prelude::*;
 use anyhow::{Context, bail};
 use num_integer::Integer;
 use std::cmp;
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::mem;
@@ -3968,7 +3969,7 @@ impl FMP4Mux {
                     image_sequence: false,
                     #[cfg(feature = "v1_28")]
                     tai_clock_info: None,
-                    auxiliary_info: vec![],
+                    auxiliary_info: BTreeMap::new(),
                     chnl_layout_info: s.chnl_layout_info.clone(),
                 }
             })

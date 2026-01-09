@@ -19,6 +19,7 @@ pub struct ExpectedConfiguration {
     pub taic_time_uncertainty: u64,
     pub taic_clock_type: u8,
     pub num_tai_timestamps: u32,
+    pub num_tai_chunks: u32,
     pub is_fragmented: bool,
     pub audio_channel_count: u16,
     pub audio_sample_rate: mp4_atom::FixedPoint<u16>,
@@ -40,6 +41,7 @@ impl Default for ExpectedConfiguration {
             taic_time_uncertainty: 0,
             taic_clock_type: 0,
             num_tai_timestamps: 0,
+            num_tai_chunks: 0,
             is_fragmented: false,
             audio_channel_count: 0,
             audio_sample_rate: 0.into(),
@@ -192,7 +194,7 @@ fn check_stbl_sanity(stbl: &mp4_atom::Stbl, expected_config: &ExpectedConfigurat
 }
 
 fn check_saio_sanity(saios: &Vec<mp4_atom::Saio>, expected_config: &ExpectedConfiguration) {
-    if expected_config.num_tai_timestamps != 0 {
+    if expected_config.num_tai_chunks != 0 {
         assert_eq!(saios.len(), 1);
         for saio in saios {
             assert!(saio.aux_info.is_some());
@@ -201,10 +203,7 @@ fn check_saio_sanity(saios: &Vec<mp4_atom::Saio>, expected_config: &ExpectedConf
                 b"stai".into()
             );
             assert_eq!(saio.aux_info.as_ref().unwrap().aux_info_type_parameter, 0);
-            assert_eq!(
-                saio.offsets.len(),
-                expected_config.num_tai_timestamps as usize
-            );
+            assert_eq!(saio.offsets.len(), expected_config.num_tai_chunks as usize);
             let mut previous_offset = 0u64;
             for offset in &saio.offsets {
                 // We check that the byte offsets are increasing

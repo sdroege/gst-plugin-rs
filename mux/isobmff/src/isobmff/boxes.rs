@@ -371,10 +371,10 @@ pub(crate) fn write_stbl(
         })?;
     }
 
-    for auxiliary_information in &stream.auxiliary_info {
-        if !auxiliary_information.entries.is_empty() {
-            auxiliary_information.write_full_saiz(v)?;
-            auxiliary_information.write_full_saio(v)?;
+    for (auxiliary_information, data) in stream.auxiliary_info.iter() {
+        if !data.entry_lengths.is_empty() {
+            auxiliary_information.write_full_saiz(v, data)?;
+            auxiliary_information.write_full_saio(v, data)?;
         }
     }
 

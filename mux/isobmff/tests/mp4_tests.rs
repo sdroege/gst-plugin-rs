@@ -758,6 +758,7 @@ fn test_taic_encode(video_enc: &str) {
             has_taic: true,
             taic_time_uncertainty: 100_000,
             taic_clock_type: 2,
+            num_tai_chunks: 1,
             num_tai_timestamps: 250,
             ..Default::default()
         },
@@ -883,6 +884,7 @@ fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
             has_taic: enabled,
             taic_time_uncertainty: 100_000,
             taic_clock_type: 2,
+            num_tai_chunks: if enabled { 1 } else { 0 },
             num_tai_timestamps: if enabled { number_of_frames } else { 0 },
             is_fragmented: false,
             ..Default::default()
@@ -996,6 +998,7 @@ fn test_taic_encode_cannot_sync(video_enc: &str) {
             has_taic: true,
             taic_time_uncertainty: 0xFFFF_FFFF_FFFF_FFFF,
             taic_clock_type: 1,
+            num_tai_chunks: 1,
             num_tai_timestamps: 250,
             ..Default::default()
         },

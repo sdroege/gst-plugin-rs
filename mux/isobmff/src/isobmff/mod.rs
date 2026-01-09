@@ -6,6 +6,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::collections::BTreeMap;
+use std::collections::VecDeque;
 use std::sync::LazyLock;
 
 use gst::glib;
@@ -257,17 +259,17 @@ pub(crate) const TAIC_TIME_UNCERTAINTY_UNKNOWN: u64 = 0xFFFF_FFFF_FFFF_FFFF;
 pub(crate) const TAIC_CLOCK_DRIFT_RATE_UNKNOWN: i32 = 0x7FFF_FFFF;
 
 // Data for auxiliary information, as used for per-sample timestamps and for protection schemes
-#[derive(Clone, Debug, Default)]
-pub(crate) struct AuxiliaryInformationEntry {
-    pub(crate) entry_offset: u64,
-    pub(crate) entry_len: u8,
-}
-
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub(crate) struct AuxiliaryInformation {
     pub(crate) aux_info_type: Option<[u8; 4]>,
     pub(crate) aux_info_type_parameter: u32,
-    pub(crate) entries: Vec<AuxiliaryInformationEntry>,
+}
+
+// Data for auxiliary information, as used for per-sample timestamps and for protection schemes
+#[derive(Clone, Debug, Default)]
+pub(crate) struct AuxiliaryInformationData {
+    pub(crate) chunk_offsets: VecDeque<u64>,
+    pub(crate) entry_lengths: VecDeque<u8>,
 }
 
 #[derive(Debug, Clone)]
@@ -413,7 +415,7 @@ pub(crate) struct TrackConfiguration {
     pub(crate) tai_clock_info: Option<TaiClockInfo>,
 
     /// Sample auxiliary information (ISO/IEC 14496-12:2022 Section 8.7.8 and 8.7.9)
-    pub(crate) auxiliary_info: Vec<AuxiliaryInformation>,
+    pub(crate) auxiliary_info: BTreeMap<AuxiliaryInformation, AuxiliaryInformationData>,
 
     /// Information needed for creating `chnl` box
     chnl_layout_info: Option<ChnlLayoutInfo>,

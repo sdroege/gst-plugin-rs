@@ -6,7 +6,9 @@ use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
 use num_integer::Integer;
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::collections::VecDeque;
 #[cfg(feature = "v1_28")]
 use std::str::FromStr;
@@ -14,7 +16,7 @@ use std::sync::Mutex;
 
 use crate::av1::obu::read_seq_header_obu_bytes;
 use crate::isobmff::AuxiliaryInformation;
-use crate::isobmff::AuxiliaryInformationEntry;
+use crate::isobmff::AuxiliaryInformationData;
 use crate::isobmff::ChnlLayoutInfo;
 use crate::isobmff::Chunk;
 use crate::isobmff::DeltaFrames;
@@ -143,12 +145,6 @@ struct PendingBuffer {
     composition_time_offset: Option<i64>,
     duration: Option<gst::ClockTime>,
 }
-#[derive(Debug)]
-struct PendingAuxInfoEntry {
-    aux_info_type: Option<[u8; 4]>,
-    aux_info_type_parameter: u32,
-    data: Vec<u8>,
-}
 
 #[derive(Debug)]
 struct Stream {
@@ -218,9 +214,9 @@ struct Stream {
     tai_clock_info: Option<TaiClockInfo>,
 
     /// The auxiliary information (saio/saiz) for the stream
-    aux_info: Vec<AuxiliaryInformation>,
+    aux_info: BTreeMap<AuxiliaryInformation, AuxiliaryInformationData>,
     /// auxiliary information to be written after the chunk is finished
-    pending_aux_info_data: VecDeque<PendingAuxInfoEntry>,
+    pending_aux_info_data: HashMap<AuxiliaryInformation, VecDeque<Vec<u8>>>,
 
     /// Information needed for creating `chnl` box
     chnl_layout_info: Option<ChnlLayoutInfo>,
@@ -1161,46 +1157,30 @@ impl MP4Mux {
         stream: &mut Stream,
         initial_offset: u64,
     ) -> u64 {
-        gst::debug!(
-            CAT,
-            obj = stream.sinkpad,
-            "Flushing {} pending entries of auxiliary information from stream {} to mdat at end of current chunk",
-            stream.pending_aux_info_data.len(),
-            stream.sinkpad.name(),
-        );
         let mut num_bytes_added = 0u64;
-        while let Some(pending_aux_info) = stream.pending_aux_info_data.pop_front() {
-            // We don't handle the case where the aux_info_type is None - no idea what the semantics of that would be
-            assert!(pending_aux_info.aux_info_type.is_some());
-            let maybe_index = stream.aux_info.iter().position(|aux_info| {
-                (aux_info.aux_info_type == pending_aux_info.aux_info_type)
-                    && (aux_info.aux_info_type_parameter
-                        == pending_aux_info.aux_info_type_parameter)
-            });
-            let index: usize = match maybe_index {
-                Some(index) => index,
-                None => {
-                    // We did not already have a matching entry in the stream, add it
-                    let aux_info = AuxiliaryInformation {
-                        aux_info_type: pending_aux_info.aux_info_type,
-                        aux_info_type_parameter: pending_aux_info.aux_info_type_parameter,
-                        entries: Vec::new(),
-                    };
-                    stream.aux_info.push(aux_info);
-                    stream.aux_info.len() - 1
-                }
-            };
-            let pending_aux_info_data = gst::Buffer::from_slice(pending_aux_info.data);
-            assert!(pending_aux_info_data.size() <= u8::MAX as usize);
-            let entry_size = pending_aux_info_data.size() as u8;
-            buffers.add(pending_aux_info_data);
-            stream.aux_info[index]
-                .entries
-                .push(AuxiliaryInformationEntry {
-                    entry_offset: initial_offset + num_bytes_added,
-                    entry_len: entry_size,
-                });
-            num_bytes_added += entry_size as u64;
+        for (aux_info_type, entries) in stream.pending_aux_info_data.iter_mut() {
+            gst::debug!(
+                CAT,
+                obj = stream.sinkpad,
+                "Flushing {} pending entries of auxiliary information of type {:?} from stream {} to mdat at end of current chunk",
+                entries.len(),
+                aux_info_type.aux_info_type,
+                stream.sinkpad.name(),
+            );
+
+            let data = stream.aux_info.entry(aux_info_type.clone()).or_default();
+
+            data.chunk_offsets
+                .push_back(initial_offset + num_bytes_added);
+
+            while let Some(entry) = entries.pop_front() {
+                let pending_aux_info_data = gst::Buffer::from_slice(entry);
+                assert!(pending_aux_info_data.size() <= u8::MAX as usize);
+                let entry_size = pending_aux_info_data.size() as u8;
+                buffers.add(pending_aux_info_data);
+                data.entry_lengths.push_back(entry_size);
+                num_bytes_added += entry_size as u64;
+            }
         }
         num_bytes_added
     }
@@ -1313,7 +1293,11 @@ impl MP4Mux {
                             timestamp_packet_flags |= 0x80u8;
                         }
                     } else {
-                        gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected synchronisation state, assuming not synchronised");
+                        gst::info!(
+                            CAT,
+                            imp = self,
+                            "TAI ReferenceTimestampMeta did not contain expected synchronisation state, assuming not synchronised"
+                        );
                     }
                     if let Ok(generation_failure) =
                         iso23001_17_timestamp_info.get::<bool>("timestamp-generation-failure")
@@ -1328,9 +1312,17 @@ impl MP4Mux {
                             timestamp_packet_flags |= 0x40u8;
                         }
                     } else if meta.timestamp().nseconds() > state.last_tai_timestamp {
-                        gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected generation failure flag, timestamp looks OK, assuming OK");
+                        gst::info!(
+                            CAT,
+                            imp = self,
+                            "TAI ReferenceTimestampMeta did not contain expected generation failure flag, timestamp looks OK, assuming OK"
+                        );
                     } else {
-                        gst::warning!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected generation failure flag and unexpected timestamp value, assuming generation failure");
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "TAI ReferenceTimestampMeta did not contain expected generation failure flag and unexpected timestamp value, assuming generation failure"
+                        );
                         timestamp_packet_flags |= 0x40u8;
                     }
                     if let Ok(timestamp_is_modified) =
@@ -1346,14 +1338,21 @@ impl MP4Mux {
                             timestamp_packet_flags |= 0x20u8;
                         }
                     } else {
-                        gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected modification state value, assuming not modified");
+                        gst::info!(
+                            CAT,
+                            imp = self,
+                            "TAI ReferenceTimestampMeta did not contain expected modification state value, assuming not modified"
+                        );
                     }
                     timestamp_packet.extend(timestamp_packet_flags.to_be_bytes());
-                    stream.pending_aux_info_data.push_back(PendingAuxInfoEntry {
-                        aux_info_type: Some(*b"stai"),
-                        aux_info_type_parameter: 0,
-                        data: timestamp_packet,
-                    });
+                    stream
+                        .pending_aux_info_data
+                        .entry(AuxiliaryInformation {
+                            aux_info_type: Some(*b"stai"),
+                            aux_info_type_parameter: 0,
+                        })
+                        .or_default()
+                        .push_back(timestamp_packet);
                 } else {
                     // generate a failure packet, because we always need aux info for a sample
                     let mut timestamp_packet = Vec::<u8>::with_capacity(9);
@@ -1363,11 +1362,15 @@ impl MP4Mux {
                     state.last_tai_timestamp = timestamp;
                     let flags = 0x40u8; // not sync'd | generation failure | not modified,
                     timestamp_packet.extend(flags.to_be_bytes());
-                    stream.pending_aux_info_data.push_back(PendingAuxInfoEntry {
-                        aux_info_type: Some(*b"stai"),
-                        aux_info_type_parameter: 0,
-                        data: timestamp_packet,
-                    });
+
+                    stream
+                        .pending_aux_info_data
+                        .entry(AuxiliaryInformation {
+                            aux_info_type: Some(*b"stai"),
+                            aux_info_type_parameter: 0,
+                        })
+                        .or_default()
+                        .push_back(timestamp_packet);
                 }
             }
             stream.queued_chunk_time += duration;
@@ -1746,8 +1749,8 @@ impl MP4Mux {
                 avg_bitrate,
                 #[cfg(feature = "v1_28")]
                 tai_clock_info,
-                aux_info: Vec::new(),
-                pending_aux_info_data: VecDeque::new(),
+                aux_info: BTreeMap::new(),
+                pending_aux_info_data: HashMap::new(),
                 chnl_layout_info,
             });
         }
