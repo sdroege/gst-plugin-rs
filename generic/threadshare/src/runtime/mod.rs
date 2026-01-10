@@ -35,7 +35,7 @@
 //! [`PadSink`]: pad/struct.PadSink.html
 
 pub mod executor;
-pub use executor::{timer, Async, Context, JoinHandle, SubTaskOutput};
+pub use executor::{Async, Context, JoinHandle, SubTaskOutput, timer};
 
 pub mod pad;
 pub use pad::{PadSink, PadSinkRef, PadSinkWeak, PadSrc, PadSrcRef, PadSrcWeak};

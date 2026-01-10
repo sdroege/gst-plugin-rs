@@ -11,15 +11,15 @@
 //! This element accumulates text
 
 use super::CAT;
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use gst::subclass::prelude::*;
 use gst::{glib, prelude::*};
 use itertools::Itertools;
 use regex::Regex;
 use std::collections::VecDeque;
-use std::sync::mpsc::RecvTimeoutError;
 use std::sync::LazyLock;
-use std::sync::{mpsc, Condvar, Mutex};
+use std::sync::mpsc::RecvTimeoutError;
+use std::sync::{Condvar, Mutex, mpsc};
 
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(3);
 const DEFAULT_LATENESS: gst::ClockTime = gst::ClockTime::from_seconds(0);
@@ -154,11 +154,7 @@ impl Input {
             }
         }
 
-        if ret.is_empty() {
-            None
-        } else {
-            Some(ret)
-        }
+        if ret.is_empty() { None } else { Some(ret) }
     }
 
     fn next_sentence(&mut self) -> Option<Vec<Item>> {
@@ -220,11 +216,7 @@ impl Input {
 
         let ret: Vec<Item> = self.items.split_off(0).into();
 
-        if ret.is_empty() {
-            None
-        } else {
-            Some(ret)
-        }
+        if ret.is_empty() { None } else { Some(ret) }
     }
 }
 
@@ -478,11 +470,10 @@ impl Accumulate {
                     .as_ref()
                     .map(|input| input.is_empty())
                     .unwrap_or(true)
+                    && let Some(accumulate_tx) = state.accumulate_tx.clone()
                 {
-                    if let Some(accumulate_tx) = state.accumulate_tx.clone() {
-                        drop(state);
-                        let _ = accumulate_tx.send(AccumulateInput::Gap { pts, duration });
-                    }
+                    drop(state);
+                    let _ = accumulate_tx.send(AccumulateInput::Gap { pts, duration });
                 }
 
                 true
@@ -540,10 +531,10 @@ impl Accumulate {
                         )
                     };
 
-                    if let Some(tx) = accumulate_tx {
-                        if let Some(items) = items {
-                            let _ = tx.send(AccumulateInput::Items(items));
-                        }
+                    if let Some(tx) = accumulate_tx
+                        && let Some(items) = items
+                    {
+                        let _ = tx.send(AccumulateInput::Items(items));
                     }
                 }
 
@@ -621,42 +612,41 @@ impl Accumulate {
             return Ok(gst::FlowSuccess::Ok);
         }
 
-        if settings.no_timeout {
-            if let Some((upstream_latency, now)) = self
+        if settings.no_timeout
+            && let Some((upstream_latency, now)) = self
                 .upstream_latency()
                 .zip(self.obj().current_running_time())
-            {
-                let (upstream_live, upstream_min, _) = upstream_latency;
+        {
+            let (upstream_live, upstream_min, _) = upstream_latency;
 
-                if upstream_live {
-                    let state = self.state.lock().unwrap();
-                    // Safe unwrap, empty checked earlier
-                    let earliest_pts = to_push.first().unwrap().pts;
+            if upstream_live {
+                let state = self.state.lock().unwrap();
+                // Safe unwrap, empty checked earlier
+                let earliest_pts = to_push.first().unwrap().pts;
 
-                    let min_pts = state
-                        .segment
-                        .position_from_running_time(
-                            now.saturating_sub(upstream_min + settings.latency + settings.lateness),
-                        )
-                        .unwrap_or(state.segment.start().unwrap_or(gst::ClockTime::ZERO))
-                        .max(state.segment.position().unwrap_or(gst::ClockTime::ZERO));
+                let min_pts = state
+                    .segment
+                    .position_from_running_time(
+                        now.saturating_sub(upstream_min + settings.latency + settings.lateness),
+                    )
+                    .unwrap_or(state.segment.start().unwrap_or(gst::ClockTime::ZERO))
+                    .max(state.segment.position().unwrap_or(gst::ClockTime::ZERO));
 
-                    if min_pts > earliest_pts {
-                        let offset = min_pts.saturating_sub(earliest_pts);
+                if min_pts > earliest_pts {
+                    let offset = min_pts.saturating_sub(earliest_pts);
 
-                        for item in to_push.iter_mut() {
-                            item.pts += offset;
-                        }
-
-                        gst::debug!(
-                            CAT,
-                            imp = self,
-                            "Applied offset {}, now is {}, earliest rtime now {:?}",
-                            offset,
-                            now,
-                            state.segment.to_running_time(to_push.first().unwrap().pts)
-                        );
+                    for item in to_push.iter_mut() {
+                        item.pts += offset;
                     }
+
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "Applied offset {}, now is {}, earliest rtime now {:?}",
+                        offset,
+                        now,
+                        state.segment.to_running_time(to_push.first().unwrap().pts)
+                    );
                 }
             }
         }
@@ -774,125 +764,127 @@ impl Accumulate {
         self.state.lock().unwrap().accumulate_tx = Some(accumulate_tx);
 
         let this_weak = self.downgrade();
-        let res = self.srcpad.start_task(move || loop {
-            let Some(this) = this_weak.upgrade() else {
-                break;
-            };
+        let res = self.srcpad.start_task(move || {
+            loop {
+                let Some(this) = this_weak.upgrade() else {
+                    break;
+                };
 
-            let timeout = match this.upstream_latency() {
-                Some((true, upstream_min, _max)) => {
-                    let (latency, lateness, no_timeout) = {
-                        let settings = this.settings.lock().unwrap();
-                        (settings.latency, settings.lateness, settings.no_timeout)
-                    };
+                let timeout = match this.upstream_latency() {
+                    Some((true, upstream_min, _max)) => {
+                        let (latency, lateness, no_timeout) = {
+                            let settings = this.settings.lock().unwrap();
+                            (settings.latency, settings.lateness, settings.no_timeout)
+                        };
 
-                    if no_timeout {
-                        std::time::Duration::MAX
-                    } else if let Some(now) = this.obj().current_running_time() {
-                        match this
-                            .state
-                            .lock()
-                            .unwrap()
-                            .input
-                            .as_ref()
-                            .and_then(|input| input.start_rtime())
-                        {
-                            Some(next_rtime) => std::time::Duration::from_nanos(
-                                (next_rtime + upstream_min + latency + lateness)
-                                    .saturating_sub(now)
-                                    .nseconds(),
-                            ),
-                            _ => std::time::Duration::MAX,
+                        if no_timeout {
+                            std::time::Duration::MAX
+                        } else if let Some(now) = this.obj().current_running_time() {
+                            match this
+                                .state
+                                .lock()
+                                .unwrap()
+                                .input
+                                .as_ref()
+                                .and_then(|input| input.start_rtime())
+                            {
+                                Some(next_rtime) => std::time::Duration::from_nanos(
+                                    (next_rtime + upstream_min + latency + lateness)
+                                        .saturating_sub(now)
+                                        .nseconds(),
+                                ),
+                                _ => std::time::Duration::MAX,
+                            }
+                        } else {
+                            std::time::Duration::MAX
                         }
-                    } else {
-                        std::time::Duration::MAX
                     }
-                }
-                _ => std::time::Duration::MAX,
-            };
+                    _ => std::time::Duration::MAX,
+                };
 
-            gst::log!(CAT, imp = this, "now waiting with timeout {timeout:?}");
+                gst::log!(CAT, imp = this, "now waiting with timeout {timeout:?}");
 
-            match accumulate_rx.recv_timeout(timeout) {
-                Ok(input) => {
-                    gst::trace!(CAT, imp = this, "received input on translate queue");
+                match accumulate_rx.recv_timeout(timeout) {
+                    Ok(input) => {
+                        gst::trace!(CAT, imp = this, "received input on translate queue");
 
-                    match input {
-                        AccumulateInput::Items(to_push) => {
-                            if let Err(err) = this.do_push(to_push) {
-                                if err != gst::FlowError::Flushing {
-                                    gst::element_error!(
-                                        this.obj(),
-                                        gst::StreamError::Failed,
-                                        ["Streaming failed: {}", err]
-                                    );
+                        match input {
+                            AccumulateInput::Items(to_push) => {
+                                if let Err(err) = this.do_push(to_push) {
+                                    if err != gst::FlowError::Flushing {
+                                        gst::element_error!(
+                                            this.obj(),
+                                            gst::StreamError::Failed,
+                                            ["Streaming failed: {}", err]
+                                        );
+                                    }
+                                    let _ = this.srcpad.pause_task();
                                 }
-                                let _ = this.srcpad.pause_task();
+                            }
+                            AccumulateInput::Gap { pts, duration } => {
+                                let event = {
+                                    let mut state = this.state.lock().unwrap();
+
+                                    state.segment.set_position(
+                                        pts + duration.unwrap_or(gst::ClockTime::ZERO),
+                                    );
+
+                                    gst::debug!(
+                                        CAT,
+                                        imp = this,
+                                        "forwarding gap {} {:?}",
+                                        pts,
+                                        duration
+                                    );
+
+                                    gst::event::Gap::builder(pts)
+                                        .duration(duration)
+                                        .seqnum(state.seqnum)
+                                        .build()
+                                };
+
+                                let _ = this.srcpad.push_event(event);
+                            }
+                            AccumulateInput::Event(event) => {
+                                gst::debug!(CAT, imp = this, "Forwarding event {event:?}");
+                                let _ = this.srcpad.push_event(event);
+                            }
+                            AccumulateInput::Query(mut query) => {
+                                gst::debug!(CAT, imp = this, "Forwarding query {query:?}");
+                                let res = this.srcpad.peer_query(unsafe { query.as_mut() });
+
+                                this.state.lock().unwrap().serialized_query_return = Some(res);
+                                this.serialized_query_cond.notify_all();
+                            }
+                            AccumulateInput::RecalculateTimeout => {
+                                continue;
                             }
                         }
-                        AccumulateInput::Gap { pts, duration } => {
-                            let event = {
-                                let mut state = this.state.lock().unwrap();
+                    }
+                    Err(RecvTimeoutError::Timeout) => {
+                        gst::trace!(
+                            CAT,
+                            imp = this,
+                            "timed out waiting for input on accumulate queue"
+                        );
 
-                                state
-                                    .segment
-                                    .set_position(pts + duration.unwrap_or(gst::ClockTime::ZERO));
-
-                                gst::debug!(
-                                    CAT,
-                                    imp = this,
-                                    "forwarding gap {} {:?}",
-                                    pts,
-                                    duration
+                        if let Err(err) = this.maybe_push() {
+                            if err != gst::FlowError::Flushing {
+                                gst::element_error!(
+                                    this.obj(),
+                                    gst::StreamError::Failed,
+                                    ["Streaming failed: {}", err]
                                 );
-
-                                gst::event::Gap::builder(pts)
-                                    .duration(duration)
-                                    .seqnum(state.seqnum)
-                                    .build()
-                            };
-
-                            let _ = this.srcpad.push_event(event);
-                        }
-                        AccumulateInput::Event(event) => {
-                            gst::debug!(CAT, imp = this, "Forwarding event {event:?}");
-                            let _ = this.srcpad.push_event(event);
-                        }
-                        AccumulateInput::Query(mut query) => {
-                            gst::debug!(CAT, imp = this, "Forwarding query {query:?}");
-                            let res = this.srcpad.peer_query(unsafe { query.as_mut() });
-
-                            this.state.lock().unwrap().serialized_query_return = Some(res);
-                            this.serialized_query_cond.notify_all();
-                        }
-                        AccumulateInput::RecalculateTimeout => {
-                            continue;
+                            }
+                            let _ = this.srcpad.pause_task();
                         }
                     }
-                }
-                Err(RecvTimeoutError::Timeout) => {
-                    gst::trace!(
-                        CAT,
-                        imp = this,
-                        "timed out waiting for input on accumulate queue"
-                    );
+                    Err(RecvTimeoutError::Disconnected) => {
+                        gst::log!(CAT, imp = this, "accumulate queue disconnected");
 
-                    if let Err(err) = this.maybe_push() {
-                        if err != gst::FlowError::Flushing {
-                            gst::element_error!(
-                                this.obj(),
-                                gst::StreamError::Failed,
-                                ["Streaming failed: {}", err]
-                            );
-                        }
                         let _ = this.srcpad.pause_task();
+                        break;
                     }
-                }
-                Err(RecvTimeoutError::Disconnected) => {
-                    gst::log!(CAT, imp = this, "accumulate queue disconnected");
-
-                    let _ = this.srcpad.pause_task();
-                    break;
                 }
             }
         });
@@ -943,12 +935,12 @@ impl Accumulate {
             None
         };
 
-        if let Some(items) = drained_items {
-            if let Some(tx) = state.accumulate_tx.clone() {
-                drop(state);
-                let _ = tx.send(AccumulateInput::Items(items));
-                state = self.state.lock().unwrap();
-            }
+        if let Some(items) = drained_items
+            && let Some(tx) = state.accumulate_tx.clone()
+        {
+            drop(state);
+            let _ = tx.send(AccumulateInput::Items(items));
+            state = self.state.lock().unwrap();
         }
 
         let Some(pts) = buffer.pts() else {
@@ -987,12 +979,11 @@ impl Accumulate {
             .map(|input| input.items.len())
             .unwrap_or(0)
             == 1
+            && let Some(tx) = state.accumulate_tx.clone()
         {
-            if let Some(tx) = state.accumulate_tx.clone() {
-                drop(state);
-                let _ = tx.send(AccumulateInput::RecalculateTimeout);
-                state = self.state.lock().unwrap();
-            }
+            drop(state);
+            let _ = tx.send(AccumulateInput::RecalculateTimeout);
+            state = self.state.lock().unwrap();
         }
 
         gst::trace!(CAT, imp = self, "input is now {:#?}", state.input);
@@ -1411,14 +1402,16 @@ mod tests {
         let upstream_min = gst::ClockTime::from_nseconds(5);
         let lateness = gst::ClockTime::from_nseconds(0);
 
-        assert!(input
-            .timeout(
-                gst::ClockTime::from_nseconds(5),
-                upstream_min,
-                lateness,
-                &timeout_terminators_regex
-            )
-            .is_none());
+        assert!(
+            input
+                .timeout(
+                    gst::ClockTime::from_nseconds(5),
+                    upstream_min,
+                    lateness,
+                    &timeout_terminators_regex
+                )
+                .is_none()
+        );
 
         assert_eq!(
             input
@@ -1469,14 +1462,16 @@ mod tests {
         let upstream_min = gst::ClockTime::from_nseconds(5);
         let lateness = gst::ClockTime::from_nseconds(0);
 
-        assert!(input
-            .timeout(
-                gst::ClockTime::from_nseconds(5),
-                upstream_min,
-                lateness,
-                &timeout_terminators_regex
-            )
-            .is_none());
+        assert!(
+            input
+                .timeout(
+                    gst::ClockTime::from_nseconds(5),
+                    upstream_min,
+                    lateness,
+                    &timeout_terminators_regex
+                )
+                .is_none()
+        );
 
         assert_eq!(
             input
@@ -1518,14 +1513,16 @@ mod tests {
         let upstream_min = gst::ClockTime::from_nseconds(5);
         let lateness = gst::ClockTime::from_nseconds(10);
 
-        assert!(input
-            .timeout(
-                gst::ClockTime::from_nseconds(5),
-                upstream_min,
-                lateness,
-                &timeout_terminators_regex
-            )
-            .is_none());
+        assert!(
+            input
+                .timeout(
+                    gst::ClockTime::from_nseconds(5),
+                    upstream_min,
+                    lateness,
+                    &timeout_terminators_regex
+                )
+                .is_none()
+        );
 
         assert_eq!(
             input

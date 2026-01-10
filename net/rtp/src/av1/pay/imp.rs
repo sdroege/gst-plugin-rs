@@ -18,7 +18,7 @@ use bitstream_io::{BitReader, BitWriter};
 use std::sync::LazyLock;
 
 use crate::{
-    av1::common::{err_flow, leb128_size, write_leb128, ObuType, SizedObu, CLOCK_RATE, ENDIANNESS},
+    av1::common::{CLOCK_RATE, ENDIANNESS, ObuType, SizedObu, err_flow, leb128_size, write_leb128},
     basepay::{PacketToBufferRelation, RtpBasePay2Ext},
 };
 

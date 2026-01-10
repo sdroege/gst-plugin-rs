@@ -12,7 +12,7 @@ use crate::utils::ExtendedSeqnum;
 
 use super::{
     session::KeyUnitRequestType,
-    time::{system_time_to_ntp_time_u64, NtpTime},
+    time::{NtpTime, system_time_to_ntp_time_u64},
 };
 
 use gst::prelude::MulDiv;
@@ -561,7 +561,11 @@ impl RemoteSendSource {
             None => 0,
         };
 
-        trace!("source {} in state {:?} received seqnum {seqnum} with a difference of {diff} from the previous seqnum", self.ssrc(), self.state());
+        trace!(
+            "source {} in state {:?} received seqnum {seqnum} with a difference of {diff} from the previous seqnum",
+            self.ssrc(),
+            self.state()
+        );
 
         let ret = if let SourceState::Probation(n_probation) = self.state() {
             // consecutive packets are good
@@ -650,24 +654,24 @@ impl RemoteSendSource {
             SourceRecvReply::Passthrough
         };
 
-        if matches!(ret, SourceRecvReply::Passthrough) {
-            if let Some(held) = self.held_buffers.pop_back() {
-                info!(
-                    "source {} pushing stored seqnum {}",
-                    self.ssrc(),
-                    held.seqnum
-                );
-                self.recv_packet_add_to_stats(
-                    rtp_timestamp,
-                    held.time,
-                    initial_time,
-                    payload_type,
-                    clock_rate,
-                    ext_seqnum,
-                    held.bytes,
-                );
-                return SourceRecvReply::Forward(held.id);
-            }
+        if matches!(ret, SourceRecvReply::Passthrough)
+            && let Some(held) = self.held_buffers.pop_back()
+        {
+            info!(
+                "source {} pushing stored seqnum {}",
+                self.ssrc(),
+                held.seqnum
+            );
+            self.recv_packet_add_to_stats(
+                rtp_timestamp,
+                held.time,
+                initial_time,
+                payload_type,
+                clock_rate,
+                ext_seqnum,
+                held.bytes,
+            );
+            return SourceRecvReply::Forward(held.id);
         }
 
         trace!("setting ext seqnum to {ext_seqnum}");
@@ -798,17 +802,16 @@ impl RemoteSendSource {
 
         trace!(
             "ssrc {} current packet counts ext_seqnum {:?} recv_packets {}",
-            self.source.ssrc,
-            self.ext_seqnum,
-            self.recv_packets
+            self.source.ssrc, self.ext_seqnum, self.recv_packets
         );
         trace!(
             "ssrc {} previous rtcp values ext_seqnum {:?} recv_packets {}",
-            self.source.ssrc,
-            self.ext_seqnum_at_last_rtcp,
-            self.recv_packets_at_last_rtcp
+            self.source.ssrc, self.ext_seqnum_at_last_rtcp, self.recv_packets_at_last_rtcp
         );
-        trace!("ssrc {} fraction expected {expected_since_last_rtcp} lost {lost_packets_since_last_rtcp} fraction lost {fraction_lost}", self.source.ssrc);
+        trace!(
+            "ssrc {} fraction expected {expected_since_last_rtcp} lost {lost_packets_since_last_rtcp} fraction lost {fraction_lost}",
+            self.source.ssrc
+        );
 
         Rb {
             ssrc: self.source.ssrc,

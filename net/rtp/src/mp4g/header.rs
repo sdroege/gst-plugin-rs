@@ -56,8 +56,8 @@ impl<'a> FromBitStreamWith<'a> for AuHeader {
         r: &mut R,
         ctx: &AuHeaderContext,
     ) -> Result<Self, Self::Error> {
-        use anyhow::Context;
         use AuHeaderError::*;
+        use anyhow::Context;
 
         let mut this = AuHeader::default();
 
@@ -134,8 +134,8 @@ impl<'a> ToBitStreamWith<'a> for AuHeader {
         w: &mut W,
         ctx: &AuHeaderContext,
     ) -> Result<(), Self::Error> {
-        use anyhow::Context;
         use AuHeaderError::*;
+        use anyhow::Context;
 
         if ctx.config.size_len > 0 {
             let Some(size) = self.size else {

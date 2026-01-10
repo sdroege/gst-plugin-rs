@@ -77,13 +77,13 @@ fn test_can_find_similar_frames() {
         use gst::MessageView;
         match msg.view() {
             MessageView::Element(elt) => {
-                if let Some(s) = elt.structure() {
-                    if s.name() == "videocompare" {
-                        detection = Some(
-                            VideoCompareMessage::try_from(s.to_owned())
-                                .expect("Can convert message to struct"),
-                        );
-                    }
+                if let Some(s) = elt.structure()
+                    && s.name() == "videocompare"
+                {
+                    detection = Some(
+                        VideoCompareMessage::try_from(s.to_owned())
+                            .expect("Can convert message to struct"),
+                    );
                 }
             }
             MessageView::Eos(..) => break,
@@ -117,13 +117,13 @@ fn test_do_not_send_message_when_image_not_found() {
         use gst::MessageView;
         match msg.view() {
             MessageView::Element(elt) => {
-                if let Some(s) = elt.structure() {
-                    if s.name() == "videocompare" {
-                        detection = Some(
-                            VideoCompareMessage::try_from(s.to_owned())
-                                .expect("Can convert message to struct"),
-                        );
-                    }
+                if let Some(s) = elt.structure()
+                    && s.name() == "videocompare"
+                {
+                    detection = Some(
+                        VideoCompareMessage::try_from(s.to_owned())
+                            .expect("Can convert message to struct"),
+                    );
                 }
             }
             MessageView::Eos(..) => break,
@@ -156,13 +156,13 @@ fn test_use_dssim_to_find_similar_frames() {
         use gst::MessageView;
         match msg.view() {
             MessageView::Element(elt) => {
-                if let Some(s) = elt.structure() {
-                    if s.name() == "videocompare" {
-                        detection = Some(
-                            VideoCompareMessage::try_from(s.to_owned())
-                                .expect("Can convert message to struct"),
-                        );
-                    }
+                if let Some(s) = elt.structure()
+                    && s.name() == "videocompare"
+                {
+                    detection = Some(
+                        VideoCompareMessage::try_from(s.to_owned())
+                            .expect("Can convert message to struct"),
+                    );
                 }
             }
             MessageView::Eos(..) => break,

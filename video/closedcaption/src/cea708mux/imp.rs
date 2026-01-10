@@ -248,8 +248,8 @@ impl AggregatorImpl for Cea708Mux {
 
                     if let Some(cea608) = cea608 {
                         for pair in cea608 {
-                            if !pad_state.discarded_services.is_empty() {
-                                if let (Ok(decoded), field) = match pair {
+                            if !pad_state.discarded_services.is_empty()
+                                && let (Ok(decoded), field) = match pair {
                                     cea708_types::Cea608::Field1(a, b) => (
                                         pad_state.cea608_parsers[0].decode([a, b]),
                                         cea608_types::tables::Field::ONE,
@@ -258,22 +258,20 @@ impl AggregatorImpl for Cea708Mux {
                                         pad_state.cea608_parsers[1].decode([a, b]),
                                         cea608_types::tables::Field::TWO,
                                     ),
-                                } {
-                                    if let Some(channel) = decoded.map(|d| d.channel()) {
-                                        let channel_id =
-                                            match cea608_types::Id::from_caption_field_channel(
-                                                field, channel,
-                                            ) {
-                                                cea608_types::Id::CC1 => -1,
-                                                cea608_types::Id::CC2 => -2,
-                                                cea608_types::Id::CC3 => -3,
-                                                cea608_types::Id::CC4 => -4,
-                                            };
+                                }
+                                && let Some(channel) = decoded.map(|d| d.channel())
+                            {
+                                let channel_id = match cea608_types::Id::from_caption_field_channel(
+                                    field, channel,
+                                ) {
+                                    cea608_types::Id::CC1 => -1,
+                                    cea608_types::Id::CC2 => -2,
+                                    cea608_types::Id::CC3 => -3,
+                                    cea608_types::Id::CC4 => -4,
+                                };
 
-                                        if pad_state.discarded_services.contains(&channel_id) {
-                                            continue;
-                                        }
-                                    }
+                                if pad_state.discarded_services.contains(&channel_id) {
+                                    continue;
                                 }
                             }
 
@@ -782,9 +780,7 @@ impl ChildProxyImpl for Cea708Mux {
     }
 
     fn child_by_name(&self, name: &str) -> Option<glib::Object> {
-        let ret = self.obj().static_pad(name).map(|pad| pad.upcast());
-
-        ret
+        self.obj().static_pad(name).map(|pad| pad.upcast())
     }
 }
 

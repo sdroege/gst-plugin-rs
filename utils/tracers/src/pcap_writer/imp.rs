@@ -45,7 +45,7 @@ use pcap_file::pcap::{self, RawPcapPacket};
 use etherparse::PacketBuilder;
 use gst::glib::Properties;
 use std::collections::{HashMap, HashSet};
-use std::fs::{create_dir_all, File};
+use std::fs::{File, create_dir_all};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 

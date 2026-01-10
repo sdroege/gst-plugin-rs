@@ -8,8 +8,8 @@
 
 use either::Either;
 
-use crate::parser_utils::{digits, digits_range, end_of_line, timecode, TimeCode};
-use winnow::{error::StrContext, ModalParser, ModalResult, Parser};
+use crate::parser_utils::{TimeCode, digits, digits_range, end_of_line, timecode};
+use winnow::{ModalParser, ModalResult, Parser, error::StrContext};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MccLine<'a> {

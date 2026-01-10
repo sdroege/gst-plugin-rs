@@ -68,8 +68,8 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::{Arc, Weak};
 
-use super::executor::{self, Context};
 use super::RUNTIME_CAT;
+use super::executor::{self, Context};
 
 #[inline]
 fn event_ret_to_event_full_res(

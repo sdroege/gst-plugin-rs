@@ -7,8 +7,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::parser_utils::{end_of_line, timecode, TimeCode};
-use winnow::{error::StrContext, ModalResult, Parser};
+use crate::parser_utils::{TimeCode, end_of_line, timecode};
+use winnow::{ModalResult, Parser, error::StrContext};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SccLine {

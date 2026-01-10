@@ -203,7 +203,10 @@ impl BufferLateness {
             min_latency,
         } in &log
         {
-            if let Err(err) = writeln!(&mut file, "{timestamp},{element_name}:{pad_name},0x{ptr:08x},{buffer_clock_time},{pipeline_clock_time},{lateness},{min_latency}") {
+            if let Err(err) = writeln!(
+                &mut file,
+                "{timestamp},{element_name}:{pad_name},0x{ptr:08x},{buffer_clock_time},{pipeline_clock_time},{lateness},{min_latency}"
+            ) {
                 gst::error!(CAT, imp = self, "Failed to write to file: {err}");
                 return;
             }
@@ -236,17 +239,19 @@ impl ObjectImpl for BufferLateness {
 
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
-            vec![glib::subclass::Signal::builder("write-log")
-                .action()
-                .param_types([Option::<String>::static_type()])
-                .class_handler(|args| {
-                    let obj = args[0].get::<super::BufferLateness>().unwrap();
+            vec![
+                glib::subclass::Signal::builder("write-log")
+                    .action()
+                    .param_types([Option::<String>::static_type()])
+                    .class_handler(|args| {
+                        let obj = args[0].get::<super::BufferLateness>().unwrap();
 
-                    obj.imp().write_log(args[1].get::<Option<&str>>().unwrap());
+                        obj.imp().write_log(args[1].get::<Option<&str>>().unwrap());
 
-                    None
-                })
-                .build()]
+                        None
+                    })
+                    .build(),
+            ]
         });
 
         SIGNALS.as_ref()
@@ -311,7 +316,7 @@ impl TracerImpl for BufferLateness {
             Some(base_time)
                 if base_time == gst::ClockTime::ZERO && element.start_time().is_some() =>
             {
-                return
+                return;
             }
             Some(base_time) => base_time,
             None => return,
@@ -340,17 +345,17 @@ impl TracerImpl for BufferLateness {
                 pad.element_name = Some(Arc::new(element.name()));
 
                 let name = format!("{}:{}", pad.element_name.as_ref().unwrap(), pad.pad_name);
-                if let Some(ref filter) = settings.include_filter {
-                    if !filter.is_match(&name) {
-                        pads.remove(&ptr);
-                        return;
-                    }
+                if let Some(ref filter) = settings.include_filter
+                    && !filter.is_match(&name)
+                {
+                    pads.remove(&ptr);
+                    return;
                 }
-                if let Some(ref filter) = settings.exclude_filter {
-                    if filter.is_match(&name) {
-                        pads.remove(&ptr);
-                        return;
-                    }
+                if let Some(ref filter) = settings.exclude_filter
+                    && filter.is_match(&name)
+                {
+                    pads.remove(&ptr);
+                    return;
                 }
             }
 

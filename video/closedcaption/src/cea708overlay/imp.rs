@@ -415,14 +415,13 @@ impl Cea708Overlay {
 
         let composition = self.render(&mut state);
 
-        if let Some(timeout) = caption_timeout {
-            if let Some(interval) = pts.opt_saturating_sub(state.last_cc_pts) {
-                if interval > timeout {
-                    gst::info!(CAT, imp = self, "Reached timeout, clearing overlay");
-                    state.cea708_renderer.clear_composition();
-                    state.last_cc_pts.take();
-                }
-            }
+        if let Some(timeout) = caption_timeout
+            && let Some(interval) = pts.opt_saturating_sub(state.last_cc_pts)
+            && interval > timeout
+        {
+            gst::info!(CAT, imp = self, "Reached timeout, clearing overlay");
+            state.cea708_renderer.clear_composition();
+            state.last_cc_pts.take();
         }
 
         if let Some(composition) = &composition {

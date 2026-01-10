@@ -6,7 +6,7 @@
 // <https://mozilla.org/MPL/2.0/>.
 //
 // SPDX-License-Identifier: MPL-2.0
-use gst::{prelude::*, Element, GroupId};
+use gst::{Element, GroupId, prelude::*};
 
 use gst_check::Harness;
 use std::sync::LazyLock;

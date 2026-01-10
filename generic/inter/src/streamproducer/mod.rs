@@ -4,7 +4,7 @@ use gst_utils::streamproducer::{ConsumerSettings, ProducerSettings};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use std::sync::LazyLock;
 
 pub enum InterStreamProducer {

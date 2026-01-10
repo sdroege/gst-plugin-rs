@@ -7,19 +7,19 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use crate::RUNTIME;
 use crate::signaller::{Signallable, SignallableImpl};
 use crate::utils::{
-    build_reqwest_client, parse_redirect_location, set_ice_servers, wait, wait_async, WaitError,
+    WaitError, build_reqwest_client, parse_redirect_location, set_ice_servers, wait, wait_async,
 };
-use crate::RUNTIME;
 use bytes::Bytes;
 use futures::future;
 use gst::glib::RustClosure;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_sdp::*;
 use gst_webrtc::*;
-use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::StatusCode;
+use reqwest::header::{HeaderMap, HeaderValue};
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
@@ -293,12 +293,10 @@ impl WhepClient {
             StatusCode::CREATED | StatusCode::NOT_ACCEPTABLE => {
                 gst::debug!(CAT, imp = self, "Response headers: {:?}", resp.headers());
 
-                if use_link_headers {
-                    if let Err(e) = set_ice_servers(&webrtcbin, resp.headers()) {
-                        self.raise_error(e.to_string());
-                        return;
-                    };
-                }
+                if use_link_headers && let Err(e) = set_ice_servers(&webrtcbin, resp.headers()) {
+                    self.raise_error(e.to_string());
+                    return;
+                };
 
                 /* See section 4.2 of the WHEP specification */
                 let location = match resp.headers().get(reqwest::header::LOCATION) {
@@ -571,7 +569,7 @@ impl WhepClient {
                     return Err(gst::error_msg!(
                         gst::ResourceError::Failed,
                         ["Unexpected response from the server: {}", r.status()]
-                    ))
+                    ));
                 }
             },
             Err(err) => return Err(gst::error_msg!(gst::ResourceError::Failed, ["{err}"])),

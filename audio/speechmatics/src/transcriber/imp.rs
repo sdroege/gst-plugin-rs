@@ -13,7 +13,7 @@ use std::default::Default;
 
 use async_tungstenite::tungstenite::error::Error as WsError;
 use async_tungstenite::{tokio::connect_async, tungstenite::Message};
-use futures::future::{abortable, AbortHandle};
+use futures::future::{AbortHandle, abortable};
 use futures::prelude::*;
 use http::Request;
 use tokio::runtime;
@@ -572,19 +572,19 @@ impl TranscriberSrcPad {
                 TranscriberOutput::Buffer(buf) => {
                     let pts = buf.pts().unwrap();
 
-                    if let Some(last_position) = last_position {
-                        if pts > last_position {
-                            let gap_event = gst::event::Gap::builder(last_position)
-                                .duration(pts - last_position)
-                                .seqnum(seqnum)
-                                .build();
-                            gst::log!(CAT, "Pushing gap:    {} -> {}", last_position, pts);
-                            if !self.obj().push_event(gap_event) {
-                                return Err(gst::error_msg!(
-                                    gst::StreamError::Failed,
-                                    ["failed to push gap"]
-                                ));
-                            }
+                    if let Some(last_position) = last_position
+                        && pts > last_position
+                    {
+                        let gap_event = gst::event::Gap::builder(last_position)
+                            .duration(pts - last_position)
+                            .seqnum(seqnum)
+                            .build();
+                        gst::log!(CAT, "Pushing gap:    {} -> {}", last_position, pts);
+                        if !self.obj().push_event(gap_event) {
+                            return Err(gst::error_msg!(
+                                gst::StreamError::Failed,
+                                ["failed to push gap"]
+                            ));
                         }
                     }
 
@@ -607,26 +607,26 @@ impl TranscriberSrcPad {
                     Ok(())
                 }
                 TranscriberOutput::Position(position) => {
-                    if let Some(last_position) = last_position {
-                        if position > last_position {
-                            let gap_event = gst::event::Gap::builder(last_position)
-                                .duration(position - last_position)
-                                .seqnum(seqnum)
-                                .build();
-                            gst::log!(CAT, "Pushing gap:    {} -> {}", last_position, position);
-                            if !self.obj().push_event(gap_event) {
-                                return Err(gst::error_msg!(
-                                    gst::StreamError::Failed,
-                                    ["failed to push gap"]
-                                ));
-                            }
-
-                            self.state
-                                .lock()
-                                .unwrap()
-                                .out_segment
-                                .set_position(position);
+                    if let Some(last_position) = last_position
+                        && position > last_position
+                    {
+                        let gap_event = gst::event::Gap::builder(last_position)
+                            .duration(position - last_position)
+                            .seqnum(seqnum)
+                            .build();
+                        gst::log!(CAT, "Pushing gap:    {} -> {}", last_position, position);
+                        if !self.obj().push_event(gap_event) {
+                            return Err(gst::error_msg!(
+                                gst::StreamError::Failed,
+                                ["failed to push gap"]
+                            ));
                         }
+
+                        self.state
+                            .lock()
+                            .unwrap()
+                            .out_segment
+                            .set_position(position);
                     }
 
                     Ok(())
@@ -941,19 +941,18 @@ impl Transcriber {
                 true
             }
             gst::EventView::Caps(e) => {
-                if let Some(old_caps) = self.sinkpad.current_caps() {
-                    if old_caps != *e.caps() {
-                        if let Err(err) = self.drain(self.state.lock().unwrap()) {
-                            gst::error!(CAT, imp = self, "Failed to drain: {err}");
-                            gst::element_imp_error!(
-                                self,
-                                gst::StreamError::Failed,
-                                ["Failed to drain: {err}"]
-                            );
-                            return false;
-                        };
-                    }
-                }
+                if let Some(old_caps) = self.sinkpad.current_caps()
+                    && old_caps != *e.caps()
+                    && let Err(err) = self.drain(self.state.lock().unwrap())
+                {
+                    gst::error!(CAT, imp = self, "Failed to drain: {err}");
+                    gst::element_imp_error!(
+                        self,
+                        gst::StreamError::Failed,
+                        ["Failed to drain: {err}"]
+                    );
+                    return false;
+                };
 
                 let srcpads = self.state.lock().unwrap().srcpads.clone();
 
@@ -2401,12 +2400,12 @@ impl TranscriberSrcPadState {
             self.discont = false;
         }
 
-        if let Some(input_running_time) = self.trim_input_times(buf.pts().unwrap()) {
-            if let Some(now) = now {
-                let item_delay = now.saturating_sub(input_running_time);
+        if let Some(input_running_time) = self.trim_input_times(buf.pts().unwrap())
+            && let Some(now) = now
+        {
+            let item_delay = now.saturating_sub(input_running_time);
 
-                self.observed_max_delay = self.observed_max_delay.max(item_delay);
-            }
+            self.observed_max_delay = self.observed_max_delay.max(item_delay);
         }
 
         if let Some(ref mut sender) = self.sender {
@@ -2465,12 +2464,14 @@ const DEFAULT_OUTPUT_LANG_CODE: Option<&str> = None;
 impl ObjectImpl for TranscriberSrcPad {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecString::builder(OUTPUT_LANG_CODE_PROPERTY)
-                .nick("Language Code")
-                .blurb("The Language the Stream must be translated to")
-                .default_value(DEFAULT_OUTPUT_LANG_CODE)
-                .mutable_ready()
-                .build()]
+            vec![
+                glib::ParamSpecString::builder(OUTPUT_LANG_CODE_PROPERTY)
+                    .nick("Language Code")
+                    .blurb("The Language the Stream must be translated to")
+                    .default_value(DEFAULT_OUTPUT_LANG_CODE)
+                    .mutable_ready()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

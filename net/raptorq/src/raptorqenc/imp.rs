@@ -9,17 +9,17 @@ use gst::{element_imp_error, error_msg, glib, loggable_error};
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use gst_rtp::rtp_buffer::*;
 use gst_rtp::RTPBuffer;
+use gst_rtp::rtp_buffer::*;
 
 use std::sync::LazyLock;
 
 use std::collections::HashSet;
-use std::sync::{mpsc, Mutex};
+use std::sync::{Mutex, mpsc};
 
 use raptorq::{
-    extended_source_block_symbols, ObjectTransmissionInformation, SourceBlockEncoder,
-    SourceBlockEncodingPlan,
+    ObjectTransmissionInformation, SourceBlockEncoder, SourceBlockEncodingPlan,
+    extended_source_block_symbols,
 };
 
 use crate::fecscheme::{self, DataUnitHeader, RepairPayloadId};
@@ -415,11 +415,11 @@ impl RaptorqEnc {
             }
         };
 
-        if let Some(last_seq) = state.seqnums.last() {
-            if last_seq.overflowing_add(1).0 != curr_seq {
-                gst::error!(CAT, imp = self, "Got out of sequence packets");
-                return Err(gst::FlowError::NotSupported);
-            }
+        if let Some(last_seq) = state.seqnums.last()
+            && last_seq.overflowing_add(1).0 != curr_seq
+        {
+            gst::error!(CAT, imp = self, "Got out of sequence packets");
+            return Err(gst::FlowError::NotSupported);
         }
 
         state.packets.push(buffer.clone());

@@ -10,8 +10,8 @@
 
 use crate::ac3::ac3_audio_utils::*;
 use crate::tests::{
-    run_test_pipeline_and_validate_data, run_test_pipeline_full_and_validate_data, ExpectedBuffer,
-    ExpectedPacket, Liveness, Source,
+    ExpectedBuffer, ExpectedPacket, Liveness, Source, run_test_pipeline_and_validate_data,
+    run_test_pipeline_full_and_validate_data,
 };
 
 fn init() {
@@ -98,20 +98,24 @@ fn test_ac3_pay_depay() {
         // that's 3 frames/packet.
         let mut expected_pay = vec![];
         if liveness == Liveness::NonLive {
-            expected_pay.push(vec![ExpectedPacket::builder()
-                .pts(gst::ClockTime::ZERO)
-                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
-                .pt(96)
-                .rtp_time(0)
-                .marker_bit(true)
-                .build()]);
-            expected_pay.push(vec![ExpectedPacket::builder()
-                .pts(gst::ClockTime::from_mseconds(96))
-                .flags(gst::BufferFlags::MARKER)
-                .pt(96)
-                .rtp_time(3 * 1536)
-                .marker_bit(true)
-                .build()]);
+            expected_pay.push(vec![
+                ExpectedPacket::builder()
+                    .pts(gst::ClockTime::ZERO)
+                    .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
+                    .pt(96)
+                    .rtp_time(0)
+                    .marker_bit(true)
+                    .build(),
+            ]);
+            expected_pay.push(vec![
+                ExpectedPacket::builder()
+                    .pts(gst::ClockTime::from_mseconds(96))
+                    .flags(gst::BufferFlags::MARKER)
+                    .pt(96)
+                    .rtp_time(3 * 1536)
+                    .marker_bit(true)
+                    .build(),
+            ]);
         } else {
             for (i, _frame) in frames.iter().enumerate() {
                 let discont_flag = if i == 0 {
@@ -120,47 +124,59 @@ fn test_ac3_pay_depay() {
                     gst::BufferFlags::empty()
                 };
 
-                expected_pay.push(vec![ExpectedPacket::builder()
-                    .pts(gst::ClockTime::from_mseconds(32 * i as u64))
-                    .flags(discont_flag | gst::BufferFlags::MARKER)
-                    .pt(96)
-                    .rtp_time(1536 * i as u32)
-                    .marker_bit(true)
-                    .build()]);
+                expected_pay.push(vec![
+                    ExpectedPacket::builder()
+                        .pts(gst::ClockTime::from_mseconds(32 * i as u64))
+                        .flags(discont_flag | gst::BufferFlags::MARKER)
+                        .pt(96)
+                        .rtp_time(1536 * i as u32)
+                        .marker_bit(true)
+                        .build(),
+                ]);
             }
         }
 
         let expected_depay = vec![
-            vec![ExpectedBuffer::builder()
-                .pts(gst::ClockTime::ZERO)
-                .duration(gst::ClockTime::from_mseconds(32))
-                .size(384)
-                .flags(gst::BufferFlags::DISCONT)
-                .build()],
-            vec![ExpectedBuffer::builder()
-                .pts(gst::ClockTime::from_mseconds(32))
-                .duration(gst::ClockTime::from_mseconds(32))
-                .size(384)
-                .flags(gst::BufferFlags::empty())
-                .build()],
-            vec![ExpectedBuffer::builder()
-                .pts(gst::ClockTime::from_mseconds(64))
-                .duration(gst::ClockTime::from_mseconds(32))
-                .size(384)
-                .flags(gst::BufferFlags::empty())
-                .build()],
-            vec![ExpectedBuffer::builder()
-                .pts(gst::ClockTime::from_mseconds(96))
-                .duration(gst::ClockTime::from_mseconds(32))
-                .size(384)
-                .flags(gst::BufferFlags::empty())
-                .build()],
-            vec![ExpectedBuffer::builder()
-                .pts(gst::ClockTime::from_mseconds(128))
-                .duration(gst::ClockTime::from_mseconds(32))
-                .size(384)
-                .flags(gst::BufferFlags::empty())
-                .build()],
+            vec![
+                ExpectedBuffer::builder()
+                    .pts(gst::ClockTime::ZERO)
+                    .duration(gst::ClockTime::from_mseconds(32))
+                    .size(384)
+                    .flags(gst::BufferFlags::DISCONT)
+                    .build(),
+            ],
+            vec![
+                ExpectedBuffer::builder()
+                    .pts(gst::ClockTime::from_mseconds(32))
+                    .duration(gst::ClockTime::from_mseconds(32))
+                    .size(384)
+                    .flags(gst::BufferFlags::empty())
+                    .build(),
+            ],
+            vec![
+                ExpectedBuffer::builder()
+                    .pts(gst::ClockTime::from_mseconds(64))
+                    .duration(gst::ClockTime::from_mseconds(32))
+                    .size(384)
+                    .flags(gst::BufferFlags::empty())
+                    .build(),
+            ],
+            vec![
+                ExpectedBuffer::builder()
+                    .pts(gst::ClockTime::from_mseconds(96))
+                    .duration(gst::ClockTime::from_mseconds(32))
+                    .size(384)
+                    .flags(gst::BufferFlags::empty())
+                    .build(),
+            ],
+            vec![
+                ExpectedBuffer::builder()
+                    .pts(gst::ClockTime::from_mseconds(128))
+                    .duration(gst::ClockTime::from_mseconds(32))
+                    .size(384)
+                    .flags(gst::BufferFlags::empty())
+                    .build(),
+            ],
         ];
 
         run_test_pipeline_full_and_validate_data(
@@ -241,36 +257,46 @@ fn test_ac3_pay_depay_fragmented() {
     }
 
     let expected_depay = vec![
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .duration(gst::ClockTime::from_mseconds(32))
-            .size(384)
-            .flags(gst::BufferFlags::DISCONT)
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_mseconds(32))
-            .duration(gst::ClockTime::from_mseconds(32))
-            .size(384)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_mseconds(64))
-            .duration(gst::ClockTime::from_mseconds(32))
-            .size(384)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_mseconds(96))
-            .duration(gst::ClockTime::from_mseconds(32))
-            .size(384)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .duration(gst::ClockTime::from_mseconds(32))
-            .pts(gst::ClockTime::from_mseconds(128))
-            .size(384)
-            .flags(gst::BufferFlags::empty())
-            .build()],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .duration(gst::ClockTime::from_mseconds(32))
+                .size(384)
+                .flags(gst::BufferFlags::DISCONT)
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(32))
+                .duration(gst::ClockTime::from_mseconds(32))
+                .size(384)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(64))
+                .duration(gst::ClockTime::from_mseconds(32))
+                .size(384)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(96))
+                .duration(gst::ClockTime::from_mseconds(32))
+                .size(384)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .duration(gst::ClockTime::from_mseconds(32))
+                .pts(gst::ClockTime::from_mseconds(128))
+                .size(384)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
     ];
     run_test_pipeline_and_validate_data(
         Source::Buffers(input_caps, input_buffers),
@@ -357,12 +383,14 @@ fn test_ac3_pay_depay_fragmented_with_packet_loss() {
 
             // If any of the fragments got dropped, we can't reconstruct the original payload
             if packet_mask == 0b0000 {
-                expected_depay.push(vec![ExpectedBuffer::builder()
-                    .pts(gst::ClockTime::from_mseconds(32 * i as u64))
-                    .duration(gst::ClockTime::from_mseconds(32))
-                    .size(384)
-                    .flags(expected_flags)
-                    .build()]);
+                expected_depay.push(vec![
+                    ExpectedBuffer::builder()
+                        .pts(gst::ClockTime::from_mseconds(32 * i as u64))
+                        .duration(gst::ClockTime::from_mseconds(32))
+                        .size(384)
+                        .flags(expected_flags)
+                        .build(),
+                ]);
             }
         }
 

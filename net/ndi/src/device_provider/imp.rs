@@ -4,7 +4,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 
 use std::{
-    sync::{atomic, Mutex, OnceLock},
+    sync::{Mutex, OnceLock, atomic},
     thread,
 };
 
@@ -51,10 +51,12 @@ impl GstObjectImpl for DeviceProvider {}
 impl DeviceProviderImpl for DeviceProvider {
     fn metadata() -> Option<&'static gst::subclass::DeviceProviderMetadata> {
         static METADATA: LazyLock<gst::subclass::DeviceProviderMetadata> = LazyLock::new(|| {
-            gst::subclass::DeviceProviderMetadata::new("NewTek NDI Device Provider",
-            "Source/Audio/Video/Network",
-            "NewTek NDI Device Provider",
-            "Ruben Gonzalez <rubenrua@teltek.es>, Daniel Vilar <daniel.peiteado@teltek.es>, Sebastian Dröge <sebastian@centricular.com>")
+            gst::subclass::DeviceProviderMetadata::new(
+                "NewTek NDI Device Provider",
+                "Source/Audio/Video/Network",
+                "NewTek NDI Device Provider",
+                "Ruben Gonzalez <rubenrua@teltek.es>, Daniel Vilar <daniel.peiteado@teltek.es>, Sebastian Dröge <sebastian@centricular.com>",
+            )
         });
 
         Some(&*METADATA)

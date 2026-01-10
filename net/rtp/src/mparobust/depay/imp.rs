@@ -40,8 +40,8 @@ use crate::basedepay::{
 use std::{collections::BTreeMap, ops::RangeInclusive, sync::LazyLock};
 
 use super::{
-    super::FrameHeader, AduAccumulator, AduCompleteUnparsed, AduQueue, DataProvenance,
-    DeinterleavingAduBuffer, MaybeSingleAduOrList, Mp3Frame, SingleMp3FrameOrList, CAT,
+    super::FrameHeader, AduAccumulator, AduCompleteUnparsed, AduQueue, CAT, DataProvenance,
+    DeinterleavingAduBuffer, MaybeSingleAduOrList, Mp3Frame, SingleMp3FrameOrList,
 };
 
 #[derive(Default)]
@@ -157,14 +157,13 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpegAudioRobustDepay {
     fn drain(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.borrow_mut();
 
-        if let Some(adus) = state.deint_buf.drain(&self.obj()).into() {
-            if let Some(mp3frames) = state
+        if let Some(adus) = state.deint_buf.drain(&self.obj()).into()
+            && let Some(mp3frames) = state
                 .pending_adus
                 .push_adus_pop_mp3_frames(&self.obj(), adus)
                 .into()
-            {
-                self.finish_buffer_or_list(&mut state, mp3frames)?;
-            }
+        {
+            self.finish_buffer_or_list(&mut state, mp3frames)?;
         }
 
         if let Some(mp3frames) = state.pending_adus.drain(&self.obj()).into() {
@@ -234,38 +233,45 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpegAudioRobustDepay {
 
             cont = (data[0] & 0x80) == 0x80;
 
-            let (offset, total_size) =
-                if (data[0] & 0x40) == 0x40 {
-                    // 2-byte descriptor => 14-bit size
-                    if data.len() < 3 {
-                        gst::element_imp_warning!(self, gst::ResourceError::Read, [
-                        "Invalid size for ADU {provenance}. Expected at least 3, available {}",
-                        data.len(),
-                    ]);
+            let (offset, total_size) = if (data[0] & 0x40) == 0x40 {
+                // 2-byte descriptor => 14-bit size
+                if data.len() < 3 {
+                    gst::element_imp_warning!(
+                        self,
+                        gst::ResourceError::Read,
+                        [
+                            "Invalid size for ADU {provenance}. Expected at least 3, available {}",
+                            data.len(),
+                        ]
+                    );
 
-                        state.needs_discont = true;
+                    state.needs_discont = true;
 
-                        return Err(gst::FlowError::Error);
-                    }
+                    return Err(gst::FlowError::Error);
+                }
 
-                    let size = (data[0] as usize & 0x3f) << 8 | data[1] as usize;
-                    (2, size)
-                } else {
-                    // 6-bit size
-                    if data.len() < 2 {
-                        gst::element_imp_warning!(self, gst::ResourceError::Read, [
-                        "Invalid size for ADU {provenance}. Expected at least 2, available {}",
-                        data.len(),
-                    ]);
+                let size = (data[0] as usize & 0x3f) << 8 | data[1] as usize;
+                (2, size)
+            } else {
+                // 6-bit size
+                if data.len() < 2 {
+                    gst::element_imp_warning!(
+                        self,
+                        gst::ResourceError::Read,
+                        [
+                            "Invalid size for ADU {provenance}. Expected at least 2, available {}",
+                            data.len(),
+                        ]
+                    );
 
-                        state.needs_discont = true;
+                    state.needs_discont = true;
 
-                        return Err(gst::FlowError::Error);
-                    }
+                    return Err(gst::FlowError::Error);
+                }
 
-                    let size = data[0] as usize & 0x3f;
-                    (1, size)
-                };
+                let size = data[0] as usize & 0x3f;
+                (1, size)
+            };
 
             gst::trace!(
                 CAT,
@@ -384,14 +390,13 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpegAudioRobustDepay {
             idx += 1;
         }
 
-        if let Some(ready_adus) = ready_adus.into() {
-            if let Some(mp3frames) = state
+        if let Some(ready_adus) = ready_adus.into()
+            && let Some(mp3frames) = state
                 .pending_adus
                 .push_adus_pop_mp3_frames(&self.obj(), ready_adus)
                 .into()
-            {
-                self.finish_buffer_or_list(&mut state, mp3frames)?;
-            }
+        {
+            self.finish_buffer_or_list(&mut state, mp3frames)?;
         }
 
         Ok(gst::FlowSuccess::Ok)

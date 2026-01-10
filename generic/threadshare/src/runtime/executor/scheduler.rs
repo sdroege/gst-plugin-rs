@@ -361,16 +361,16 @@ impl Drop for ThrottlingHandleInner {
             );
 
             // Don't block shutting down itself
-            if !self.scheduler.is_current() {
-                if let Some(join_handler) = self.join.lock().unwrap().take() {
-                    gst::trace!(
-                        RUNTIME_CAT,
-                        "Waiting for Scheduler thread to shutdown for Context {}",
-                        self.scheduler.context_name
-                    );
+            if !self.scheduler.is_current()
+                && let Some(join_handler) = self.join.lock().unwrap().take()
+            {
+                gst::trace!(
+                    RUNTIME_CAT,
+                    "Waiting for Scheduler thread to shutdown for Context {}",
+                    self.scheduler.context_name
+                );
 
-                    let _ = join_handler.join();
-                }
+                let _ = join_handler.join();
             }
         }
     }

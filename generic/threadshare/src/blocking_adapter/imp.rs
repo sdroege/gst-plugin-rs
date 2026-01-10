@@ -33,8 +33,8 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use crate::runtime::prelude::*;
 use crate::runtime::PadSink;
+use crate::runtime::prelude::*;
 
 #[derive(Debug)]
 enum Item {

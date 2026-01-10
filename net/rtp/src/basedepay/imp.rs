@@ -867,13 +867,11 @@ impl RtpBaseDepay2 {
                 if !same_segment {
                     gst::debug!(CAT, imp = self, "Received segment {segment:?}");
 
-                    if drain {
-                        if let Err(err) = self.drain() {
-                            // Just continue here. The depayloader is now flushed and can proceed below,
-                            // and if there was a serious error downstream it will happen on the next
-                            // buffer pushed downstream
-                            gst::debug!(CAT, imp = self, "Draining failed: {err:?}");
-                        }
+                    if drain && let Err(err) = self.drain() {
+                        // Just continue here. The depayloader is now flushed and can proceed below,
+                        // and if there was a serious error downstream it will happen on the next
+                        // buffer pushed downstream
+                        gst::debug!(CAT, imp = self, "Draining failed: {err:?}");
                     }
 
                     let mut state = self.state.borrow_mut();
@@ -1123,19 +1121,19 @@ impl RtpBaseDepay2 {
                     .map(gst::ClockTime::from_nseconds);
 
                 // Account for lost packets
-                if let Some(gap) = gap {
-                    if pts > gap {
-                        gst::debug!(
-                            CAT,
-                            imp = self,
-                            "Found gap of {}, adjusting start: {} = {} - {}",
-                            gap.display(),
-                            (pts - gap).display(),
-                            pts.display(),
-                            gap.display(),
-                        );
-                        start = pts - gap;
-                    }
+                if let Some(gap) = gap
+                    && pts > gap
+                {
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "Found gap of {}, adjusting start: {} = {} - {}",
+                        gap.display(),
+                        (pts - gap).display(),
+                        pts.display(),
+                        gap.display(),
+                    );
+                    start = pts - gap;
                 }
             }
 
@@ -1217,24 +1215,24 @@ impl RtpBaseDepay2 {
                 .map(gst::ClockTime::from_nseconds);
             let pts_diff = back.buffer.pts().opt_saturating_sub(front.buffer.pts());
 
-            if let Some(rtp_diff) = rtp_diff {
-                if rtp_diff > gst::ClockTime::SECOND {
-                    gst::warning!(
-                        CAT,
-                        imp = self,
-                        "More than {rtp_diff} of RTP time queued, probably a bug in the subclass"
-                    );
-                }
+            if let Some(rtp_diff) = rtp_diff
+                && rtp_diff > gst::ClockTime::SECOND
+            {
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "More than {rtp_diff} of RTP time queued, probably a bug in the subclass"
+                );
             }
 
-            if let Some(pts_diff) = pts_diff {
-                if pts_diff > gst::ClockTime::SECOND {
-                    gst::warning!(
-                        CAT,
-                        imp = self,
-                        "More than {pts_diff} of PTS time queued, probably a bug in the subclass"
-                    );
-                }
+            if let Some(pts_diff) = pts_diff
+                && pts_diff > gst::ClockTime::SECOND
+            {
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "More than {pts_diff} of PTS time queued, probably a bug in the subclass"
+                );
             }
         }
 
@@ -1539,7 +1537,11 @@ impl RtpBaseDepay2 {
                 if let Some(uri) = arr.get(1).and_then(|v| v.get::<String>().ok()) {
                     uri
                 } else {
-                    gst::error!(CAT, imp = self, "Couldn't get URI for RTP header extension id {ext_id} from caps {sink_caps:?}");
+                    gst::error!(
+                        CAT,
+                        imp = self,
+                        "Couldn't get URI for RTP header extension id {ext_id} from caps {sink_caps:?}"
+                    );
                     return Err(gst::FlowError::NotNegotiated);
                 }
             } else {

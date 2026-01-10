@@ -6,10 +6,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use crate::HlsBaseSink;
 use crate::hlsbasesink::HlsBaseSinkImpl;
 use crate::hlssink3::HlsSink3PlaylistType;
 use crate::playlist::Playlist;
-use crate::HlsBaseSink;
 use gio::prelude::*;
 use gst::glib;
 use gst::prelude::*;

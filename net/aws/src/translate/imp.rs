@@ -13,13 +13,13 @@
 use super::CAT;
 use crate::s3utils::RUNTIME;
 use crate::transcriber::{
-    translate::{span_tokenize_items, TranslatedItem},
     TranslationTokenizationMethod,
+    translate::{TranslatedItem, span_tokenize_items},
 };
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use aws_sdk_s3::config::StalledStreamProtectionConfig;
 use aws_sdk_translate::error::ProvideErrorMetadata;
-use futures::future::{abortable, AbortHandle};
+use futures::future::{AbortHandle, abortable};
 use gst::subclass::prelude::*;
 use gst::{glib, prelude::*};
 use std::sync::LazyLock;
@@ -384,22 +384,22 @@ impl Translate {
 
             item.pts += lateness;
 
-            if let Some((upstream_live, upstream_min, _)) = upstream_latency {
-                if upstream_live {
-                    if let Some(now) = self.obj().current_running_time() {
-                        let start_rtime = segment.to_running_time(item.pts).unwrap();
-                        let deadline = start_rtime + upstream_min + latency;
+            if let Some((upstream_live, upstream_min, _)) = upstream_latency
+                && upstream_live
+                && let Some(now) = self.obj().current_running_time()
+            {
+                let start_rtime = segment.to_running_time(item.pts).unwrap();
+                let deadline = start_rtime + upstream_min + latency;
 
-                        if deadline < now {
-                            let adjusted_pts = item.pts + now - deadline;
-                            gst::warning!(
-                                CAT,
-                                imp = self,
-                                "text translated too late, adjusting timestamp {} -> {adjusted_pts}", item.pts,
-                            );
-                            item.pts = adjusted_pts;
-                        }
-                    }
+                if deadline < now {
+                    let adjusted_pts = item.pts + now - deadline;
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "text translated too late, adjusting timestamp {} -> {adjusted_pts}",
+                        item.pts,
+                    );
+                    item.pts = adjusted_pts;
                 }
             }
 

@@ -121,20 +121,20 @@ impl ProxyContextSink {
         let mut proxy_ctxs = PROXY_CONTEXTS.lock().unwrap();
 
         let mut proxy_ctx = None;
-        if let Some(shared_weak) = proxy_ctxs.get(name) {
-            if let Some(shared) = shared_weak.upgrade() {
-                {
-                    let shared = shared.lock().unwrap();
-                    if shared.sink.is_some() {
-                        return None;
-                    }
+        if let Some(shared_weak) = proxy_ctxs.get(name)
+            && let Some(shared) = shared_weak.upgrade()
+        {
+            {
+                let shared = shared.lock().unwrap();
+                if shared.sink.is_some() {
+                    return None;
                 }
-
-                proxy_ctx = Some(ProxyContextSink {
-                    shared,
-                    name: name.into(),
-                });
             }
+
+            proxy_ctx = Some(ProxyContextSink {
+                shared,
+                name: name.into(),
+            });
         }
 
         if proxy_ctx.is_none() {
@@ -184,20 +184,20 @@ impl ProxyContextSrc {
         let mut proxy_ctxs = PROXY_CONTEXTS.lock().unwrap();
 
         let mut proxy_ctx = None;
-        if let Some(shared_weak) = proxy_ctxs.get(name) {
-            if let Some(shared) = shared_weak.upgrade() {
-                {
-                    let shared = shared.lock().unwrap();
-                    if shared.src.is_some() {
-                        return None;
-                    }
+        if let Some(shared_weak) = proxy_ctxs.get(name)
+            && let Some(shared) = shared_weak.upgrade()
+        {
+            {
+                let shared = shared.lock().unwrap();
+                if shared.src.is_some() {
+                    return None;
                 }
-
-                proxy_ctx = Some(ProxyContextSrc {
-                    shared,
-                    name: name.into(),
-                });
             }
+
+            proxy_ctx = Some(ProxyContextSrc {
+                shared,
+                name: name.into(),
+            });
         }
 
         if proxy_ctx.is_none() {
@@ -587,11 +587,13 @@ impl ObjectSubclass for ProxySink {
 impl ObjectImpl for ProxySink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecString::builder("proxy-context")
-                .nick("Proxy Context")
-                .blurb("Context name of the proxy to share with")
-                .default_value(Some(DEFAULT_PROXY_CONTEXT))
-                .build()]
+            vec![
+                glib::ParamSpecString::builder("proxy-context")
+                    .nick("Proxy Context")
+                    .blurb("Context name of the proxy to share with")
+                    .default_value(Some(DEFAULT_PROXY_CONTEXT))
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()
@@ -1077,10 +1079,10 @@ impl ProxySrc {
     fn set_upstream_latency_priv(&self, new_latency: gst::ClockTime) {
         {
             let mut cur_upstream_latency = self.upstream_latency.lock().unwrap();
-            if let Some(cur_upstream_latency) = *cur_upstream_latency {
-                if cur_upstream_latency == new_latency {
-                    return;
-                }
+            if let Some(cur_upstream_latency) = *cur_upstream_latency
+                && cur_upstream_latency == new_latency
+            {
+                return;
             }
             *cur_upstream_latency = Some(new_latency);
         }

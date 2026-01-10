@@ -9,8 +9,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::sink::imp::PaintableSink;
 use crate::sink::imp::CAT;
+use crate::sink::imp::PaintableSink;
 use gst_gl::prelude::*;
 use gst_video::subclass::prelude::*;
 use gtk::{gdk, glib};
@@ -217,10 +217,9 @@ struct FrameWrapper(gst_video::VideoFrame<gst_video::video_frame::Readable>);
 impl AsRef<[u8]> for FrameWrapper {
     fn as_ref(&self) -> &[u8] {
         let raw = self.0.as_ptr();
-        let data = unsafe {
-            std::slice::from_raw_parts((*raw).map[0].data as *const u8, (*raw).map[0].size)
-        };
-        data
+
+        (unsafe { std::slice::from_raw_parts((*raw).map[0].data as *const u8, (*raw).map[0].size) })
+            as _
     }
 }
 

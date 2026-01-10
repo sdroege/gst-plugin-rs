@@ -20,7 +20,7 @@ use crate::ttutils::Chunk;
 use crate::ttutils::Line;
 use crate::ttutils::Lines;
 
-use super::translate::{TextToCea608, DEFAULT_FPS_D, DEFAULT_FPS_N};
+use super::translate::{DEFAULT_FPS_D, DEFAULT_FPS_N, TextToCea608};
 
 const DEFAULT_MODE: Cea608Mode = Cea608Mode::RollUp2;
 const DEFAULT_ORIGIN_ROW: i32 = -1;
@@ -239,10 +239,10 @@ impl TtToCea608 {
 
                     state.force_carriage_return = false;
 
-                    if state.prefix_newline {
-                        if let Some(prefix) = settings.speaker_prefix.as_ref() {
-                            text.insert_str(0, prefix);
-                        }
+                    if state.prefix_newline
+                        && let Some(prefix) = settings.speaker_prefix.as_ref()
+                    {
+                        text.insert_str(0, prefix);
                     }
 
                     state.prefix_newline = false;

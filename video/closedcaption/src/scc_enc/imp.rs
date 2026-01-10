@@ -403,16 +403,18 @@ impl ObjectImpl for SccEnc {
 
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecBoolean::builder("output-padding")
-                .nick("Output padding")
-                .blurb(
-                    "Whether the encoder should output padding captions. \
+            vec![
+                glib::ParamSpecBoolean::builder("output-padding")
+                    .nick("Output padding")
+                    .blurb(
+                        "Whether the encoder should output padding captions. \
                 The element will never add padding, but will encode padding \
                 buffers it receives if this property is set to true.",
-                )
-                .default_value(DEFAULT_OUTPUT_PADDING)
-                .mutable_ready()
-                .build()]
+                    )
+                    .default_value(DEFAULT_OUTPUT_PADDING)
+                    .mutable_ready()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()
@@ -445,10 +447,10 @@ impl ElementImpl for SccEnc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
-            "Scc Encoder",
-            "Encoder/ClosedCaption",
-            "Encodes SCC Closed Caption Files",
-            "Sebastian Dröge <sebastian@centricular.com>, Jordan Petridis <jordan@centricular.com>",
+                "Scc Encoder",
+                "Encoder/ClosedCaption",
+                "Encodes SCC Closed Caption Files",
+                "Sebastian Dröge <sebastian@centricular.com>, Jordan Petridis <jordan@centricular.com>",
             )
         });
 

@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::{
+    RUNTIME,
     signaller::{Signallable, SignallableImpl, WebRTCSignallerRole},
     webrtcsink::JanusVRSignallerState,
-    RUNTIME,
 };
 
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use async_tungstenite::tungstenite;
 use futures::channel::mpsc;
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 use gst::glib;
-use gst::glib::{subclass::Signal, Properties};
+use gst::glib::{Properties, subclass::Signal};
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use http::Uri;
@@ -1009,10 +1009,10 @@ impl SignallableImpl for Signaller {
             RUNTIME.block_on(async move {
                 sender.close_channel();
 
-                if let Some(handle) = send_task_handle {
-                    if let Err(err) = handle.await {
-                        gst::warning!(CAT, imp = self, "Error while joining send task: {}", err);
-                    }
+                if let Some(handle) = send_task_handle
+                    && let Err(err) = handle.await
+                {
+                    gst::warning!(CAT, imp = self, "Error while joining send task: {}", err);
                 }
 
                 if let Some(handle) = recv_task_handle {

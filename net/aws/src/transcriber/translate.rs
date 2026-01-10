@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use super::imp::TranslateSrcPad;
 use super::transcribe::TranscriptItem;
-use super::{TranslationTokenizationMethod, CAT};
+use super::{CAT, TranslationTokenizationMethod};
 
 const SPAN_START: &str = "<span>";
 const SPAN_END: &str = "</span>";
@@ -337,11 +337,11 @@ pub fn span_tokenize_items(
             }
             last_item.content.push_str(content.trim());
         }
-    } else if let Some((last_pts, last_duration)) = ts_duration_iter.last() {
-        if let Some(last_item) = translated_items.last_mut() {
-            // No more content, but need to fix last item's duration
-            last_item.duration = last_pts.saturating_sub(last_item.pts) + last_duration;
-        }
+    } else if let Some((last_pts, last_duration)) = ts_duration_iter.last()
+        && let Some(last_item) = translated_items.last_mut()
+    {
+        // No more content, but need to fix last item's duration
+        last_item.duration = last_pts.saturating_sub(last_item.pts) + last_duration;
     }
 
     let mut consolidated_items: VecDeque<TranslatedItem> = VecDeque::new();

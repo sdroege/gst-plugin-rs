@@ -129,13 +129,13 @@ impl TextToCea608 {
     }
 
     fn check_erase_display(&mut self) -> bool {
-        if let Some(erase_display_frame_no) = self.erase_display_frame_no {
-            if self.last_frame_no == erase_display_frame_no - 1 {
-                self.column = 0;
-                self.send_roll_up_preamble = true;
-                self.erase_display_memory();
-                return true;
-            }
+        if let Some(erase_display_frame_no) = self.erase_display_frame_no
+            && self.last_frame_no == erase_display_frame_no - 1
+        {
+            self.column = 0;
+            self.send_roll_up_preamble = true;
+            self.erase_display_memory();
+            return true;
         }
 
         false
@@ -365,32 +365,33 @@ impl TextToCea608 {
         self.pad(frame_no);
 
         let mut cleared = false;
-        if let Some(mode) = lines.mode {
-            if mode != self.mode {
-                /* Always erase the display when going to or from pop-on */
-                if self.mode == Cea608Mode::PopOn || mode == Cea608Mode::PopOn {
-                    self.erase_display_memory();
-                    cleared = true;
-                }
+        if let Some(mode) = lines.mode
+            && mode != self.mode
+        {
+            /* Always erase the display when going to or from pop-on */
+            if self.mode == Cea608Mode::PopOn || mode == Cea608Mode::PopOn {
+                self.erase_display_memory();
+                cleared = true;
+            }
 
-                self.mode = mode;
-                match self.mode {
-                    Cea608Mode::RollUp2 | Cea608Mode::RollUp3 | Cea608Mode::RollUp4 => {
-                        self.send_roll_up_preamble = true;
-                    }
-                    _ => col = origin_column,
+            self.mode = mode;
+            match self.mode {
+                Cea608Mode::RollUp2 | Cea608Mode::RollUp3 | Cea608Mode::RollUp4 => {
+                    self.send_roll_up_preamble = true;
                 }
+                _ => col = origin_column,
             }
         }
 
-        if let Some(clear) = lines.clear {
-            if clear && !cleared {
-                self.erase_display_memory();
-                if self.mode != Cea608Mode::PopOn && self.mode != Cea608Mode::PaintOn {
-                    self.send_roll_up_preamble = true;
-                }
-                col = origin_column;
+        if let Some(clear) = lines.clear
+            && clear
+            && !cleared
+        {
+            self.erase_display_memory();
+            if self.mode != Cea608Mode::PopOn && self.mode != Cea608Mode::PaintOn {
+                self.send_roll_up_preamble = true;
             }
+            col = origin_column;
         }
 
         if !lines.lines.is_empty() {

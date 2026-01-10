@@ -50,13 +50,13 @@ fn typefind_register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         None,
         Some(&Caps::builder("application/x-sodium-encrypted").build()),
         |typefind| {
-            if let Some(data) = typefind.peek(0, TYPEFIND_HEADER_SIZE as u32) {
-                if data == TYPEFIND_HEADER {
-                    typefind.suggest(
-                        TypeFindProbability::Maximum,
-                        &Caps::builder("application/x-sodium-encrypted").build(),
-                    );
-                }
+            if let Some(data) = typefind.peek(0, TYPEFIND_HEADER_SIZE as u32)
+                && data == TYPEFIND_HEADER
+            {
+                typefind.suggest(
+                    TypeFindProbability::Maximum,
+                    &Caps::builder("application/x-sodium-encrypted").build(),
+                );
             }
         },
     )

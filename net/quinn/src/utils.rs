@@ -14,8 +14,8 @@ use futures::future;
 use futures::prelude::*;
 use gst::ErrorMessage;
 use quinn::{
-    crypto::rustls::QuicClientConfig, crypto::rustls::QuicServerConfig, ClientConfig, Endpoint,
-    EndpointConfig, MtuDiscoveryConfig, ServerConfig, TokioRuntime, TransportConfig,
+    ClientConfig, Endpoint, EndpointConfig, MtuDiscoveryConfig, ServerConfig, TokioRuntime,
+    TransportConfig, crypto::rustls::QuicClientConfig, crypto::rustls::QuicServerConfig,
 };
 use quinn_proto::{ConnectionStats, FrameStats, UdpStats};
 use std::error::Error;

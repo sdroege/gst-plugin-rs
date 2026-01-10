@@ -304,14 +304,13 @@ impl Cea608Overlay {
             }
         }
 
-        if let Some(timeout) = self.settings.lock().unwrap().timeout {
-            if let Some(interval) = pts.opt_saturating_sub(state.last_cc_pts) {
-                if interval > timeout {
-                    gst::info!(CAT, imp = self, "Reached timeout, clearing overlay");
-                    state.composition.take();
-                    state.last_cc_pts.take();
-                }
-            }
+        if let Some(timeout) = self.settings.lock().unwrap().timeout
+            && let Some(interval) = pts.opt_saturating_sub(state.last_cc_pts)
+            && interval > timeout
+        {
+            gst::info!(CAT, imp = self, "Reached timeout, clearing overlay");
+            state.composition.take();
+            state.last_cc_pts.take();
         }
 
         if let Some(composition) = &state.composition {

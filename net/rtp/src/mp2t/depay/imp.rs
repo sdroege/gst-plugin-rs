@@ -83,12 +83,14 @@ impl ObjectSubclass for RtpMP2TDepay {
 impl ObjectImpl for RtpMP2TDepay {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecUInt::builder("skip-first-bytes")
-                .nick("Skip first bytes")
-                .blurb("Number of bytes to skip at the beginning of the payload")
-                .default_value(DEFAULT_SKIP_FIRST_BYTES)
-                .mutable_ready()
-                .build()]
+            vec![
+                glib::ParamSpecUInt::builder("skip-first-bytes")
+                    .nick("Skip first bytes")
+                    .blurb("Number of bytes to skip at the beginning of the payload")
+                    .default_value(DEFAULT_SKIP_FIRST_BYTES)
+                    .mutable_ready()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

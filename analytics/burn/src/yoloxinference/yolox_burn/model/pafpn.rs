@@ -1,16 +1,16 @@
 use burn::{
     module::Module,
     tensor::{
+        Device, Tensor,
         backend::Backend,
         module::interpolate,
         ops::{InterpolateMode, InterpolateOptions},
-        Device, Tensor,
     },
 };
 use std::vec;
 
 use super::{
-    blocks::{expand, BaseConv, BaseConvConfig, Conv, ConvConfig},
+    blocks::{BaseConv, BaseConvConfig, Conv, ConvConfig, expand},
     bottleneck::{CspBottleneck, CspBottleneckConfig},
     darknet::{CspDarknet, CspDarknetConfig},
 };

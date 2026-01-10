@@ -120,10 +120,12 @@ impl ObjectImpl for FileSink {
 
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecString::builder("location")
-                .nick("File Location")
-                .blurb("Location of the file to write")
-                .build()]
+            vec![
+                glib::ParamSpecString::builder("location")
+                    .nick("File Location")
+                    .blurb("Location of the file to write")
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

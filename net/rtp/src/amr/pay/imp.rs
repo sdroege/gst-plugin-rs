@@ -35,7 +35,7 @@ use std::sync::LazyLock;
 
 use crate::{
     amr::payload_header::{
-        PayloadConfiguration, PayloadHeader, TocEntry, NB_FRAME_SIZES, NB_FRAME_SIZES_BYTES,
+        NB_FRAME_SIZES, NB_FRAME_SIZES_BYTES, PayloadConfiguration, PayloadHeader, TocEntry,
         WB_FRAME_SIZES, WB_FRAME_SIZES_BYTES,
     },
     audio_discont::{AudioDiscont, AudioDiscontConfiguration},
@@ -680,11 +680,11 @@ impl RtpAmrPay {
                         num_bits -= 8;
                     }
 
-                    if num_bits > 0 {
-                        if let Err(err) = w.write_var(num_bits as u32, data[0] >> (8 - num_bits)) {
-                            gst::error!(CAT, imp = self, "Failed writing payload: {err}");
-                            return Err(gst::FlowError::Error);
-                        }
+                    if num_bits > 0
+                        && let Err(err) = w.write_var(num_bits as u32, data[0] >> (8 - num_bits))
+                    {
+                        gst::error!(CAT, imp = self, "Failed writing payload: {err}");
+                        return Err(gst::FlowError::Error);
                     }
                 }
 

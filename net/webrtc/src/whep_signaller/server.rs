@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::signaller::{Signallable, SignallableImpl};
-use crate::utils::{build_link_header, wait_async, WaitError};
 use crate::RUNTIME;
+use crate::signaller::{Signallable, SignallableImpl};
+use crate::utils::{WaitError, build_link_header, wait_async};
 use gst::glib::{self, RustClosure};
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -16,7 +16,7 @@ use http::{HeaderMap, HeaderName, HeaderValue};
 use std::net::SocketAddr;
 use tokio::sync::mpsc;
 use url::Url;
-use warp::{http, Filter, Reply};
+use warp::{Filter, Reply, http};
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -618,14 +618,14 @@ impl SignallableImpl for WhepServer {
 
         let handle = settings.server_handle.take();
 
-        if let Some(tx) = settings.shutdown_signal.take() {
-            if tx.send(()).is_err() {
-                gst::error!(
-                    CAT,
-                    imp = self,
-                    "Failed to send shutdown signal. Receiver dropped"
-                );
-            }
+        if let Some(tx) = settings.shutdown_signal.take()
+            && tx.send(()).is_err()
+        {
+            gst::error!(
+                CAT,
+                imp = self,
+                "Failed to send shutdown signal. Receiver dropped"
+            );
         }
 
         if let Some(handle) = handle {
@@ -706,7 +706,10 @@ impl ObjectImpl for WhepServer {
                 if let Err(e) =
                     self.set_host_addr(value.get::<Option<&str>>().expect("type checked upstream"))
                 {
-                    gst::error!(CAT, "Couldn't set the host address as {e:?}, fallback to the default value {DEFAULT_HOST_ADDR:?}");
+                    gst::error!(
+                        CAT,
+                        "Couldn't set the host address as {e:?}, fallback to the default value {DEFAULT_HOST_ADDR:?}"
+                    );
                 }
             }
             "stun-server" => {

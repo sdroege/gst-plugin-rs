@@ -12,8 +12,8 @@ use gst::subclass::prelude::*;
 use gst_audio::subclass::prelude::*;
 use gst_base::prelude::*;
 
-use std::sync::atomic;
 use std::sync::Mutex;
+use std::sync::atomic;
 
 use std::sync::LazyLock;
 
@@ -123,18 +123,20 @@ impl ObjectSubclass for EbuR128Level {
 impl ObjectImpl for EbuR128Level {
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
-            vec![glib::subclass::Signal::builder("reset")
-                .action()
-                .class_handler(|args| {
-                    let this = args[0].get::<super::EbuR128Level>().unwrap();
-                    let imp = this.imp();
+            vec![
+                glib::subclass::Signal::builder("reset")
+                    .action()
+                    .class_handler(|args| {
+                        let this = args[0].get::<super::EbuR128Level>().unwrap();
+                        let imp = this.imp();
 
-                    gst::info!(CAT, obj = this, "Resetting measurements",);
-                    imp.reset.store(true, atomic::Ordering::SeqCst);
+                        gst::info!(CAT, obj = this, "Resetting measurements",);
+                        imp.reset.store(true, atomic::Ordering::SeqCst);
 
-                    None
-                })
-                .build()]
+                        None
+                    })
+                    .build(),
+            ]
         });
 
         &SIGNALS

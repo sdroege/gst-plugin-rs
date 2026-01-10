@@ -9,7 +9,7 @@
 
 use std::io;
 
-use anyhow::{bail, Context as _};
+use anyhow::{Context as _, bail};
 use bitstream_io::{
     BigEndian, ByteWrite as _, ByteWriter, FromByteStream, FromByteStreamWith, ToByteStream,
     ToByteStreamWith,
@@ -349,15 +349,14 @@ pub fn detect_static_quant_table(
     // but probably doesn't really matter in the bigger picture.
 
     // Short-cut in case quantization tables don't change
-    if let Some(previous_q) = previous_q {
-        if Iterator::zip(
+    if let Some(previous_q) = previous_q
+        && Iterator::zip(
             Iterator::zip(luma_quant.iter().copied(), chroma_quant.iter().copied()),
             make_quant_tables_iter(previous_q),
         )
         .all(|(a, b)| a == b)
-        {
-            return Some(previous_q);
-        }
+    {
+        return Some(previous_q);
     }
 
     (1..=99).find(|&q| {

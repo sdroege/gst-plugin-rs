@@ -417,16 +417,16 @@ pub(crate) fn caps_to_timescale(caps: &gst::CapsRef) -> u32 {
                 return 10_000;
             }
 
-            if fps.denom() != 1 && fps.denom() != 1001 {
-                if let Some(fps) = (fps.denom() as u64)
+            if fps.denom() != 1
+                && fps.denom() != 1001
+                && let Some(fps) = (fps.denom() as u64)
                     .nseconds()
                     .mul_div_round(1_000_000_000, fps.numer() as u64)
                     .and_then(gst_video::guess_framerate)
-                {
-                    return (fps.numer() as u32)
-                        .mul_div_round(100, fps.denom() as u32)
-                        .unwrap_or(10_000);
-                }
+            {
+                return (fps.numer() as u32)
+                    .mul_div_round(100, fps.denom() as u32)
+                    .unwrap_or(10_000);
             }
 
             if fps.denom() == 1001 {

@@ -7,7 +7,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::tests::{run_test_pipeline_and_validate_data, ExpectedBuffer, ExpectedPacket, Source};
+use crate::tests::{ExpectedBuffer, ExpectedPacket, Source, run_test_pipeline_and_validate_data};
 use anyhow::bail;
 use gst::prelude::*;
 
@@ -75,35 +75,43 @@ fn test_smpte291() {
     let depay = "rtpsmpte291depay";
 
     let expected_pay = vec![
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_mseconds(0))
-            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
-            .pt(96)
-            .rtp_time(0)
-            .marker_bit(true)
-            .size(124)
-            .build()],
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_nseconds(34482759))
-            .flags(gst::BufferFlags::MARKER)
-            .pt(96)
-            .rtp_time(3104)
-            .marker_bit(true)
-            .size(124)
-            .build()],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(0))
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
+                .pt(96)
+                .rtp_time(0)
+                .marker_bit(true)
+                .size(124)
+                .build(),
+        ],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_nseconds(34482759))
+                .flags(gst::BufferFlags::MARKER)
+                .pt(96)
+                .rtp_time(3104)
+                .marker_bit(true)
+                .size(124)
+                .build(),
+        ],
     ];
 
     let expected_depay = vec![
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_mseconds(0))
-            .size(100)
-            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_nseconds(34482759))
-            .size(100)
-            .flags(gst::BufferFlags::MARKER)
-            .build()],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(0))
+                .size(100)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_nseconds(34482759))
+                .size(100)
+                .flags(gst::BufferFlags::MARKER)
+                .build(),
+        ],
     ];
 
     run_test_pipeline_and_validate_data(

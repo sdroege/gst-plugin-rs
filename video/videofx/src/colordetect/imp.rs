@@ -9,10 +9,10 @@
 
 use atomic_refcell::AtomicRefCell;
 use color_name;
-use color_thief::{get_palette, Color, ColorFormat};
+use color_thief::{Color, ColorFormat, get_palette};
 use gst::{glib, subclass::prelude::*};
 use gst_base::prelude::*;
-use gst_video::{subclass::prelude::*, VideoFormat};
+use gst_video::{VideoFormat, subclass::prelude::*};
 use std::sync::LazyLock;
 use std::sync::Mutex;
 

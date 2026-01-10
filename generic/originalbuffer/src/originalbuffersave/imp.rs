@@ -166,18 +166,18 @@ impl OriginalBufferSave {
             return ret;
         }
 
-        if let gst::QueryViewMut::Caps(q) = query.view_mut() {
-            if let Some(caps) = q.result_owned() {
-                let forwarding_q = gst::query::Caps::new(Some(&caps)).into();
+        if let gst::QueryViewMut::Caps(q) = query.view_mut()
+            && let Some(caps) = q.result_owned()
+        {
+            let forwarding_q = gst::query::Caps::new(Some(&caps)).into();
 
-                if let Some(forwarding_q) = self.forward_query(forwarding_q) {
-                    if let gst::QueryView::Caps(c) = forwarding_q.view() {
-                        let res = c
-                            .result_owned()
-                            .map(|c| c.intersect_with_mode(&caps, gst::CapsIntersectMode::First));
-                        q.set_result(&res);
-                    }
-                }
+            if let Some(forwarding_q) = self.forward_query(forwarding_q)
+                && let gst::QueryView::Caps(c) = forwarding_q.view()
+            {
+                let res = c
+                    .result_owned()
+                    .map(|c| c.intersect_with_mode(&caps, gst::CapsIntersectMode::First));
+                q.set_result(&res);
             }
         }
 

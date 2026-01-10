@@ -205,13 +205,12 @@ impl VideoDecoderImpl for CdgDec {
         if query
             .find_allocation_meta::<gst_video::VideoMeta>()
             .is_some()
+            && let Some((Some(ref pool), _, _, _)) = query.allocation_pools().next()
         {
-            if let Some((Some(ref pool), _, _, _)) = query.allocation_pools().next() {
-                let mut config = pool.config();
-                config.add_option(gst_video::BUFFER_POOL_OPTION_VIDEO_META);
-                pool.set_config(config)
-                    .map_err(|_| gst::loggable_error!(CAT, "Failed to configure buffer pool"))?;
-            }
+            let mut config = pool.config();
+            config.add_option(gst_video::BUFFER_POOL_OPTION_VIDEO_META);
+            pool.set_config(config)
+                .map_err(|_| gst::loggable_error!(CAT, "Failed to configure buffer pool"))?;
         }
 
         self.parent_decide_allocation(query)

@@ -8,7 +8,7 @@
 
 use crate::cea608utils::Cea608Mode;
 use crate::cea708utils::Cea708Mode;
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -419,7 +419,9 @@ impl TranscriberBin {
         let (tttoceax08, ccmux_pad_name) = match mux_method {
             MuxMethod::Cea608 => {
                 if caption_streams.len() != 1 {
-                    anyhow::bail!("Muxing zero/multiple cea608 streams for the same language is not supported");
+                    anyhow::bail!(
+                        "Muxing zero/multiple cea608 streams for the same language is not supported"
+                    );
                 }
                 (
                     gst::ElementFactory::make("tttocea608").build()?,
@@ -2593,11 +2595,11 @@ impl ObjectImpl for TranscriberBin {
                         let ps = pad.imp().state.lock().unwrap();
                         let pad_state = ps.as_ref().unwrap();
 
-                        if let Some(ref transcriber) = pad_state.transcriber {
-                            if transcriber.has_property_with_type("lateness", u32::static_type()) {
-                                let lateness_ms = settings.lateness.mseconds() as u32;
-                                transcriber.set_property("lateness", lateness_ms);
-                            }
+                        if let Some(ref transcriber) = pad_state.transcriber
+                            && transcriber.has_property_with_type("lateness", u32::static_type())
+                        {
+                            let lateness_ms = settings.lateness.mseconds() as u32;
+                            transcriber.set_property("lateness", lateness_ms);
                         }
                     }
                 }
@@ -2666,14 +2668,12 @@ impl ObjectImpl for TranscriberBin {
                         let ps = pad.imp().state.lock().unwrap();
                         let pad_state = ps.as_ref().unwrap();
 
-                        if let Some(ref transcriber) = pad_state.transcriber {
-                            if transcriber
+                        if let Some(ref transcriber) = pad_state.transcriber
+                            && transcriber
                                 .has_property_with_type("translate-latency", u32::static_type())
-                            {
-                                let translate_latency_ms =
-                                    settings.translate_latency.mseconds() as u32;
-                                transcriber.set_property("translate-latency", translate_latency_ms);
-                            }
+                        {
+                            let translate_latency_ms = settings.translate_latency.mseconds() as u32;
+                            transcriber.set_property("translate-latency", translate_latency_ms);
                         }
                     }
                 }
@@ -2925,22 +2925,20 @@ impl ElementImpl for TranscriberBin {
                 if let Some(srcpad) = pad_state
                     .transcription_bin
                     .static_pad(&format!("src_{}", channel.language))
+                    && let Some(peer) = srcpad.peer()
                 {
-                    if let Some(peer) = srcpad.peer() {
-                        let _ = state.ccmux.remove_pad(&peer);
-                    }
+                    let _ = state.ccmux.remove_pad(&peer);
                 }
             }
 
             let _ = state.transcription_bin.remove(&pad_state.transcription_bin);
             for srcpad in pad_state.audio_tee.iterate_src_pads() {
                 let srcpad = srcpad.unwrap();
-                if let Some(peer) = srcpad.peer() {
-                    if let Some(parent) = peer.parent() {
-                        if parent == state.transcription_bin {
-                            let _ = parent.downcast::<gst::Element>().unwrap().remove_pad(&peer);
-                        }
-                    }
+                if let Some(peer) = srcpad.peer()
+                    && let Some(parent) = peer.parent()
+                    && parent == state.transcription_bin
+                {
+                    let _ = parent.downcast::<gst::Element>().unwrap().remove_pad(&peer);
                 }
             }
             let _ = state.internal_bin.remove_many([
@@ -3658,18 +3656,17 @@ impl ObjectImpl for TranscriberSinkPad {
                 if old_mode != new_mode {
                     drop(settings);
                     if let Some(this) = self.obj().parent().and_downcast::<super::TranscriberBin>()
+                        && let Some(state) = this.imp().state.lock().unwrap().as_ref()
                     {
-                        if let Some(state) = this.imp().state.lock().unwrap().as_ref() {
-                            let ps = self.state.lock().unwrap();
-                            let pad_state = ps.as_ref().unwrap();
-                            this.imp().setup_cc_mode(
-                                &self.obj(),
-                                pad_state,
-                                state.mux_method,
-                                new_mode,
-                                accumulate_time,
-                            );
-                        }
+                        let ps = self.state.lock().unwrap();
+                        let pad_state = ps.as_ref().unwrap();
+                        this.imp().setup_cc_mode(
+                            &self.obj(),
+                            pad_state,
+                            state.mux_method,
+                            new_mode,
+                            accumulate_time,
+                        );
                     }
                 }
             }
@@ -3712,19 +3709,19 @@ impl ObjectImpl for TranscriberSinkPad {
                     let old_transcriber = pad_state.transcriber.clone();
                     pad_state.transcriber.clone_from(&new_transcriber);
 
-                    if old_transcriber != new_transcriber {
-                        if let Some(ref mut state) = s.as_mut() {
-                            match this.imp().relink_transcriber(
-                                state,
-                                pad_state,
-                                old_transcriber.as_ref(),
-                            ) {
-                                Ok(()) => (),
-                                Err(err) => {
-                                    gst::error!(CAT, "invalid transcriber: {err}");
-                                    drop(s);
-                                    *this.imp().state.lock().unwrap() = None;
-                                }
+                    if old_transcriber != new_transcriber
+                        && let Some(ref mut state) = s.as_mut()
+                    {
+                        match this.imp().relink_transcriber(
+                            state,
+                            pad_state,
+                            old_transcriber.as_ref(),
+                        ) {
+                            Ok(()) => (),
+                            Err(err) => {
+                                gst::error!(CAT, "invalid transcriber: {err}");
+                                drop(s);
+                                *this.imp().state.lock().unwrap() = None;
                             }
                         }
                     }

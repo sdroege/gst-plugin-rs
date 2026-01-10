@@ -46,12 +46,14 @@ impl ObjectSubclass for QuinnQuicMuxPad {
 impl ObjectImpl for QuinnQuicMuxPad {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecInt::builder("priority")
-                .nick("Priority of the stream")
-                .blurb("Priority of the stream")
-                .default_value(DEFAULT_STREAM_PRIORITY)
-                .readwrite()
-                .build()]
+            vec![
+                glib::ParamSpecInt::builder("priority")
+                    .nick("Priority of the stream")
+                    .blurb("Priority of the stream")
+                    .default_value(DEFAULT_STREAM_PRIORITY)
+                    .readwrite()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

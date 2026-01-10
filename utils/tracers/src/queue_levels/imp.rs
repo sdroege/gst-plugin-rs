@@ -292,17 +292,19 @@ impl ObjectImpl for QueueLevels {
 
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
-            vec![glib::subclass::Signal::builder("write-log")
-                .action()
-                .param_types([Option::<String>::static_type()])
-                .class_handler(|args| {
-                    let obj = args[0].get::<super::QueueLevels>().unwrap();
+            vec![
+                glib::subclass::Signal::builder("write-log")
+                    .action()
+                    .param_types([Option::<String>::static_type()])
+                    .class_handler(|args| {
+                        let obj = args[0].get::<super::QueueLevels>().unwrap();
 
-                    obj.imp().write_log(args[1].get::<Option<&str>>().unwrap());
+                        obj.imp().write_log(args[1].get::<Option<&str>>().unwrap());
 
-                    None
-                })
-                .build()]
+                        None
+                    })
+                    .build(),
+            ]
         });
 
         SIGNALS.as_ref()
@@ -333,15 +335,15 @@ impl TracerImpl for QueueLevels {
         let mut state = self.state.lock().unwrap();
 
         let name = element.name();
-        if let Some(ref filter) = state.settings.include_filter {
-            if !filter.is_match(&name) {
-                return;
-            }
+        if let Some(ref filter) = state.settings.include_filter
+            && !filter.is_match(&name)
+        {
+            return;
         }
-        if let Some(ref filter) = state.settings.exclude_filter {
-            if filter.is_match(&name) {
-                return;
-            }
+        if let Some(ref filter) = state.settings.exclude_filter
+            && filter.is_match(&name)
+        {
+            return;
         }
 
         state.queues.entry(ptr).or_insert_with(|| Arc::new(name));
@@ -354,18 +356,18 @@ impl TracerImpl for QueueLevels {
     }
 
     fn pad_push_pre(&self, ts: u64, pad: &gst::Pad, _buffer: &gst::Buffer) {
-        if let Some(parent) = pad.parent().and_then(|p| p.downcast::<gst::Element>().ok()) {
-            if is_queue_type(parent.type_()) {
-                self.log(&parent, Some(pad), ts);
-            }
+        if let Some(parent) = pad.parent().and_then(|p| p.downcast::<gst::Element>().ok())
+            && is_queue_type(parent.type_())
+        {
+            self.log(&parent, Some(pad), ts);
         }
     }
 
     fn pad_push_list_pre(&self, ts: u64, pad: &gst::Pad, _list: &gst::BufferList) {
-        if let Some(parent) = pad.parent().and_then(|p| p.downcast::<gst::Element>().ok()) {
-            if is_queue_type(parent.type_()) {
-                self.log(&parent, Some(pad), ts);
-            }
+        if let Some(parent) = pad.parent().and_then(|p| p.downcast::<gst::Element>().ok())
+            && is_queue_type(parent.type_())
+        {
+            self.log(&parent, Some(pad), ts);
         }
     }
 
@@ -376,15 +378,13 @@ impl TracerImpl for QueueLevels {
         pad: &gst::Pad,
         _result: Result<gst::FlowSuccess, gst::FlowError>,
     ) {
-        if let Some(peer) = pad.peer() {
-            if let Some(parent) = peer
+        if let Some(peer) = pad.peer()
+            && let Some(parent) = peer
                 .parent()
                 .and_then(|p| p.downcast::<gst::Element>().ok())
-            {
-                if is_queue_type(parent.type_()) {
-                    self.log(&parent, Some(&peer), ts);
-                }
-            }
+            && is_queue_type(parent.type_())
+        {
+            self.log(&parent, Some(&peer), ts);
         }
     }
 
@@ -395,15 +395,13 @@ impl TracerImpl for QueueLevels {
         pad: &gst::Pad,
         _result: Result<gst::FlowSuccess, gst::FlowError>,
     ) {
-        if let Some(peer) = pad.peer() {
-            if let Some(parent) = peer
+        if let Some(peer) = pad.peer()
+            && let Some(parent) = peer
                 .parent()
                 .and_then(|p| p.downcast::<gst::Element>().ok())
-            {
-                if is_queue_type(parent.type_()) {
-                    self.log(&parent, Some(&peer), ts);
-                }
-            }
+            && is_queue_type(parent.type_())
+        {
+            self.log(&parent, Some(&peer), ts);
         }
     }
 
@@ -414,10 +412,10 @@ impl TracerImpl for QueueLevels {
         pad: &gst::Pad,
         _result: Result<gst::FlowSuccess, gst::FlowError>,
     ) {
-        if let Some(parent) = pad.parent().and_then(|p| p.downcast::<gst::Element>().ok()) {
-            if is_queue_type(parent.type_()) {
-                self.log(&parent, Some(pad), ts);
-            }
+        if let Some(parent) = pad.parent().and_then(|p| p.downcast::<gst::Element>().ok())
+            && is_queue_type(parent.type_())
+        {
+            self.log(&parent, Some(pad), ts);
         }
     }
 
@@ -428,10 +426,10 @@ impl TracerImpl for QueueLevels {
         pad: &gst::Pad,
         _result: Result<gst::FlowSuccess, gst::FlowError>,
     ) {
-        if let Some(parent) = pad.parent().and_then(|p| p.downcast::<gst::Element>().ok()) {
-            if is_queue_type(parent.type_()) {
-                self.log(&parent, Some(pad), ts);
-            }
+        if let Some(parent) = pad.parent().and_then(|p| p.downcast::<gst::Element>().ok())
+            && is_queue_type(parent.type_())
+        {
+            self.log(&parent, Some(pad), ts);
         }
     }
 
@@ -458,10 +456,10 @@ impl TracerImpl for QueueLevels {
             return;
         }
 
-        if let Some(parent) = pad.parent().and_then(|p| p.downcast::<gst::Element>().ok()) {
-            if is_queue_type(parent.type_()) {
-                self.log(&parent, Some(pad), ts);
-            }
+        if let Some(parent) = pad.parent().and_then(|p| p.downcast::<gst::Element>().ok())
+            && is_queue_type(parent.type_())
+        {
+            self.log(&parent, Some(pad), ts);
         }
     }
 }
@@ -615,9 +613,15 @@ impl QueueLevels {
         } in &log
         {
             let res = if let Some(idx) = idx {
-                writeln!(&mut file, "{timestamp},{name}:{idx},0x{ptr:08x},{cur_level_bytes},{cur_level_time},{cur_level_buffers},{max_size_bytes},{max_size_time},{max_size_buffers}")
+                writeln!(
+                    &mut file,
+                    "{timestamp},{name}:{idx},0x{ptr:08x},{cur_level_bytes},{cur_level_time},{cur_level_buffers},{max_size_bytes},{max_size_time},{max_size_buffers}"
+                )
             } else {
-                writeln!(&mut file, "{timestamp},{name},0x{ptr:08x},{cur_level_bytes},{cur_level_time},{cur_level_buffers},{max_size_bytes},{max_size_time},{max_size_buffers}")
+                writeln!(
+                    &mut file,
+                    "{timestamp},{name},0x{ptr:08x},{cur_level_bytes},{cur_level_time},{cur_level_buffers},{max_size_bytes},{max_size_time},{max_size_buffers}"
+                )
             };
             if let Err(err) = res {
                 gst::error!(CAT, imp = self, "Failed to write to file: {err}");

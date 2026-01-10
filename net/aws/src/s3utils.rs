@@ -8,14 +8,14 @@
 
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::{
-    config::{timeout::TimeoutConfig, Credentials, Region},
+    config::{Credentials, Region, timeout::TimeoutConfig},
     error::{DisplayErrorContext, ProvideErrorMetadata},
     primitives::{ByteStream, ByteStreamError},
 };
 use aws_types::sdk_config::SdkConfig;
 
-use bytes::{buf::BufMut, Bytes, BytesMut};
-use futures::{future, Future};
+use bytes::{Bytes, BytesMut, buf::BufMut};
+use futures::{Future, future};
 use std::fmt;
 use std::sync::LazyLock;
 use std::sync::Mutex;

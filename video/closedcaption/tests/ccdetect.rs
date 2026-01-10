@@ -6,8 +6,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use gst::prelude::*;
 use gst::ClockTime;
+use gst::prelude::*;
 
 use std::sync::{Arc, Mutex};
 

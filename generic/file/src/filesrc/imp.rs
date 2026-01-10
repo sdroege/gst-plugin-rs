@@ -127,11 +127,13 @@ impl ObjectSubclass for FileSrc {
 impl ObjectImpl for FileSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecString::builder("location")
-                .nick("File Location")
-                .blurb("Location of the file to read from")
-                .mutable_ready()
-                .build()]
+            vec![
+                glib::ParamSpecString::builder("location")
+                    .nick("File Location")
+                    .blurb("Location of the file to read from")
+                    .mutable_ready()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

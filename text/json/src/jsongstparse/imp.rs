@@ -136,11 +136,11 @@ impl State {
             self.need_flush_stop = false;
         }
 
-        if let Some(pull) = &mut self.pull {
-            if pull.need_stream_start {
-                events.push(gst::event::StreamStart::new(&pull.stream_id));
-                pull.need_stream_start = false;
-            }
+        if let Some(pull) = &mut self.pull
+            && pull.need_stream_start
+        {
+            events.push(gst::event::StreamStart::new(&pull.stream_id));
+            pull.need_stream_start = false;
         }
 
         if self.need_caps {
@@ -240,14 +240,14 @@ impl JsonGstParse {
 
                         let mut buffer = gst::Buffer::from_mut_slice(data.into_bytes());
 
-                        if let Some(last_position) = state.last_position {
-                            if let Ok(Some(duration)) = pts.opt_checked_sub(last_position) {
-                                events.push(
-                                    gst::event::Gap::builder(last_position)
-                                        .duration(duration)
-                                        .build(),
-                                );
-                            }
+                        if let Some(last_position) = state.last_position
+                            && let Ok(Some(duration)) = pts.opt_checked_sub(last_position)
+                        {
+                            events.push(
+                                gst::event::Gap::builder(last_position)
+                                    .duration(duration)
+                                    .build(),
+                            );
                         }
 
                         state.add_buffer_metadata(&mut buffer, pts, duration);

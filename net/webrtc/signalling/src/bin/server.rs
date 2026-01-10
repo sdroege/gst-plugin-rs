@@ -10,7 +10,7 @@ use tracing::{info, warn};
 use tracing_subscriber::prelude::*;
 
 use std::{path::PathBuf, sync::Arc};
-use tokio_rustls::{rustls, TlsAcceptor};
+use tokio_rustls::{TlsAcceptor, rustls};
 
 const TLS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 

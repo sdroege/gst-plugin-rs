@@ -34,11 +34,7 @@ fn cdg_packets_ratio(typefind: &mut TypeFind, start: i64, len: i64) -> i64 {
             None => break,
         }
     }
-    if total == 0 {
-        0
-    } else {
-        (count * 100) / total
-    }
+    if total == 0 { 0 } else { (count * 100) / total }
 }
 
 /* Some CDG files starts drawing right away and then pause for a while

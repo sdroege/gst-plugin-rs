@@ -133,22 +133,22 @@ impl AudioDecoderImpl for ClaxonDec {
 
                     if inmap[0..7] != [0x7f, b'F', b'L', b'A', b'C', 0x01, 0x00] {
                         gst::debug!(CAT, imp = self, "Unknown streamheader format");
-                    } else if let Ok(tstreaminfo) = claxon_streaminfo(&inmap[13..]) {
-                        if let Ok(taudio_info) = gstaudioinfo(&tstreaminfo) {
-                            // To speed up negotiation
-                            let element = self.obj();
-                            if element.set_output_format(&taudio_info).is_err()
-                                || element.negotiate().is_err()
-                            {
-                                gst::debug!(
-                                    CAT,
-                                    imp = self,
-                                    "Error to negotiate output from based on in-caps streaminfo"
-                                );
-                            }
-
-                            audio_info = Some(taudio_info);
+                    } else if let Ok(tstreaminfo) = claxon_streaminfo(&inmap[13..])
+                        && let Ok(taudio_info) = gstaudioinfo(&tstreaminfo)
+                    {
+                        // To speed up negotiation
+                        let element = self.obj();
+                        if element.set_output_format(&taudio_info).is_err()
+                            || element.negotiate().is_err()
+                        {
+                            gst::debug!(
+                                CAT,
+                                imp = self,
+                                "Error to negotiate output from based on in-caps streaminfo"
+                            );
                         }
+
+                        audio_info = Some(taudio_info);
                     }
                 }
             }

@@ -9,8 +9,8 @@
 #![allow(clippy::single_match)]
 
 use crate::st2038anc_utils::AncDataHeader;
-use gst::prelude::*;
 use gst::EventView;
+use gst::prelude::*;
 use pretty_assertions::assert_eq;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};

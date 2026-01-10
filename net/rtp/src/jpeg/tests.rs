@@ -7,7 +7,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::tests::{run_test_pipeline, ExpectedBuffer, ExpectedPacket, Source};
+use crate::tests::{ExpectedBuffer, ExpectedPacket, Source, run_test_pipeline};
 
 fn init() {
     use std::sync::Once;
@@ -101,16 +101,20 @@ fn test_jpeg() {
 
     let expected_depay = vec![
         // One buffer per frame
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_mseconds(0))
-            .size(5409)
-            .flags(gst::BufferFlags::DISCONT)
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_mseconds(40))
-            .size(5409)
-            .flags(gst::BufferFlags::empty())
-            .build()],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(0))
+                .size(5409)
+                .flags(gst::BufferFlags::DISCONT)
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(40))
+                .size(5409)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
     ];
 
     run_test_pipeline(Source::Bin(src), pay, depay, expected_pay, expected_depay);

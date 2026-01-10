@@ -67,19 +67,19 @@ macro_rules! define_wrapping_comparable_u32 {
 
             #[inline]
             pub fn is_zero(self) -> bool {
-                self.0 .0 == 0
+                self.0.0 == 0
             }
 
             #[inline]
             pub fn distance(self, other: Self) -> Option<i32> {
-                self.distance_u32(other.0 .0)
+                self.distance_u32(other.0.0)
             }
 
             #[inline]
             pub fn distance_u32(self, other: u32) -> Option<i32> {
                 // See http://en.wikipedia.org/wiki/Serial_number_arithmetic
 
-                let this = i32::from_ne_bytes(self.0 .0.to_ne_bytes());
+                let this = i32::from_ne_bytes(self.0.0.to_ne_bytes());
                 let other = i32::from_ne_bytes(other.to_ne_bytes());
 
                 match this.wrapping_sub(other) {
@@ -102,7 +102,7 @@ macro_rules! define_wrapping_comparable_u32 {
 
         impl From<$typ> for u32 {
             fn from(value: $typ) -> Self {
-                value.0 .0
+                value.0.0
             }
         }
 
@@ -110,7 +110,7 @@ macro_rules! define_wrapping_comparable_u32 {
             type Target = u32;
 
             fn deref(&self) -> &u32 {
-                &self.0 .0
+                &self.0.0
             }
         }
 
@@ -133,7 +133,7 @@ macro_rules! define_wrapping_comparable_u32 {
             fn add(self, rhs: i32) -> Self {
                 // See http://en.wikipedia.org/wiki/Serial_number_arithmetic
 
-                let this = i32::from_ne_bytes(self.0 .0.to_ne_bytes());
+                let this = i32::from_ne_bytes(self.0.0.to_ne_bytes());
                 let res = this.wrapping_add(rhs);
 
                 let res = u32::from_ne_bytes(res.to_ne_bytes());
@@ -162,7 +162,7 @@ macro_rules! define_wrapping_comparable_u32 {
         impl std::ops::Sub for $typ {
             type Output = Self;
             fn sub(self, rhs: Self) -> Self {
-                self.sub(rhs.0 .0)
+                self.sub(rhs.0.0)
             }
         }
 
@@ -175,7 +175,7 @@ macro_rules! define_wrapping_comparable_u32 {
 
         impl std::ops::SubAssign for $typ {
             fn sub_assign(&mut self, rhs: Self) {
-                self.sub_assign(rhs.0 .0);
+                self.sub_assign(rhs.0.0);
             }
         }
 
@@ -187,13 +187,13 @@ macro_rules! define_wrapping_comparable_u32 {
 
         impl std::cmp::PartialEq for $typ {
             fn eq(&self, other: &Self) -> bool {
-                self.0 .0 == other.0 .0
+                self.0.0 == other.0.0
             }
         }
 
         impl std::cmp::PartialEq<u32> for $typ {
             fn eq(&self, other: &u32) -> bool {
-                self.0 .0 == *other
+                self.0.0 == *other
             }
         }
 
@@ -237,7 +237,7 @@ macro_rules! define_wrapping_comparable_u32_with_display {
     ($typ:ident, impl) => {
         impl std::fmt::Display for $typ {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.write_fmt(format_args!("{}", self.0 .0))
+                f.write_fmt(format_args!("{}", self.0.0))
             }
         }
     };

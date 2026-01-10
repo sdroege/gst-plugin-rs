@@ -248,15 +248,15 @@ impl ElementImpl for InterSrc {
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
-        if transition == gst::StateChange::ReadyToPaused {
-            if let Err(err) = self.prepare() {
-                gst::element_error!(
-                    self.obj(),
-                    gst::StreamError::Failed,
-                    ["Failed to prepare: {}", err]
-                );
-                return Err(gst::StateChangeError);
-            }
+        if transition == gst::StateChange::ReadyToPaused
+            && let Err(err) = self.prepare()
+        {
+            gst::element_error!(
+                self.obj(),
+                gst::StreamError::Failed,
+                ["Failed to prepare: {}", err]
+            );
+            return Err(gst::StateChangeError);
         }
 
         let ret = self.parent_change_state(transition)?;

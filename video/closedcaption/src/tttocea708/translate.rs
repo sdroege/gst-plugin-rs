@@ -17,7 +17,7 @@ use std::sync::LazyLock;
 
 use crate::cea608utils::{Cea608Mode, TextStyle};
 use crate::cea708utils::{
-    textstyle_foreground_color, textstyle_to_pen_color, Cea708Mode, Cea708ServiceWriter,
+    Cea708Mode, Cea708ServiceWriter, textstyle_foreground_color, textstyle_to_pen_color,
 };
 use crate::tttocea608::translate::{TextToCea608, TimedCea608};
 use crate::ttutils::{Chunk, Lines};
@@ -251,13 +251,13 @@ impl TextToCea708 {
     }
 
     fn check_erase_display(&mut self) -> bool {
-        if let Some(erase_display_frame_no) = self.erase_display_frame_no {
-            if self.last_frame_no == erase_display_frame_no - 1 {
-                self.erase_display_frame_no = None;
-                self.send_roll_up_preamble = true;
-                self.service_writer.clear_current_window();
-                return true;
-            }
+        if let Some(erase_display_frame_no) = self.erase_display_frame_no
+            && self.last_frame_no == erase_display_frame_no - 1
+        {
+            self.erase_display_frame_no = None;
+            self.send_roll_up_preamble = true;
+            self.service_writer.clear_current_window();
+            return true;
         }
 
         false
@@ -351,48 +351,48 @@ impl TextToCea708 {
 
         let mut cleared = false;
         let mut need_pen_location = false;
-        if let Some(mode) = lines.mode {
-            if (mode.is_rollup() && self.mode != Cea708Mode::RollUp)
+        if let Some(mode) = lines.mode
+            && ((mode.is_rollup() && self.mode != Cea708Mode::RollUp)
                 || (mode == Cea608Mode::PaintOn && self.mode != Cea708Mode::PaintOn)
-                || (mode == Cea608Mode::PopOn && self.mode == Cea708Mode::PopOn)
-            {
-                /* Always erase the display when going to or from pop-on */
-                if self.mode == Cea708Mode::PopOn || mode == Cea608Mode::PopOn {
-                    self.erase_display_frame_no = None;
-                    self.service_writer.clear_current_window();
-                    cleared = true;
-                }
+                || (mode == Cea608Mode::PopOn && self.mode == Cea708Mode::PopOn))
+        {
+            /* Always erase the display when going to or from pop-on */
+            if self.mode == Cea708Mode::PopOn || mode == Cea608Mode::PopOn {
+                self.erase_display_frame_no = None;
+                self.service_writer.clear_current_window();
+                cleared = true;
+            }
 
-                self.mode = match mode {
-                    Cea608Mode::PopOn => Cea708Mode::PopOn,
-                    Cea608Mode::PaintOn => Cea708Mode::PaintOn,
-                    Cea608Mode::RollUp2 | Cea608Mode::RollUp3 | Cea608Mode::RollUp4 => {
-                        Cea708Mode::RollUp
-                    }
-                };
-                match self.mode {
-                    Cea708Mode::RollUp => {
-                        self.send_roll_up_preamble = true;
-                    }
-                    _ => {
-                        self.pen_location.column = origin_column as u8;
-                        need_pen_location = true;
-                    }
+            self.mode = match mode {
+                Cea608Mode::PopOn => Cea708Mode::PopOn,
+                Cea608Mode::PaintOn => Cea708Mode::PaintOn,
+                Cea608Mode::RollUp2 | Cea608Mode::RollUp3 | Cea608Mode::RollUp4 => {
+                    Cea708Mode::RollUp
+                }
+            };
+            match self.mode {
+                Cea708Mode::RollUp => {
+                    self.send_roll_up_preamble = true;
+                }
+                _ => {
+                    self.pen_location.column = origin_column as u8;
+                    need_pen_location = true;
                 }
             }
         }
 
-        if let Some(clear) = lines.clear {
-            if clear && !cleared {
-                self.erase_display_frame_no = None;
-                self.service_writer.clear_current_window();
-                if self.mode != Cea708Mode::PopOn && self.mode != Cea708Mode::PaintOn {
-                    self.send_roll_up_preamble = true;
-                }
-                self.pen_location.column = origin_column as u8;
-                need_pen_location = true;
-                cleared = true;
+        if let Some(clear) = lines.clear
+            && clear
+            && !cleared
+        {
+            self.erase_display_frame_no = None;
+            self.service_writer.clear_current_window();
+            if self.mode != Cea708Mode::PopOn && self.mode != Cea708Mode::PaintOn {
+                self.send_roll_up_preamble = true;
             }
+            self.pen_location.column = origin_column as u8;
+            need_pen_location = true;
+            cleared = true;
         }
 
         if !lines.lines.is_empty() {

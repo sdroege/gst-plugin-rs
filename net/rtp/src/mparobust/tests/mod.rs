@@ -2,7 +2,7 @@
 
 use gst::prelude::*;
 
-use crate::mparobust::{peek_frame_header, FrameHeader};
+use crate::mparobust::{FrameHeader, peek_frame_header};
 
 use std::sync::LazyLock;
 

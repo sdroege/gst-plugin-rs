@@ -23,8 +23,8 @@ use gst::prelude::*;
 use slab::Slab;
 
 use async_lock::{
-    futures::{Read as AsyncLockRead, Write as AsyncLockWrite},
     Mutex, RwLock,
+    futures::{Read as AsyncLockRead, Write as AsyncLockWrite},
 };
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Weak};

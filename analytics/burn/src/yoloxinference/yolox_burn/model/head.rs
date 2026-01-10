@@ -1,16 +1,16 @@
 use burn::{
     module::Module,
     nn::{
-        conv::{Conv2d, Conv2dConfig},
         Initializer, PaddingConfig2d,
+        conv::{Conv2d, Conv2dConfig},
     },
-    tensor::{activation::sigmoid, backend::Backend, Device, Int, Shape, Tensor},
+    tensor::{Device, Int, Shape, Tensor, activation::sigmoid, backend::Backend},
 };
 use itertools::{izip, multiunzip};
 use std::{vec, vec::Vec};
 
 use super::{
-    blocks::{expand, BaseConv, BaseConvConfig, ConvBlock, ConvBlockConfig},
+    blocks::{BaseConv, BaseConvConfig, ConvBlock, ConvBlockConfig, expand},
     pafpn::FpnFeatures,
 };
 

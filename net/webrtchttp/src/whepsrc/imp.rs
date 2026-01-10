@@ -7,18 +7,18 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::utils::{
-    self, build_reqwest_client, parse_redirect_location, set_ice_servers, wait, wait_async,
-    WaitError, RUNTIME,
-};
 use crate::IceTransportPolicy;
+use crate::utils::{
+    self, RUNTIME, WaitError, build_reqwest_client, parse_redirect_location, set_ice_servers, wait,
+    wait_async,
+};
 use async_recursion::async_recursion;
 use bytes::Bytes;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_sdp::*;
 use gst_webrtc::*;
-use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::StatusCode;
+use reqwest::header::{HeaderMap, HeaderValue};
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
@@ -683,12 +683,11 @@ impl WhepSrc {
             StatusCode::CREATED => {
                 gst::debug!(CAT, imp = self, "Response headers: {:?}", resp.headers());
 
-                if use_link_headers {
-                    if let Err(e) = set_ice_servers(&self.webrtcbin, resp.headers()) {
-                        self.raise_error(gst::ResourceError::Failed, e.to_string());
-                        return;
-                    };
-                }
+                if use_link_headers && let Err(e) = set_ice_servers(&self.webrtcbin, resp.headers())
+                {
+                    self.raise_error(gst::ResourceError::Failed, e.to_string());
+                    return;
+                };
 
                 /* See section 4.2 of the WHEP specification */
                 let location = match resp.headers().get(reqwest::header::LOCATION) {

@@ -14,10 +14,10 @@ use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
 
 use aws_sdk_s3::{
-    config::{self, retry::RetryConfig, Credentials, Region},
+    Client,
+    config::{self, Credentials, Region, retry::RetryConfig},
     operation::put_object::builders::PutObjectFluentBuilder,
     primitives::ByteStream,
-    Client,
 };
 
 use super::NextFile;
@@ -28,7 +28,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::s3url::*;
-use crate::s3utils::{self, duration_from_millis, duration_to_millis, WaitError};
+use crate::s3utils::{self, WaitError, duration_from_millis, duration_to_millis};
 
 const DEFAULT_RETRY_ATTEMPTS: u32 = 5;
 const DEFAULT_FLUSH_INTERVAL_BUFFERS: u64 = 1;
@@ -938,13 +938,14 @@ impl BaseSinkImpl for S3PutObjectSink {
         let mut state = self.state.lock().unwrap();
         let settings = self.settings.lock().unwrap();
 
-        if let State::Started(ref mut started_state) = *state {
-            if settings.flush_on_error && started_state.need_flush {
-                drop(settings);
+        if let State::Started(ref mut started_state) = *state
+            && settings.flush_on_error
+            && started_state.need_flush
+        {
+            drop(settings);
 
-                if self.write_put_object_request(started_state).is_err() {
-                    gst::error!(CAT, imp = self, "Failed to finalize the next-file upload",);
-                }
+            if self.write_put_object_request(started_state).is_err() {
+                gst::error!(CAT, imp = self, "Failed to finalize the next-file upload",);
             }
         }
 
@@ -976,14 +977,14 @@ impl BaseSinkImpl for S3PutObjectSink {
                         Ok(_key_unit_event) => {
                             let mut state = self.state.lock().unwrap();
 
-                            if let State::Started(ref mut started_state) = *state {
-                                if let Err(e) = self.write_put_object_request(started_state) {
-                                    gst::element_imp_error!(
-                                        self,
-                                        gst::CoreError::Failed,
-                                        ["Failed to write on KeyUnitEvent, {e}"]
-                                    );
-                                }
+                            if let State::Started(ref mut started_state) = *state
+                                && let Err(e) = self.write_put_object_request(started_state)
+                            {
+                                gst::element_imp_error!(
+                                    self,
+                                    gst::CoreError::Failed,
+                                    ["Failed to write on KeyUnitEvent, {e}"]
+                                );
                             }
                         }
                         Err(e) => gst::error!(CAT, "Failed to parse key unit event: {e}"),

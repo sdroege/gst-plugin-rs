@@ -49,15 +49,13 @@ enum CongestionControlOp {
 
 fn lookup_twcc_stats(stats: &gst::StructureRef) -> Option<gst::Structure> {
     for (_, field_value) in stats {
-        if let Ok(s) = field_value.get::<gst::Structure>() {
-            if let Ok(type_) = s.get::<gst_webrtc::WebRTCStatsType>("type") {
-                if (type_ == gst_webrtc::WebRTCStatsType::Transport
-                    || type_ == gst_webrtc::WebRTCStatsType::CandidatePair)
-                    && s.has_field("gst-twcc-stats")
-                {
-                    return Some(s.get::<gst::Structure>("gst-twcc-stats").unwrap());
-                }
-            }
+        if let Ok(s) = field_value.get::<gst::Structure>()
+            && let Ok(type_) = s.get::<gst_webrtc::WebRTCStatsType>("type")
+            && (type_ == gst_webrtc::WebRTCStatsType::Transport
+                || type_ == gst_webrtc::WebRTCStatsType::CandidatePair)
+            && s.has_field("gst-twcc-stats")
+        {
+            return Some(s.get::<gst::Structure>("gst-twcc-stats").unwrap());
         }
     }
 
@@ -256,12 +254,11 @@ impl CongestionController {
     fn get_remote_inbound_stats(&self, stats: &gst::StructureRef) -> Vec<gst::Structure> {
         let mut inbound_rtp_stats: Vec<gst::Structure> = Default::default();
         for (_, field_value) in stats {
-            if let Ok(s) = field_value.get::<gst::Structure>() {
-                if let Ok(type_) = s.get::<gst_webrtc::WebRTCStatsType>("type") {
-                    if type_ == gst_webrtc::WebRTCStatsType::RemoteInboundRtp {
-                        inbound_rtp_stats.push(s);
-                    }
-                }
+            if let Ok(s) = field_value.get::<gst::Structure>()
+                && let Ok(type_) = s.get::<gst_webrtc::WebRTCStatsType>("type")
+                && type_ == gst_webrtc::WebRTCStatsType::RemoteInboundRtp
+            {
+                inbound_rtp_stats.push(s);
             }
         }
 

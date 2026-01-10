@@ -11,7 +11,7 @@
 //
 // https://www.rfc-editor.org/rfc/rfc2326.html
 
-use std::collections::{btree_set::BTreeSet, HashMap};
+use std::collections::{HashMap, btree_set::BTreeSet};
 use std::convert::TryFrom;
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
@@ -32,9 +32,9 @@ use tokio::task::JoinHandle;
 use tokio::time;
 
 use rtsp_types::headers::{
-    CSeq, NptRange, NptTime, Public, Range, RtpInfos, RtpLowerTransport, RtpProfile, RtpTransport,
-    RtpTransportParameters, Session, Transport, TransportMode, Transports, ACCEPT, CONTENT_BASE,
-    CONTENT_LOCATION, USER_AGENT,
+    ACCEPT, CONTENT_BASE, CONTENT_LOCATION, CSeq, NptRange, NptTime, Public, Range, RtpInfos,
+    RtpLowerTransport, RtpProfile, RtpTransport, RtpTransportParameters, Session, Transport,
+    TransportMode, Transports, USER_AGENT,
 };
 use rtsp_types::{Message, Method, Request, Response, StatusCode, Version};
 
@@ -181,7 +181,7 @@ fn parse_protocols_str(s: &str) -> Result<Vec<RtspProtocol>, glib::Error> {
                 return Err(glib::Error::new(
                     gst::CoreError::Failed,
                     &format!("Unsupported RTSP protocol: {each}"),
-                ))
+                ));
             }
         }
     }
@@ -640,13 +640,13 @@ impl RtspSrc {
 
         RUNTIME.block_on(async {
             let (tx, rx) = oneshot::channel();
-            if let Ok(()) = cmd_queue.send(Commands::Teardown(Some(tx))).await {
-                if let Err(_elapsed) = time::timeout(Duration::from_millis(500), rx).await {
-                    gst::warning!(
-                        CAT,
-                        "Timeout waiting for Teardown, going to NULL asynchronously"
-                    );
-                }
+            if let Ok(()) = cmd_queue.send(Commands::Teardown(Some(tx))).await
+                && let Err(_elapsed) = time::timeout(Duration::from_millis(500), rx).await
+            {
+                gst::warning!(
+                    CAT,
+                    "Timeout waiting for Teardown, going to NULL asynchronously"
+                );
             }
         });
 
@@ -1974,7 +1974,7 @@ async fn udp_rtp_task(
                 }
             }
             Ok(Err(_elapsed)) => {
-                break format!("No data after {} seconds, exiting", timeout.seconds())
+                break format!("No data after {} seconds, exiting", timeout.seconds());
             }
             Err(err) => break format!("UDP socket was closed: {err:?}"),
         };

@@ -6,7 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use futures::future::{abortable, AbortHandle};
+use futures::future::{AbortHandle, abortable};
 use futures::prelude::*;
 
 use gst::glib;
@@ -88,13 +88,13 @@ impl InputSelectorPadSinkHandler {
             let mut sync_future = None;
             let switched_pad = state.switched_pad;
 
-            if let Some(segment) = &inner.segment {
-                if let Some(segment) = segment.downcast_ref::<gst::format::Time>() {
-                    let rtime = segment.to_running_time(buffer.pts());
-                    let (sync_fut, abort_handle) = abortable(self.sync(elem, rtime));
-                    inner.abort_handle = Some(abort_handle);
-                    sync_future = Some(sync_fut.map_err(|_| gst::FlowError::Flushing));
-                }
+            if let Some(segment) = &inner.segment
+                && let Some(segment) = segment.downcast_ref::<gst::format::Time>()
+            {
+                let rtime = segment.to_running_time(buffer.pts());
+                let (sync_fut, abort_handle) = abortable(self.sync(elem, rtime));
+                inner.abort_handle = Some(abort_handle);
+                sync_future = Some(sync_fut.map_err(|_| gst::FlowError::Flushing));
             }
 
             let is_active = {
@@ -410,10 +410,10 @@ impl ObjectImpl for InputSelector {
                 drop(pads);
                 drop(state);
 
-                if let Some(old_pad) = old_pad {
-                    if Some(&old_pad) != pad.as_ref() {
-                        let _ = old_pad.push_event(gst::event::Reconfigure::new());
-                    }
+                if let Some(old_pad) = old_pad
+                    && Some(&old_pad) != pad.as_ref()
+                {
+                    let _ = old_pad.push_event(gst::event::Reconfigure::new());
                 }
 
                 if let Some(pad) = pad {

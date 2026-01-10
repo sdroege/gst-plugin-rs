@@ -932,12 +932,11 @@ impl ElementImpl for FallbackSrc {
             gst::StateChange::ReadyToPaused => {
                 self.post_initial_collection()?;
 
-                if let Some(parent) = self.obj().parent() {
-                    if let Some(bin) = parent.downcast_ref::<gst::Bin>() {
-                        if !bin.bin_flags().contains(gst::BinFlags::STREAMS_AWARE) {
-                            self.obj().no_more_pads();
-                        }
-                    }
+                if let Some(parent) = self.obj().parent()
+                    && let Some(bin) = parent.downcast_ref::<gst::Bin>()
+                    && !bin.bin_flags().contains(gst::BinFlags::STREAMS_AWARE)
+                {
+                    self.obj().no_more_pads();
                 }
             }
             _ => (),
@@ -1193,16 +1192,14 @@ impl FallbackSrc {
                     .obj()
                     .emit_by_name::<glib::GString>("update-uri", &[uri]);
 
-                let source = gst::ElementFactory::make("uridecodebin3")
+                gst::ElementFactory::make("uridecodebin3")
                     .name("dbin-main")
                     .property("uri", uri)
                     .property("use-buffering", true)
                     .property("buffer-duration", buffer_duration)
                     .property("caps", source_caps)
                     .build()
-                    .expect("No uridecodebin3 found");
-
-                source
+                    .expect("No uridecodebin3 found")
             }
             Source::Element(source) => CustomSource::new(source).upcast(),
         };
@@ -1268,18 +1265,14 @@ impl FallbackSrc {
         source_caps: gst::Caps,
     ) -> Option<SourceBin> {
         let source: gst::Element = match fallback_uri {
-            Some(uri) => {
-                let dbin = gst::ElementFactory::make("uridecodebin3")
-                    .name("dbin-fallback")
-                    .property("uri", uri)
-                    .property("use-buffering", true)
-                    .property("buffer-duration", buffer_duration)
-                    .property("caps", source_caps)
-                    .build()
-                    .expect("No uridecodebin3 found");
-
-                dbin
-            }
+            Some(uri) => gst::ElementFactory::make("uridecodebin3")
+                .name("dbin-fallback")
+                .property("uri", uri)
+                .property("use-buffering", true)
+                .property("buffer-duration", buffer_duration)
+                .property("caps", source_caps)
+                .build()
+                .expect("No uridecodebin3 found"),
             None => return None,
         };
 
@@ -2180,10 +2173,10 @@ impl FallbackSrc {
         if let Some(ev) = pad.sticky_event::<gst::event::StreamStart>(0) {
             let stream = ev.stream();
 
-            if let Some(caps) = stream.and_then(|s| s.caps()) {
-                if let Some(s) = caps.structure(0) {
-                    is_image = s.name().starts_with("image/");
-                }
+            if let Some(caps) = stream.and_then(|s| s.caps())
+                && let Some(s) = caps.structure(0)
+            {
+                is_image = s.name().starts_with("image/");
             }
         }
 
@@ -2327,11 +2320,10 @@ impl FallbackSrc {
         let clocksync = gst::ElementFactory::make("clocksync")
             .build()
             .unwrap_or_else(|_| {
-                let identity = gst::ElementFactory::make("identity")
+                gst::ElementFactory::make("identity")
                     .property("sync", true)
                     .build()
-                    .unwrap();
-                identity
+                    .unwrap()
             });
 
         source
@@ -2807,10 +2799,8 @@ impl FallbackSrc {
                 let srcpad = branch.source_srcpad.clone();
                 let is_eos = srcpad.pad_flags().contains(gst::PadFlags::EOS);
 
-                if !is_eos {
-                    if let Some(offset) = offset {
-                        block.pad.set_offset(offset);
-                    }
+                if !is_eos && let Some(offset) = offset {
+                    block.pad.set_offset(offset);
                 }
                 block.pad.remove_probe(block.probe_id);
                 block.pad.remove_probe(block.qos_probe_id);
@@ -3557,19 +3547,18 @@ impl FallbackSrc {
                 _ => {}
             }
 
-            if let Ok(fallback_id) = entry.get::<&str>("fallback") {
-                if !fallback_collection
+            if let Ok(fallback_id) = entry.get::<&str>("fallback")
+                && !fallback_collection
                     .iter()
                     .any(|s| s.stream_id().as_ref().map(|id| id.as_str()) == Some(fallback_id))
-                {
-                    gst::warning!(
-                        CAT,
-                        imp = self,
-                        "Fallback stream ID {:?} not from fallback collection, ignoring map",
-                        fallback_id
-                    );
-                    return false;
-                }
+            {
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Fallback stream ID {:?} not from fallback collection, ignoring map",
+                    fallback_id
+                );
+                return false;
             }
         }
 
@@ -3913,14 +3902,14 @@ impl FallbackSrc {
         }
 
         // Check if error is from fallback input and if so, use a dummy fallback
-        if let Some(ref source) = state.fallback_source {
-            if src == &source.bin || src.has_as_ancestor(&source.bin) {
-                self.handle_source_error(state, RetryReason::Error, true);
-                drop(state_guard);
-                self.obj().notify("status");
-                self.obj().notify("statistics");
-                return true;
-            }
+        if let Some(ref source) = state.fallback_source
+            && (src == &source.bin || src.has_as_ancestor(&source.bin))
+        {
+            self.handle_source_error(state, RetryReason::Error, true);
+            drop(state_guard);
+            self.obj().notify("status");
+            self.obj().notify("statistics");
+            return true;
         }
 
         gst::error!(
@@ -4152,11 +4141,13 @@ impl FallbackSrc {
             let clock = gst::SystemClock::obtain();
             let wait_time = clock.time() + gst::ClockTime::SECOND;
             if fallback_source {
-                assert!(state
-                    .fallback_source
-                    .as_ref()
-                    .map(|s| s.pending_restart_timeout.is_none())
-                    .unwrap_or(true));
+                assert!(
+                    state
+                        .fallback_source
+                        .as_ref()
+                        .map(|s| s.pending_restart_timeout.is_none())
+                        .unwrap_or(true)
+                );
             } else {
                 assert!(state.source.pending_restart_timeout.is_none());
             }

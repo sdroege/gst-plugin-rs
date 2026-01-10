@@ -151,7 +151,9 @@ impl CsoundFilter {
         } else {
             return Err(error_msg!(
                 gst::LibraryError::Failed,
-                ["No Csound score specified to compile. Use either location or csd-text but not both"]
+                [
+                    "No Csound score specified to compile. Use either location or csd-text but not both"
+                ]
             ));
         }
 

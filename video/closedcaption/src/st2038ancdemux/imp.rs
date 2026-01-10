@@ -176,13 +176,12 @@ impl St2038AncDemux {
                 }
             };
 
-            if let Some(running_time) = running_time {
-                if stream
+            if let Some(running_time) = running_time
+                && stream
                     .last_used
                     .is_none_or(|last_used| last_used < running_time)
-                {
-                    stream.last_used = Some(running_time);
-                }
+            {
+                stream.last_used = Some(running_time);
             }
 
             let Ok(mut sub_buffer) =
@@ -205,11 +204,11 @@ impl St2038AncDemux {
             state.flow_combiner.update_pad_flow(&anc_pad, anc_flow)?;
 
             // TODO: Check every now and then if any ancillary streams haven't seen any data for a while
-            if let Some((last_check, rt)) = Option::zip(state.last_inactivity_check, running_time) {
-                if gst::ClockTime::absdiff(rt, last_check) >= gst::ClockTime::from_seconds(10) {
-                    // gst::fixme!(CAT, imp = self, "Check ancillary streams for inactivity");
-                    state.last_inactivity_check = running_time;
-                }
+            if let Some((last_check, rt)) = Option::zip(state.last_inactivity_check, running_time)
+                && gst::ClockTime::absdiff(rt, last_check) >= gst::ClockTime::from_seconds(10)
+            {
+                // gst::fixme!(CAT, imp = self, "Check ancillary streams for inactivity");
+                state.last_inactivity_check = running_time;
             }
 
             let mut late_pads = Vec::new();

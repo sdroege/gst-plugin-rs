@@ -26,7 +26,7 @@ use crate::runtime::{Context, PadSrc, Task, TaskState};
 
 use crate::runtime::Async;
 use crate::socket::{Socket, SocketError, SocketRead};
-use futures::channel::mpsc::{channel, Receiver, Sender};
+use futures::channel::mpsc::{Receiver, Sender, channel};
 use futures::pin_mut;
 
 const DEFAULT_HOST: Option<&str> = Some("127.0.0.1");
@@ -741,10 +741,10 @@ impl ElementImpl for TcpClientSrc {
 
         match event.view() {
             EventView::Eos(_) => {
-                if self.state() != TaskState::Started {
-                    if let Err(err) = self.start() {
-                        gst::error!(CAT, imp = self, "Failed to start task thread {err:?}");
-                    }
+                if self.state() != TaskState::Started
+                    && let Err(err) = self.start()
+                {
+                    gst::error!(CAT, imp = self, "Failed to start task thread {err:?}");
                 }
 
                 if self.state() == TaskState::Started {

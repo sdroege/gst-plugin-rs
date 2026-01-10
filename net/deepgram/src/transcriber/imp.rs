@@ -24,10 +24,10 @@ use tokio::runtime;
 use futures::channel::mpsc;
 use futures::prelude::*;
 
-use super::{DeepgramInterimStrategy, CAT};
+use super::{CAT, DeepgramInterimStrategy};
 use deepgram::{
-    common::{options::Encoding, options::OptionsBuilder, stream_response::StreamResponse},
     Deepgram,
+    common::{options::Encoding, options::OptionsBuilder, stream_response::StreamResponse},
 };
 
 static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
@@ -285,12 +285,11 @@ impl Transcriber {
 
                 match settings.interim_strategy {
                     DeepgramInterimStrategy::Timing => {
-                        if let Some(interim_start_time) = state.interim_start_time {
-                            if dg_start_time
+                        if let Some(interim_start_time) = state.interim_start_time
+                            && dg_start_time
                                 <= interim_start_time + settings.interim_timing_threshold
-                            {
-                                continue;
-                            }
+                        {
+                            continue;
                         }
                     }
                     DeepgramInterimStrategy::Index => {
@@ -329,22 +328,22 @@ impl Transcriber {
 
                 let duration = dg_end_time.saturating_sub(dg_start_time);
 
-                if let Some(position) = out_segment.position() {
-                    if pts.cmp(&position) == std::cmp::Ordering::Greater {
-                        gst::log!(
-                            CAT,
-                            imp = self,
-                            "position lagging, queuing gap \
+                if let Some(position) = out_segment.position()
+                    && pts.cmp(&position) == std::cmp::Ordering::Greater
+                {
+                    gst::log!(
+                        CAT,
+                        imp = self,
+                        "position lagging, queuing gap \
                             with pts {position} and duration {}",
-                            pts - position
-                        );
-                        result_tx.send(TranscriptOutput::Event(
-                            gst::event::Gap::builder(position)
-                                .duration(pts - position)
-                                .seqnum(state.seqnum)
-                                .build(),
-                        ))?;
-                    }
+                        pts - position
+                    );
+                    result_tx.send(TranscriptOutput::Event(
+                        gst::event::Gap::builder(position)
+                            .duration(pts - position)
+                            .seqnum(state.seqnum)
+                            .build(),
+                    ))?;
                 }
 
                 if item.speaker != state.last_speaker {
@@ -399,14 +398,13 @@ impl Transcriber {
                 result_tx.send(TranscriptOutput::Item(buf))?;
 
                 if let Some(input_running_time) = self.trim_input_times(&mut state.input_times, pts)
+                    && let Some(now) = now
                 {
-                    if let Some(now) = now {
-                        let item_delay = now.saturating_sub(input_running_time);
+                    let item_delay = now.saturating_sub(input_running_time);
 
-                        if item_delay > state.observed_max_delay {
-                            state.observed_max_delay = item_delay;
-                            do_notify_delay = true;
-                        }
+                    if item_delay > state.observed_max_delay {
+                        state.observed_max_delay = item_delay;
+                        do_notify_delay = true;
                     }
                 }
 
@@ -445,22 +443,22 @@ impl Transcriber {
             let transcript_end_pts =
                 transcript_start_time + state.first_buffer_pts.unwrap() + transcript_duration;
 
-            if let Some(position) = out_segment.position() {
-                if transcript_end_pts.cmp(&position) == std::cmp::Ordering::Greater {
-                    gst::log!(
-                        CAT,
-                        imp = self,
-                        "position lagging, queuing gap \
+            if let Some(position) = out_segment.position()
+                && transcript_end_pts.cmp(&position) == std::cmp::Ordering::Greater
+            {
+                gst::log!(
+                    CAT,
+                    imp = self,
+                    "position lagging, queuing gap \
                         with pts {position} and duration {}",
-                        transcript_end_pts - position
-                    );
-                    result_tx.send(TranscriptOutput::Event(
-                        gst::event::Gap::builder(position)
-                            .duration(transcript_end_pts - position)
-                            .seqnum(state.seqnum)
-                            .build(),
-                    ))?;
-                }
+                    transcript_end_pts - position
+                );
+                result_tx.send(TranscriptOutput::Event(
+                    gst::event::Gap::builder(position)
+                        .duration(transcript_end_pts - position)
+                        .seqnum(state.seqnum)
+                        .build(),
+                ))?;
             }
 
             out_segment.set_position(Some(transcript_end_pts));
@@ -521,38 +519,40 @@ impl Transcriber {
         state.result_tx = Some(result_tx);
 
         let this_weak = self.downgrade();
-        let res = self.srcpad.start_task(move || loop {
-            let Some(this) = this_weak.upgrade() else {
-                break;
-            };
-
-            match result_rx.recv() {
-                Ok(TranscriptOutput::Item(buffer)) => {
-                    gst::debug!(CAT, imp = this, "pushing buffer {buffer:?}");
-
-                    if let Err(err) = this.srcpad.push(buffer) {
-                        if err != gst::FlowError::Flushing {
-                            gst::element_error!(
-                                this.obj(),
-                                gst::StreamError::Failed,
-                                ["Streaming failed: {}", err]
-                            );
-                        }
-                        this.pause_srcpad_task();
-                    }
-                }
-                Ok(TranscriptOutput::Event(event)) => {
-                    gst::debug!(CAT, imp = this, "pushing event {event:?}");
-
-                    if event.is_downstream() {
-                        this.srcpad.push_event(event);
-                    } else {
-                        this.sinkpad.push_event(event);
-                    }
-                }
-                Ok(TranscriptOutput::Eos) | Err(_) => {
-                    this.do_eos();
+        let res = self.srcpad.start_task(move || {
+            loop {
+                let Some(this) = this_weak.upgrade() else {
                     break;
+                };
+
+                match result_rx.recv() {
+                    Ok(TranscriptOutput::Item(buffer)) => {
+                        gst::debug!(CAT, imp = this, "pushing buffer {buffer:?}");
+
+                        if let Err(err) = this.srcpad.push(buffer) {
+                            if err != gst::FlowError::Flushing {
+                                gst::element_error!(
+                                    this.obj(),
+                                    gst::StreamError::Failed,
+                                    ["Streaming failed: {}", err]
+                                );
+                            }
+                            this.pause_srcpad_task();
+                        }
+                    }
+                    Ok(TranscriptOutput::Event(event)) => {
+                        gst::debug!(CAT, imp = this, "pushing event {event:?}");
+
+                        if event.is_downstream() {
+                            this.srcpad.push_event(event);
+                        } else {
+                            this.sinkpad.push_event(event);
+                        }
+                    }
+                    Ok(TranscriptOutput::Eos) | Err(_) => {
+                        this.do_eos();
+                        break;
+                    }
                 }
             }
         });

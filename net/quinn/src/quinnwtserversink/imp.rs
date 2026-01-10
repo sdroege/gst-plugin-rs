@@ -15,7 +15,7 @@ use crate::quinnconnection::*;
 use crate::quinnquicmeta::*;
 use crate::quinnquicquery::*;
 use crate::utils::{
-    get_stats, make_socket_addr, wait, WaitError, CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG,
+    CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG, WaitError, get_stats, make_socket_addr, wait,
 };
 use crate::{common::*, utils};
 use bytes::Bytes;
@@ -464,10 +464,8 @@ impl BaseSinkImpl for QuinnWebTransportSink {
         let mut state = self.state.lock().unwrap();
 
         if let State::Started(ref mut state) = *state {
-            if !use_datagram {
-                if let Some(ref mut send) = state.stream.take() {
-                    self.close_stream(send, timeout);
-                }
+            if !use_datagram && let Some(ref mut send) = state.stream.take() {
+                self.close_stream(send, timeout);
             }
 
             for stream in state.stream_map.values_mut() {
@@ -581,19 +579,15 @@ impl BaseSinkImpl for QuinnWebTransportSink {
         drop(settings);
 
         let mut state = self.state.lock().unwrap();
-        if let State::Started(ref mut state) = *state {
-            if let EventView::CustomDownstream(ev) = event.view() {
-                if let Some(s) = ev.structure() {
-                    if s.name() == QUIC_STREAM_CLOSE_CUSTOMDOWNSTREAM_EVENT {
-                        if let Ok(stream_id) = s.get::<u64>(QUIC_STREAM_ID) {
-                            if let Some(mut stream) = state.stream_map.remove(&stream_id) {
-                                self.close_stream(&mut stream, timeout);
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
+        if let State::Started(ref mut state) = *state
+            && let EventView::CustomDownstream(ev) = event.view()
+            && let Some(s) = ev.structure()
+            && s.name() == QUIC_STREAM_CLOSE_CUSTOMDOWNSTREAM_EVENT
+            && let Ok(stream_id) = s.get::<u64>(QUIC_STREAM_ID)
+            && let Some(mut stream) = state.stream_map.remove(&stream_id)
+        {
+            self.close_stream(&mut stream, timeout);
+            return true;
         }
 
         self.parent_event(event)

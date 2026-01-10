@@ -508,10 +508,16 @@ impl OnvifMeta2RelationMeta {
                                     + ((bottom * y_scale * (height / 2) as f64) as i32);
 
                                 gst::info!(
-				    CAT,
-				    imp = self,
-				    "Object detected with label : {}, likelihood: {}, bounding box: {}x{} at ({},{})",
-				    tag, likelihood, (x2 - x1), (y2 - y1), x1, y1);
+                                    CAT,
+                                    imp = self,
+                                    "Object detected with label : {}, likelihood: {}, bounding box: {}x{} at ({},{})",
+                                    tag,
+                                    likelihood,
+                                    (x2 - x1),
+                                    (y2 - y1),
+                                    x1,
+                                    y1
+                                );
 
                                 let mut arm = AnalyticsRelationMeta::add(buf);
                                 let quark = glib::Quark::from_str(tag);

@@ -3,13 +3,13 @@ use std::{
     ops::Deref,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc, LazyLock,
+        atomic::{AtomicBool, Ordering},
     },
 };
-use tokio_rustls::{rustls, TlsAcceptor, TlsConnector};
+use tokio_rustls::{TlsAcceptor, TlsConnector, rustls};
 
-use anyhow::{anyhow, Context, Error};
+use anyhow::{Context, Error, anyhow};
 use gst::{glib, prelude::*};
 
 pub(crate) const INPUT_DATA_CHANNEL_LABEL: &str = "input";
@@ -391,8 +391,11 @@ pub fn build_link_header(url_str: &str) -> Result<String, url::ParseError> {
     link_str += ">";
 
     if let Some(password) = url.password() {
-        link_str += &format!("; rel=\"ice-server\"; username=\"{}\"; credential:\"{}\"; credential-type:\"password\";",
-            url.username(), password);
+        link_str += &format!(
+            "; rel=\"ice-server\"; username=\"{}\"; credential:\"{}\"; credential-type:\"password\";",
+            url.username(),
+            password
+        );
     }
 
     Ok(link_str)
@@ -510,14 +513,13 @@ impl Codec {
         });
 
         let mut caps = None;
-        if let Some(elem) = Codec::get_payloader_for_codec(name, payloaders) {
-            if let Some(tmpl) = elem
+        if let Some(elem) = Codec::get_payloader_for_codec(name, payloaders)
+            && let Some(tmpl) = elem
                 .static_pad_templates()
                 .iter()
                 .find(|template| template.direction() == gst::PadDirection::Sink)
-            {
-                caps = Some(tmpl.caps());
-            }
+        {
+            caps = Some(tmpl.caps());
         }
 
         Self {
@@ -1319,26 +1321,26 @@ pub fn serialize_meta(buffer: &gst::BufferRef, forward_metas: &HashSet<String>) 
     let mut ret = vec![];
 
     buffer.foreach_meta(|meta| {
-        if forward_metas.contains("timecode") {
-            if let Some(tc_meta) = meta.downcast_ref::<gst_video::VideoTimeCodeMeta>() {
-                let tc = tc_meta.tc();
-                ret.push(Meta::TimeCode {
-                    hours: tc.hours(),
-                    minutes: tc.minutes(),
-                    seconds: tc.seconds(),
-                    frames: tc.frames(),
-                    field_count: tc.field_count(),
-                    fps: tc.fps(),
-                    flags: VideoTimeCodeFlags(tc.flags()),
-                    latest_daily_jam: tc
-                        .latest_daily_jam()
-                        .and_then(|dt| {
-                            let gst_dt: gst::DateTime = dt.into();
-                            gst_dt.to_iso8601_string().ok()
-                        })
-                        .map(|s| s.to_string()),
-                });
-            }
+        if forward_metas.contains("timecode")
+            && let Some(tc_meta) = meta.downcast_ref::<gst_video::VideoTimeCodeMeta>()
+        {
+            let tc = tc_meta.tc();
+            ret.push(Meta::TimeCode {
+                hours: tc.hours(),
+                minutes: tc.minutes(),
+                seconds: tc.seconds(),
+                frames: tc.frames(),
+                field_count: tc.field_count(),
+                fps: tc.fps(),
+                flags: VideoTimeCodeFlags(tc.flags()),
+                latest_daily_jam: tc
+                    .latest_daily_jam()
+                    .and_then(|dt| {
+                        let gst_dt: gst::DateTime = dt.into();
+                        gst_dt.to_iso8601_string().ok()
+                    })
+                    .map(|s| s.to_string()),
+            });
         }
         std::ops::ControlFlow::Continue(())
     });

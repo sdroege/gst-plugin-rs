@@ -180,16 +180,16 @@ impl JitterBuffer {
 
         self.seqnums.insert(seqnum);
 
-        if let Some(last_output_seqnum) = self.last_output_seqnum {
-            if last_output_seqnum >= seqnum {
-                debug!(
-                    "Late packet {} (extended {})",
-                    rtp.sequence_number(),
-                    seqnum
-                );
-                self.stats.num_late += 1;
-                return QueueResult::Late;
-            }
+        if let Some(last_output_seqnum) = self.last_output_seqnum
+            && last_output_seqnum >= seqnum
+        {
+            debug!(
+                "Late packet {} (extended {})",
+                rtp.sequence_number(),
+                seqnum
+            );
+            self.stats.num_late += 1;
+            return QueueResult::Late;
         }
 
         if self.items.is_empty()

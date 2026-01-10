@@ -6,7 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use anyhow::{bail, Context, Error};
+use anyhow::{Context, Error, bail};
 use bitstream_io::{FromBitStream, ToBitStream};
 
 #[derive(Debug, Clone, Copy)]

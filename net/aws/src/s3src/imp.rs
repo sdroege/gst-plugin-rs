@@ -12,8 +12,8 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use aws_sdk_s3::{
-    config::{self, retry::RetryConfig, Credentials, Region},
     Client,
+    config::{self, Credentials, Region, retry::RetryConfig},
 };
 
 use gst::glib;
@@ -25,7 +25,7 @@ use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;
 
 use crate::s3url::*;
-use crate::s3utils::{self, duration_from_millis, duration_to_millis, WaitError};
+use crate::s3utils::{self, WaitError, duration_from_millis, duration_to_millis};
 
 const DEFAULT_FORCE_PATH_STYLE: bool = false;
 const DEFAULT_RETRY_ATTEMPTS: u32 = 5;

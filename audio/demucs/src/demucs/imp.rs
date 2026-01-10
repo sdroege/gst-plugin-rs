@@ -898,12 +898,14 @@ impl Demucs {
     #[cfg(feature = "websocket")]
     async fn ws_read_loop_fn(
         &self,
-        ws_stream: &mut (impl futures::Stream<
+        ws_stream: &mut (
+                 impl futures::Stream<
             Item = Result<
                 async_tungstenite::tungstenite::Message,
                 async_tungstenite::tungstenite::Error,
             >,
-        > + Unpin),
+        > + Unpin
+             ),
         senders: &mut Vec<async_channel::Sender<gst::Buffer>>,
     ) -> ControlFlow<(), ()> {
         use futures::prelude::*;
@@ -1534,11 +1536,9 @@ impl ElementImpl for Demucs {
                 #[cfg(feature = "inprocess")]
                 {
                     let load_python = self.settings.lock().unwrap().url.is_none();
-                    if load_python {
-                        if let Err(err) = python::init() {
-                            gst::error!(CAT, imp = self, "Failed to load Python module: {err}");
-                            return Err(gst::StateChangeError);
-                        }
+                    if load_python && let Err(err) = python::init() {
+                        gst::error!(CAT, imp = self, "Failed to load Python module: {err}");
+                        return Err(gst::StateChangeError);
                     }
                 }
             }

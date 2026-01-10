@@ -5,7 +5,7 @@ use anyhow::Error;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst_utils::streamproducer::{ProducerSettings, DEFAULT_PRODUCER_SYNC};
+use gst_utils::streamproducer::{DEFAULT_PRODUCER_SYNC, ProducerSettings};
 
 use std::sync::Mutex;
 
@@ -246,15 +246,15 @@ impl ElementImpl for InterSink {
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
-        if transition == gst::StateChange::ReadyToPaused {
-            if let Err(err) = self.prepare() {
-                gst::element_error!(
-                    self.obj(),
-                    gst::StreamError::Failed,
-                    ["Failed to prepare: {}", err]
-                );
-                return Err(gst::StateChangeError);
-            }
+        if transition == gst::StateChange::ReadyToPaused
+            && let Err(err) = self.prepare()
+        {
+            gst::element_error!(
+                self.obj(),
+                gst::StreamError::Failed,
+                ["Failed to prepare: {}", err]
+            );
+            return Err(gst::StateChangeError);
         }
 
         let ret = self.parent_change_state(transition)?;

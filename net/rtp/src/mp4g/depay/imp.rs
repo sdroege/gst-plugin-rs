@@ -238,14 +238,14 @@ impl AuAccumulator {
     #[inline]
     fn try_into_au(self) -> Result<AccessUnit, Mpeg4GenericDepayError> {
         let au = self.0;
-        if let Some(expected) = au.size {
-            if expected as usize != au.data.len() {
-                return Err(Mpeg4GenericDepayError::FragmentedAuSizeMismatch {
-                    expected,
-                    found: au.data.len(),
-                    ext_seqnum: au.ext_seqnum,
-                });
-            }
+        if let Some(expected) = au.size
+            && expected as usize != au.data.len()
+        {
+            return Err(Mpeg4GenericDepayError::FragmentedAuSizeMismatch {
+                expected,
+                found: au.data.len(),
+                ext_seqnum: au.ext_seqnum,
+            });
         }
 
         Ok(au)
@@ -264,10 +264,10 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
     fn drain(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.borrow_mut();
 
-        if let Some(ref mut deint_buf) = state.deint_buf {
-            if let Some(aus) = deint_buf.drain().take() {
-                self.finish_buffer_or_list(&state, None, aus)?;
-            }
+        if let Some(ref mut deint_buf) = state.deint_buf
+            && let Some(aus) = deint_buf.drain().take()
+        {
+            self.finish_buffer_or_list(&state, None, aus)?;
         }
 
         Ok(gst::FlowSuccess::Ok)
@@ -459,7 +459,9 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
                             }
                         }
                     } else {
-                        gst::warning!(CAT, imp = self,
+                        gst::warning!(
+                            CAT,
+                            imp = self,
                             "Discarding pending fragmented AU {} due to incoming non fragmented AU {au}",
                             acc.0,
                         );
@@ -547,7 +549,9 @@ impl RtpMpeg4GenericDepay {
                 return ControlFlow::Break(());
             }
 
-            gst::debug!(CAT, imp = self,
+            gst::debug!(
+                CAT,
+                imp = self,
                 "Packet {seqnum} (ext seqnum {}) passed expected initial packet {seqnum_base}, will sync on next marker",
                 packet.ext_seqnum(),
             );
@@ -557,7 +561,9 @@ impl RtpMpeg4GenericDepay {
 
         // Wait until a marked packet is found and start parsing from the next packet
         if packet.marker_bit() {
-            gst::debug!(CAT, imp = self,
+            gst::debug!(
+                CAT,
+                imp = self,
                 "Found first marked packet {seqnum} (ext seqnum {}). Will start parsing from next packet",
                 packet.ext_seqnum(),
             );

@@ -499,13 +499,16 @@ impl IceClient {
                         Some(401) => Err(if auth_header.is_empty() {
                             gst::error_msg!(
                                 gst::ResourceError::NotAuthorized,
-                                ["Server requires authorization, but no username and/or password configured"]
-                            )} else {
+                                [
+                                    "Server requires authorization, but no username and/or password configured"
+                                ]
+                            )
+                        } else {
                             gst::error_msg!(
                                 gst::ResourceError::NotAuthorized,
                                 ["Server didn't accept credentials for mount point {path}"]
-                            )}
-                        ),
+                            )
+                        }),
                         // 403 - Forbidden / Content Type Not Supported
                         Some(403) => match r.reason {
                             Some("Content-type not supported") => Err(gst::error_msg!(
@@ -518,13 +521,19 @@ impl IceClient {
                             )),
                             _ => Err(gst::error_msg!(
                                 gst::ResourceError::Settings,
-                                ["Server didn't accept content type {content_type} on mount point {path} ({})", r.reason.unwrap_or("no reason")]
+                                [
+                                    "Server didn't accept content type {content_type} on mount point {path} ({})",
+                                    r.reason.unwrap_or("no reason")
+                                ]
                             )),
-                        }
+                        },
                         // 404 - Not Found
                         Some(404) => Err(gst::error_msg!(
                             gst::ResourceError::NotFound,
-                            ["Server didn't accept mount point {path} ({})", r.reason.unwrap_or("no reason")]
+                            [
+                                "Server didn't accept mount point {path} ({})",
+                                r.reason.unwrap_or("no reason")
+                            ]
                         )),
                         // 405 - Method Not Allowed
                         Some(405) => Err(gst::error_msg!(

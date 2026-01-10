@@ -74,11 +74,7 @@ impl Rgb2Gray {
         let gray = ((r * R_Y) + (g * G_Y) + (b * B_Y)) / 65536;
         let gray = (gray as u8).wrapping_add(shift);
 
-        if invert {
-            255 - gray
-        } else {
-            gray
-        }
+        if invert { 255 - gray } else { gray }
     }
 }
 

@@ -227,26 +227,26 @@ impl State {
             self.need_flush_stop = false;
         }
 
-        if let Some(pull) = &mut self.pull {
-            if pull.need_stream_start {
-                events.push(gst::event::StreamStart::new(&pull.stream_id));
-                pull.need_stream_start = false;
-            }
+        if let Some(pull) = &mut self.pull
+            && pull.need_stream_start
+        {
+            events.push(gst::event::StreamStart::new(&pull.stream_id));
+            pull.need_stream_start = false;
         }
 
-        if let Some(framerate) = framerate {
-            if self.framerate != Some(framerate) {
-                self.framerate = Some(framerate);
+        if let Some(framerate) = framerate
+            && self.framerate != Some(framerate)
+        {
+            self.framerate = Some(framerate);
 
-                let caps = gst::Caps::builder("closedcaption/x-cea-608")
-                    .field("format", "raw")
-                    .field("framerate", framerate)
-                    .build();
-                self.framerate = Some(framerate);
+            let caps = gst::Caps::builder("closedcaption/x-cea-608")
+                .field("format", "raw")
+                .field("framerate", framerate)
+                .build();
+            self.framerate = Some(framerate);
 
-                events.push(gst::event::Caps::new(&caps));
-                gst::info!(CAT, imp = imp, "Caps changed to {:?}", &caps);
-            }
+            events.push(gst::event::Caps::new(&caps));
+            gst::info!(CAT, imp = imp, "Caps changed to {:?}", &caps);
         }
 
         if self.need_segment {
@@ -1043,10 +1043,10 @@ impl ElementImpl for SccParse {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
-            "Scc Parse",
-            "Parser/ClosedCaption",
-            "Parses SCC Closed Caption Files",
-            "Sebastian Dröge <sebastian@centricular.com>, Jordan Petridis <jordan@centricular.com>",
+                "Scc Parse",
+                "Parser/ClosedCaption",
+                "Parses SCC Closed Caption Files",
+                "Sebastian Dröge <sebastian@centricular.com>, Jordan Petridis <jordan@centricular.com>",
             )
         });
 

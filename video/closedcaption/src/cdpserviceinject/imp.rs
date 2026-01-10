@@ -49,7 +49,10 @@ fn service_descriptor_from_array(s: &gst::Array) -> Vec<cdp_types::ServiceEntry>
 
         // TODO: validate exact values from ISO 639.2/B.
         if language.len() != 3 {
-            gst::error!(CAT, "Language descriptor for service {service_id} is not ISO-639.2/B compatible. Ignoring");
+            gst::error!(
+                CAT,
+                "Language descriptor for service {service_id} is not ISO-639.2/B compatible. Ignoring"
+            );
             continue;
         }
         let field_or_service = if service_id > 0 {

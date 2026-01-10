@@ -6,17 +6,17 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::videocompare::hashed_image::HasherEngine;
 use crate::videocompare::HashAlgorithm;
+use crate::videocompare::hashed_image::HasherEngine;
 use crate::{PadDistance, VideoCompareMessage};
 use gst::subclass::prelude::*;
 use gst::{glib, glib::prelude::*, prelude::*};
-use gst_base::prelude::*;
 use gst_base::AggregatorPad;
-use gst_video::prelude::*;
-use gst_video::subclass::prelude::*;
-use gst_video::subclass::AggregateFramesToken;
+use gst_base::prelude::*;
 use gst_video::VideoFormat;
+use gst_video::prelude::*;
+use gst_video::subclass::AggregateFramesToken;
+use gst_video::subclass::prelude::*;
 use std::sync::LazyLock;
 use std::sync::{Arc, Mutex};
 
@@ -291,7 +291,7 @@ impl VideoAggregatorImpl for VideoCompare {
                         reference_pad.name()
                     );
                     Ok(gst::FlowSuccess::Ok)
-                }
+                };
             }
         };
 

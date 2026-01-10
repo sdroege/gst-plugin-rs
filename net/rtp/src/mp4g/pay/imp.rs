@@ -554,7 +554,9 @@ impl RtpBasePay2Impl for RtpMpeg4GenericPay {
             },
         );
 
-        gst::trace!(CAT, imp = self,
+        gst::trace!(
+            CAT,
+            imp = self,
             "Pushing AU from buffer {id} dts_delta {dts_delta:?} random access {maybe_random_access:?}",
         );
 

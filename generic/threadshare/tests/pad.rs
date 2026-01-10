@@ -13,14 +13,14 @@ use futures::prelude::*;
 
 use gst::glib;
 
+use gst::EventView;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::EventView;
 
 use std::sync::LazyLock;
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use gstthreadshare::runtime::prelude::*;
@@ -285,12 +285,14 @@ mod imp_src {
     impl ObjectImpl for ElementSrcTest {
         fn properties() -> &'static [glib::ParamSpec] {
             static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-                vec![glib::ParamSpecString::builder("context")
-                    .nick("Context")
-                    .blurb("Context name to share threads with")
-                    .default_value(Some(DEFAULT_CONTEXT))
-                    .write_only()
-                    .build()]
+                vec![
+                    glib::ParamSpecString::builder("context")
+                        .nick("Context")
+                        .blurb("Context name to share threads with")
+                        .default_value(Some(DEFAULT_CONTEXT))
+                        .write_only()
+                        .build(),
+                ]
             });
 
             PROPERTIES.as_ref()
@@ -572,12 +574,14 @@ mod imp_sink {
     impl ObjectImpl for ElementSinkTest {
         fn properties() -> &'static [glib::ParamSpec] {
             static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-                vec![glib::ParamSpecBoxed::builder::<ItemSender>("sender")
-                    .nick("Sender")
-                    .blurb("Channel sender to forward the incoming items to")
-                    .write_only()
-                    .construct_only()
-                    .build()]
+                vec![
+                    glib::ParamSpecBoxed::builder::<ItemSender>("sender")
+                        .nick("Sender")
+                        .blurb("Channel sender to forward the incoming items to")
+                        .write_only()
+                        .construct_only()
+                        .build(),
+                ]
             });
 
             PROPERTIES.as_ref()

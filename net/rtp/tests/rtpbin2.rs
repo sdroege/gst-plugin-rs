@@ -7,9 +7,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::sync::{atomic::AtomicUsize, Arc, Mutex};
+use std::sync::{Arc, Mutex, atomic::AtomicUsize};
 
-use gst::{prelude::*, Caps};
+use gst::{Caps, prelude::*};
 use gst_check::Harness;
 use rtp_types::*;
 

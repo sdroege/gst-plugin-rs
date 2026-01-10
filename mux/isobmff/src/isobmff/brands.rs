@@ -58,88 +58,81 @@ fn cmaf_brands_from_caps(caps: &gst::CapsRef, compatible_brands: &mut BTreeSet<[
 
             if let (Some(width), Some(height), Some(profile), Some(level), Some(fps)) =
                 (width, height, profile, level, fps)
-            {
-                if profile == "high"
+                && (profile == "high"
                     || profile == "main"
                     || profile == "baseline"
-                    || profile == "constrained-baseline"
+                    || profile == "constrained-baseline")
+            {
+                if width <= 864
+                    && height <= 576
+                    && level <= ("3", "1")
+                    && fps <= gst::Fraction::new(60, 1)
                 {
-                    if width <= 864
-                        && height <= 576
-                        && level <= ("3", "1")
-                        && fps <= gst::Fraction::new(60, 1)
+                    if let Some(colorimetry) =
+                        colorimetry.and_then(|c| c.parse::<gst_video::VideoColorimetry>().ok())
                     {
-                        if let Some(colorimetry) =
-                            colorimetry.and_then(|c| c.parse::<gst_video::VideoColorimetry>().ok())
-                        {
-                            if matches!(
-                                colorimetry.primaries(),
-                                gst_video::VideoColorPrimaries::Bt709
-                                    | gst_video::VideoColorPrimaries::Bt470bg
-                                    | gst_video::VideoColorPrimaries::Smpte170m
-                            ) && matches!(
-                                colorimetry.transfer(),
-                                gst_video::VideoTransferFunction::Bt709
-                                    | gst_video::VideoTransferFunction::Bt601
-                            ) && matches!(
-                                colorimetry.matrix(),
-                                gst_video::VideoColorMatrix::Bt709
-                                    | gst_video::VideoColorMatrix::Bt601
-                            ) {
-                                compatible_brands.insert(*b"cfsd");
-                            }
-                        } else {
-                            // Assume it's OK
+                        if matches!(
+                            colorimetry.primaries(),
+                            gst_video::VideoColorPrimaries::Bt709
+                                | gst_video::VideoColorPrimaries::Bt470bg
+                                | gst_video::VideoColorPrimaries::Smpte170m
+                        ) && matches!(
+                            colorimetry.transfer(),
+                            gst_video::VideoTransferFunction::Bt709
+                                | gst_video::VideoTransferFunction::Bt601
+                        ) && matches!(
+                            colorimetry.matrix(),
+                            gst_video::VideoColorMatrix::Bt709 | gst_video::VideoColorMatrix::Bt601
+                        ) {
                             compatible_brands.insert(*b"cfsd");
                         }
-                    } else if width <= 1920
-                        && height <= 1080
-                        && level <= ("4", "0")
-                        && fps <= gst::Fraction::new(60, 1)
+                    } else {
+                        // Assume it's OK
+                        compatible_brands.insert(*b"cfsd");
+                    }
+                } else if width <= 1920
+                    && height <= 1080
+                    && level <= ("4", "0")
+                    && fps <= gst::Fraction::new(60, 1)
+                {
+                    if let Some(colorimetry) =
+                        colorimetry.and_then(|c| c.parse::<gst_video::VideoColorimetry>().ok())
                     {
-                        if let Some(colorimetry) =
-                            colorimetry.and_then(|c| c.parse::<gst_video::VideoColorimetry>().ok())
+                        if matches!(
+                            colorimetry.primaries(),
+                            gst_video::VideoColorPrimaries::Bt709
+                        ) && matches!(
+                            colorimetry.transfer(),
+                            gst_video::VideoTransferFunction::Bt709
+                        ) && matches!(colorimetry.matrix(), gst_video::VideoColorMatrix::Bt709)
                         {
-                            if matches!(
-                                colorimetry.primaries(),
-                                gst_video::VideoColorPrimaries::Bt709
-                            ) && matches!(
-                                colorimetry.transfer(),
-                                gst_video::VideoTransferFunction::Bt709
-                            ) && matches!(
-                                colorimetry.matrix(),
-                                gst_video::VideoColorMatrix::Bt709
-                            ) {
-                                compatible_brands.insert(*b"cfhd");
-                            }
-                        } else {
-                            // Assume it's OK
                             compatible_brands.insert(*b"cfhd");
                         }
-                    } else if width <= 1920
-                        && height <= 1080
-                        && level <= ("4", "2")
-                        && fps <= gst::Fraction::new(60, 1)
+                    } else {
+                        // Assume it's OK
+                        compatible_brands.insert(*b"cfhd");
+                    }
+                } else if width <= 1920
+                    && height <= 1080
+                    && level <= ("4", "2")
+                    && fps <= gst::Fraction::new(60, 1)
+                {
+                    if let Some(colorimetry) =
+                        colorimetry.and_then(|c| c.parse::<gst_video::VideoColorimetry>().ok())
                     {
-                        if let Some(colorimetry) =
-                            colorimetry.and_then(|c| c.parse::<gst_video::VideoColorimetry>().ok())
+                        if matches!(
+                            colorimetry.primaries(),
+                            gst_video::VideoColorPrimaries::Bt709
+                        ) && matches!(
+                            colorimetry.transfer(),
+                            gst_video::VideoTransferFunction::Bt709
+                        ) && matches!(colorimetry.matrix(), gst_video::VideoColorMatrix::Bt709)
                         {
-                            if matches!(
-                                colorimetry.primaries(),
-                                gst_video::VideoColorPrimaries::Bt709
-                            ) && matches!(
-                                colorimetry.transfer(),
-                                gst_video::VideoTransferFunction::Bt709
-                            ) && matches!(
-                                colorimetry.matrix(),
-                                gst_video::VideoColorMatrix::Bt709
-                            ) {
-                                compatible_brands.insert(*b"chdf");
-                            }
-                        } else {
-                            // Assume it's OK
                             compatible_brands.insert(*b"chdf");
                         }
+                    } else {
+                        // Assume it's OK
+                        compatible_brands.insert(*b"chdf");
                     }
                 }
             }

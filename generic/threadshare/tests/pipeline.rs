@@ -130,15 +130,13 @@ fn multiple_contexts_queue() {
 
             match msg.view() {
                 MessageView::StateChanged(state_changed) => {
-                    if let Some(source) = state_changed.src() {
-                        if source.type_() == gst::Pipeline::static_type()
-                            && state_changed.old() == gst::State::Paused
-                            && state_changed.current() == gst::State::Playing
-                        {
-                            if let Some(test_scenario) = test_scenario.take() {
-                                std::thread::spawn(test_scenario);
-                            }
-                        }
+                    if let Some(source) = state_changed.src()
+                        && source.type_() == gst::Pipeline::static_type()
+                        && state_changed.old() == gst::State::Paused
+                        && state_changed.current() == gst::State::Playing
+                        && let Some(test_scenario) = test_scenario.take()
+                    {
+                        std::thread::spawn(test_scenario);
                     }
                 }
                 MessageView::Error(err) => {
@@ -277,15 +275,13 @@ fn multiple_contexts_proxy() {
 
             match msg.view() {
                 MessageView::StateChanged(state_changed) => {
-                    if let Some(source) = state_changed.src() {
-                        if source.type_() == gst::Pipeline::static_type()
-                            && state_changed.old() == gst::State::Paused
-                            && state_changed.current() == gst::State::Playing
-                        {
-                            if let Some(test_scenario) = test_scenario.take() {
-                                std::thread::spawn(test_scenario);
-                            }
-                        }
+                    if let Some(source) = state_changed.src()
+                        && source.type_() == gst::Pipeline::static_type()
+                        && state_changed.old() == gst::State::Paused
+                        && state_changed.current() == gst::State::Playing
+                        && let Some(test_scenario) = test_scenario.take()
+                    {
+                        std::thread::spawn(test_scenario);
                     }
                 }
                 MessageView::Error(err) => {
@@ -410,10 +406,9 @@ fn eos() {
                         }
                         if state_changed.old() == gst::State::Paused
                             && state_changed.current() == gst::State::Playing
+                            && let Some(scenario) = scenario.take()
                         {
-                            if let Some(scenario) = scenario.take() {
-                                std::thread::spawn(scenario);
-                            }
+                            std::thread::spawn(scenario);
                         }
                     }
                 }
@@ -566,10 +561,9 @@ fn premature_shutdown() {
                         }
                         if state_changed.old() == gst::State::Paused
                             && state_changed.current() == gst::State::Playing
+                            && let Some(scenario) = scenario.take()
                         {
-                            if let Some(scenario) = scenario.take() {
-                                std::thread::spawn(scenario);
-                            }
+                            std::thread::spawn(scenario);
                         }
                     }
                 }
@@ -602,8 +596,8 @@ fn premature_shutdown() {
 #[ignore]
 fn socket_play_null_play() {
     use gio::{
-        prelude::SocketExt, InetAddress, InetSocketAddress, SocketFamily, SocketProtocol,
-        SocketType,
+        InetAddress, InetSocketAddress, SocketFamily, SocketProtocol, SocketType,
+        prelude::SocketExt,
     };
 
     const TEST: &str = "socket_play_null_play";
@@ -664,10 +658,9 @@ fn socket_play_null_play() {
                         }
                         if state_changed.old() == gst::State::Paused
                             && state_changed.current() == gst::State::Playing
+                            && let Some(scenario) = scenario.take()
                         {
-                            if let Some(scenario) = scenario.take() {
-                                std::thread::spawn(scenario);
-                            }
+                            std::thread::spawn(scenario);
                         }
                     }
                 }

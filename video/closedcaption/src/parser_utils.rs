@@ -6,7 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use winnow::{error::StrContext, ModalParser, ModalResult, Parser};
+use winnow::{ModalParser, ModalResult, Parser, error::StrContext};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TimeCode {

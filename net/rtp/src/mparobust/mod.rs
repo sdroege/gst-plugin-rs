@@ -3,7 +3,7 @@
 pub mod depay;
 
 pub(crate) mod mpeg_audio_utils;
-pub(crate) use mpeg_audio_utils::{peek_frame_header, FrameHeader};
+pub(crate) use mpeg_audio_utils::{FrameHeader, peek_frame_header};
 
 #[cfg(test)]
 mod tests;

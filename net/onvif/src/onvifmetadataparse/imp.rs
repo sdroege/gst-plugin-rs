@@ -290,16 +290,15 @@ impl OnvifMetadataParse {
                             None
                         }
                     })
+                    && running_time.saturating_sub(front_running_time) >= state.configured_latency
                 {
-                    if running_time.saturating_sub(front_running_time) >= state.configured_latency {
-                        gst::warning!(
-                            CAT,
-                            obj = pad,
-                            "Received no UTC time in the first {}",
-                            state.configured_latency
-                        );
-                        state.pre_queued_buffers.remove(idx);
-                    }
+                    gst::warning!(
+                        CAT,
+                        obj = pad,
+                        "Received no UTC time in the first {}",
+                        state.configured_latency
+                    );
+                    state.pre_queued_buffers.remove(idx);
                 }
 
                 return Ok(gst::FlowSuccess::Ok);

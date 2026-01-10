@@ -296,18 +296,18 @@ impl Stream {
                     );
                     gop.earliest_pts = pts;
 
-                    if let Some(prev_gop) = self.queued_gops.get_mut(1) {
-                        if prev_gop.end_pts < pts {
-                            gst::debug!(
-                                CAT,
-                                obj = self.sinkpad,
-                                "Updating previous GOP starting PTS {} end time from {} to {}",
-                                pts,
-                                prev_gop.end_pts,
-                                pts
-                            );
-                            prev_gop.end_pts = pts;
-                        }
+                    if let Some(prev_gop) = self.queued_gops.get_mut(1)
+                        && prev_gop.end_pts < pts
+                    {
+                        gst::debug!(
+                            CAT,
+                            obj = self.sinkpad,
+                            "Updating previous GOP starting PTS {} end time from {} to {}",
+                            pts,
+                            prev_gop.end_pts,
+                            pts
+                        );
+                        prev_gop.end_pts = pts;
                     }
                 }
                 let gop = self.queued_gops.front_mut().unwrap();
@@ -505,7 +505,12 @@ impl GopBuffer {
                     .opt_saturating_sub(oldest_ts)
                     .is_some_and(|diff| diff > gst::Signed::Positive(max_time))
                 {
-                    gst::warning!(CAT, obj = obj, "Stored data has overflowed the maximum allowed stored time {}, pushing oldest GOP", max_time.display());
+                    gst::warning!(
+                        CAT,
+                        obj = obj,
+                        "Stored data has overflowed the maximum allowed stored time {}, pushing oldest GOP",
+                        max_time.display()
+                    );
                     gops_to_push.push(stream.oldest_gop().unwrap());
                 } else {
                     break;
@@ -876,15 +881,15 @@ impl ElementImpl for GopBuffer {
         match transition {
             gst::StateChange::NullToReady => {
                 let settings = self.settings.lock().unwrap();
-                if let Some(max_time) = settings.max_time {
-                    if max_time < settings.min_time {
-                        gst::element_imp_error!(
-                            self,
-                            gst::CoreError::StateChange,
-                            ["Configured maximum time is less than the minimum time"]
-                        );
-                        return Err(gst::StateChangeError);
-                    }
+                if let Some(max_time) = settings.max_time
+                    && max_time < settings.min_time
+                {
+                    gst::element_imp_error!(
+                        self,
+                        gst::CoreError::StateChange,
+                        ["Configured maximum time is less than the minimum time"]
+                    );
+                    return Err(gst::StateChangeError);
                 }
             }
             _ => (),

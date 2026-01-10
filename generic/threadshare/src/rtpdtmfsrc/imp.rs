@@ -85,7 +85,7 @@ use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{self, timer, PadSrc, Task};
+use crate::runtime::{self, PadSrc, Task, timer};
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(

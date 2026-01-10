@@ -476,16 +476,16 @@ impl ObjectImpl for HrtfRender {
 
                 let mut state_guard = self.state.lock().unwrap();
 
-                if let Some(state) = state_guard.as_mut() {
-                    if objs.len() != state.ininfo.channels() as usize {
-                        gst::warning!(
-                            CAT,
-                            "Could not update spatial objects, expected {} channels, got {}",
-                            state.ininfo.channels(),
-                            objs.len()
-                        );
-                        return;
-                    }
+                if let Some(state) = state_guard.as_mut()
+                    && objs.len() != state.ininfo.channels() as usize
+                {
+                    gst::warning!(
+                        CAT,
+                        "Could not update spatial objects, expected {} channels, got {}",
+                        state.ininfo.channels(),
+                        objs.len()
+                    );
+                    return;
                 }
 
                 settings.spatial_objects = if objs.is_empty() { None } else { Some(objs) };

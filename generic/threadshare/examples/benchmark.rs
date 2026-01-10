@@ -11,8 +11,8 @@ use gst::prelude::*;
 use std::sync::LazyLock;
 
 use std::env;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -224,17 +224,17 @@ fn main() {
 
         loop {
             total_count += counter.fetch_and(0, Ordering::SeqCst) as f32 / n_streams_f32;
-            if let Some(max_buffers) = max_buffers {
-                if total_count > max_buffers {
-                    gst::info!(CAT, "Stopping");
-                    let stopping_instant = Instant::now();
-                    pipeline.set_state(gst::State::Ready).unwrap();
-                    gst::info!(CAT, "Stopped. Took {:?}", stopping_instant.elapsed());
-                    pipeline.set_state(gst::State::Null).unwrap();
-                    gst::info!(CAT, "Unprepared");
-                    l_clone.quit();
-                    break;
-                }
+            if let Some(max_buffers) = max_buffers
+                && total_count > max_buffers
+            {
+                gst::info!(CAT, "Stopping");
+                let stopping_instant = Instant::now();
+                pipeline.set_state(gst::State::Ready).unwrap();
+                gst::info!(CAT, "Stopped. Took {:?}", stopping_instant.elapsed());
+                pipeline.set_state(gst::State::Null).unwrap();
+                gst::info!(CAT, "Unprepared");
+                l_clone.quit();
+                break;
             }
 
             if let Some(init) = ramp_up_complete_instant {

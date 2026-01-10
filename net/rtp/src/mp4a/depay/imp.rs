@@ -249,7 +249,10 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4AudioDepay {
             {
                 // FIXME this is a workaround for forward compatibility with AAC SBR & HE
                 // see also comment in the parsers module.
-                gst::warning!(CAT, imp = self, concat!(
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    concat!(
                         "Found audio object type {}, which uses a specific extension for samplingFrequency. ",
                         "This extension is not supported yet. ",
                         "Will use 'clock-rate' {} as a workaround.",
@@ -404,7 +407,9 @@ impl RtpMpeg4AudioDepay {
                 return ControlFlow::Break(());
             }
 
-            gst::debug!(CAT, imp = self,
+            gst::debug!(
+                CAT,
+                imp = self,
                 "Packet {seqnum} (ext seqnum {}) passed expected initial packet {seqnum_base}, will sync on next marker",
                 packet.ext_seqnum(),
             );
@@ -415,7 +420,9 @@ impl RtpMpeg4AudioDepay {
         // AudioMuxElement doesn't come with a frame start marker
         // so wait until a marked packet is found and start parsing from the next packet
         if packet.marker_bit() {
-            gst::debug!(CAT, imp = self,
+            gst::debug!(
+                CAT,
+                imp = self,
                 "Found first marked packet {seqnum} (ext seqnum {}). Will start parsing from next packet",
                 packet.ext_seqnum(),
             );

@@ -210,10 +210,10 @@ impl SharedSessionInner {
                         .field("packets-sent", ls.packet_count())
                         .field("octets-sent", ls.octet_count())
                         .field("bitrate", ls.bitrate() as u64);
-                if let Some(pt) = ls.payload_type() {
-                    if let Some(clock_rate) = self.session.clock_rate_from_pt(pt) {
-                        source_stats = source_stats.field("clock-rate", clock_rate);
-                    }
+                if let Some(pt) = ls.payload_type()
+                    && let Some(clock_rate) = self.session.clock_rate_from_pt(pt)
+                {
+                    source_stats = source_stats.field("clock-rate", clock_rate);
                 }
                 if let Some(sr) = ls.last_sent_sr() {
                     source_stats = source_stats
@@ -254,10 +254,10 @@ impl SharedSessionInner {
                         .field("ssrc", lr.ssrc())
                         .field("sender", false)
                         .field("local", true);
-                if let Some(pt) = lr.payload_type() {
-                    if let Some(clock_rate) = self.session.clock_rate_from_pt(pt) {
-                        source_stats = source_stats.field("clock-rate", clock_rate);
-                    }
+                if let Some(pt) = lr.payload_type()
+                    && let Some(clock_rate) = self.session.clock_rate_from_pt(pt)
+                {
+                    source_stats = source_stats.field("clock-rate", clock_rate);
                 }
                 // TODO: add rb stats
                 session_stats = session_stats.field(lr.ssrc().to_string(), source_stats.build());
@@ -272,10 +272,10 @@ impl SharedSessionInner {
                         .field("bitrate", rs.bitrate() as u64)
                         .field("jitter", rs.jitter())
                         .field("packets-lost", rs.packets_lost());
-                if let Some(pt) = rs.payload_type() {
-                    if let Some(clock_rate) = self.session.clock_rate_from_pt(pt) {
-                        source_stats = source_stats.field("clock-rate", clock_rate);
-                    }
+                if let Some(pt) = rs.payload_type()
+                    && let Some(clock_rate) = self.session.clock_rate_from_pt(pt)
+                {
+                    source_stats = source_stats.field("clock-rate", clock_rate);
                 }
                 if let Some(rtp_from) = rs.rtp_from() {
                     source_stats = source_stats.field("rtp-from", rtp_from.to_string());

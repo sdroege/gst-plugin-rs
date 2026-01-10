@@ -3,8 +3,8 @@
 use std::collections::BTreeMap;
 
 use super::{
-    Adu, AduCompleteUnparsed, InterleavingSeqnum, MaybeSingleAduOrList, MpegAudioRobustDepayError,
-    CAT,
+    Adu, AduCompleteUnparsed, CAT, InterleavingSeqnum, MaybeSingleAduOrList,
+    MpegAudioRobustDepayError,
 };
 
 /// ADU Frame Deinterleaving Buffer.
@@ -113,19 +113,19 @@ impl DeinterleavingAduBuffer {
 
         gst::trace!(CAT, obj = elem, "Pushing {adu}");
 
-        if let Some(last_inserted) = self.last_inserted {
-            if cur_isn.cycle != last_inserted.cycle || cur_isn.index == last_inserted.index {
-                // > We've started a new interleave cycle
-                // > (or interleaving was not used). Release all
-                // > pending ADU frames to the ADU->MP3 conversion step.
+        if let Some(last_inserted) = self.last_inserted
+            && (cur_isn.cycle != last_inserted.cycle || cur_isn.index == last_inserted.index)
+        {
+            // > We've started a new interleave cycle
+            // > (or interleaving was not used). Release all
+            // > pending ADU frames to the ADU->MP3 conversion step.
 
-                ready_adus.reserve(self.adus.len());
+            ready_adus.reserve(self.adus.len());
 
-                while let Some((_, ready_adu)) = self.adus.pop_first() {
-                    gst::trace!(CAT, obj = elem, "Popped {ready_adu}");
+            while let Some((_, ready_adu)) = self.adus.pop_first() {
+                gst::trace!(CAT, obj = elem, "Popped {ready_adu}");
 
-                    self.handle_ready(elem, ready_adu, ready_adus);
-                }
+                self.handle_ready(elem, ready_adu, ready_adus);
             }
         }
 

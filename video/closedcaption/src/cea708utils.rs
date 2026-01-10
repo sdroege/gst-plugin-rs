@@ -6,7 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use cea708_types::{tables::*, Service};
+use cea708_types::{Service, tables::*};
 
 use std::collections::VecDeque;
 
@@ -146,11 +146,7 @@ impl Cea708ServiceWriter {
                 break;
             }
             let service_header_bytes = if service.is_empty() {
-                if service.number() >= 7 {
-                    2
-                } else {
-                    1
-                }
+                if service.number() >= 7 { 2 } else { 1 }
             } else {
                 0
             };
@@ -414,12 +410,12 @@ impl Cea708Renderer {
 
         let ret = self.cea608.push_pair(pair);
         if let Ok(changed) = ret {
-            if self.selected.is_none() {
-                if let Some(chan) = self.cea608.channel() {
-                    self.selected = Some(ServiceOrChannel::Cea608Channel(
-                        cea608_types::Id::from_caption_field_channel(field, chan),
-                    ));
-                }
+            if self.selected.is_none()
+                && let Some(chan) = self.cea608.channel()
+            {
+                self.selected = Some(ServiceOrChannel::Cea608Channel(
+                    cea608_types::Id::from_caption_field_channel(field, chan),
+                ));
             }
             if changed {
                 self.composition.take();
@@ -458,14 +454,8 @@ impl Cea708Renderer {
             }
 
             self.composition = composition;
-        } else {
-            match self.cea608.generate_rectangle() {
-                Some(rectangle) => {
-                    self.composition =
-                        gst_video::VideoOverlayComposition::new(Some(&rectangle)).ok();
-                }
-                _ => {}
-            }
+        } else if let Some(rectangle) = self.cea608.generate_rectangle() {
+            self.composition = gst_video::VideoOverlayComposition::new(Some(&rectangle)).ok();
         }
         self.composition.clone()
     }

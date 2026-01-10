@@ -362,14 +362,14 @@ impl OnvifMetadataOverlay {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::trace!(CAT, obj = pad, "Handling buffer {:?}", buffer);
 
-        if self.srcpad.check_reconfigure() {
-            if let Err(err) = self.negotiate() {
-                if self.srcpad.pad_flags().contains(gst::PadFlags::FLUSHING) {
-                    self.srcpad.mark_reconfigure();
-                    return Ok(gst::FlowSuccess::Ok);
-                } else {
-                    return Err(err);
-                }
+        if self.srcpad.check_reconfigure()
+            && let Err(err) = self.negotiate()
+        {
+            if self.srcpad.pad_flags().contains(gst::PadFlags::FLUSHING) {
+                self.srcpad.mark_reconfigure();
+                return Ok(gst::FlowSuccess::Ok);
+            } else {
+                return Err(err);
             }
         }
 
@@ -864,11 +864,13 @@ impl ObjectSubclass for OnvifMetadataOverlay {
 impl ObjectImpl for OnvifMetadataOverlay {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecString::builder("font-desc")
-                .nick("Font Description")
-                .blurb("Pango font description of font to be used for rendering")
-                .default_value(Some(DEFAULT_FONT_DESC))
-                .build()]
+            vec![
+                glib::ParamSpecString::builder("font-desc")
+                    .nick("Font Description")
+                    .blurb("Pango font description of font to be used for rendering")
+                    .default_value(Some(DEFAULT_FONT_DESC))
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

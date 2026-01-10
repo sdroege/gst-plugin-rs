@@ -294,10 +294,12 @@ impl ObjectImpl for QuinnRoqDemux {
              * code if the signal fails. This will have to be communicated
              * upstream to quinnquicsrc.
              */
-            vec![glib::subclass::Signal::builder(SIGNAL_FLOW_ID_MAP)
-                .param_types([u64::static_type()])
-                .return_type::<gst::Caps>()
-                .build()]
+            vec![
+                glib::subclass::Signal::builder(SIGNAL_FLOW_ID_MAP)
+                    .param_types([u64::static_type()])
+                    .return_type::<gst::Caps>()
+                    .build(),
+            ]
         });
 
         SIGNALS.as_ref()
@@ -618,14 +620,12 @@ impl QuinnRoqDemux {
 
         gst::debug!(CAT, imp = self, "Handling event {:?}", event);
 
-        if let EventView::CustomDownstream(ev) = event.view() {
-            if let Some(s) = ev.structure() {
-                if s.name() == QUIC_STREAM_CLOSE_CUSTOMDOWNSTREAM_EVENT {
-                    if let Ok(stream_id) = s.get::<u64>(QUIC_STREAM_ID) {
-                        return self.remove_pad(stream_id);
-                    }
-                }
-            }
+        if let EventView::CustomDownstream(ev) = event.view()
+            && let Some(s) = ev.structure()
+            && s.name() == QUIC_STREAM_CLOSE_CUSTOMDOWNSTREAM_EVENT
+            && let Ok(stream_id) = s.get::<u64>(QUIC_STREAM_ID)
+        {
+            return self.remove_pad(stream_id);
         }
 
         gst::Pad::event_default(pad, Some(&*self.obj()), event)

@@ -504,16 +504,16 @@ impl RaptorqDec {
         gst::debug!(CAT, "Handling event {:?}", event);
         use gst::EventView;
 
-        if let EventView::Caps(c) = event.view() {
-            if let Err(err) = self.start(c.caps()) {
-                gst::element_imp_error!(
-                    self,
-                    gst::CoreError::Event,
-                    ["Failed to start raptorqdec {:?}", err]
-                );
+        if let EventView::Caps(c) = event.view()
+            && let Err(err) = self.start(c.caps())
+        {
+            gst::element_imp_error!(
+                self,
+                gst::CoreError::Event,
+                ["Failed to start raptorqdec {:?}", err]
+            );
 
-                return false;
-            }
+            return false;
         }
 
         gst::Pad::event_default(pad, Some(&*self.obj()), event)

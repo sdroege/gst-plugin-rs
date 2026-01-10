@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 use std::task::{self, Poll};
 use std::time::Duration;
 
-use super::{scheduler, JoinHandle, SubTaskOutput, TaskId};
+use super::{JoinHandle, SubTaskOutput, TaskId, scheduler};
 use crate::runtime::RUNTIME_CAT;
 
 // We are bound to using `sync` for the `runtime` `Mutex`es. Attempts to use `async` `Mutex`es
@@ -148,11 +148,11 @@ impl Context {
     pub fn acquire(context_name: &str, wait: Duration) -> Result<Self, io::Error> {
         let mut contexts = CONTEXTS.lock().unwrap();
 
-        if let Some(context_weak) = contexts.get(context_name) {
-            if let Some(context) = context_weak.upgrade() {
-                gst::debug!(RUNTIME_CAT, "Joining Context '{}'", context.name());
-                return Ok(context);
-            }
+        if let Some(context_weak) = contexts.get(context_name)
+            && let Some(context) = context_weak.upgrade()
+        {
+            gst::debug!(RUNTIME_CAT, "Joining Context '{}'", context.name());
+            return Ok(context);
         }
 
         let context = Context(scheduler::Throttling::start(context_name, wait));

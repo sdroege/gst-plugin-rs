@@ -819,12 +819,13 @@ impl FallbackSwitch {
 
         /* Before sleeping, ensure there is a timeout to switch active pads,
          * in case the initial active pad never receives a buffer */
-        if let Some(running_time) = start_running_time {
-            if state.timeout_clock_id.is_none() && !is_active {
-                // May change active pad immediately
-                update_all_pad_health = self.schedule_timeout(&mut state, &settings, running_time);
-                is_active = self.active_sinkpad.lock().as_ref() == Some(pad);
-            }
+        if let Some(running_time) = start_running_time
+            && state.timeout_clock_id.is_none()
+            && !is_active
+        {
+            // May change active pad immediately
+            update_all_pad_health = self.schedule_timeout(&mut state, &settings, running_time);
+            is_active = self.active_sinkpad.lock().as_ref() == Some(pad);
         }
 
         if let Some(clock_id) = &output_clockid {

@@ -735,11 +735,11 @@ impl LiveSync {
         if is_restart {
             state.eos = false;
 
-            if state.srcresult == Err(gst::FlowError::Eos) {
-                if let Err(e) = self.start_src_task(&mut state) {
-                    gst::error!(CAT, imp = self, "Failed to start task: {e}");
-                    return false;
-                }
+            if state.srcresult == Err(gst::FlowError::Eos)
+                && let Err(e) = self.start_src_task(&mut state)
+            {
+                gst::error!(CAT, imp = self, "Failed to start task: {e}");
+                return false;
             }
         }
 
@@ -784,10 +784,10 @@ impl LiveSync {
             gst::EventView::Reconfigure(_) => {
                 {
                     let mut state = self.state.lock();
-                    if state.srcresult == Err(gst::FlowError::NotLinked) {
-                        if let Err(e) = self.start_src_task(&mut state) {
-                            gst::error!(CAT, imp = self, "Failed to start task: {e}");
-                        }
+                    if state.srcresult == Err(gst::FlowError::NotLinked)
+                        && let Err(e) = self.start_src_task(&mut state)
+                    {
+                        gst::error!(CAT, imp = self, "Failed to start task: {e}");
                     }
                 }
 
@@ -1023,10 +1023,10 @@ impl LiveSync {
 
         // If we're not strictly syncing to the clock but output buffers as soon as they arrive
         // then also wake up the source pad task now in case it's waiting on the clock.
-        if !state.sync {
-            if let Some(clock_id) = state.clock_id.take() {
-                clock_id.unschedule();
-            }
+        if !state.sync
+            && let Some(clock_id) = state.clock_id.take()
+        {
+            clock_id.unschedule();
         }
 
         Ok(gst::FlowSuccess::Ok)

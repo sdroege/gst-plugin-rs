@@ -360,19 +360,19 @@ fn build_codec_string_for_variant(
      */
     let mut codecs_str: Vec<String> = vec![];
 
-    if let Some(audio_group_id) = &variant.audio {
-        if let Some(caps) = codecs.get(audio_group_id.as_str()) {
-            for cap in caps.iter() {
-                codecs_str.push(cap.to_string());
-            }
+    if let Some(audio_group_id) = &variant.audio
+        && let Some(caps) = codecs.get(audio_group_id.as_str())
+    {
+        for cap in caps.iter() {
+            codecs_str.push(cap.to_string());
         }
     }
 
-    if let Some(video_group_id) = &variant.video {
-        if let Some(caps) = codecs.get(video_group_id.as_str()) {
-            for cap in caps.iter() {
-                codecs_str.push(cap.to_string());
-            }
+    if let Some(video_group_id) = &variant.video
+        && let Some(caps) = codecs.get(video_group_id.as_str())
+    {
+        for cap in caps.iter() {
+            codecs_str.push(cap.to_string());
         }
     }
 
@@ -1391,19 +1391,19 @@ impl ElementImpl for HlsMultivariantSink {
         let pad_name = ghost_pad.name().to_string();
 
         let mut state = self.state.lock().unwrap();
-        if let Some(hlssink_name) = state.pads.get(&pad_name.to_string()) {
-            if let Some(hlssink) = self.obj().by_name(hlssink_name) {
-                if let Err(err) = self.obj().remove(&hlssink) {
-                    gst::error!(
-                        CAT,
-                        imp = self,
-                        "Failed to remove hlssink for pad: {} with error: {}",
-                        pad_name,
-                        err
-                    );
-                }
-                state.pads.remove(&pad_name);
+        if let Some(hlssink_name) = state.pads.get(&pad_name.to_string())
+            && let Some(hlssink) = self.obj().by_name(hlssink_name)
+        {
+            if let Err(err) = self.obj().remove(&hlssink) {
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Failed to remove hlssink for pad: {} with error: {}",
+                    pad_name,
+                    err
+                );
             }
+            state.pads.remove(&pad_name);
         }
 
         self.obj().remove_pad(pad).expect("Failed to remove pad");
@@ -1589,7 +1589,9 @@ impl HlsMultivariantSink {
                         constraint_indicator_flag += 2u32.pow(7 - index as u32) * (*bit) as u32;
                     });
 
-                let codec_str = format!("{codec_str}.{profile_idc:X}.{compat_flag_parameter}.{tier_flag}{level_idc}.{constraint_indicator_flag:02X}");
+                let codec_str = format!(
+                    "{codec_str}.{profile_idc:X}.{compat_flag_parameter}.{tier_flag}{level_idc}.{constraint_indicator_flag:02X}"
+                );
 
                 self.build_codec_str_and_write_multivariant_playlist(codec_str, group_id);
 

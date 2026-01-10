@@ -261,8 +261,9 @@ impl ObjectSubclass for AudioRNNoise {
 
 impl ObjectImpl for AudioRNNoise {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecFloat::builder("voice-activity-threshold")
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> =
+            LazyLock::new(|| {
+                vec![glib::ParamSpecFloat::builder("voice-activity-threshold")
                 .nick("Voice activity threshold")
                 .blurb("Threshold of the voice activity detector below which to mute the output")
                 .minimum(0.0)
@@ -270,7 +271,7 @@ impl ObjectImpl for AudioRNNoise {
                 .default_value(DEFAULT_VOICE_ACTIVITY_THRESHOLD)
                 .mutable_playing()
                 .build()]
-        });
+            });
 
         PROPERTIES.as_ref()
     }
@@ -359,25 +360,25 @@ impl BaseTransformImpl for AudioRNNoise {
     }
 
     fn query(&self, direction: gst::PadDirection, query: &mut gst::QueryRef) -> bool {
-        if direction == gst::PadDirection::Src {
-            if let gst::QueryViewMut::Latency(q) = query.view_mut() {
-                let mut upstream_query = gst::query::Latency::new();
-                if self.obj().sink_pad().peer_query(&mut upstream_query) {
-                    let (live, mut min, mut max) = upstream_query.result();
-                    gst::debug!(
-                        CAT,
-                        imp = self,
-                        "Peer latency: live {} min {} max {}",
-                        live,
-                        min,
-                        max.display(),
-                    );
+        if direction == gst::PadDirection::Src
+            && let gst::QueryViewMut::Latency(q) = query.view_mut()
+        {
+            let mut upstream_query = gst::query::Latency::new();
+            if self.obj().sink_pad().peer_query(&mut upstream_query) {
+                let (live, mut min, mut max) = upstream_query.result();
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "Peer latency: live {} min {} max {}",
+                    live,
+                    min,
+                    max.display(),
+                );
 
-                    min += ((FRAME_SIZE / 48000) as u64).seconds();
-                    max = max.opt_add(((FRAME_SIZE / 48000) as u64).seconds());
-                    q.set(live, min, max);
-                    return true;
-                }
+                min += ((FRAME_SIZE / 48000) as u64).seconds();
+                max = max.opt_add(((FRAME_SIZE / 48000) as u64).seconds());
+                q.set(live, min, max);
+                return true;
             }
         }
         BaseTransformImplExt::parent_query(self, direction, query)

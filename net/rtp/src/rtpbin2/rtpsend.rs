@@ -40,13 +40,13 @@ use std::sync::{Arc, Mutex};
 use std::task::Poll;
 use std::time::{Duration, Instant, SystemTime};
 
-use futures::future::{AbortHandle, Abortable};
 use futures::StreamExt;
+use futures::future::{AbortHandle, Abortable};
 use gst::{glib, prelude::*, subclass::prelude::*};
 use std::sync::LazyLock;
 
-use super::internal::{pt_clock_rate_from_caps, GstRustLogger, SharedRtpState, SharedSession};
-use super::session::{RtcpSendReply, RtpProfile, SendReply, RTCP_MIN_REPORT_INTERVAL};
+use super::internal::{GstRustLogger, SharedRtpState, SharedSession, pt_clock_rate_from_caps};
+use super::session::{RTCP_MIN_REPORT_INTERVAL, RtcpSendReply, RtpProfile, SendReply};
 use super::source::SourceState;
 
 use crate::rtpbin2;
@@ -144,10 +144,10 @@ impl futures::stream::Stream for RtcpSendStream {
             if let Some(reply) = session_inner.session.poll_rtcp_send(now, ntp_now) {
                 return Poll::Ready(Some(reply));
             }
-            if let Some(wait) = session_inner.session.poll_rtcp_send_timeout(now) {
-                if lowest_wait.is_none_or(|lowest_wait| wait < lowest_wait) {
-                    lowest_wait = Some(wait);
-                }
+            if let Some(wait) = session_inner.session.poll_rtcp_send_timeout(now)
+                && lowest_wait.is_none_or(|lowest_wait| wait < lowest_wait)
+            {
+                lowest_wait = Some(wait);
             }
             session_inner.rtcp_waker = Some(cx.waker().clone());
         }
@@ -332,20 +332,18 @@ struct RtcpTask {
 impl RtpSend {
     fn iterate_internal_links(&self, pad: &gst::Pad) -> gst::Iterator<gst::Pad> {
         let state = self.state.lock().unwrap();
-        if let Some(&id) = state.pads_session_id_map.get(pad) {
-            if let Some(session) = state.session_by_id(id) {
-                if let Some(ref sinkpad) = session.rtp_send_sinkpad {
-                    if let Some(ref srcpad) = session.rtp_send_srcpad {
-                        if sinkpad == pad {
-                            return gst::Iterator::from_vec(vec![srcpad.clone()]);
-                        } else if srcpad == pad {
-                            return gst::Iterator::from_vec(vec![sinkpad.clone()]);
-                        }
-                    }
-                }
-                // nothing to do for rtcp pads
+        if let Some(&id) = state.pads_session_id_map.get(pad)
+            && let Some(session) = state.session_by_id(id)
+            && let Some(ref sinkpad) = session.rtp_send_sinkpad
+            && let Some(ref srcpad) = session.rtp_send_srcpad
+        {
+            if sinkpad == pad {
+                return gst::Iterator::from_vec(vec![srcpad.clone()]);
+            } else if srcpad == pad {
+                return gst::Iterator::from_vec(vec![sinkpad.clone()]);
             }
         }
+        // nothing to do for rtcp pads
         gst::Iterator::from_vec(vec![])
     }
 
@@ -493,12 +491,10 @@ impl RtpSend {
                         else {
                             if let Some(local_recv) =
                                 session.session.local_receive_source_by_ssrc(ssrc)
+                                && local_recv.state() != SourceState::Bye
+                                && Some(ssrc) != internal_ssrc
                             {
-                                if local_recv.state() != SourceState::Bye
-                                    && Some(ssrc) != internal_ssrc
-                                {
-                                    all_local = false;
-                                }
+                                all_local = false;
                             }
                             continue;
                         };
@@ -629,20 +625,22 @@ impl ObjectImpl for RtpSend {
 
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
-            vec![glib::subclass::Signal::builder("get-session")
-                .param_types([u32::static_type()])
-                .return_type::<crate::rtpbin2::config::Rtp2Session>()
-                .action()
-                .class_handler(|args| {
-                    let element = args[0].get::<super::RtpSend>().expect("signal arg");
-                    let id = args[1].get::<u32>().expect("signal arg");
-                    let send = element.imp();
-                    let state = send.state.lock().unwrap();
-                    state
-                        .session_by_id(id as usize)
-                        .map(|sess| sess.internal_session.config.to_value())
-                })
-                .build()]
+            vec![
+                glib::subclass::Signal::builder("get-session")
+                    .param_types([u32::static_type()])
+                    .return_type::<crate::rtpbin2::config::Rtp2Session>()
+                    .action()
+                    .class_handler(|args| {
+                        let element = args[0].get::<super::RtpSend>().expect("signal arg");
+                        let id = args[1].get::<u32>().expect("signal arg");
+                        let send = element.imp();
+                        let state = send.state.lock().unwrap();
+                        state
+                            .session_by_id(id as usize)
+                            .map(|sess| sess.internal_session.config.to_value())
+                    })
+                    .build(),
+            ]
         });
 
         SIGNALS.as_ref()
@@ -931,11 +929,12 @@ impl ElementImpl for RtpSend {
                 state.pads_session_id_map.remove(pad);
             }
             for id in removed_session_ids {
-                if let Some(session) = state.session_by_id(id) {
-                    if session.rtp_send_sinkpad.is_none() && session.rtcp_send_srcpad.is_none() {
-                        session.stop_rtcp_task();
-                        state.sessions.retain(|s| s.internal_session.id != id);
-                    }
+                if let Some(session) = state.session_by_id(id)
+                    && session.rtp_send_sinkpad.is_none()
+                    && session.rtcp_send_srcpad.is_none()
+                {
+                    session.stop_rtcp_task();
+                    state.sessions.retain(|s| s.internal_session.id != id);
                 }
             }
         }

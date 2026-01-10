@@ -99,24 +99,24 @@ fn main() -> Result<(), Error> {
                 if s.has_name("GstBinForwarded") {
                     let m = s.get::<gst::Message>("message").unwrap();
 
-                    if matches!(m.type_(), gst::MessageType::Eos) {
-                        if let Some(src) = m.src() {
-                            let src = src.downcast_ref::<gst::Element>().unwrap();
-                            let mut dynamic_streams = dynamic_streams.lock().unwrap();
-                            if let Some(stream) = dynamic_streams.remove(src) {
-                                let sink_pad = stream.queue.static_pad("sink").unwrap();
-                                let peer = sink_pad.peer().unwrap();
+                    if matches!(m.type_(), gst::MessageType::Eos)
+                        && let Some(src) = m.src()
+                    {
+                        let src = src.downcast_ref::<gst::Element>().unwrap();
+                        let mut dynamic_streams = dynamic_streams.lock().unwrap();
+                        if let Some(stream) = dynamic_streams.remove(src) {
+                            let sink_pad = stream.queue.static_pad("sink").unwrap();
+                            let peer = sink_pad.peer().unwrap();
 
-                                peer.unlink(&sink_pad).unwrap();
+                            peer.unlink(&sink_pad).unwrap();
 
-                                pipeline.remove(src).unwrap();
-                                pipeline.remove(&stream.queue).unwrap();
-                                pipeline.remove(&stream.convert).unwrap();
+                            pipeline.remove(src).unwrap();
+                            pipeline.remove(&stream.queue).unwrap();
+                            pipeline.remove(&stream.convert).unwrap();
 
-                                src.set_state(gst::State::Null).unwrap();
-                                stream.queue.set_state(gst::State::Null).unwrap();
-                                stream.convert.set_state(gst::State::Null).unwrap();
-                            }
+                            src.set_state(gst::State::Null).unwrap();
+                            stream.queue.set_state(gst::State::Null).unwrap();
+                            stream.convert.set_state(gst::State::Null).unwrap();
                         }
                     }
                 }

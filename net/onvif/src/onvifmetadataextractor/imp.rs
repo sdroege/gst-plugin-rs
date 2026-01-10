@@ -98,11 +98,13 @@ impl ObjectImpl for OnvifMetadataExtractor {
 
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecBoolean::builder("remove-onvif-metadata")
-                .nick("Remove ONVIF metadata")
-                .blurb("Remove ONVIF metadata from output stream")
-                .default_value(false)
-                .build()]
+            vec![
+                glib::ParamSpecBoolean::builder("remove-onvif-metadata")
+                    .nick("Remove ONVIF metadata")
+                    .blurb("Remove ONVIF metadata from output stream")
+                    .default_value(false)
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

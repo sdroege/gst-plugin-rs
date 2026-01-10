@@ -9,14 +9,15 @@
 use crate::isobmff::brands::brands_from_variant_and_caps;
 
 use crate::isobmff::{
-    boxes::{
-        create_moov, write_box, write_full_box, FULL_BOX_FLAGS_NONE, FULL_BOX_VERSION_0,
-        FULL_BOX_VERSION_1,
-    },
-    caps_to_timescale, Buffer, FragmentHeaderConfiguration, FragmentHeaderStream, FragmentOffset,
+    Buffer, FragmentHeaderConfiguration, FragmentHeaderStream, FragmentOffset,
     PresentationConfiguration,
+    boxes::{
+        FULL_BOX_FLAGS_NONE, FULL_BOX_VERSION_0, FULL_BOX_VERSION_1, create_moov, write_box,
+        write_full_box,
+    },
+    caps_to_timescale,
 };
-use anyhow::{anyhow, Context, Error};
+use anyhow::{Context, Error, anyhow};
 use gst::prelude::*;
 
 pub(crate) fn create_fmp4_header(cfg: PresentationConfiguration) -> Result<gst::Buffer, Error> {
@@ -134,14 +135,13 @@ pub(crate) fn create_fmp4_fragment_header(
     }
 
     // Write prft for the first stream if we can
-    if let Some(stream) = cfg.streams.first() {
-        if let Some((start_time, start_ntp_time)) =
+    if let Some(stream) = cfg.streams.first()
+        && let Some((start_time, start_ntp_time)) =
             Option::zip(stream.start_time, stream.start_ntp_time)
-        {
-            write_full_box(&mut v, b"prft", FULL_BOX_VERSION_1, 8, |v| {
-                write_prft(v, &cfg, 0, stream, start_time, start_ntp_time)
-            })?;
-        }
+    {
+        write_full_box(&mut v, b"prft", FULL_BOX_VERSION_1, 8, |v| {
+            write_prft(v, &cfg, 0, stream, start_time, start_ntp_time)
+        })?;
     }
 
     let moof_pos = v.len();

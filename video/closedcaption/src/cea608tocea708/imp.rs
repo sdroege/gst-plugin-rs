@@ -7,8 +7,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use cea608_types::tables::{Channel, PreambleAddressCode};
-use cea708_types::{tables::*, DTVCCPacket};
 use cea708_types::{CCDataWriter, Framerate};
+use cea708_types::{DTVCCPacket, tables::*};
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -17,7 +17,7 @@ use atomic_refcell::AtomicRefCell;
 
 use crate::cea608utils::*;
 use crate::cea708utils::{
-    cea608_color_to_foreground_color, textstyle_to_pen_color, Cea708ServiceWriter,
+    Cea708ServiceWriter, cea608_color_to_foreground_color, textstyle_to_pen_color,
 };
 
 use cea608_types::{Cea608, Cea608State as Cea608StateTracker};
@@ -182,11 +182,11 @@ impl Cea708ServiceState {
 
     fn handle_midrowchange(&mut self, midrowchange: cea608_types::tables::MidRow) {
         self.writer.write_char(' ');
-        if let Some(color) = midrowchange.color() {
-            if self.pen_color.foreground_color != cea608_color_to_foreground_color(color) {
-                self.pen_color.foreground_color = cea608_color_to_foreground_color(color);
-                self.writer.set_pen_color(self.pen_color);
-            }
+        if let Some(color) = midrowchange.color()
+            && self.pen_color.foreground_color != cea608_color_to_foreground_color(color)
+        {
+            self.pen_color.foreground_color = cea608_color_to_foreground_color(color);
+            self.writer.set_pen_color(self.pen_color);
         }
 
         let mut need_pen_attributes = false;
@@ -416,11 +416,10 @@ impl State {
                 Cea608::CarriageReturn(chan) => {
                     if let Some(mode) =
                         self.cea608.service[self.field_channel_to_index(field, chan)].mode
+                        && mode.is_rollup()
                     {
-                        if mode.is_rollup() {
-                            let state = self.service_state_from_608_field_channel(field, chan);
-                            state.carriage_return();
-                        }
+                        let state = self.service_state_from_608_field_channel(field, chan);
+                        state.carriage_return();
                     }
                 }
                 Cea608::EraseDisplay(chan) => {

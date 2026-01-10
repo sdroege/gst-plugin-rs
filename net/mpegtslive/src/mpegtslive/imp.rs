@@ -21,7 +21,7 @@
  *
  * Since: plugins-rs-0.13.0
  */
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use bitstream_io::{BigEndian, BitRead, BitReader};
 
@@ -430,10 +430,10 @@ impl State {
                             continue;
                         } else if num_non_nit_pats > 1 {
                             gst::warning!(
-                                    CAT,
-                                    imp = imp,
-                                    "MPEG-TS stream with multiple programs - timing will be wrong for all but first program",
-                                );
+                                CAT,
+                                imp = imp,
+                                "MPEG-TS stream with multiple programs - timing will be wrong for all but first program",
+                            );
                         }
 
                         // Get first non-NIT program here and select that
@@ -995,10 +995,10 @@ impl ElementImpl for MpegTsLiveSource {
 
     fn set_clock(&self, clock: Option<&gst::Clock>) -> bool {
         // We only accept our clock
-        if let Some(proposed) = clock {
-            if *proposed != self.external_clock {
-                return false;
-            }
+        if let Some(proposed) = clock
+            && *proposed != self.external_clock
+        {
+            return false;
         }
         true
     }

@@ -47,14 +47,14 @@ fn test_red_color() {
         use gst::MessageView;
         match msg.view() {
             MessageView::Element(elt) => {
-                if let Some(s) = elt.structure() {
-                    if s.name() == "colordetect" {
-                        // The video source emits 2 red frames, but we should
-                        // receive only one message because the dominant color
-                        // doesn't change.
-                        assert_eq!(detected_color.as_deref(), None);
-                        detected_color = Some(s.get::<String>("dominant-color").unwrap());
-                    }
+                if let Some(s) = elt.structure()
+                    && s.name() == "colordetect"
+                {
+                    // The video source emits 2 red frames, but we should
+                    // receive only one message because the dominant color
+                    // doesn't change.
+                    assert_eq!(detected_color.as_deref(), None);
+                    detected_color = Some(s.get::<String>("dominant-color").unwrap());
                 }
             }
             MessageView::Eos(..) => break,

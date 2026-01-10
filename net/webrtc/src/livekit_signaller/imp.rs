@@ -2,8 +2,8 @@
 
 use crate::signaller::{Signallable, SignallableImpl, WebRTCSignallerRole};
 
-use crate::utils::{wait_async, WaitError};
 use crate::RUNTIME;
+use crate::utils::{WaitError, wait_async};
 
 use anyhow::anyhow;
 use futures::executor::block_on;
@@ -301,16 +301,15 @@ impl Signaller {
                     return;
                 };
 
-                if target == trickle.target() {
-                    if let Ok(json) =
+                if target == trickle.target()
+                    && let Ok(json) =
                         serde_json::from_str::<IceCandidateJson>(&trickle.candidate_init)
-                    {
-                        let mline = json.sdp_m_line_index as u32;
-                        self.obj().emit_by_name::<()>(
-                            "handle-ice",
-                            &[&"unique", &mline, &Some(json.sdp_mid), &json.candidate],
-                        );
-                    }
+                {
+                    let mline = json.sdp_m_line_index as u32;
+                    self.obj().emit_by_name::<()>(
+                        "handle-ice",
+                        &[&"unique", &mline, &Some(json.sdp_mid), &json.candidate],
+                    );
                 }
             }
 
@@ -320,11 +319,11 @@ impl Signaller {
 
             proto::signal_response::Message::TrackPublished(publish_res) => {
                 gst::debug!(CAT, imp = self, "Track published: {:?}", publish_res);
-                if let Some(connection) = &mut *self.connection.lock().unwrap() {
-                    if let Some(tx) = connection.pending_tracks.remove(&publish_res.cid) {
-                        connection.published_tracks.insert(publish_res.cid);
-                        let _ = tx.send(publish_res.track.unwrap());
-                    }
+                if let Some(connection) = &mut *self.connection.lock().unwrap()
+                    && let Some(tx) = connection.pending_tracks.remove(&publish_res.cid)
+                {
+                    connection.published_tracks.insert(publish_res.cid);
+                    let _ = tx.send(publish_res.track.unwrap());
                 }
             }
 
@@ -467,13 +466,13 @@ impl Signaller {
 
                         if mtype == proto::TrackType::Audio {
                             for format in media.formats() {
-                                if let Ok(pt) = format.parse::<i32>() {
-                                    if let Some(caps) = media.caps_from_media(pt) {
-                                        let s = caps.structure(0).unwrap();
-                                        let encoding_name = s.get::<&str>("encoding-name").unwrap();
-                                        if encoding_name == "RED" {
-                                            disable_red = false;
-                                        }
+                                if let Ok(pt) = format.parse::<i32>()
+                                    && let Some(caps) = media.caps_from_media(pt)
+                                {
+                                    let s = caps.structure(0).unwrap();
+                                    let encoding_name = s.get::<&str>("encoding-name").unwrap();
+                                    if encoding_name == "RED" {
+                                        disable_red = false;
                                     }
                                 }
                             }
@@ -484,19 +483,19 @@ impl Signaller {
 
                         let mut trackid = "";
                         for attr in media.attributes() {
-                            if attr.key() == "ssrc" {
-                                if let Some(val) = attr.value() {
-                                    let split: Vec<&str> = val.split_whitespace().collect();
-                                    if split.len() == 3 && split[1].starts_with("msid:") {
-                                        trackid = split[2];
-                                        let split: Vec<&str> = split[1].splitn(2, ":").collect();
+                            if attr.key() == "ssrc"
+                                && let Some(val) = attr.value()
+                            {
+                                let split: Vec<&str> = val.split_whitespace().collect();
+                                if split.len() == 3 && split[1].starts_with("msid:") {
+                                    trackid = split[2];
+                                    let split: Vec<&str> = split[1].splitn(2, ":").collect();
 
-                                        if split.len() == 2 {
-                                            name = split[1].to_string();
-                                        }
-
-                                        break;
+                                    if split.len() == 2 {
+                                        name = split[1].to_string();
                                     }
+
+                                    break;
                                 }
                             }
                         }
@@ -930,13 +929,13 @@ impl SignallableImpl for Signaller {
         })
         .unwrap();
 
-        if let Some(connection) = &mut *self.connection.lock().unwrap() {
-            if let Some(early_candidates) = connection.early_candidates.as_mut() {
-                gst::debug!(CAT, imp = self, "Delaying ice candidate {candidate_str:?}");
+        if let Some(connection) = &mut *self.connection.lock().unwrap()
+            && let Some(early_candidates) = connection.early_candidates.as_mut()
+        {
+            gst::debug!(CAT, imp = self, "Delaying ice candidate {candidate_str:?}");
 
-                early_candidates.push(candidate_str);
-                return;
-            }
+            early_candidates.push(candidate_str);
+            return;
         };
 
         gst::debug!(CAT, imp = self, "Sending ice candidate {candidate_str:?}");

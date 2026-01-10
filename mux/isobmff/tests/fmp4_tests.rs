@@ -14,7 +14,7 @@ use tempfile::tempdir;
 use std::{fs::File, path::Path, thread};
 
 pub mod support;
-use support::{check_ftyp_output, check_mvhd_sanity, ExpectedConfiguration};
+use support::{ExpectedConfiguration, check_ftyp_output, check_mvhd_sanity};
 
 use crate::support::check_trak_sanity;
 
@@ -4259,10 +4259,12 @@ fn check_frag_file_structure(
                 assert_eq!(moof.mfhd.sequence_number, 1);
                 assert_eq!(moof.traf.len(), 1);
                 let traf0 = &moof.traf[0];
-                assert!(traf0
-                    .tfdt
-                    .as_ref()
-                    .is_some_and(|tfdt| { tfdt.base_media_decode_time == 0 }));
+                assert!(
+                    traf0
+                        .tfdt
+                        .as_ref()
+                        .is_some_and(|tfdt| { tfdt.base_media_decode_time == 0 })
+                );
                 assert_eq!(traf0.tfhd.track_id, 1);
                 assert!(traf0.tfhd.base_data_offset.is_none());
                 if expected_config.is_audio {

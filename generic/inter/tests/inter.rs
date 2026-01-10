@@ -7,8 +7,8 @@ use serial_test::serial;
 use pretty_assertions::assert_eq;
 
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 
 fn init() {

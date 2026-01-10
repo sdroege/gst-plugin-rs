@@ -440,11 +440,11 @@ impl ElementImpl for UriPlaylistBin {
         &self,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        if transition == gst::StateChange::NullToReady {
-            if let Err(e) = self.start() {
-                self.failed(e);
-                return Err(gst::StateChangeError);
-            }
+        if transition == gst::StateChange::NullToReady
+            && let Err(e) = self.start()
+        {
+            self.failed(e);
+            return Err(gst::StateChangeError);
         }
 
         let res = self.parent_change_state(transition);

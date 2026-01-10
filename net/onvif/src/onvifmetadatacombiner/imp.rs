@@ -1,9 +1,9 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst_base::AGGREGATOR_FLOW_NEED_DATA;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
-use gst_base::AGGREGATOR_FLOW_NEED_DATA;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
@@ -303,12 +303,12 @@ impl OnvifMetadataCombiner {
                                 Ok(Some(current_media_buffer))
                             } else if timeout {
                                 gst::warning!(
-                                CAT,
-                                imp = self,
-                                "Timed out but did not receive all meta for media buffer from {}-{} yet",
-                                current_media_start,
-                                end
-                            );
+                                    CAT,
+                                    imp = self,
+                                    "Timed out but did not receive all meta for media buffer from {}-{} yet",
+                                    current_media_start,
+                                    end
+                                );
                                 Ok(Some(current_media_buffer))
                             } else {
                                 gst::trace!(

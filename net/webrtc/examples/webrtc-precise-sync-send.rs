@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Context};
+use anyhow::{Context, anyhow, bail};
 use futures::prelude::*;
 use gst::prelude::*;
 use gst_rtp::prelude::*;
@@ -86,11 +86,7 @@ struct Args {
 
 impl Args {
     fn scheme(&self) -> &str {
-        if self.use_tls {
-            "wss"
-        } else {
-            "ws"
-        }
+        if self.use_tls { "wss" } else { "ws" }
     }
 
     async fn get_synced_clock(&self) -> anyhow::Result<gst::Clock> {

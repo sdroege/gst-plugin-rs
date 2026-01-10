@@ -491,7 +491,9 @@ impl Detector {
 
                 if diff > i16::MAX as u64 {
                     if seqnum < 1 << 16 {
-                        eprintln!("Cannot unwrap, any wrapping took place yet. Returning 0 without updating extended timestamp.");
+                        eprintln!(
+                            "Cannot unwrap, any wrapping took place yet. Returning 0 without updating extended timestamp."
+                        );
                     } else {
                         seqnum -= 1 << 16;
                     }
@@ -1054,10 +1056,10 @@ impl State {
                 }
             }
             NetworkUsage::Under => {
-                if let BandwidthEstimationOp::Increase(..) = self.last_control_op {
-                    if let Some(bitrate) = self.compute_increased_rate(bwe) {
-                        return self.set_bitrate(bwe, bitrate, ControllerType::Delay);
-                    }
+                if let BandwidthEstimationOp::Increase(..) = self.last_control_op
+                    && let Some(bitrate) = self.compute_increased_rate(bwe)
+                {
+                    return self.set_bitrate(bwe, bitrate, ControllerType::Delay);
                 }
             }
         }
@@ -1139,13 +1141,13 @@ impl BandwidthEstimator {
                 state.create_buffer_list(&bwe)
             };
 
-            if !list.is_empty() {
-                if let Err(err) = bwe.imp().push_list(list) {
-                    if err != gst::FlowError::Flushing {
-                        gst::error!(CAT, obj = bwe, "pause task, reason: {err:?}");
-                    }
-                    pause()
+            if !list.is_empty()
+                && let Err(err) = bwe.imp().push_list(list)
+            {
+                if err != gst::FlowError::Flushing {
+                    gst::error!(CAT, obj = bwe, "pause task, reason: {err:?}");
                 }
+                pause()
             }
         })?;
 
@@ -1214,8 +1216,8 @@ impl ObjectSubclass for BandwidthEstimator {
                     |this| {
                         let bwe = this.obj();
 
-                        if let Some(structure) = event.structure() {
-                            if structure.name() == "RTPTWCCPackets" {
+                        if let Some(structure) = event.structure()
+                            && structure.name() == "RTPTWCCPackets" {
                                 let varray = structure.get::<glib::ValueArray>("packets").unwrap();
                                 let mut packets = varray
                                     .iter()
@@ -1262,7 +1264,6 @@ impl ObjectSubclass for BandwidthEstimator {
                                     }
                                 }
                             }
-                        }
 
                         gst::Pad::event_default(pad, parent, event)
                     },

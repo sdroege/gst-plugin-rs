@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::utils::{
-    cleanup_codec_caps, has_raw_caps, make_element, Codec, Codecs, NavigationEvent,
-    CONTROL_DATA_CHANNEL_LABEL, INPUT_DATA_CHANNEL_LABEL,
+    CONTROL_DATA_CHANNEL_LABEL, Codec, Codecs, INPUT_DATA_CHANNEL_LABEL, NavigationEvent,
+    cleanup_codec_caps, has_raw_caps, make_element,
 };
 use anyhow::Context;
 use gst::glib;
@@ -20,21 +20,21 @@ use tokio::net::TcpListener;
 
 use futures::prelude::*;
 
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use itertools::Itertools;
 use std::collections::HashMap;
 
 use std::ops::DerefMut;
 use std::ops::Mul;
-use std::sync::{mpsc, Arc, Condvar, LazyLock, Mutex};
+use std::sync::{Arc, Condvar, LazyLock, Mutex, mpsc};
 
 use super::homegrown_cc::CongestionController;
 use super::{
     WebRTCSinkCongestionControl, WebRTCSinkError, WebRTCSinkMitigationMode, WebRTCSinkPad,
 };
-use crate::signaller::{prelude::*, Signallable, Signaller, WebRTCSignallerRole};
+use crate::signaller::{Signallable, Signaller, WebRTCSignallerRole, prelude::*};
 use crate::utils::create_tls_acceptor;
-use crate::{utils, RUNTIME};
+use crate::{RUNTIME, utils};
 use std::collections::{BTreeMap, HashSet};
 use tracing_subscriber::prelude::*;
 
@@ -194,18 +194,18 @@ impl CustomBusStream {
                     }
                 }
                 gst::MessageView::StateChanged(state_changed) => {
-                    if let Some(pipeline) = pipeline_weak.upgrade() {
-                        if state_changed.src() == Some(pipeline.upcast_ref()) {
-                            pipeline.debug_to_dot_file_with_ts(
-                                gst::DebugGraphDetails::all(),
-                                format!(
-                                    "{}-{:?}-to-{:?}",
-                                    prefix_clone,
-                                    state_changed.old(),
-                                    state_changed.current()
-                                ),
-                            );
-                        }
+                    if let Some(pipeline) = pipeline_weak.upgrade()
+                        && state_changed.src() == Some(pipeline.upcast_ref())
+                    {
+                        pipeline.debug_to_dot_file_with_ts(
+                            gst::DebugGraphDetails::all(),
+                            format!(
+                                "{}-{:?}-to-{:?}",
+                                prefix_clone,
+                                state_changed.old(),
+                                state_changed.current()
+                            ),
+                        );
                     }
                     let _ = sender.unbounded_send(msg.clone());
                 }
@@ -1665,8 +1665,8 @@ impl NavigationEventHandler {
 
 impl Drop for NavigationEventHandler {
     fn drop(&mut self) {
-        self.0 .1.disconnect(self.0 .0.take().unwrap());
-        self.0 .1.close();
+        self.0.1.disconnect(self.0.0.take().unwrap());
+        self.0.1.close();
     }
 }
 
@@ -1727,8 +1727,8 @@ impl ControlRequestHandler {
 
 impl Drop for ControlRequestHandler {
     fn drop(&mut self) {
-        self.0 .1.disconnect(self.0 .0.take().unwrap());
-        self.0 .1.close();
+        self.0.1.disconnect(self.0.0.take().unwrap());
+        self.0.1.close();
     }
 }
 
@@ -1757,18 +1757,17 @@ impl BaseWebRTCSink {
 
         let settings = self.settings.lock().unwrap();
 
-        if codec.is_video() {
-            if let Some(enc_name) = codec.encoder_name().as_deref() {
-                if !VideoEncoder::is_bitrate_supported(enc_name) {
-                    gst::error!(
-                        CAT,
-                        imp = self,
-                        "Bitrate handling is not supported yet for {enc_name}"
-                    );
+        if codec.is_video()
+            && let Some(enc_name) = codec.encoder_name().as_deref()
+            && !VideoEncoder::is_bitrate_supported(enc_name)
+        {
+            gst::error!(
+                CAT,
+                imp = self,
+                "Bitrate handling is not supported yet for {enc_name}"
+            );
 
-                    return Ok(());
-                }
-            }
+            return Ok(());
         }
 
         if settings.cc_info.heuristic == WebRTCSinkCongestionControl::Disabled {
@@ -1799,7 +1798,9 @@ impl BaseWebRTCSink {
                 payloader.emit_by_name::<()>("add-extension", &[&twcc_extension]);
             }
             _ => {
-                anyhow::bail!("Failed to add TWCC extension, make sure 'gst-plugins-good:rtpmanager' is installed");
+                anyhow::bail!(
+                    "Failed to add TWCC extension, make sure 'gst-plugins-good:rtpmanager' is installed"
+                );
             }
         }
 
@@ -1831,9 +1832,13 @@ impl BaseWebRTCSink {
                 // GstRTPBasePayload::extensions property is only available since GStreamer 1.24
                 if !payloader.has_property_with_type("extensions", gst::Array::static_type()) {
                     if self.has_connected_payloader_setup_slots() {
-                        gst::warning!(CAT, imp = self, "'extensions' property is not available: TWCC extension ID will default to 1. \
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "'extensions' property is not available: TWCC extension ID will default to 1. \
         Application code must ensure to pick non-conflicting IDs for any additionally configured extensions. \
-        Please consider updating GStreamer to 1.24.");
+        Please consider updating GStreamer to 1.24."
+                        );
                     }
 
                     return Some(1);
@@ -1924,38 +1929,38 @@ impl BaseWebRTCSink {
             }
         }
 
-        if self.settings.lock().unwrap().do_clock_signalling {
-            if let Some(caps) = caps {
-                let clock = self
+        if self.settings.lock().unwrap().do_clock_signalling
+            && let Some(caps) = caps
+        {
+            let clock = self
+                .obj()
+                .clock()
+                .expect("element added & pipeline Playing");
+
+            if clock.is::<gst_net::NtpClock>() || clock.is::<gst_net::PtpClock>() {
+                // RFC 7273 defines the "mediaclk:direct" attribute as the RTP timestamp
+                // value at the clock's epoch (time of origin). It was initialised to
+                // 0 in the SDP offer.
+                //
+                // Let's set the payloader's offset so the RTP timestamps
+                // are generated accordingly.
+                let clock_rate = caps
+                    .structure(0)
+                    .unwrap()
+                    .get::<i32>("clock-rate")
+                    .context("Setting payloader offset")? as u64;
+                let basetime = self
                     .obj()
-                    .clock()
+                    .base_time()
                     .expect("element added & pipeline Playing");
+                let Some(rtp_basetime) = basetime
+                    .nseconds()
+                    .mul_div_ceil(clock_rate, *gst::ClockTime::SECOND)
+                else {
+                    anyhow::bail!("Failed to compute RTP base time. clock-rate: {clock_rate}");
+                };
 
-                if clock.is::<gst_net::NtpClock>() || clock.is::<gst_net::PtpClock>() {
-                    // RFC 7273 defines the "mediaclk:direct" attribute as the RTP timestamp
-                    // value at the clock's epoch (time of origin). It was initialised to
-                    // 0 in the SDP offer.
-                    //
-                    // Let's set the payloader's offset so the RTP timestamps
-                    // are generated accordingly.
-                    let clock_rate =
-                        caps.structure(0)
-                            .unwrap()
-                            .get::<i32>("clock-rate")
-                            .context("Setting payloader offset")? as u64;
-                    let basetime = self
-                        .obj()
-                        .base_time()
-                        .expect("element added & pipeline Playing");
-                    let Some(rtp_basetime) = basetime
-                        .nseconds()
-                        .mul_div_ceil(clock_rate, *gst::ClockTime::SECOND)
-                    else {
-                        anyhow::bail!("Failed to compute RTP base time. clock-rate: {clock_rate}");
-                    };
-
-                    payloader.set_property("timestamp-offset", (rtp_basetime & 0xffff_ffff) as u32);
-                }
+                payloader.set_property("timestamp-offset", (rtp_basetime & 0xffff_ffff) as u32);
             }
         }
 
@@ -2483,9 +2488,7 @@ impl BaseWebRTCSink {
                 "request-meta",
                 false,
                 glib::closure!(#[watch] instance, move |_signaler: glib::Object| -> Option<gst::Structure> {
-                    let meta = instance.imp().settings.lock().unwrap().meta.clone();
-
-                    meta
+                    instance.imp().settings.lock().unwrap().meta.clone()
                 }),
             ),
 
@@ -2781,21 +2784,15 @@ impl BaseWebRTCSink {
         let mut twcc_idx = None;
 
         for attribute in media.attributes() {
-            if attribute.key() == "extmap" {
-                if let Some(value) = attribute.value() {
-                    if let Some((idx_str, ext)) = value.split_once(' ') {
-                        if ext == RTP_TWCC_URI {
-                            if let Ok(idx) = idx_str.parse::<u32>() {
-                                twcc_idx = Some(idx);
-                            } else {
-                                gst::warning!(
-                                    CAT,
-                                    imp = self,
-                                    "Failed to parse twcc index: {idx_str}"
-                                );
-                            }
-                        }
-                    }
+            if attribute.key() == "extmap"
+                && let Some(value) = attribute.value()
+                && let Some((idx_str, ext)) = value.split_once(' ')
+                && ext == RTP_TWCC_URI
+            {
+                if let Ok(idx) = idx_str.parse::<u32>() {
+                    twcc_idx = Some(idx);
+                } else {
+                    gst::warning!(CAT, imp = self, "Failed to parse twcc index: {idx_str}");
                 }
             }
         }
@@ -2980,7 +2977,7 @@ impl BaseWebRTCSink {
         let session = session.0.lock().unwrap();
 
         if let Some(ref handler) = session.control_events_handler {
-            if handler.0 .1.ready_state() != gst_webrtc::WebRTCDataChannelState::Open {
+            if handler.0.1.ready_state() != gst_webrtc::WebRTCDataChannelState::Open {
                 return;
             }
 
@@ -2990,7 +2987,7 @@ impl BaseWebRTCSink {
                     info: utils::Info::Meta(meta),
                 }) {
                     Ok(msg) => {
-                        if let Err(err) = handler.0 .1.send_string_full(Some(msg.as_str())) {
+                        if let Err(err) = handler.0.1.send_string_full(Some(msg.as_str())) {
                             gst::error!(CAT, imp = self, "Failed sending meta to peer: {err}",);
                         }
                     }
@@ -4199,13 +4196,13 @@ impl BaseWebRTCSink {
                         webrtc_pad.payload = Some(payload);
                     } else {
                         gst::warning!(
-                        CAT,
-                        imp = self,
-                        "consumer from session {} did not provide valid payload for media index {} for session {}",
-                        session_id,
-                        media_idx,
-                        session_id,
-                    );
+                            CAT,
+                            imp = self,
+                            "consumer from session {} did not provide valid payload for media index {} for session {}",
+                            session_id,
+                            media_idx,
+                            session_id,
+                        );
 
                         drop(session);
                         if let Some(_session) = state.end_session(&self.obj(), session_id) {
@@ -4216,7 +4213,11 @@ impl BaseWebRTCSink {
                             signaller.end_session(session_id);
                         }
 
-                        gst::warning!(CAT, imp = self, "Consumer did not provide valid payload for media session: {session_id} media_ix: {media_idx}");
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Consumer did not provide valid payload for media session: {session_id} media_ix: {media_idx}"
+                        );
                         return;
                     }
                 }
@@ -4317,15 +4318,15 @@ impl BaseWebRTCSink {
                 gst_app::AppSinkCallbacks::builder()
                     .new_event(|sink| {
                         let obj = sink.pull_object().ok();
-                        if let Some(event) = obj.and_then(|o| o.downcast::<gst::Event>().ok()) {
-                            if let gst::EventView::Caps(caps) = event.view() {
-                                sink.post_message(gst::message::Application::new(
-                                    gst::Structure::builder("payloaded_caps")
-                                        .field("caps", caps.caps_owned())
-                                        .build(),
-                                ))
-                                .expect("Could not send message");
-                            }
+                        if let Some(event) = obj.and_then(|o| o.downcast::<gst::Event>().ok())
+                            && let gst::EventView::Caps(caps) = event.view()
+                        {
+                            sink.post_message(gst::message::Application::new(
+                                gst::Structure::builder("payloaded_caps")
+                                    .field("caps", caps.caps_owned())
+                                    .build(),
+                            ))
+                            .expect("Could not send message");
                         }
 
                         true
@@ -4601,17 +4602,17 @@ impl BaseWebRTCSink {
         use gst::EventView;
 
         if let EventView::Caps(e) = event.view() {
-            if let Some(caps) = pad.current_caps() {
-                if !self.input_caps_change_allowed(&caps, e.caps()) {
-                    gst::error!(
-                        CAT,
-                        obj = pad,
-                        "Renegotiation is not supported (old: {}, new: {})",
-                        caps,
-                        e.caps()
-                    );
-                    return false;
-                }
+            if let Some(caps) = pad.current_caps()
+                && !self.input_caps_change_allowed(&caps, e.caps())
+            {
+                gst::error!(
+                    CAT,
+                    obj = pad,
+                    "Renegotiation is not supported (old: {}, new: {})",
+                    caps,
+                    e.caps()
+                );
+                return false;
             }
             gst::info!(CAT, obj = pad, "Received caps event {:?}", e);
 
@@ -4624,28 +4625,28 @@ impl BaseWebRTCSink {
                     let mut caps = e.caps().to_owned();
                     {
                         let mut_caps = caps.get_mut().unwrap();
-                        if let Some(s) = mut_caps.structure_mut(0) {
-                            if s.has_name("video/x-raw") {
-                                s.remove_field("max-framerate");
-                            }
+                        if let Some(s) = mut_caps.structure_mut(0)
+                            && s.has_name("video/x-raw")
+                        {
+                            s.remove_field("max-framerate");
                         }
                     }
                     stream.in_caps = Some(caps.to_owned());
                 }
             });
 
-            if e.caps().structure(0).unwrap().name().starts_with("video/") {
-                if let Ok(video_info) = gst_video::VideoInfo::from_caps(e.caps()) {
-                    // update video encoder info used when downscaling/downsampling the input
-                    let stream_name = pad.name().to_string();
+            if e.caps().structure(0).unwrap().name().starts_with("video/")
+                && let Ok(video_info) = gst_video::VideoInfo::from_caps(e.caps())
+            {
+                // update video encoder info used when downscaling/downsampling the input
+                let stream_name = pad.name().to_string();
 
-                    for session in state.sessions.values() {
-                        for encoder in session.0.lock().unwrap().encoders.values_mut() {
-                            if encoder.stream_name == stream_name {
-                                encoder.halved_framerate =
-                                    video_info.fps().mul(gst::Fraction::new(1, 2));
-                                encoder.video_info = video_info.clone();
-                            }
+                for session in state.sessions.values() {
+                    for encoder in session.0.lock().unwrap().encoders.values_mut() {
+                        if encoder.stream_name == stream_name {
+                            encoder.halved_framerate =
+                                video_info.fps().mul(gst::Fraction::new(1, 2));
+                            encoder.video_info = video_info.clone();
                         }
                     }
                 }
@@ -5225,7 +5226,10 @@ impl ObjectImpl for BaseWebRTCSink {
                     &value.get::<String>().expect("type checked upstream"),
                 ) {
                     Err(e) => {
-                        gst::error!(CAT, "Couldn't set the host address as {e:?}, fallback to the default value {DEFAULT_WEB_SERVER_HOST_ADDR:?}");
+                        gst::error!(
+                            CAT,
+                            "Couldn't set the host address as {e:?}, fallback to the default value {DEFAULT_WEB_SERVER_HOST_ADDR:?}"
+                        );
                         return;
                     }
 
@@ -5412,7 +5416,8 @@ impl ObjectImpl for BaseWebRTCSink {
                         let element = args[0].get::<super::BaseWebRTCSink>().expect("signal arg");
                         let this = element.imp();
 
-                        let res = Some(
+
+                        Some(
                             this.state
                                 .lock()
                                 .unwrap()
@@ -5421,8 +5426,7 @@ impl ObjectImpl for BaseWebRTCSink {
                                 .cloned()
                                 .collect::<Vec<String>>()
                                 .to_value(),
-                        );
-                        res
+                        )
                     })
                     .return_type::<Vec<String>>()
                     .build(),
@@ -5809,15 +5813,15 @@ impl ElementImpl for BaseWebRTCSink {
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         let element = self.obj();
-        if let gst::StateChange::ReadyToPaused = transition {
-            if let Err(err) = self.prepare() {
-                gst::element_error!(
-                    element,
-                    gst::StreamError::Failed,
-                    ["Failed to prepare: {}", err]
-                );
-                return Err(gst::StateChangeError);
-            }
+        if let gst::StateChange::ReadyToPaused = transition
+            && let Err(err) = self.prepare()
+        {
+            gst::element_error!(
+                element,
+                gst::StreamError::Failed,
+                ["Failed to prepare: {}", err]
+            );
+            return Err(gst::StateChangeError);
         }
 
         let mut ret = self.parent_change_state(transition);
@@ -6280,15 +6284,15 @@ impl ElementImpl for WebRTCSink {
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         let element = self.obj();
-        if let gst::StateChange::ReadyToPaused = transition {
-            if let Err(err) = self.prepare() {
-                gst::element_error!(
-                    element,
-                    gst::StreamError::Failed,
-                    ["Failed to prepare: {}", err]
-                );
-                return Err(gst::StateChangeError);
-            }
+        if let gst::StateChange::ReadyToPaused = transition
+            && let Err(err) = self.prepare()
+        {
+            gst::element_error!(
+                element,
+                gst::StreamError::Failed,
+                ["Failed to prepare: {}", err]
+            );
+            return Err(gst::StateChangeError);
         }
 
         let ret = self.parent_change_state(transition);

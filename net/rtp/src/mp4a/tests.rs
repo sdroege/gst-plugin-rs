@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::tests::{run_test_pipeline, ExpectedBuffer, ExpectedPacket, Source};
+use crate::tests::{ExpectedBuffer, ExpectedPacket, Source, run_test_pipeline};
 use gst::prelude::*;
 
 fn init() {
@@ -25,37 +25,41 @@ fn mp4a_one_frame_per_packet() {
     for i in 0..102 {
         let position = i * 1024;
 
-        expected_pay.push(vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_nseconds(
-                position
-                    .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
-                    .unwrap(),
-            ))
-            .flags(if i == 0 {
-                gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER
-            } else {
-                gst::BufferFlags::MARKER
-            })
-            .rtp_time((position & 0xffff_ffff) as u32)
-            .build()]);
+        expected_pay.push(vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_nseconds(
+                    position
+                        .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
+                        .unwrap(),
+                ))
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER
+                } else {
+                    gst::BufferFlags::MARKER
+                })
+                .rtp_time((position & 0xffff_ffff) as u32)
+                .build(),
+        ]);
     }
 
     let mut expected_depay = Vec::with_capacity(101);
     for i in 0..101 {
         let position = (i + 1) * 1024;
 
-        expected_depay.push(vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_nseconds(
-                position
-                    .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
-                    .unwrap(),
-            ))
-            .flags(if i == 0 {
-                gst::BufferFlags::DISCONT
-            } else {
-                gst::BufferFlags::empty()
-            })
-            .build()]);
+        expected_depay.push(vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_nseconds(
+                    position
+                        .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
+                        .unwrap(),
+                ))
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT
+                } else {
+                    gst::BufferFlags::empty()
+                })
+                .build(),
+        ]);
     }
 
     run_test_pipeline(Source::Bin(src), pay, depay, expected_pay, expected_depay);
@@ -103,18 +107,20 @@ fn mp4a_fragmented() {
     for i in 0..101 {
         let position = (i + 1) * 1024;
 
-        expected_depay.push(vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_nseconds(
-                position
-                    .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
-                    .unwrap(),
-            ))
-            .flags(if i == 0 {
-                gst::BufferFlags::DISCONT
-            } else {
-                gst::BufferFlags::empty()
-            })
-            .build()]);
+        expected_depay.push(vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_nseconds(
+                    position
+                        .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
+                        .unwrap(),
+                ))
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT
+                } else {
+                    gst::BufferFlags::empty()
+                })
+                .build(),
+        ]);
     }
 
     run_test_pipeline(Source::Bin(src), pay, depay, expected_pay, expected_depay);

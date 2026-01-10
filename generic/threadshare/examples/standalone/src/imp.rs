@@ -18,7 +18,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use gstthreadshare::runtime::prelude::*;
-use gstthreadshare::runtime::{task, timer, Context, PadSrc, Task};
+use gstthreadshare::runtime::{Context, PadSrc, Task, task, timer};
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(

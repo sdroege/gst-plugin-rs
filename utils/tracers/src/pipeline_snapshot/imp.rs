@@ -78,8 +78,8 @@ use tokio::runtime;
 
 use async_tungstenite::tungstenite::Message;
 use gst::glib;
-use gst::glib::translate::ToGlibPtr;
 use gst::glib::Properties;
+use gst::glib::translate::ToGlibPtr;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -384,14 +384,16 @@ impl ObjectImpl for PipelineSnapshot {
 
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
-            vec![glib::subclass::Signal::builder("snapshot")
-                .action()
-                .class_handler(|args| {
-                    args[0].get::<super::PipelineSnapshot>().unwrap().snapshot();
+            vec![
+                glib::subclass::Signal::builder("snapshot")
+                    .action()
+                    .class_handler(|args| {
+                        args[0].get::<super::PipelineSnapshot>().unwrap().snapshot();
 
-                    None
-                })
-                .build()]
+                        None
+                    })
+                    .build(),
+            ]
         });
 
         SIGNALS.as_ref()

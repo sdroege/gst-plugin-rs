@@ -65,7 +65,9 @@ pub enum Mpeg4GenericDepayError {
         expected_index: AccessUnitIndex,
     },
 
-    #[error("Unexpected non-zero first AU index {index} in packet {ext_seqnum} due to configured constant duration")]
+    #[error(
+        "Unexpected non-zero first AU index {index} in packet {ext_seqnum} due to configured constant duration"
+    )]
     ConstantDurationAuNonZeroIndex {
         index: AccessUnitIndex,
         ext_seqnum: u64,
@@ -74,15 +76,15 @@ pub enum Mpeg4GenericDepayError {
     #[error("Constant duration not configured and no headers in packet {ext_seqnum}")]
     NonConstantDurationNoAuHeaders { ext_seqnum: u64 },
 
-    #[error("Constant duration not configured and no CTS delta for AU index {index} in packet {ext_seqnum}")]
+    #[error(
+        "Constant duration not configured and no CTS delta for AU index {index} in packet {ext_seqnum}"
+    )]
     NonConstantDurationAuNoCtsDelta {
         index: AccessUnitIndex,
         ext_seqnum: u64,
     },
 
-    #[error(
-        "Fragmented AU size mismatch: expected {expected}, found {found}. Packet {ext_seqnum}"
-    )]
+    #[error("Fragmented AU size mismatch: expected {expected}, found {found}. Packet {ext_seqnum}")]
     FragmentedAuSizeMismatch {
         expected: u32,
         found: usize,

@@ -399,17 +399,17 @@ impl Session {
 
         // handle possible collision
         if let Some(source) = self.remote_senders.get(&rtp.ssrc()) {
-            if let Some(rtp_from) = source.rtp_from().or(source.rtcp_from()) {
-                if self.handle_ssrc_conflict(rtp_from, now) {
-                    return SendReply::SsrcCollision(rtp.ssrc());
-                }
+            if let Some(rtp_from) = source.rtp_from().or(source.rtcp_from())
+                && self.handle_ssrc_conflict(rtp_from, now)
+            {
+                return SendReply::SsrcCollision(rtp.ssrc());
             }
             return SendReply::Drop;
         } else if let Some(source) = self.remote_receivers.get(&rtp.ssrc()) {
-            if let Some(rtcp_from) = source.rtcp_from() {
-                if self.handle_ssrc_conflict(rtcp_from, now) {
-                    return SendReply::SsrcCollision(rtp.ssrc());
-                }
+            if let Some(rtcp_from) = source.rtcp_from()
+                && self.handle_ssrc_conflict(rtcp_from, now)
+            {
+                return SendReply::SsrcCollision(rtp.ssrc());
             }
             return SendReply::Drop;
         }
@@ -612,15 +612,14 @@ impl Session {
                     }
                 }
                 Ok(Packet::Sr(sr)) => {
-                    if let Some(addr) = from {
-                        if self.local_senders.contains_key(&sr.ssrc())
-                            || self.local_receivers.contains_key(&sr.ssrc())
-                        {
-                            if self.handle_ssrc_conflict(addr, now) {
-                                replies.push(RtcpRecvReply::SsrcCollision(sr.ssrc()));
-                            }
-                            continue;
+                    if let Some(addr) = from
+                        && (self.local_senders.contains_key(&sr.ssrc())
+                            || self.local_receivers.contains_key(&sr.ssrc()))
+                    {
+                        if self.handle_ssrc_conflict(addr, now) {
+                            replies.push(RtcpRecvReply::SsrcCollision(sr.ssrc()));
                         }
+                        continue;
                     }
 
                     if let Some(source) = self.remote_receivers.remove(&sr.ssrc()) {
@@ -658,15 +657,14 @@ impl Session {
                 Ok(Packet::Sdes(sdes)) => {
                     for chunk in sdes.chunks() {
                         for item in chunk.items() {
-                            if let Some(addr) = from {
-                                if self.local_senders.contains_key(&chunk.ssrc())
-                                    || self.local_receivers.contains_key(&chunk.ssrc())
-                                {
-                                    if self.handle_ssrc_conflict(addr, now) {
-                                        replies.push(RtcpRecvReply::SsrcCollision(chunk.ssrc()));
-                                    }
-                                    continue;
+                            if let Some(addr) = from
+                                && (self.local_senders.contains_key(&chunk.ssrc())
+                                    || self.local_receivers.contains_key(&chunk.ssrc()))
+                            {
+                                if self.handle_ssrc_conflict(addr, now) {
+                                    replies.push(RtcpRecvReply::SsrcCollision(chunk.ssrc()));
                                 }
+                                continue;
                             }
                             if !matches!(
                                 item.type_(),
@@ -700,13 +698,10 @@ impl Session {
                                 source.set_last_activity(now);
                             }
 
-                            if item.type_() == SdesItem::CNAME {
-                                if let Ok(s) = std::str::from_utf8(item.value()) {
-                                    replies.push(RtcpRecvReply::NewCName((
-                                        s.to_owned(),
-                                        chunk.ssrc(),
-                                    )));
-                                }
+                            if item.type_() == SdesItem::CNAME
+                                && let Ok(s) = std::str::from_utf8(item.value())
+                            {
+                                replies.push(RtcpRecvReply::NewCName((s.to_owned(), chunk.ssrc())));
                             }
                         }
                     }
@@ -775,14 +770,16 @@ impl Session {
                     trace!("Requesting key-unit not allowed again yet");
                     continue;
                 }
-            } else if let Some(sender) = self.remote_receivers.get_mut(&sender_ssrc) {
-                if !sender.remote_request_key_unit_allowed(now, rb.1) {
-                    trace!("Requesting key-unit not allowed again yet");
-                    continue;
-                }
+            } else if let Some(sender) = self.remote_receivers.get_mut(&sender_ssrc)
+                && !sender.remote_request_key_unit_allowed(now, rb.1)
+            {
+                trace!("Requesting key-unit not allowed again yet");
+                continue;
             }
 
-            trace!("Requesting key-unit from sender ssrc {sender_ssrc} for media ssrc {media_ssrc} (fir: {fir})");
+            trace!(
+                "Requesting key-unit from sender ssrc {sender_ssrc} for media ssrc {media_ssrc} (fir: {fir})"
+            );
             ssrcs.push(media_ssrc);
         }
 
@@ -831,21 +828,26 @@ impl Session {
                     .last_rtp_sent_timestamp()
                     .map(|(last_rtp_ts, instant)| {
                         let dur_since_last_rtp = now.duration_since(instant);
-                        trace!("last_rtp_ts: {last_rtp_ts}, dur since last rtp: {dur_since_last_rtp:?}");
+                        trace!(
+                            "last_rtp_ts: {last_rtp_ts}, dur since last rtp: {dur_since_last_rtp:?}"
+                        );
                         // get the clock-rate for this source
-                        last_rtp_ts + sender
-                            .payload_type()
-                            .and_then(|pt| self.clock_rate_from_pt(pt))
-                            .and_then(|clock_rate| {
-                                // assume that the rtp times and clock times advance at a rate
-                                // close to 1.0 and do a direct linear extrapolation to get the rtp
-                                // time for 'now'
-                                (dur_since_last_rtp.as_nanos() as u64).mul_div_round(
-                                    clock_rate as u64,
-                                    gst::ClockTime::SECOND.nseconds(),
-                                ).map(|v| (v & 0xffff_ffff) as u32)
-                            })
-                            .unwrap_or(0)
+                        last_rtp_ts
+                            + sender
+                                .payload_type()
+                                .and_then(|pt| self.clock_rate_from_pt(pt))
+                                .and_then(|clock_rate| {
+                                    // assume that the rtp times and clock times advance at a rate
+                                    // close to 1.0 and do a direct linear extrapolation to get the rtp
+                                    // time for 'now'
+                                    (dur_since_last_rtp.as_nanos() as u64)
+                                        .mul_div_round(
+                                            clock_rate as u64,
+                                            gst::ClockTime::SECOND.nseconds(),
+                                        )
+                                        .map(|v| (v & 0xffff_ffff) as u32)
+                                })
+                                .unwrap_or(0)
                     })
                     .unwrap_or(0);
 
@@ -1193,11 +1195,13 @@ impl Session {
         let is_early = self.next_early_rtcp_time.is_some() && !self.last_rtcp_sent_times.is_empty();
 
         if is_early {
-            if let Some(next_early_rtcp_time) = self.next_early_rtcp_time {
-                if now < next_early_rtcp_time {
-                    trace!("next early time {next_early_rtcp_time:?} not reached at {now:?}, nothing to produce");
-                    return None;
-                }
+            if let Some(next_early_rtcp_time) = self.next_early_rtcp_time
+                && now < next_early_rtcp_time
+            {
+                trace!(
+                    "next early time {next_early_rtcp_time:?} not reached at {now:?}, nothing to produce"
+                );
+                return None;
             }
         } else {
             if now < next_rtcp_send {
@@ -1210,7 +1214,9 @@ impl Session {
             let interval = self.rtcp_interval();
             let test_next_rtcp_time = self.last_rtcp_handle_time.unwrap() + interval;
             if test_next_rtcp_time > now {
-                trace!("timer reconsideration considers this wakeup {now:?} too early, nothing to produce. reconsidered time {test_next_rtcp_time:?}");
+                trace!(
+                    "timer reconsideration considers this wakeup {now:?} too early, nothing to produce. reconsidered time {test_next_rtcp_time:?}"
+                );
                 self.next_rtcp_send.time = Some(test_next_rtcp_time);
                 return None;
             }
@@ -1285,8 +1291,7 @@ impl Session {
     pub fn poll_rtcp_send_timeout(&mut self, now: Instant) -> Option<Instant> {
         trace!(
             "poll-rtcp-send-timeout early time {:?}, next {:?}",
-            self.next_early_rtcp_time,
-            self.next_rtcp_send.time
+            self.next_early_rtcp_time, self.next_rtcp_send.time
         );
         if let Some(early_time) = self.next_early_rtcp_time {
             return Some(early_time);
@@ -1406,10 +1411,14 @@ impl Session {
         // no regular RTCP sent yet, we cannot send early without the first regular RTCP being sent
         let Some(&last_rtcp_sent) = self.last_rtcp_sent_times.front() else {
             if now + max_delay >= next_rtcp_send_time {
-                debug!("early RTCP can't be scheduled until first regular RTCP is sent but regular RTCP scheduled early enough");
+                debug!(
+                    "early RTCP can't be scheduled until first regular RTCP is sent but regular RTCP scheduled early enough"
+                );
                 return RequestEarlyRtcpResult::Scheduled;
             } else {
-                debug!("early RTCP can't be scheduled until first regular RTCP is sent and regular RTCP scheduled too late");
+                debug!(
+                    "early RTCP can't be scheduled until first regular RTCP is sent and regular RTCP scheduled too late"
+                );
                 return RequestEarlyRtcpResult::NotScheduled;
             }
         };
@@ -1431,7 +1440,9 @@ impl Session {
                 debug!("early RTCP not scheduled because regular RTCP is early enough");
                 return RequestEarlyRtcpResult::Scheduled;
             } else {
-                debug!("early RTCP can't be scheduled because regular RTCP is scheduled soon but too late");
+                debug!(
+                    "early RTCP can't be scheduled because regular RTCP is scheduled soon but too late"
+                );
                 return RequestEarlyRtcpResult::NotScheduled;
             }
         }

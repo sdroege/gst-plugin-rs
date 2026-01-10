@@ -6,8 +6,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use gst::prelude::*;
 use gst::ClockTime;
+use gst::prelude::*;
 use pretty_assertions::assert_eq;
 
 fn init() {
@@ -257,7 +257,11 @@ fn test_tttocea708_large_input() {
         let _event = h.pull_event().unwrap();
     }
 
-    let inbuf = new_timed_buffer(" This is going to be a very long#& buffer that will exceed the output length of a single DTVCCPacket.#&", 0.nseconds(), ClockTime::SECOND);
+    let inbuf = new_timed_buffer(
+        " This is going to be a very long#& buffer that will exceed the output length of a single DTVCCPacket.#&",
+        0.nseconds(),
+        ClockTime::SECOND,
+    );
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
     h.push_event(gst::event::Eos::new());

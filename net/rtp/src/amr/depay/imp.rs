@@ -33,7 +33,7 @@ use std::sync::LazyLock;
 
 use crate::{
     amr::payload_header::{
-        PayloadConfiguration, PayloadHeader, NB_FRAME_SIZES, NB_FRAME_SIZES_BYTES, WB_FRAME_SIZES,
+        NB_FRAME_SIZES, NB_FRAME_SIZES_BYTES, PayloadConfiguration, PayloadHeader, WB_FRAME_SIZES,
         WB_FRAME_SIZES_BYTES,
     },
     basedepay::{RtpBaseDepay2Ext, RtpBaseDepay2Impl},

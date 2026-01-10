@@ -6,18 +6,18 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use gst::EventView;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::EventView;
 
 use std::sync::LazyLock;
 
-use gstthreadshare::runtime::{prelude::*, PadSink};
+use gstthreadshare::runtime::{PadSink, prelude::*};
 
 use std::sync::{Arc, Mutex};
 
-use super::super::{Settings, Stats, CAT};
+use super::super::{CAT, Settings, Stats};
 
 #[derive(Debug, Default)]
 struct PadSinkHandlerInner {

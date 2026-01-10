@@ -299,14 +299,12 @@ impl QuinnQuicDemux {
 
         gst::debug!(CAT, imp = self, "Handling event {:?}", event);
 
-        if let EventView::CustomDownstream(ev) = event.view() {
-            if let Some(s) = ev.structure() {
-                if s.name() == QUIC_STREAM_CLOSE_CUSTOMDOWNSTREAM_EVENT {
-                    if let Ok(stream_id) = s.get::<u64>(QUIC_STREAM_ID) {
-                        return self.remove_pad(stream_id);
-                    }
-                }
-            }
+        if let EventView::CustomDownstream(ev) = event.view()
+            && let Some(s) = ev.structure()
+            && s.name() == QUIC_STREAM_CLOSE_CUSTOMDOWNSTREAM_EVENT
+            && let Ok(stream_id) = s.get::<u64>(QUIC_STREAM_ID)
+        {
+            return self.remove_pad(stream_id);
         }
 
         gst::Pad::event_default(pad, Some(&*self.obj()), event)

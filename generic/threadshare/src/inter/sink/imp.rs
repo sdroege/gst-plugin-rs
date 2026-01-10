@@ -37,17 +37,17 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     LazyLock, Mutex,
+    atomic::{AtomicBool, Ordering},
 };
 
+use crate::runtime::PadSink;
 use crate::runtime::executor::block_on_or_add_subtask;
 use crate::runtime::prelude::*;
-use crate::runtime::PadSink;
 
 use crate::dataqueue::DataQueueItem;
 
-use crate::inter::{InterContext, InterContextWeak, DEFAULT_INTER_CONTEXT, INTER_CONTEXTS};
+use crate::inter::{DEFAULT_INTER_CONTEXT, INTER_CONTEXTS, InterContext, InterContextWeak};
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -352,13 +352,15 @@ impl ObjectSubclass for InterSink {
 impl ObjectImpl for InterSink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecString::builder("inter-context")
-                .nick("Inter Context")
-                .blurb("Context name of the inter elements to share with")
-                .default_value(Some(DEFAULT_INTER_CONTEXT))
-                .readwrite()
-                .construct_only()
-                .build()]
+            vec![
+                glib::ParamSpecString::builder("inter-context")
+                    .nick("Inter Context")
+                    .blurb("Context name of the inter elements to share with")
+                    .default_value(Some(DEFAULT_INTER_CONTEXT))
+                    .readwrite()
+                    .construct_only()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

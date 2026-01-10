@@ -28,7 +28,7 @@ pub mod async_wrapper;
 pub use async_wrapper::Async;
 
 mod context;
-pub use context::{block_on, block_on_or_add_subtask, yield_now, Context};
+pub use context::{Context, block_on, block_on_or_add_subtask, yield_now};
 
 mod join;
 pub use join::JoinHandle;

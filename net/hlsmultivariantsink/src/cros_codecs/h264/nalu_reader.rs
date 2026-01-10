@@ -4,8 +4,8 @@
 
 use std::io::Cursor;
 
-use anyhow::anyhow;
 use anyhow::Context;
+use anyhow::anyhow;
 use byteorder::ReadBytesExt;
 use thiserror::Error;
 

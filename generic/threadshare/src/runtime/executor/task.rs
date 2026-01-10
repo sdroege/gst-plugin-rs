@@ -138,14 +138,13 @@ impl TaskQueue {
                 if let Some(task) = tasks_weak
                     .upgrade()
                     .and_then(|tasks| tasks.lock().unwrap().try_remove(task_id.0))
+                    && !task.sub_tasks.is_empty()
                 {
-                    if !task.sub_tasks.is_empty() {
-                        gst::warning!(
-                            RUNTIME_CAT,
-                            "Task {task_id:?} has {} pending sub tasks",
-                            task.sub_tasks.len(),
-                        );
-                    }
+                    gst::warning!(
+                        RUNTIME_CAT,
+                        "Task {task_id:?} has {} pending sub tasks",
+                        task.sub_tasks.len(),
+                    );
                 }
 
                 gst::trace!(RUNTIME_CAT, "Done {task_id:?}",);

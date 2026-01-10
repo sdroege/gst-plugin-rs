@@ -8,7 +8,7 @@ use super::{
 };
 use burn::{
     module::Module,
-    tensor::{backend::Backend, Device, Tensor},
+    tensor::{Device, Tensor, backend::Backend},
 };
 
 /// Darknet backbone feature maps.

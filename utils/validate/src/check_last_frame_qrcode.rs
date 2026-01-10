@@ -37,10 +37,10 @@ fn find_sink(
                     Ok(p) => p,
                     Err(_) => continue,
                 };
-                if let Some(pad_caps) = pad.current_caps() {
-                    if expected_caps.can_intersect(&pad_caps) {
-                        return true;
-                    }
+                if let Some(pad_caps) = pad.current_caps()
+                    && expected_caps.can_intersect(&pad_caps)
+                {
+                    return true;
                 }
             }
         }
@@ -250,11 +250,11 @@ fn check_last_frame_qrcode(
                 }
                 _ => {
                     return Err(gst_validate::ActionError::Error(format!(
-            "Either a string or an array of strings must be provided for 'expected-data' parameter, got {:?} \
+                        "Either a string or an array of strings must be provided for 'expected-data' parameter, got {:?} \
                 and expected-json-fields parameter is {:?}",
-            structure.get::<glib::Value>("expected-data"),
-            structure.get::<glib::Value>("expected-json-fields")
-        )));
+                        structure.get::<glib::Value>("expected-data"),
+                        structure.get::<glib::Value>("expected-json-fields")
+                    )));
                 }
             }
         }

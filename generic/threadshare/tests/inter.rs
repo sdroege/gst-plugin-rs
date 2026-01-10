@@ -11,8 +11,8 @@ use futures::prelude::*;
 use gst::prelude::*;
 
 use std::sync::{
-    atomic::{AtomicBool, AtomicU32, Ordering},
     Arc,
+    atomic::{AtomicBool, AtomicU32, Ordering},
 };
 use std::time::Duration;
 
@@ -223,10 +223,10 @@ fn one_to_one_up_first() {
                 unreachable!();
             };
 
-            if let gst::EventView::Latency(evt) = evt.view() {
-                if evt.latency() > gst::ClockTime::ZERO {
-                    got_latency_evt.store(true, Ordering::SeqCst);
-                }
+            if let gst::EventView::Latency(evt) = evt.view()
+                && evt.latency() > gst::ClockTime::ZERO
+            {
+                got_latency_evt.store(true, Ordering::SeqCst);
             }
             gst::PadProbeReturn::Ok
         },
@@ -346,10 +346,10 @@ fn one_to_many_up_first() {
                     move |appsink| {
                         let _ = appsink.pull_sample().unwrap();
                         let cur = samples.fetch_add(1, Ordering::SeqCst);
-                        if let Some(num_buf) = num_buf {
-                            if cur + 1 == num_buf {
-                                n_buf_tx.take().unwrap().send(()).unwrap();
-                            }
+                        if let Some(num_buf) = num_buf
+                            && cur + 1 == num_buf
+                        {
+                            n_buf_tx.take().unwrap().send(()).unwrap();
                         }
                         Ok(gst::FlowSuccess::Ok)
                     }
@@ -575,11 +575,11 @@ fn changing_inter_ctx() {
                     }
 
                     let sample = appsink.pull_sample().unwrap();
-                    if let Some(caps) = sample.caps() {
-                        if cur_caps.as_ref().is_none() {
-                            cur_caps = Some(caps.to_owned());
-                            caps_tx.try_send(caps.to_owned()).unwrap();
-                        }
+                    if let Some(caps) = sample.caps()
+                        && cur_caps.as_ref().is_none()
+                    {
+                        cur_caps = Some(caps.to_owned());
+                        caps_tx.try_send(caps.to_owned()).unwrap();
                     }
 
                     samples += 1;
@@ -593,11 +593,11 @@ fn changing_inter_ctx() {
             })
             .new_event(move |appsink| {
                 let obj = appsink.pull_object().unwrap();
-                if let Some(event) = obj.downcast_ref::<gst::Event>() {
-                    if let gst::EventView::FlushStop(_) = event.view() {
-                        println!("inter::changing_inter_ctx: appsink got FlushStop");
-                        starting.store(true, Ordering::SeqCst);
-                    }
+                if let Some(event) = obj.downcast_ref::<gst::Event>()
+                    && let gst::EventView::FlushStop(_) = event.view()
+                {
+                    println!("inter::changing_inter_ctx: appsink got FlushStop");
+                    starting.store(true, Ordering::SeqCst);
                 }
                 // let basesink handle the event
                 false

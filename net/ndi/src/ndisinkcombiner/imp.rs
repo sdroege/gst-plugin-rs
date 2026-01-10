@@ -548,8 +548,8 @@ impl AggregatorImpl for NdiSinkCombiner {
         if let Some(segment) = pending_segment {
             self.obj().update_segment(&segment);
         }
-        let ret = self.obj().finish_buffer(current_video_buffer);
-        ret
+
+        self.obj().finish_buffer(current_video_buffer)
     }
 
     fn sink_event(&self, pad: &gst_base::AggregatorPad, event: gst::Event) -> bool {

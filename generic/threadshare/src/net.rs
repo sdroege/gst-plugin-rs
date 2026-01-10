@@ -21,8 +21,8 @@ pub mod imp {
     };
 
     use libc::{
-        in_addr, ip_mreqn, setsockopt, IPPROTO_IP, IP_ADD_MEMBERSHIP, IP_DROP_MEMBERSHIP,
-        IP_MULTICAST_IF,
+        IP_ADD_MEMBERSHIP, IP_DROP_MEMBERSHIP, IP_MULTICAST_IF, IPPROTO_IP, in_addr, ip_mreqn,
+        setsockopt,
     };
 
     #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -289,8 +289,8 @@ pub mod imp {
     };
 
     use windows_sys::Win32::Networking::WinSock::{
-        setsockopt, WSAGetLastError, IN_ADDR, IN_ADDR_0, IPPROTO_IP, IP_ADD_MEMBERSHIP,
-        IP_DROP_MEMBERSHIP, IP_MREQ, IP_MULTICAST_IF,
+        IN_ADDR, IN_ADDR_0, IP_ADD_MEMBERSHIP, IP_DROP_MEMBERSHIP, IP_MREQ, IP_MULTICAST_IF,
+        IPPROTO_IP, WSAGetLastError, setsockopt,
     };
 
     /// Join multicast address for a given interface.

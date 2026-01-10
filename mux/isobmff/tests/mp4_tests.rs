@@ -22,7 +22,7 @@ use mp4_atom::{Atom, ReadAtom as _, ReadFrom as _};
 use tempfile::tempdir;
 
 pub mod support;
-use support::{check_ftyp_output, check_mvhd_sanity, check_trak_sanity, ExpectedConfiguration};
+use support::{ExpectedConfiguration, check_ftyp_output, check_mvhd_sanity, check_trak_sanity};
 
 fn init() {
     use std::sync::Once;
@@ -248,7 +248,9 @@ fn test_encode_uncompressed(video_format: &str, width: u32, height: u32) {
     let temp_dir = tempdir().unwrap();
     let temp_file_path = temp_dir.path().join(filename);
     let location = temp_file_path.as_path();
-    let pipeline_text = format!("videotestsrc num-buffers=34 ! video/x-raw,format={video_format},width={width},height={height} ! isomp4mux ! filesink location={location:?}");
+    let pipeline_text = format!(
+        "videotestsrc num-buffers=34 ! video/x-raw,format={video_format},width={width},height={height} ! isomp4mux ! filesink location={location:?}"
+    );
 
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
         panic!("could not build encoding pipeline")
@@ -580,7 +582,9 @@ fn test_encode_uncompressed_image_sequence(video_format: &str, width: u32, heigh
     let temp_dir = tempdir().unwrap();
     let temp_file_path = temp_dir.path().join(filename);
     let location = temp_file_path.as_path();
-    let pipeline_text = format!("videotestsrc num-buffers=10 ! video/x-raw,format={video_format},width={width},height={height} ! isomp4mux name=mux ! filesink location={location:?}");
+    let pipeline_text = format!(
+        "videotestsrc num-buffers=10 ! video/x-raw,format={video_format},width={width},height={height} ! isomp4mux name=mux ! filesink location={location:?}"
+    );
 
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
         panic!("could not build encoding pipeline")
@@ -648,7 +652,9 @@ fn test_encode_audio_trak() {
     let temp_dir = tempdir().unwrap();
     let temp_file_path = temp_dir.path().join(filename);
     let location = temp_file_path.as_path();
-    let pipeline_text = format!("audiotestsrc num-buffers=100 ! audioconvert ! opusenc ! isomp4mux ! filesink location={location:?}");
+    let pipeline_text = format!(
+        "audiotestsrc num-buffers=100 ! audioconvert ! opusenc ! isomp4mux ! filesink location={location:?}"
+    );
 
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
         panic!("could not build encoding pipeline")
@@ -703,7 +709,9 @@ fn test_taic_encode(video_enc: &str) {
     let temp_dir = tempdir().unwrap();
     let temp_file_path = temp_dir.path().join(filename);
     let location = temp_file_path.as_path();
-    let pipeline_text = format!("videotestsrc num-buffers=250 ! {video_enc} ! taginject tags=\"precision-clock-type=can-sync-to-TAI,precision-clock-time-uncertainty-nanoseconds=100000\" scope=stream ! isomp4mux ! filesink location={location:?}");
+    let pipeline_text = format!(
+        "videotestsrc num-buffers=250 ! {video_enc} ! taginject tags=\"precision-clock-type=can-sync-to-TAI,precision-clock-time-uncertainty-nanoseconds=100000\" scope=stream ! isomp4mux ! filesink location={location:?}"
+    );
 
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
         println!("could not build encoding pipeline");
@@ -938,7 +946,9 @@ fn test_taic_encode_cannot_sync(video_enc: &str) {
     let temp_dir = tempdir().unwrap();
     let temp_file_path = temp_dir.path().join(filename);
     let location = temp_file_path.as_path();
-    let pipeline_text = format!("videotestsrc num-buffers=250 ! {video_enc} ! taginject tags=\"precision-clock-type=cannot-sync-to-TAI\" scope=stream ! isomp4mux ! filesink location={location:?}");
+    let pipeline_text = format!(
+        "videotestsrc num-buffers=250 ! {video_enc} ! taginject tags=\"precision-clock-type=cannot-sync-to-TAI\" scope=stream ! isomp4mux ! filesink location={location:?}"
+    );
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
         println!("could not build encoding pipeline");
         return;
@@ -1563,7 +1573,9 @@ fn test_encode_uncompressed_audio(audio_format: &str, rate: u16, channels: u16) 
     let temp_dir = tempdir().unwrap();
     let temp_file_path = temp_dir.path().join(filename);
     let location = temp_file_path.as_path();
-    let pipeline_text = format!("audiotestsrc num-buffers=34 ! audio/x-raw,format={audio_format},rate={rate},channels={channels} ! isomp4mux ! filesink location={location:?}");
+    let pipeline_text = format!(
+        "audiotestsrc num-buffers=34 ! audio/x-raw,format={audio_format},rate={rate},channels={channels} ! isomp4mux ! filesink location={location:?}"
+    );
 
     let Ok(pipeline) = gst::parse::launch(&pipeline_text) else {
         panic!("could not build encoding pipeline")

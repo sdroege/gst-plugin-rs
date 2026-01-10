@@ -9,11 +9,11 @@
 use flume::{Receiver, Sender};
 use futures::future;
 
+use gst::EventView;
 use gst::error_msg;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::EventView;
 
 use std::sync::LazyLock;
 
@@ -22,7 +22,7 @@ use gstthreadshare::runtime::{Context, PadSink, Task};
 
 use std::sync::Mutex;
 
-use super::super::{Settings, Stats, CAT};
+use super::super::{CAT, Settings, Stats};
 
 #[derive(Debug)]
 enum StreamItem {

@@ -273,7 +273,10 @@ impl ObjectImpl for HlsBaseSink {
                 settings.enable_program_date_time = value.get().expect("type checked upstream");
             }
             "pdt-follows-pipeline-clock" => {
-                gst::warning!(CAT, "The 'pdt-follows-pipeline-clock' property is deprecated. Use 'program-date-time-reference' instead.");
+                gst::warning!(
+                    CAT,
+                    "The 'pdt-follows-pipeline-clock' property is deprecated. Use 'program-date-time-reference' instead."
+                );
                 settings.program_date_time_reference =
                     if value.get().expect("type checked upstream") {
                         HlsProgramDateTimeReference::Pipeline
@@ -448,22 +451,22 @@ impl HlsBaseSink {
 
     pub fn close_playlist(&self) {
         let mut state = self.state.lock().unwrap();
-        if let Some(mut context) = state.context.take() {
-            if context.playlist.is_rendering() {
-                context
-                    .playlist
-                    .stop(self.settings.lock().unwrap().enable_endlist);
-                let _ = self.write_playlist(&mut context);
-            }
+        if let Some(mut context) = state.context.take()
+            && context.playlist.is_rendering()
+        {
+            context
+                .playlist
+                .stop(self.settings.lock().unwrap().enable_endlist);
+            let _ = self.write_playlist(&mut context);
         }
 
-        if let Some(mut context) = state.iframe_context.take() {
-            if context.playlist.is_rendering() {
-                context
-                    .playlist
-                    .stop(self.settings.lock().unwrap().enable_endlist);
-                let _ = self.write_playlist(&mut context);
-            }
+        if let Some(mut context) = state.iframe_context.take()
+            && context.playlist.is_rendering()
+        {
+            context
+                .playlist
+                .stop(self.settings.lock().unwrap().enable_endlist);
+            let _ = self.write_playlist(&mut context);
         }
     }
 
@@ -851,13 +854,13 @@ impl HlsBaseSink {
         let mut init_segment_br = None;
         let mut segment_br = None;
 
-        if let Some(ref map) = segment.map {
-            if let Some(br) = &map.byte_range {
-                let mut s = gst::Structure::new_empty("byte-range");
-                s.set("length", br.length);
-                s.set("offset", br.offset.unwrap());
-                init_segment_br = Some(s);
-            }
+        if let Some(ref map) = segment.map
+            && let Some(br) = &map.byte_range
+        {
+            let mut s = gst::Structure::new_empty("byte-range");
+            s.set("length", br.length);
+            s.set("offset", br.offset.unwrap());
+            init_segment_br = Some(s);
         }
 
         if let Some(ref br) = segment.byte_range {

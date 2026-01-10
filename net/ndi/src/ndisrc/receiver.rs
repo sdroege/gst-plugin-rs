@@ -200,13 +200,8 @@ impl Receiver {
                 return ReceiverItem::Timeout;
             } else if queue.flushing || queue.shutdown {
                 return ReceiverItem::Flushing;
-            } else {
-                match queue.buffer_queue.pop_front() {
-                    Some(buffer) => {
-                        return ReceiverItem::Buffer(buffer);
-                    }
-                    _ => {}
-                }
+            } else if let Some(buffer) = queue.buffer_queue.pop_front() {
+                return ReceiverItem::Buffer(buffer);
             }
 
             queue = (self.0.queue.0).1.wait(queue).unwrap();

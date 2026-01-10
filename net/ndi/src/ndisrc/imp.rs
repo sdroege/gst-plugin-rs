@@ -12,10 +12,10 @@ use std::sync::Mutex;
 
 use std::sync::LazyLock;
 
-use crate::ndisrcmeta::NdiSrcMeta;
-use crate::ndisys;
 use crate::RecvColorFormat;
 use crate::TimestampMode;
+use crate::ndisrcmeta::NdiSrcMeta;
+use crate::ndisys;
 
 use super::receiver::{Receiver, ReceiverControlHandle, ReceiverItem};
 use crate::ndisrcmeta::Buffer;
@@ -352,10 +352,10 @@ impl ElementImpl for NdiSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
-            "NewTek NDI Source",
-            "Source/Audio/Video/Network",
-            "NewTek NDI Source",
-            "Ruben Gonzalez <rubenrua@teltek.es>, Daniel Vilar <daniel.peiteado@teltek.es>, Sebastian Dröge <sebastian@centricular.com>",
+                "NewTek NDI Source",
+                "Source/Audio/Video/Network",
+                "NewTek NDI Source",
+                "Ruben Gonzalez <rubenrua@teltek.es>, Daniel Vilar <daniel.peiteado@teltek.es>, Sebastian Dröge <sebastian@centricular.com>",
             )
         });
 
@@ -870,57 +870,57 @@ impl NdiSrc {
             .min_by_key(|delta| delta.delta);
 
         // If the minimum delta was updated then update the clock mapping
-        if let Some(current_min_delta) = current_min_delta {
-            if Some(current_min_delta) != state.last_min_delta {
-                state.last_min_delta = Some(current_min_delta);
+        if let Some(current_min_delta) = current_min_delta
+            && Some(current_min_delta) != state.last_min_delta
+        {
+            state.last_min_delta = Some(current_min_delta);
 
-                if discont || Option::zip(state.base_timecode, state.base_receive_time).is_none() {
-                    // On DISCONT or if we don't have a base timecode / base capture time mapping yet,
-                    // select one and update the clock calibration in a way that this base clock time
-                    // maps to the current time. This is needed so that the clock time is
-                    // continuous all the time.
-                    let (internal, external, num, denom) = state.clock.calibration();
+            if discont || Option::zip(state.base_timecode, state.base_receive_time).is_none() {
+                // On DISCONT or if we don't have a base timecode / base capture time mapping yet,
+                // select one and update the clock calibration in a way that this base clock time
+                // maps to the current time. This is needed so that the clock time is
+                // continuous all the time.
+                let (internal, external, num, denom) = state.clock.calibration();
 
-                    let clock_time = gst::Clock::adjust_with_calibration(
-                        current_min_delta.local_time,
-                        internal,
-                        external,
-                        num,
-                        denom,
-                    );
+                let clock_time = gst::Clock::adjust_with_calibration(
+                    current_min_delta.local_time,
+                    internal,
+                    external,
+                    num,
+                    denom,
+                );
 
-                    gst::debug!(
-                        CAT,
-                        imp = self,
-                        "Initializing clock with internal {} external {clock_time} at timecode {}",
-                        current_min_delta.local_time,
-                        current_min_delta.remote_time,
-                    );
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "Initializing clock with internal {} external {clock_time} at timecode {}",
+                    current_min_delta.local_time,
+                    current_min_delta.remote_time,
+                );
 
-                    state.base_timecode = Some(current_min_delta.remote_time);
-                    state.base_receive_time = Some(clock_time);
-                    discont = true;
-                } else {
-                    let (base_timecode, base_receive_time) =
-                        Option::zip(state.base_timecode, state.base_receive_time).unwrap();
-                    // Calculate the clock time from the timecode by offsetting accordingly
-                    let clock_time = (current_min_delta.remote_time + base_receive_time)
-                        .saturating_sub(base_timecode);
+                state.base_timecode = Some(current_min_delta.remote_time);
+                state.base_receive_time = Some(clock_time);
+                discont = true;
+            } else {
+                let (base_timecode, base_receive_time) =
+                    Option::zip(state.base_timecode, state.base_receive_time).unwrap();
+                // Calculate the clock time from the timecode by offsetting accordingly
+                let clock_time = (current_min_delta.remote_time + base_receive_time)
+                    .saturating_sub(base_timecode);
 
-                    gst::trace!(
-                        CAT,
-                        imp = self,
-                        "Adding observation internal {} external {clock_time} at timecode {}",
-                        current_min_delta.local_time,
-                        current_min_delta.remote_time,
-                    );
+                gst::trace!(
+                    CAT,
+                    imp = self,
+                    "Adding observation internal {} external {clock_time} at timecode {}",
+                    current_min_delta.local_time,
+                    current_min_delta.remote_time,
+                );
 
-                    if let Some(r_squared) = state
-                        .clock
-                        .add_observation(current_min_delta.local_time, clock_time)
-                    {
-                        gst::trace!(CAT, imp = self, "R² = {r_squared}");
-                    }
+                if let Some(r_squared) = state
+                    .clock
+                    .add_observation(current_min_delta.local_time, clock_time)
+                {
+                    gst::trace!(CAT, imp = self, "R² = {r_squared}");
                 }
             }
         }

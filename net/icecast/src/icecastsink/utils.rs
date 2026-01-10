@@ -182,7 +182,22 @@ pub(crate) fn parse_ogg_audio_streamheaders(
         // There's a different mapping as well with just a fLaC id, but let's not worry about that,
         // GStreamer's ogg muxer will produce the right one.
         #[allow(clippy::unusual_byte_groupings)]
-        [127, b'F', b'L', b'A', b'C', 1, 0, _, _, b'f', b'L', b'a', b'C', ..] => {
+        [
+            127,
+            b'F',
+            b'L',
+            b'A',
+            b'C',
+            1,
+            0,
+            _,
+            _,
+            b'f',
+            b'L',
+            b'a',
+            b'C',
+            ..,
+        ] => {
             if packet.len() < 51 {
                 return Err("FLAC identification header too small".into());
             }
@@ -197,7 +212,19 @@ pub(crate) fn parse_ogg_audio_streamheaders(
             ("flac", rate, channels)
         }
         // Opus - https://www.rfc-editor.org/rfc/rfc7845.html#section-5.1
-        [b'O', b'p', b'u', b's', b'H', b'e', b'a', b'd', 1, channel_count, ..] => {
+        [
+            b'O',
+            b'p',
+            b'u',
+            b's',
+            b'H',
+            b'e',
+            b'a',
+            b'd',
+            1,
+            channel_count,
+            ..,
+        ] => {
             if packet.len() < 19 {
                 return Err("Opus identification header too small".into());
             }

@@ -106,10 +106,12 @@ fn build_pipeline(args: &Args) -> Result<gst::Pipeline, Error> {
                 ));
             }
 
-            if let Some(n_medias) = *n_medias_clone.lock().unwrap() {
-                if n_medias == src.num_src_pads() as usize + 1 {
-                    let src_weak = src.downgrade();
-                    std::thread::spawn(move || loop {
+            if let Some(n_medias) = *n_medias_clone.lock().unwrap()
+                && n_medias == src.num_src_pads() as usize + 1
+            {
+                let src_weak = src.downgrade();
+                std::thread::spawn(move || {
+                    loop {
                         std::thread::sleep(Duration::from_secs(frequency));
 
                         let Some(src) = src_weak.upgrade() else {
@@ -125,8 +127,8 @@ fn build_pipeline(args: &Args) -> Result<gst::Pipeline, Error> {
                             let custom_event = gst::event::CustomUpstream::builder(s).build();
                             srcpad.send_event(custom_event);
                         }
-                    });
-                }
+                    }
+                });
             }
         }
     ));

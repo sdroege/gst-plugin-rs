@@ -7,7 +7,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::tests::{run_test_pipeline, ExpectedBuffer, ExpectedPacket, Source};
+use crate::tests::{ExpectedBuffer, ExpectedPacket, Source, run_test_pipeline};
 
 use std::cmp;
 
@@ -31,30 +31,34 @@ fn test_pcma() {
 
     let mut expected_pay = Vec::with_capacity(100);
     for i in 0..100 {
-        expected_pay.push(vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_mseconds(i * 50))
-            .flags(if i == 0 {
-                gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER
-            } else {
-                gst::BufferFlags::empty()
-            })
-            .pt(8)
-            .rtp_time(((i * 400) & 0xffff_ffff) as u32)
-            .marker_bit(i == 0)
-            .build()]);
+        expected_pay.push(vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(i * 50))
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER
+                } else {
+                    gst::BufferFlags::empty()
+                })
+                .pt(8)
+                .rtp_time(((i * 400) & 0xffff_ffff) as u32)
+                .marker_bit(i == 0)
+                .build(),
+        ]);
     }
 
     let mut expected_depay = Vec::with_capacity(100);
     for i in 0..100 {
-        expected_depay.push(vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_mseconds(i * 50))
-            .size(400)
-            .flags(if i == 0 {
-                gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC
-            } else {
-                gst::BufferFlags::empty()
-            })
-            .build()]);
+        expected_depay.push(vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(i * 50))
+                .size(400)
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC
+                } else {
+                    gst::BufferFlags::empty()
+                })
+                .build(),
+        ]);
     }
 
     run_test_pipeline(Source::Bin(src), pay, depay, expected_pay, expected_depay);
@@ -81,18 +85,20 @@ fn test_pcma_splitting() {
             let size = cmp::min(queued, 400);
             queued -= size;
 
-            expected_pay.push(vec![ExpectedPacket::builder()
-                .pts(gst::ClockTime::from_mseconds(pos / 8))
-                .size(size as usize + 12)
-                .flags(if pos == 0 {
-                    gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER
-                } else {
-                    gst::BufferFlags::empty()
-                })
-                .pt(8)
-                .rtp_time((pos & 0xffff_ffff) as u32)
-                .marker_bit(pos == 0)
-                .build()]);
+            expected_pay.push(vec![
+                ExpectedPacket::builder()
+                    .pts(gst::ClockTime::from_mseconds(pos / 8))
+                    .size(size as usize + 12)
+                    .flags(if pos == 0 {
+                        gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER
+                    } else {
+                        gst::BufferFlags::empty()
+                    })
+                    .pt(8)
+                    .rtp_time((pos & 0xffff_ffff) as u32)
+                    .marker_bit(pos == 0)
+                    .build(),
+            ]);
 
             pos += size;
         }
@@ -101,15 +107,17 @@ fn test_pcma_splitting() {
     let mut expected_depay = Vec::with_capacity(134);
     for packets in &expected_pay {
         for packet in packets {
-            expected_depay.push(vec![ExpectedBuffer::builder()
-                .pts(packet.pts)
-                .maybe_size(packet.size.map(|size| size - 12))
-                .flags(if packet.pts.is_zero() {
-                    gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC
-                } else {
-                    gst::BufferFlags::empty()
-                })
-                .build()]);
+            expected_depay.push(vec![
+                ExpectedBuffer::builder()
+                    .pts(packet.pts)
+                    .maybe_size(packet.size.map(|size| size - 12))
+                    .flags(if packet.pts.is_zero() {
+                        gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC
+                    } else {
+                        gst::BufferFlags::empty()
+                    })
+                    .build(),
+            ]);
         }
     }
 
@@ -149,20 +157,22 @@ fn test_pcma_discont() {
     let mut expected_pay = Vec::with_capacity(10);
     let mut pos = 0;
     for _ in 0..10 {
-        expected_pay.push(vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_mseconds(pos / 8))
-            .size(412)
-            .flags(if pos == 0 {
-                gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER
-            } else if pos == 82000 {
-                gst::BufferFlags::MARKER
-            } else {
-                gst::BufferFlags::empty()
-            })
-            .pt(8)
-            .rtp_time((pos & 0xffff_ffff) as u32)
-            .marker_bit(pos == 0 || pos == 82000)
-            .build()]);
+        expected_pay.push(vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(pos / 8))
+                .size(412)
+                .flags(if pos == 0 {
+                    gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER
+                } else if pos == 82000 {
+                    gst::BufferFlags::MARKER
+                } else {
+                    gst::BufferFlags::empty()
+                })
+                .pt(8)
+                .rtp_time((pos & 0xffff_ffff) as u32)
+                .marker_bit(pos == 0 || pos == 82000)
+                .build(),
+        ]);
 
         pos += 400;
         if pos == 2000 {
@@ -173,17 +183,19 @@ fn test_pcma_discont() {
     let mut expected_depay = Vec::with_capacity(10);
     for packets in &expected_pay {
         for packet in packets {
-            expected_depay.push(vec![ExpectedBuffer::builder()
-                .pts(packet.pts)
-                .maybe_size(packet.size.map(|size| size - 12))
-                .flags(if packet.pts.is_zero() {
-                    gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC
-                } else if packet.flags.contains(gst::BufferFlags::MARKER) {
-                    gst::BufferFlags::RESYNC
-                } else {
-                    gst::BufferFlags::empty()
-                })
-                .build()]);
+            expected_depay.push(vec![
+                ExpectedBuffer::builder()
+                    .pts(packet.pts)
+                    .maybe_size(packet.size.map(|size| size - 12))
+                    .flags(if packet.pts.is_zero() {
+                        gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC
+                    } else if packet.flags.contains(gst::BufferFlags::MARKER) {
+                        gst::BufferFlags::RESYNC
+                    } else {
+                        gst::BufferFlags::empty()
+                    })
+                    .build(),
+            ]);
         }
     }
 
@@ -206,31 +218,35 @@ fn test_pcmu() {
 
     let mut expected_pay = Vec::with_capacity(100);
     for i in 0..100 {
-        expected_pay.push(vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_mseconds(i * 50))
-            .size(412)
-            .flags(if i == 0 {
-                gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER
-            } else {
-                gst::BufferFlags::empty()
-            })
-            .pt(0)
-            .rtp_time(((i * 400) & 0xffff_ffff) as u32)
-            .marker_bit(i == 0)
-            .build()]);
+        expected_pay.push(vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(i * 50))
+                .size(412)
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER
+                } else {
+                    gst::BufferFlags::empty()
+                })
+                .pt(0)
+                .rtp_time(((i * 400) & 0xffff_ffff) as u32)
+                .marker_bit(i == 0)
+                .build(),
+        ]);
     }
 
     let mut expected_depay = Vec::with_capacity(100);
     for i in 0..100 {
-        expected_depay.push(vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_mseconds(i * 50))
-            .size(400)
-            .flags(if i == 0 {
-                gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC
-            } else {
-                gst::BufferFlags::empty()
-            })
-            .build()]);
+        expected_depay.push(vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(i * 50))
+                .size(400)
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC
+                } else {
+                    gst::BufferFlags::empty()
+                })
+                .build(),
+        ]);
     }
 
     run_test_pipeline(Source::Bin(src), pay, depay, expected_pay, expected_depay);

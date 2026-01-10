@@ -761,15 +761,15 @@ impl StreamingState {
                 self.metadata = Some(metadata);
 
                 if audio_changed || video_changed {
-                    if audio_changed {
-                        if let Some(caps) = self.audio.as_ref().and_then(|a| a.to_caps()) {
-                            events.push(Event::StreamChanged(Stream::Audio, caps));
-                        }
+                    if audio_changed
+                        && let Some(caps) = self.audio.as_ref().and_then(|a| a.to_caps())
+                    {
+                        events.push(Event::StreamChanged(Stream::Audio, caps));
                     }
-                    if video_changed {
-                        if let Some(caps) = self.video.as_ref().and_then(|v| v.to_caps()) {
-                            events.push(Event::StreamChanged(Stream::Video, caps));
-                        }
+                    if video_changed
+                        && let Some(caps) = self.video.as_ref().and_then(|v| v.to_caps())
+                    {
+                        events.push(Event::StreamChanged(Stream::Video, caps));
                     }
                 }
             }
@@ -1325,17 +1325,17 @@ impl AudioFormat {
             }
         };
 
-        if self.rate != 0 {
-            if let Some(ref mut caps) = caps.as_mut() {
-                caps.get_mut().unwrap().set("rate", self.rate as i32)
-            }
+        if self.rate != 0
+            && let Some(ref mut caps) = caps.as_mut()
+        {
+            caps.get_mut().unwrap().set("rate", self.rate as i32)
         }
-        if self.channels != 0 {
-            if let Some(ref mut caps) = caps.as_mut() {
-                caps.get_mut()
-                    .unwrap()
-                    .set("channels", self.channels as i32)
-            }
+        if self.channels != 0
+            && let Some(ref mut caps) = caps.as_mut()
+        {
+            caps.get_mut()
+                .unwrap()
+                .set("channels", self.channels as i32)
         }
 
         caps
@@ -1433,33 +1433,32 @@ impl VideoFormat {
             }
         };
 
-        if let (Some(width), Some(height)) = (self.width, self.height) {
-            if let Some(ref mut caps) = caps.as_mut() {
-                let caps = caps.get_mut().unwrap();
-                caps.set("width", width as i32);
-                caps.set("height", height as i32);
-            }
+        if let (Some(width), Some(height)) = (self.width, self.height)
+            && let Some(ref mut caps) = caps.as_mut()
+        {
+            let caps = caps.get_mut().unwrap();
+            caps.set("width", width as i32);
+            caps.set("height", height as i32);
         }
 
-        if let Some(par) = self.pixel_aspect_ratio {
-            if *par.numer() != 0 && par.numer() != par.denom() {
-                if let Some(ref mut caps) = caps.as_mut() {
-                    caps.get_mut().unwrap().set(
-                        "pixel-aspect-ratio",
-                        gst::Fraction::new(*par.numer(), *par.denom()),
-                    );
-                }
-            }
+        if let Some(par) = self.pixel_aspect_ratio
+            && *par.numer() != 0
+            && par.numer() != par.denom()
+            && let Some(ref mut caps) = caps.as_mut()
+        {
+            caps.get_mut().unwrap().set(
+                "pixel-aspect-ratio",
+                gst::Fraction::new(*par.numer(), *par.denom()),
+            );
         }
 
-        if let Some(fps) = self.framerate {
-            if *fps.numer() != 0 {
-                if let Some(ref mut caps) = caps.as_mut() {
-                    caps.get_mut()
-                        .unwrap()
-                        .set("framerate", gst::Fraction::new(*fps.numer(), *fps.denom()));
-                }
-            }
+        if let Some(fps) = self.framerate
+            && *fps.numer() != 0
+            && let Some(ref mut caps) = caps.as_mut()
+        {
+            caps.get_mut()
+                .unwrap()
+                .set("framerate", gst::Fraction::new(*fps.numer(), *fps.denom()));
         }
 
         caps

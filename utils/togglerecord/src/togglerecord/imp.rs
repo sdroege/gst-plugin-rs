@@ -197,11 +197,7 @@ trait HandleData: Sized {
     fn dts(&self) -> Option<gst::ClockTime>;
     fn dts_or_pts(&self) -> Option<gst::ClockTime> {
         let dts = self.dts();
-        if dts.is_some() {
-            dts
-        } else {
-            self.pts()
-        }
+        if dts.is_some() { dts } else { self.pts() }
     }
     fn duration(&self, state: &StreamState) -> Option<gst::ClockTime>;
     fn is_keyframe(&self) -> bool;
@@ -1016,12 +1012,16 @@ impl ToggleRecord {
             } else {
                 // In all other cases the buffer is fully between recording start and end and
                 // can be passed through as is
-                assert!(current_running_time
-                    .opt_ge(last_recording_start)
-                    .unwrap_or(false));
-                assert!(current_running_time_end
-                    .opt_le(rec_state.last_recording_stop)
-                    .unwrap_or(false));
+                assert!(
+                    current_running_time
+                        .opt_ge(last_recording_start)
+                        .unwrap_or(false)
+                );
+                assert!(
+                    current_running_time_end
+                        .opt_le(rec_state.last_recording_stop)
+                        .unwrap_or(false)
+                );
 
                 gst::debug!(
                     CAT,
@@ -1043,9 +1043,11 @@ impl ToggleRecord {
             RecordingState::Recording => {
                 // The end of our buffer must be before/at the end of the previous buffer of the main
                 // stream
-                assert!(current_running_time_end
-                    .opt_le(main_state.current_running_time_end)
-                    .unwrap_or(false));
+                assert!(
+                    current_running_time_end
+                        .opt_le(main_state.current_running_time_end)
+                        .unwrap_or(false)
+                );
 
                 // We're properly started, must have a start position and
                 // be actually after that start position
@@ -1137,9 +1139,11 @@ impl ToggleRecord {
             RecordingState::Stopped => {
                 // The end of our buffer must be before/at the end of the previous buffer of the main
                 // stream
-                assert!(current_running_time_end
-                    .opt_le(main_state.current_running_time_end)
-                    .unwrap_or(false));
+                assert!(
+                    current_running_time_end
+                        .opt_le(main_state.current_running_time_end)
+                        .unwrap_or(false)
+                );
 
                 // We're properly stopped
                 gst::log!(CAT, obj = pad, "Dropping buffer (stopped)");

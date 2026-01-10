@@ -223,7 +223,9 @@ async fn main() -> Result<(), Error> {
                             let consumer = create_src_pipeline(&producer_name, &consumer_name)?;
                             monitor_pipeline(&consumer.pipeline, base_time)?;
 
-                            println!("Added consumer with name {consumer_name} and producer name {producer_name}");
+                            println!(
+                                "Added consumer with name {consumer_name} and producer name {producer_name}"
+                            );
 
                             consumers.insert(consumer_name, consumer);
                         }
@@ -262,7 +264,9 @@ async fn main() -> Result<(), Error> {
                     }
                     Some(&"cnp") => {
                         if command.len() != 3 {
-                            println!("cnp <old_producer_name> <new_producer_name>: Change the name of a producer");
+                            println!(
+                                "cnp <old_producer_name> <new_producer_name>: Change the name of a producer"
+                            );
                         } else {
                             let old_producer_name = command.get(1).unwrap().to_string();
                             let producer_name = command.get(2).unwrap().to_string();
@@ -279,8 +283,8 @@ async fn main() -> Result<(), Error> {
                                         .overlay
                                         .set_property("text", format!("Producer: {producer_name}"));
                                     println!(
-                                    "Changed producer name {old_producer_name} -> {producer_name}"
-                                );
+                                        "Changed producer name {old_producer_name} -> {producer_name}"
+                                    );
                                     producers.insert(producer_name, producer);
                                 }
                                 _ => {
@@ -291,14 +295,18 @@ async fn main() -> Result<(), Error> {
                     }
                     Some(&"cpn") => {
                         if command.len() != 3 {
-                            println!("cpn <consumer_name> <new_producer_name>: Change the producer name for a consumer");
+                            println!(
+                                "cpn <consumer_name> <new_producer_name>: Change the producer name for a consumer"
+                            );
                         } else {
                             let consumer_name = command.get(1).unwrap().to_string();
                             let producer_name = command.get(2).unwrap().to_string();
 
                             if let Some(consumer) = consumers.get_mut(&consumer_name) {
                                 consumer.src.set_property("producer-name", &producer_name);
-                                println!("Changed producer name for consumer {consumer_name} to {producer_name}");
+                                println!(
+                                    "Changed producer name for consumer {consumer_name} to {producer_name}"
+                                );
                             } else {
                                 println!("No consumer with name {consumer_name}");
                             }
@@ -310,8 +318,12 @@ async fn main() -> Result<(), Error> {
                         println!("ac <consumer_name> <producer_name>: Add a consumer");
                         println!("rp <producer_name>: Remove a producer");
                         println!("rc <consumer_name>: Remove a consumer");
-                        println!("cnp <old_producer_name> <new_producer_name>: Change the name of a producer");
-                        println!("cpn <consumer_name> <new_producer_name>: Change the producer name for a consumer");
+                        println!(
+                            "cnp <old_producer_name> <new_producer_name>: Change the name of a producer"
+                        );
+                        println!(
+                            "cpn <consumer_name> <new_producer_name>: Change the producer name for a consumer"
+                        );
                     }
                     _ => {
                         println!("Unknown command");

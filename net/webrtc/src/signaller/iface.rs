@@ -60,12 +60,14 @@ impl prelude::ObjectInterface for Signallable {
 
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecBoolean::builder("manual-sdp-munging")
-                .nick("Manual SDP munging")
-                .blurb("Whether the signaller manages SDP munging itself")
-                .default_value(false)
-                .read_only()
-                .build()]
+            vec![
+                glib::ParamSpecBoolean::builder("manual-sdp-munging")
+                    .nick("Manual SDP munging")
+                    .blurb("Whether the signaller manages SDP munging itself")
+                    .default_value(false)
+                    .read_only()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

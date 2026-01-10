@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::signaller::{prelude::*, Signallable};
-use crate::utils::{create_tls_connector, gvalue_to_json, serialize_json_object};
 use crate::RUNTIME;
-use anyhow::{anyhow, Error};
+use crate::signaller::{Signallable, prelude::*};
+use crate::utils::{create_tls_connector, gvalue_to_json, serialize_json_object};
+use anyhow::{Error, anyhow};
+use async_tungstenite::tungstenite::Message as WsMessage;
 use async_tungstenite::tungstenite::client::IntoClientRequest;
 use async_tungstenite::tungstenite::http::{HeaderName, HeaderValue};
-use async_tungstenite::tungstenite::Message as WsMessage;
 use futures::channel::mpsc;
 use futures::prelude::*;
 use gst::glib;
@@ -153,14 +153,15 @@ impl Signaller {
             )
         };
 
-        if let super::WebRTCSignallerRole::Consumer = role {
-            if !connect_to_first_producer && self.producer_peer_id().is_none() {
-                gst::info!(
-                    CAT,
-                    imp = self,
-                    "No producer peer id set, listening for producer session requests"
-                );
-            }
+        if let super::WebRTCSignallerRole::Consumer = role
+            && !connect_to_first_producer
+            && self.producer_peer_id().is_none()
+        {
+            gst::info!(
+                CAT,
+                imp = self,
+                "No producer peer id set, listening for producer session requests"
+            );
         }
 
         if insecure_tls {
@@ -510,16 +511,15 @@ impl Signaller {
                             if matches!(role, super::WebRTCSignallerRole::Consumer)
                                 && settings.connect_to_first_producer
                                 && settings.producer_peer_id.is_none()
+                                && let Some(producer) = producers.first()
                             {
-                                if let Some(producer) = producers.first() {
-                                    settings.producer_peer_id = Some(producer.id.clone());
+                                settings.producer_peer_id = Some(producer.id.clone());
 
-                                    drop(settings);
+                                drop(settings);
 
-                                    self.start_session();
+                                self.start_session();
 
-                                    return ControlFlow::Continue(());
-                                }
+                                return ControlFlow::Continue(());
                             }
                             for producer in producers {
                                 let mut state = self.state.lock().unwrap();
@@ -756,10 +756,10 @@ impl SignallableImpl for Signaller {
             RUNTIME.block_on(async move {
                 sender.close_channel();
 
-                if let Some(handle) = send_task_handle {
-                    if let Err(err) = handle.await {
-                        gst::warning!(CAT, imp = self, "Error while joining send task: {}", err);
-                    }
+                if let Some(handle) = send_task_handle
+                    && let Err(err) = handle.await
+                {
+                    gst::warning!(CAT, imp = self, "Error while joining send task: {}", err);
                 }
 
                 if let Some(handle) = receive_task_handle {

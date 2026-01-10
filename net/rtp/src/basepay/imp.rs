@@ -497,11 +497,7 @@ impl RtpBasePay2 {
             if pts <= start {
                 start
             } else if let Some(stop) = stop {
-                if pts >= stop {
-                    stop
-                } else {
-                    pts
-                }
+                if pts >= stop { stop } else { pts }
             } else {
                 pts
             }
@@ -623,24 +619,24 @@ impl RtpBasePay2 {
 
             // Copy over metas and other metadata from the packets that made up this buffer
             for front in state.pending_buffers.iter().take_while(|b| b.id <= id_end) {
-                if n_csrc < rtp_types::RtpPacket::MAX_N_CSRCS {
-                    if let Some(meta) = front.buffer.meta::<gst_rtp::RTPSourceMeta>() {
-                        if let Some(ssrc) = meta.ssrc() {
-                            if !csrc[..n_csrc].contains(&ssrc) {
-                                csrc[n_csrc] = ssrc;
-                                n_csrc += 1;
-                            }
+                if n_csrc < rtp_types::RtpPacket::MAX_N_CSRCS
+                    && let Some(meta) = front.buffer.meta::<gst_rtp::RTPSourceMeta>()
+                {
+                    if let Some(ssrc) = meta.ssrc()
+                        && !csrc[..n_csrc].contains(&ssrc)
+                    {
+                        csrc[n_csrc] = ssrc;
+                        n_csrc += 1;
+                    }
+
+                    for c in meta.csrc() {
+                        if n_csrc >= rtp_types::RtpPacket::MAX_N_CSRCS {
+                            break;
                         }
 
-                        for c in meta.csrc() {
-                            if n_csrc >= rtp_types::RtpPacket::MAX_N_CSRCS {
-                                break;
-                            }
-
-                            if !csrc[..n_csrc].contains(c) {
-                                csrc[n_csrc] = *c;
-                                n_csrc += 1;
-                            }
+                        if !csrc[..n_csrc].contains(c) {
+                            csrc[n_csrc] = *c;
+                            n_csrc += 1;
                         }
                     }
                 }
@@ -962,7 +958,11 @@ impl RtpBasePay2 {
                 if let Some(uri) = arr.get(1).and_then(|v| v.get::<String>().ok()) {
                     uri
                 } else {
-                    gst::error!(CAT, imp = self, "Couldn't get URI for RTP header extension id {ext_id} from caps {src_caps:?}");
+                    gst::error!(
+                        CAT,
+                        imp = self,
+                        "Couldn't get URI for RTP header extension id {ext_id} from caps {src_caps:?}"
+                    );
                     return Err(gst::FlowError::NotNegotiated);
                 }
             } else {
@@ -1285,13 +1285,11 @@ impl RtpBasePay2 {
                 if !same_segment {
                     gst::debug!(CAT, imp = self, "Received segment {segment:?}");
 
-                    if drain {
-                        if let Err(err) = self.drain() {
-                            // Just continue here. The payloader is now flushed and can proceed below,
-                            // and if there was a serious error downstream it will happen on the next
-                            // buffer pushed downstream
-                            gst::debug!(CAT, imp = self, "Draining failed: {err:?}");
-                        }
+                    if drain && let Err(err) = self.drain() {
+                        // Just continue here. The payloader is now flushed and can proceed below,
+                        // and if there was a serious error downstream it will happen on the next
+                        // buffer pushed downstream
+                        gst::debug!(CAT, imp = self, "Draining failed: {err:?}");
                     }
 
                     let mut state = self.state.borrow_mut();
@@ -1390,12 +1388,11 @@ impl RtpBasePay2 {
     }
 
     fn src_event_default(&self, event: gst::Event) -> Result<gst::FlowSuccess, gst::FlowError> {
-        if let gst::EventView::CustomUpstream(ev) = event.view() {
-            if let Some(s) = ev.structure() {
-                if s.name() == "GstRTPCollision" {
-                    self.handle_ssrc_collision_event(s);
-                }
-            }
+        if let gst::EventView::CustomUpstream(ev) = event.view()
+            && let Some(s) = ev.structure()
+            && s.name() == "GstRTPCollision"
+        {
+            self.handle_ssrc_collision_event(s);
         }
 
         if gst::Pad::event_default(&self.src_pad, Some(&*self.obj()), event) {
@@ -1650,14 +1647,14 @@ impl RtpBasePay2 {
         {
             let pts_diff = back.buffer.pts().opt_saturating_sub(front.buffer.pts());
 
-            if let Some(pts_diff) = pts_diff {
-                if pts_diff > gst::ClockTime::SECOND {
-                    gst::warning!(
-                        CAT,
-                        imp = self,
-                        "More than {pts_diff} of PTS time queued, probably a bug in the subclass"
-                    );
-                }
+            if let Some(pts_diff) = pts_diff
+                && pts_diff > gst::ClockTime::SECOND
+            {
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "More than {pts_diff} of PTS time queued, probably a bug in the subclass"
+                );
             }
         }
 

@@ -80,7 +80,11 @@ async fn main() -> Result<(), Error> {
 
                     let mut shared_ctx = shared_gl_context.lock().unwrap();
                     if shared_ctx.is_some() {
-                        eprintln!("Already have a GstGLContext, not overwriting it with a new context from {} in pipeline {}", e.name(), pipeline_name);
+                        eprintln!(
+                            "Already have a GstGLContext, not overwriting it with a new context from {} in pipeline {}",
+                            e.name(),
+                            pipeline_name
+                        );
                         return gst::BusSyncReply::Pass;
                     }
                     eprintln!(
@@ -91,14 +95,14 @@ async fn main() -> Result<(), Error> {
                     let _ = shared_ctx.insert(ctx);
                 }
                 gst::MessageView::Latency(..) => {
-                    if let Some(o) = msg.src() {
-                        if let Ok(pipeline) = toplevel(o).downcast::<gst::Pipeline>() {
-                            // This message handler is a sync handler
-                            pipeline.call_async(|pipeline: &gst::Pipeline| {
-                                eprintln!("Recalculating latency {pipeline:?}");
-                                let _ = pipeline.recalculate_latency();
-                            });
-                        }
+                    if let Some(o) = msg.src()
+                        && let Ok(pipeline) = toplevel(o).downcast::<gst::Pipeline>()
+                    {
+                        // This message handler is a sync handler
+                        pipeline.call_async(|pipeline: &gst::Pipeline| {
+                            eprintln!("Recalculating latency {pipeline:?}");
+                            let _ = pipeline.recalculate_latency();
+                        });
                     }
                 }
                 gst::MessageView::Eos(..) => {

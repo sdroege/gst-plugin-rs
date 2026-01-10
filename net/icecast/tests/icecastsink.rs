@@ -9,7 +9,7 @@
 use gst::prelude::*;
 
 use std::io::{BufRead, BufReader, Read, Write};
-use std::sync::{mpsc, LazyLock};
+use std::sync::{LazyLock, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 

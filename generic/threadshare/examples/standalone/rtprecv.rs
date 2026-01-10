@@ -16,8 +16,8 @@ mod macros;
 mod sink;
 mod src;
 
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 const DROP_PROBABILITY: f32 = 0.125f32;
 const RTPRECV_LATENCY_MS: u32 = 40;

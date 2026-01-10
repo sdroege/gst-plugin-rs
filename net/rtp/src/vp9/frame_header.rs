@@ -7,7 +7,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use anyhow::{bail, Context as _};
+use anyhow::{Context as _, bail};
 use bitstream_io::{FromBitStream, FromBitStreamWith};
 
 #[derive(Debug)]
@@ -192,11 +192,7 @@ impl FromBitStreamWith<'_> for ColorConfig {
 
         let bit_depth = if *profile >= 2 {
             let ten_or_twelve_bit = r.read_bit().context("ten_or_twelve_bit")?;
-            if ten_or_twelve_bit {
-                12
-            } else {
-                10
-            }
+            if ten_or_twelve_bit { 12 } else { 10 }
         } else {
             8
         };

@@ -193,7 +193,9 @@ impl crate::basepay::RtpBasePay2Impl for RtpMP2TPay {
                 self,
                 gst::LibraryError::Settings,
                 ("Configured MTU is too small"),
-                ["Payloader MTU {max_payload_size} must be able to fit at least one MPEG-TS packet of size {packet_size}"]
+                [
+                    "Payloader MTU {max_payload_size} must be able to fit at least one MPEG-TS packet of size {packet_size}"
+                ]
             );
             return false;
         }
@@ -318,11 +320,15 @@ impl crate::basepay::RtpBasePay2Impl for RtpMP2TPay {
 
         let remainder = iter.remainder();
 
-        gst::log!(CAT, imp = self,
+        gst::log!(
+            CAT,
+            imp = self,
             "Sending {} bytes ({} packets) in {} RTP packets with max payload size {}, {} bytes ({} packets) remaining for next time",
             data.len() - remainder.len(),
-            (data.len() - remainder.len()) / packet_size, data.len() / target_payload_size,
-            self.obj().max_payload_size(), remainder.len(),
+            (data.len() - remainder.len()) / packet_size,
+            data.len() / target_payload_size,
+            self.obj().max_payload_size(),
+            remainder.len(),
             remainder.len() / packet_size,
         );
 

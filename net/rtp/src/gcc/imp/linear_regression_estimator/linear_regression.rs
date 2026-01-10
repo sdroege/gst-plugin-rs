@@ -53,11 +53,7 @@ impl Samples {
             num += delta_x * delta_y;
             denum += delta_x * delta_x;
         }
-        if denum != 0. {
-            Some(num / denum)
-        } else {
-            None
-        }
+        if denum != 0. { Some(num / denum) } else { None }
     }
 
     pub fn push(&mut self, sample: Sample) {

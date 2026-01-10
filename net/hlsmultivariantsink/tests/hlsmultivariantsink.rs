@@ -18,7 +18,7 @@ use serial_test::serial;
 use std::io::Write;
 use std::str::FromStr;
 use std::sync::mpsc::SyncSender;
-use std::sync::{mpsc, Arc, LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex, mpsc};
 use std::time::Duration;
 use std::{collections::HashSet, hash::Hash};
 
@@ -578,8 +578,8 @@ low/video.m3u8
 #[ignore]
 #[test]
 #[serial]
-fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_relative_path(
-) -> Result<(), ()> {
+fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_relative_path()
+-> Result<(), ()> {
     /*
      * For this test, we do not set the playlist and segment location on the pad. The sink
      * will figure out and use relative path to the multivariant playlist.
@@ -1177,8 +1177,8 @@ low/video.m3u8
 #[ignore]
 #[test]
 #[serial]
-fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpegts(
-) -> Result<(), ()> {
+fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpegts()
+-> Result<(), ()> {
     init();
 
     let pipeline = gst::Pipeline::with_name("hlsmultivariantsink_pipeline");
@@ -1601,8 +1601,8 @@ low-audio/audio-only.m3u8
 #[ignore]
 #[test]
 #[serial]
-fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpegts_h265(
-) -> Result<(), ()> {
+fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpegts_h265()
+-> Result<(), ()> {
     init();
 
     // Skip the test if `x265enc` is not available which is the case on CI

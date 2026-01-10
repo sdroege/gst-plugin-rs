@@ -6,7 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use anyhow::{bail, Context as _};
+use anyhow::{Context as _, bail};
 use bitstream_io::{FromBitStreamWith, FromByteStreamWith, ToBitStreamWith, ToByteStreamWith};
 use smallvec::SmallVec;
 

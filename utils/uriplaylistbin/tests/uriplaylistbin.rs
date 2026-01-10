@@ -8,11 +8,11 @@
 
 use std::{
     path::PathBuf,
-    sync::{atomic::AtomicI32, Arc},
+    sync::{Arc, atomic::AtomicI32},
 };
 
-use gst::prelude::*;
 use gst::MessageView;
+use gst::prelude::*;
 use more_asserts::assert_ge;
 
 struct TestMedia {
@@ -214,15 +214,13 @@ fn test(
             }
             // check stream related messages
             MessageView::StreamCollection(sc) => {
-                if let Some(prev) = events.last() {
-                    if let MessageView::StreamCollection(prev_sc) = prev.view() {
-                        if prev_sc.src() == sc.src()
-                            && prev_sc.stream_collection() == sc.stream_collection()
-                        {
-                            // decodebin3 may send twice the same collection
-                            continue;
-                        }
-                    }
+                if let Some(prev) = events.last()
+                    && let MessageView::StreamCollection(prev_sc) = prev.view()
+                    && prev_sc.src() == sc.src()
+                    && prev_sc.stream_collection() == sc.stream_collection()
+                {
+                    // decodebin3 may send twice the same collection
+                    continue;
                 }
 
                 events.push(msg.clone())
@@ -230,10 +228,10 @@ fn test(
             MessageView::StreamsSelected(_) => events.push(msg.clone()),
             MessageView::StreamStart(_) => {
                 n_stream_start += 1;
-                if let Some(change) = &iterations_change {
-                    if change.when_ss == n_stream_start {
-                        playlist.set_property("iterations", change.iterations);
-                    }
+                if let Some(change) = &iterations_change
+                    && change.when_ss == n_stream_start
+                {
+                    playlist.set_property("iterations", change.iterations);
                 }
             }
             _ => {}

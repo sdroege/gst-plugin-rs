@@ -195,7 +195,7 @@ impl AccessUnitIter<'_> {
                 Err(err) => {
                     return Some(
                         Err(err).with_context(|| format!("AuHeader in packet {}", self.ext_seqnum)),
-                    )
+                    );
                 }
             };
 

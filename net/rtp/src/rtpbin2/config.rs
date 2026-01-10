@@ -117,10 +117,12 @@ mod imp {
     impl ObjectImpl for Rtp2Session {
         fn properties() -> &'static [glib::ParamSpec] {
             static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-                vec![glib::ParamSpecBoxed::builder::<gst::Structure>("pt-map")
-                    .nick("RTP Payload Type Map")
-                    .blurb("Mapping of RTP payload type to caps")
-                    .build()]
+                vec![
+                    glib::ParamSpecBoxed::builder::<gst::Structure>("pt-map")
+                        .nick("RTP Payload Type Map")
+                        .blurb("Mapping of RTP payload type to caps")
+                        .build(),
+                ]
             });
 
             PROPERTIES.as_ref()
@@ -165,8 +167,8 @@ mod imp {
 #[cfg(test)]
 mod tests {
     use std::sync::{
-        atomic::{AtomicBool, AtomicUsize},
         Arc,
+        atomic::{AtomicBool, AtomicUsize},
     };
 
     use crate::{rtpbin2::session::tests::generate_rtp_packet, test_init};

@@ -6,10 +6,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use gst::EventView;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::EventView;
 use gst::{element_error, error_msg};
 
 use std::sync::LazyLock;
@@ -18,7 +18,7 @@ use crate::net;
 use crate::runtime::executor::block_on_or_add_subtask;
 use crate::runtime::prelude::*;
 use crate::runtime::{self, Async, Context, PadSink};
-use crate::socket::{wrap_socket, GioSocketWrapper};
+use crate::socket::{GioSocketWrapper, wrap_socket};
 
 use std::collections::BTreeSet;
 use std::net::{IpAddr, SocketAddr, UdpSocket};

@@ -1,4 +1,4 @@
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -12,14 +12,6 @@ use std::str::FromStr;
 use std::sync::Mutex;
 
 use crate::av1::obu::read_seq_header_obu_bytes;
-use crate::isobmff::boxes::create_dac3;
-use crate::isobmff::boxes::create_dec3;
-use crate::isobmff::boxes::create_ftyp;
-use crate::isobmff::boxes::create_mdat_header_non_frag;
-use crate::isobmff::boxes::create_moov;
-use crate::isobmff::boxes::create_pcmc;
-use crate::isobmff::boxes::generate_audio_channel_layout_info;
-use crate::isobmff::brands::brands_from_variant_and_caps;
 use crate::isobmff::AuxiliaryInformation;
 use crate::isobmff::AuxiliaryInformationEntry;
 use crate::isobmff::ChnlLayoutInfo;
@@ -28,11 +20,19 @@ use crate::isobmff::DeltaFrames;
 use crate::isobmff::ElstInfo;
 use crate::isobmff::PresentationConfiguration;
 use crate::isobmff::Sample;
+use crate::isobmff::TAIC_TIME_UNCERTAINTY_UNKNOWN;
 use crate::isobmff::TaiClockInfo;
 use crate::isobmff::TaicClockType;
 use crate::isobmff::TrackConfiguration;
 use crate::isobmff::Variant;
-use crate::isobmff::TAIC_TIME_UNCERTAINTY_UNKNOWN;
+use crate::isobmff::boxes::create_dac3;
+use crate::isobmff::boxes::create_dec3;
+use crate::isobmff::boxes::create_ftyp;
+use crate::isobmff::boxes::create_mdat_header_non_frag;
+use crate::isobmff::boxes::create_moov;
+use crate::isobmff::boxes::create_pcmc;
+use crate::isobmff::boxes::generate_audio_channel_layout_info;
+use crate::isobmff::brands::brands_from_variant_and_caps;
 use std::sync::LazyLock;
 
 use crate::isobmff::transform_matrix::TransformMatrix;
@@ -294,16 +294,15 @@ impl Stream {
                     return fps.numer() as u32;
                 }
 
-                if fps.denom() != 1 {
-                    if let Some(fps) = (fps.denom() as u64)
+                if fps.denom() != 1
+                    && let Some(fps) = (fps.denom() as u64)
                         .nseconds()
                         .mul_div_round(1_000_000_000, fps.numer() as u64)
                         .and_then(gst_video::guess_framerate)
-                    {
-                        return (fps.numer() as u32)
-                            .mul_div_round(100, fps.denom() as u32)
-                            .unwrap_or(DEFAULT_TIMESCALE);
-                    }
+                {
+                    return (fps.numer() as u32)
+                        .mul_div_round(100, fps.denom() as u32)
+                        .unwrap_or(DEFAULT_TIMESCALE);
                 }
 
                 (fps.numer() as u32)
@@ -340,15 +339,14 @@ impl Stream {
     }
 
     fn image_sequence_mode(&self) -> bool {
-        let image_sequence = {
+        {
             self.sinkpad
                 .imp()
                 .settings
                 .lock()
                 .unwrap()
                 .image_sequence_mode
-        };
-        image_sequence
+        }
     }
 
     fn orientation(&self) -> &'static TransformMatrix {
@@ -1019,12 +1017,17 @@ impl MP4Mux {
                             interleave_time >= stream.queued_chunk_time
                         }))
                     {
-                        gst::trace!(CAT,
+                        gst::trace!(
+                            CAT,
                             obj = stream.sinkpad,
                             "Continuing current chunk: single stream {single_stream}, or {} >= {} and {} >= {}",
                             gst::format::Bytes::from_u64(stream.queued_chunk_bytes),
-                            settings.interleave_bytes.map(gst::format::Bytes::from_u64).display(),
-                            stream.queued_chunk_time, settings.interleave_time.display(),
+                            settings
+                                .interleave_bytes
+                                .map(gst::format::Bytes::from_u64)
+                                .display(),
+                            stream.queued_chunk_time,
+                            settings.interleave_time.display(),
                         );
                         return Ok(Some(current_stream_idx));
                     }
@@ -1305,7 +1308,11 @@ impl MP4Mux {
                                 }
                             }
                             _ => {
-                                gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected synchronisation state, assuming not synchronised");
+                                gst::info!(
+                                    CAT,
+                                    imp = self,
+                                    "TAI ReferenceTimestampMeta did not contain expected synchronisation state, assuming not synchronised"
+                                );
                             }
                         }
                         match iso23001_17_timestamp_info.get::<bool>("timestamp-generation-failure")
@@ -1323,9 +1330,17 @@ impl MP4Mux {
                             }
                             _ => {
                                 if meta.timestamp().nseconds() > state.last_tai_timestamp {
-                                    gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected generation failure flag, timestamp looks OK, assuming OK");
+                                    gst::info!(
+                                        CAT,
+                                        imp = self,
+                                        "TAI ReferenceTimestampMeta did not contain expected generation failure flag, timestamp looks OK, assuming OK"
+                                    );
                                 } else {
-                                    gst::warning!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected generation failure flag and unexpected timestamp value, assuming generation failure");
+                                    gst::warning!(
+                                        CAT,
+                                        imp = self,
+                                        "TAI ReferenceTimestampMeta did not contain expected generation failure flag and unexpected timestamp value, assuming generation failure"
+                                    );
                                     timestamp_packet_flags |= 0x40u8;
                                 }
                             }
@@ -1343,7 +1358,11 @@ impl MP4Mux {
                                 }
                             }
                             _ => {
-                                gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected modification state value, assuming not modified");
+                                gst::info!(
+                                    CAT,
+                                    imp = self,
+                                    "TAI ReferenceTimestampMeta did not contain expected modification state value, assuming not modified"
+                                );
                             }
                         }
                         timestamp_packet.extend(timestamp_packet_flags.to_be_bytes());
@@ -2580,11 +2599,11 @@ impl AggregatorImpl for MP4Mux {
             self.obj().set_src_caps(caps);
         }
 
-        if !buffers.is_empty() {
-            if let Err(err) = self.obj().finish_buffer_list(buffers) {
-                gst::error!(CAT, imp = self, "Failed pushing buffers: {err:?}");
-                return Err(err);
-            }
+        if !buffers.is_empty()
+            && let Err(err) = self.obj().finish_buffer_list(buffers)
+        {
+            gst::error!(CAT, imp = self, "Failed pushing buffers: {err:?}");
+            return Err(err);
         }
 
         if res == Err(gst::FlowError::Eos) {

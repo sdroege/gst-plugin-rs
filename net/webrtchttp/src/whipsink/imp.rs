@@ -7,20 +7,20 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::utils::{
-    self, build_reqwest_client, parse_redirect_location, set_ice_servers, wait, wait_async,
-    WaitError, RUNTIME,
-};
 use crate::IceTransportPolicy;
+use crate::utils::{
+    self, RUNTIME, WaitError, build_reqwest_client, parse_redirect_location, set_ice_servers, wait,
+    wait_async,
+};
 use async_recursion::async_recursion;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_sdp::*;
 use gst_webrtc::*;
+use reqwest::StatusCode;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
-use reqwest::StatusCode;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
@@ -674,12 +674,11 @@ impl WhipSink {
 
         match resp.status() {
             StatusCode::OK | StatusCode::CREATED => {
-                if use_link_headers {
-                    if let Err(e) = set_ice_servers(&self.webrtcbin, resp.headers()) {
-                        self.raise_error(gst::ResourceError::Failed, e.to_string());
-                        return;
-                    };
-                }
+                if use_link_headers && let Err(e) = set_ice_servers(&self.webrtcbin, resp.headers())
+                {
+                    self.raise_error(gst::ResourceError::Failed, e.to_string());
+                    return;
+                };
 
                 // Get the url of the resource from 'location' header.
                 // The resource created is expected be a relative path

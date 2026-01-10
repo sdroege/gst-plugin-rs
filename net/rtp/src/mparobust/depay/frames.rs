@@ -6,8 +6,8 @@ use gst::prelude::*;
 use std::{collections::VecDeque, fmt};
 
 use super::{
-    super::{peek_frame_header, FrameHeader},
-    MpegAudioRobustDepayError, CAT,
+    super::{FrameHeader, peek_frame_header},
+    CAT, MpegAudioRobustDepayError,
 };
 
 /// An identifier to track a chunk of data to the RTP packet it was extracted from.
@@ -287,7 +287,7 @@ impl Adu {
                     id,
                     version,
                     channels,
-                })
+                });
             }
         };
 
@@ -702,10 +702,18 @@ impl AduQueue {
 
         let mut is_first = true;
         while adu.backpointer > prev_adu_end {
-            gst::trace!(CAT, obj = elem, "Inserting dummy ADU with data capacity {} before incoming {adu}{} backpointer {} prev_adu_end {}",
+            gst::trace!(
+                CAT,
+                obj = elem,
+                "Inserting dummy ADU with data capacity {} before incoming {adu}{} backpointer {} prev_adu_end {}",
                 adu.mp3_frame_data_capacity,
-                prev_adu_id.as_ref().map_or_else(String::new, |prev_adu_id| format!(" and after ADU {prev_adu_id:?}")),
-                adu.backpointer, prev_adu_end,
+                prev_adu_id
+                    .as_ref()
+                    .map_or_else(String::new, |prev_adu_id| format!(
+                        " and after ADU {prev_adu_id:?}"
+                    )),
+                adu.backpointer,
+                prev_adu_end,
             );
 
             let dummy_adu = match adu.to_dummy(is_first, prev_adu_end) {
@@ -1088,10 +1096,12 @@ mod tests {
         const ADU0_DATA_LEN: usize = DATA_CAPACITY - BACKPOINTER1;
         let adu0 = new_adu_layer3(0, 0, ADU0_DATA_LEN);
         // MP3 frame can use more data
-        assert!(Option::<SingleMp3FrameOrList>::from(
-            pending_adus.push_adus_pop_mp3_frames(&ELEM, adu0.into())
-        )
-        .is_none());
+        assert!(
+            Option::<SingleMp3FrameOrList>::from(
+                pending_adus.push_adus_pop_mp3_frames(&ELEM, adu0.into())
+            )
+            .is_none()
+        );
 
         const ADU1_FRAMED_DATA_LEN: usize = DATA_CAPACITY - HEADROOM1;
         const ADU1_DATA_LEN: usize = ADU1_FRAMED_DATA_LEN + BACKPOINTER1;
@@ -1109,14 +1119,18 @@ mod tests {
             assert_eq!(mp3buf.len(), MP3FRAME_LEN);
 
             // Check ADU0 data
-            assert!(mp3buf[HEADER_LEN + SIDE_INFO_LEN..][..ADU0_DATA_LEN]
-                .iter()
-                .eq(iter::repeat_n(&0xf0u8, ADU0_DATA_LEN)));
+            assert!(
+                mp3buf[HEADER_LEN + SIDE_INFO_LEN..][..ADU0_DATA_LEN]
+                    .iter()
+                    .eq(iter::repeat_n(&0xf0u8, ADU0_DATA_LEN))
+            );
 
             // Check ADU1 backpointed data
-            assert!(mp3buf[ADU0_LEN..][..BACKPOINTER1]
-                .iter()
-                .eq(iter::repeat_n(&0xb1u8, BACKPOINTER1)));
+            assert!(
+                mp3buf[ADU0_LEN..][..BACKPOINTER1]
+                    .iter()
+                    .eq(iter::repeat_n(&0xb1u8, BACKPOINTER1))
+            );
         }
 
         assert!(mp3frame_iter.next().is_none());
@@ -1130,14 +1144,18 @@ mod tests {
             assert_eq!(mp3buf.len(), MP3FRAME_LEN);
 
             // Check ADU1 framed data
-            assert!(mp3buf[HEADER_LEN + SIDE_INFO_LEN..][..ADU1_FRAMED_DATA_LEN]
-                .iter()
-                .eq(iter::repeat_n(&0xf1u8, ADU1_FRAMED_DATA_LEN)));
+            assert!(
+                mp3buf[HEADER_LEN + SIDE_INFO_LEN..][..ADU1_FRAMED_DATA_LEN]
+                    .iter()
+                    .eq(iter::repeat_n(&0xf1u8, ADU1_FRAMED_DATA_LEN))
+            );
 
             // Check 0 filler
-            assert!(mp3buf[HEADER_LEN + SIDE_INFO_LEN + ADU1_FRAMED_DATA_LEN..]
-                .iter()
-                .eq(iter::repeat_n(&0u8, HEADROOM1)));
+            assert!(
+                mp3buf[HEADER_LEN + SIDE_INFO_LEN + ADU1_FRAMED_DATA_LEN..]
+                    .iter()
+                    .eq(iter::repeat_n(&0u8, HEADROOM1))
+            );
         }
 
         assert!(mp3frame_iter.next().is_none());
@@ -1165,17 +1183,21 @@ mod tests {
 
         let adu0 = new_adu_layer3(0, 0, ADU0_DATA_LEN);
         // MP3 frame can use more data
-        assert!(Option::<SingleMp3FrameOrList>::from(
-            pending_adus.push_adus_pop_mp3_frames(&ELEM, adu0.into())
-        )
-        .is_none());
+        assert!(
+            Option::<SingleMp3FrameOrList>::from(
+                pending_adus.push_adus_pop_mp3_frames(&ELEM, adu0.into())
+            )
+            .is_none()
+        );
 
         let adu1 = new_adu_layer3(1, ADU1_BACKPOINTER, ADU1_DATA_LEN);
         // MP3 frame can use more data
-        assert!(Option::<SingleMp3FrameOrList>::from(
-            pending_adus.push_adus_pop_mp3_frames(&ELEM, adu1.into())
-        )
-        .is_none());
+        assert!(
+            Option::<SingleMp3FrameOrList>::from(
+                pending_adus.push_adus_pop_mp3_frames(&ELEM, adu1.into())
+            )
+            .is_none()
+        );
 
         let adu2 = new_adu_layer3(2, ADU2_BACKPOINTER, ADU2_DATA_LEN);
 
@@ -1190,24 +1212,32 @@ mod tests {
             assert_eq!(mp3buf.len(), MP3FRAME_LEN);
 
             // Check ADU0 data
-            assert!(mp3buf[HEADER_LEN + SIDE_INFO_LEN..][..ADU0_DATA_LEN]
-                .iter()
-                .eq(iter::repeat_n(&0xf0u8, ADU0_DATA_LEN)));
+            assert!(
+                mp3buf[HEADER_LEN + SIDE_INFO_LEN..][..ADU0_DATA_LEN]
+                    .iter()
+                    .eq(iter::repeat_n(&0xf0u8, ADU0_DATA_LEN))
+            );
 
             // Check the gap before backpointed data
-            assert!(mp3buf[ADU0_LEN..][..DATA_GAP0]
-                .iter()
-                .eq(iter::repeat_n(&0u8, DATA_GAP0)));
+            assert!(
+                mp3buf[ADU0_LEN..][..DATA_GAP0]
+                    .iter()
+                    .eq(iter::repeat_n(&0u8, DATA_GAP0))
+            );
 
             // Check ADU1 backpointed data (all in frame 0)
-            assert!(mp3buf[ADU0_LEN + DATA_GAP0..][..ADU1_IN_FRAME_0]
-                .iter()
-                .eq(iter::repeat_n(&0xb1u8, ADU1_IN_FRAME_0)));
+            assert!(
+                mp3buf[ADU0_LEN + DATA_GAP0..][..ADU1_IN_FRAME_0]
+                    .iter()
+                    .eq(iter::repeat_n(&0xb1u8, ADU1_IN_FRAME_0))
+            );
 
             // Check ADU2 backpointed data in frame 0
-            assert!(mp3buf[ADU0_LEN + DATA_GAP0 + ADU1_IN_FRAME_0..]
-                .iter()
-                .eq(iter::repeat_n(&0xb2u8, ADU2_IN_FRAME_0)));
+            assert!(
+                mp3buf[ADU0_LEN + DATA_GAP0 + ADU1_IN_FRAME_0..]
+                    .iter()
+                    .eq(iter::repeat_n(&0xb2u8, ADU2_IN_FRAME_0))
+            );
         }
 
         assert!(mp3frame_iter.next().is_none());
@@ -1220,9 +1250,11 @@ mod tests {
             assert_eq!(mp3buf.len(), MP3FRAME_LEN);
 
             // Check ADU2 backpointed data in frame 1
-            assert!(mp3buf[HEADER_LEN + SIDE_INFO_LEN..]
-                .iter()
-                .eq(iter::repeat_n(&0xb2u8, ADU2_IN_FRAME_1)));
+            assert!(
+                mp3buf[HEADER_LEN + SIDE_INFO_LEN..]
+                    .iter()
+                    .eq(iter::repeat_n(&0xb2u8, ADU2_IN_FRAME_1))
+            );
         }
 
         // Pop third MP3 frame with framed data from ADU2
@@ -1232,9 +1264,11 @@ mod tests {
             assert_eq!(mp3buf.len(), MP3FRAME_LEN);
 
             // Check ADU2 framed data
-            assert!(mp3buf[HEADER_LEN + SIDE_INFO_LEN..]
-                .iter()
-                .eq(iter::repeat_n(&0xf2u8, ADU2_FRAMED_DATA_LEN)));
+            assert!(
+                mp3buf[HEADER_LEN + SIDE_INFO_LEN..]
+                    .iter()
+                    .eq(iter::repeat_n(&0xf2u8, ADU2_FRAMED_DATA_LEN))
+            );
         }
 
         assert!(mp3frame_iter.next().is_none());
@@ -1250,10 +1284,12 @@ mod tests {
         const ADU0_DATA_LEN: usize = DATA_CAPACITY - HEADROOM0;
         let adu0 = new_adu_layer3(0, 0, ADU0_DATA_LEN);
         // MP3 frame can use more data
-        assert!(Option::<SingleMp3FrameOrList>::from(
-            pending_adus.push_adus_pop_mp3_frames(&ELEM, adu0.into())
-        )
-        .is_none());
+        assert!(
+            Option::<SingleMp3FrameOrList>::from(
+                pending_adus.push_adus_pop_mp3_frames(&ELEM, adu0.into())
+            )
+            .is_none()
+        );
 
         const ADU1_FRAMED_DATA_LEN: usize = DATA_CAPACITY;
         const ADU1_DATA_LEN: usize = ADU1_FRAMED_DATA_LEN + BACKPOINTER1;
@@ -1272,14 +1308,18 @@ mod tests {
             assert_eq!(mp3buf.len(), MP3FRAME_LEN);
 
             // Check ADU0 data
-            assert!(mp3buf[HEADER_LEN + SIDE_INFO_LEN..][..ADU0_DATA_LEN]
-                .iter()
-                .eq(iter::repeat_n(&0xf0u8, ADU0_DATA_LEN)));
+            assert!(
+                mp3buf[HEADER_LEN + SIDE_INFO_LEN..][..ADU0_DATA_LEN]
+                    .iter()
+                    .eq(iter::repeat_n(&0xf0u8, ADU0_DATA_LEN))
+            );
 
             // Check 0 filler
-            assert!(mp3buf[HEADER_LEN + SIDE_INFO_LEN + ADU0_DATA_LEN..]
-                .iter()
-                .eq(iter::repeat_n(&0u8, HEADROOM0)));
+            assert!(
+                mp3buf[HEADER_LEN + SIDE_INFO_LEN + ADU0_DATA_LEN..]
+                    .iter()
+                    .eq(iter::repeat_n(&0u8, HEADROOM0))
+            );
         }
 
         // Second MP3 frame contains backpointed data from ADU1
@@ -1313,9 +1353,11 @@ mod tests {
             assert_eq!(mp3buf.len(), MP3FRAME_LEN);
 
             // Check ADU1 framed data
-            assert!(mp3buf[HEADER_LEN + SIDE_INFO_LEN..]
-                .iter()
-                .eq(iter::repeat_n(&0xf1u8, ADU1_FRAMED_DATA_LEN)));
+            assert!(
+                mp3buf[HEADER_LEN + SIDE_INFO_LEN..]
+                    .iter()
+                    .eq(iter::repeat_n(&0xf1u8, ADU1_FRAMED_DATA_LEN))
+            );
         }
 
         assert!(mp3frame_iter.next().is_none());
@@ -1377,14 +1419,18 @@ mod tests {
             assert_eq!(mp3buf.len(), MP3FRAME_LEN);
 
             // Check ADU0 framed data
-            assert!(mp3buf[HEADER_LEN + SIDE_INFO_LEN..][..ADU0_FRAMED_DATA_LEN]
-                .iter()
-                .eq(iter::repeat_n(&0xf0u8, ADU0_FRAMED_DATA_LEN)));
+            assert!(
+                mp3buf[HEADER_LEN + SIDE_INFO_LEN..][..ADU0_FRAMED_DATA_LEN]
+                    .iter()
+                    .eq(iter::repeat_n(&0xf0u8, ADU0_FRAMED_DATA_LEN))
+            );
 
             // Check ADU1 backpointed data
-            assert!(mp3buf[HEADER_LEN + SIDE_INFO_LEN + ADU0_FRAMED_DATA_LEN..]
-                .iter()
-                .eq(iter::repeat_n(&0xb1u8, ADU1_BACKPOINTER)));
+            assert!(
+                mp3buf[HEADER_LEN + SIDE_INFO_LEN + ADU0_FRAMED_DATA_LEN..]
+                    .iter()
+                    .eq(iter::repeat_n(&0xb1u8, ADU1_BACKPOINTER))
+            );
         }
 
         assert!(mp3frame_iter.next().is_none());
@@ -1398,9 +1444,11 @@ mod tests {
             assert_eq!(mp3buf.len(), MP3FRAME_LEN);
 
             // Check ADU1 framed data
-            assert!(mp3buf[HEADER_LEN + SIDE_INFO_LEN..]
-                .iter()
-                .eq(iter::repeat_n(&0xf1u8, ADU1_FRAMED_DATA_LEN)));
+            assert!(
+                mp3buf[HEADER_LEN + SIDE_INFO_LEN..]
+                    .iter()
+                    .eq(iter::repeat_n(&0xf1u8, ADU1_FRAMED_DATA_LEN))
+            );
         }
 
         assert!(mp3frame_iter.next().is_none());

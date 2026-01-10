@@ -367,7 +367,7 @@ pub fn run_test_pipeline_full_and_validate_data<
                         .filter(|exp_pkt| exp_pkt.drop)
                         .count();
 
-                    let probe_return = if drop_count > 0 {
+                    if drop_count > 0 {
                         match info.mask
                             & (gst::PadProbeType::BUFFER | gst::PadProbeType::BUFFER_LIST)
                         {
@@ -407,9 +407,7 @@ pub fn run_test_pipeline_full_and_validate_data<
                         }
                     } else {
                         gst::PadProbeReturn::Ok
-                    };
-
-                    probe_return
+                    }
                 }
             },
         )
@@ -601,10 +599,10 @@ pub fn run_test_pipeline_full_and_validate_data<
         depay_samples.len()
     );
 
-    if let Some(expected_depay_caps) = expected_depay_caps {
-        if let Some(first_depay_sample) = depay_samples.first() {
-            assert_eq!(expected_depay_caps, *first_depay_sample.caps().unwrap());
-        }
+    if let Some(expected_depay_caps) = expected_depay_caps
+        && let Some(first_depay_sample) = depay_samples.first()
+    {
+        assert_eq!(expected_depay_caps, *first_depay_sample.caps().unwrap());
     }
 
     for (i, (expected_list, sample)) in

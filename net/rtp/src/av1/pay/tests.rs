@@ -7,7 +7,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use gst::{event::Eos, prelude::*, Buffer, Caps, ClockTime};
+use gst::{Buffer, Caps, ClockTime, event::Eos, prelude::*};
 use gst_check::Harness;
 
 fn init() {

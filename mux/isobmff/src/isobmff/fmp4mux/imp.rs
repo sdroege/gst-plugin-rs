@@ -12,7 +12,7 @@ use gst::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use num_integer::Integer;
 use std::cmp;
 use std::collections::BTreeSet;
@@ -21,14 +21,6 @@ use std::mem;
 use std::sync::Mutex;
 
 use crate::av1::obu::read_seq_header_obu_bytes;
-use crate::isobmff::boxes::create_dac3;
-use crate::isobmff::boxes::create_dec3;
-use crate::isobmff::boxes::create_pcmc;
-use crate::isobmff::boxes::generate_audio_channel_layout_info;
-use crate::isobmff::fmp4mux::boxes::create_fmp4_fragment_header;
-use crate::isobmff::fmp4mux::boxes::create_fmp4_header;
-use crate::isobmff::fmp4mux::boxes::create_mfra;
-use crate::isobmff::transform_matrix::TransformMatrix;
 use crate::isobmff::ChnlLayoutInfo;
 use crate::isobmff::ChunkMode;
 use crate::isobmff::DeltaFrames;
@@ -42,6 +34,14 @@ use crate::isobmff::SplitNowEvent;
 use crate::isobmff::TrackConfiguration;
 use crate::isobmff::Variant;
 use crate::isobmff::WriteEdtsMode;
+use crate::isobmff::boxes::create_dac3;
+use crate::isobmff::boxes::create_dec3;
+use crate::isobmff::boxes::create_pcmc;
+use crate::isobmff::boxes::generate_audio_channel_layout_info;
+use crate::isobmff::fmp4mux::boxes::create_fmp4_fragment_header;
+use crate::isobmff::fmp4mux::boxes::create_fmp4_header;
+use crate::isobmff::fmp4mux::boxes::create_mfra;
+use crate::isobmff::transform_matrix::TransformMatrix;
 use std::sync::LazyLock;
 
 use crate::isobmff::Buffer;
@@ -394,16 +394,16 @@ impl Stream {
                     return 10_000;
                 }
 
-                if fps.denom() != 1 && fps.denom() != 1001 {
-                    if let Some(fps) = (fps.denom() as u64)
+                if fps.denom() != 1
+                    && fps.denom() != 1001
+                    && let Some(fps) = (fps.denom() as u64)
                         .nseconds()
                         .mul_div_round(1_000_000_000, fps.numer() as u64)
                         .and_then(gst_video::guess_framerate)
-                    {
-                        return (fps.numer() as u32)
-                            .mul_div_round(100, fps.denom() as u32)
-                            .unwrap_or(10_000);
-                    }
+                {
+                    return (fps.numer() as u32)
+                        .mul_div_round(100, fps.denom() as u32)
+                        .unwrap_or(10_000);
                 }
 
                 if fps.denom() == 1001 {
@@ -641,12 +641,11 @@ impl FMP4Mux {
     ) -> Result<Option<PreQueuedBuffer>, gst::FlowError> {
         // If not in ONVIF mode or the mapping is already known and there is a pre-queued buffer
         // then we can directly return it from here.
-        if self.obj().class().as_ref().variant != Variant::FragmentedONVIF
-            || stream.running_time_utc_time_mapping.is_some()
+        if (self.obj().class().as_ref().variant != Variant::FragmentedONVIF
+            || stream.running_time_utc_time_mapping.is_some())
+            && let Some(pre_queued_buffer) = stream.pre_queue.front()
         {
-            if let Some(pre_queued_buffer) = stream.pre_queue.front() {
-                return Ok(Some(pre_queued_buffer.clone()));
-            }
+            return Ok(Some(pre_queued_buffer.clone()));
         }
 
         if stream.caps_or_tag_change() {
@@ -1359,18 +1358,18 @@ impl FMP4Mux {
                     gop.earliest_pts = pts;
                     gop.earliest_pts_position = pts_position;
 
-                    if let Some(prev_gop) = stream.queued_gops.get_mut(1) {
-                        if prev_gop.end_pts < pts {
-                            gst::debug!(
-                                CAT,
-                                obj = stream.sinkpad,
-                                "Updating previous GOP starting PTS {} end time from {} to {}",
-                                pts,
-                                prev_gop.end_pts,
-                                pts
-                            );
-                            prev_gop.end_pts = pts;
-                        }
+                    if let Some(prev_gop) = stream.queued_gops.get_mut(1)
+                        && prev_gop.end_pts < pts
+                    {
+                        gst::debug!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Updating previous GOP starting PTS {} end time from {} to {}",
+                            pts,
+                            prev_gop.end_pts,
+                            pts
+                        );
+                        prev_gop.end_pts = pts;
                     }
                 }
 
@@ -1577,32 +1576,32 @@ impl FMP4Mux {
 
             // If currently nothing is queued, check the pending split-now events if any.
             // The stream might still be filled.
-            if stream.queued_gops.is_empty() {
-                if let Some(split_now) = stream.pending_split_now.first() {
-                    match split_now {
-                        SplitNowEvent { chunk: true } => {
-                            // Chunk should be split off at exactly this point
-                            gst::debug!(
-                                CAT,
-                                obj = stream.sinkpad,
-                                "Stream queued enough data for this chunk at EOS"
-                            );
-                            stream.chunk_filled = true;
-                        }
-                        SplitNowEvent { chunk: false } => {
-                            // Fragment should be split off at exactly this point
-                            gst::debug!(
-                                CAT,
-                                obj = stream.sinkpad,
-                                "Stream queued enough data for this fragment at EOS"
-                            );
-
-                            stream.fragment_filled = true;
-                        }
+            if stream.queued_gops.is_empty()
+                && let Some(split_now) = stream.pending_split_now.first()
+            {
+                match split_now {
+                    SplitNowEvent { chunk: true } => {
+                        // Chunk should be split off at exactly this point
+                        gst::debug!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Stream queued enough data for this chunk at EOS"
+                        );
+                        stream.chunk_filled = true;
                     }
+                    SplitNowEvent { chunk: false } => {
+                        // Fragment should be split off at exactly this point
+                        gst::debug!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Stream queued enough data for this fragment at EOS"
+                        );
 
-                    return;
+                        stream.fragment_filled = true;
+                    }
                 }
+
+                return;
             }
         }
 
@@ -1713,12 +1712,12 @@ impl FMP4Mux {
 
                 if fragment_end_pts < chunk_end_pts {
                     gst::trace!(
-                    CAT,
-                    obj = stream.sinkpad,
-                    "Current chunk end {}, current fragment end {}. Fragment end before chunk end, extending fragment",
-                    chunk_end_pts,
-                    fragment_end_pts,
-                );
+                        CAT,
+                        obj = stream.sinkpad,
+                        "Current chunk end {}, current fragment end {}. Fragment end before chunk end, extending fragment",
+                        chunk_end_pts,
+                        fragment_end_pts,
+                    );
                 } else {
                     gst::trace!(
                         CAT,
@@ -1827,10 +1826,10 @@ impl FMP4Mux {
                         Some(res) => res,
                         None => {
                             gst::trace!(
-                            CAT,
-                            obj = stream.sinkpad,
-                            "Chunked mode and want to finish chunk but no GOP with final earliest PTS known yet",
-                        );
+                                CAT,
+                                obj = stream.sinkpad,
+                                "Chunked mode and want to finish chunk but no GOP with final earliest PTS known yet",
+                            );
                             return;
                         }
                     };
@@ -2038,10 +2037,10 @@ impl FMP4Mux {
                 earliest_pts = Some(stream_earliest_pts);
             }
 
-            if let Some(stream_start_dts) = stream_start_dts {
-                if start_dts.opt_gt(stream_start_dts).unwrap_or(true) {
-                    start_dts = Some(stream_start_dts);
-                }
+            if let Some(stream_start_dts) = stream_start_dts
+                && start_dts.opt_gt(stream_start_dts).unwrap_or(true)
+            {
+                start_dts = Some(stream_start_dts);
             }
         }
 
@@ -2440,20 +2439,18 @@ impl FMP4Mux {
                 }
             }
 
-            if check_fragment_start {
-                if let Some(first_buffer) = gops.first().and_then(|gop| gop.buffers.first()) {
-                    if first_buffer
-                        .buffer
-                        .flags()
-                        .contains(gst::BufferFlags::DELTA_UNIT)
-                    {
-                        gst::error!(
-                            CAT,
-                            obj = stream.sinkpad,
-                            "First buffer of a new fragment is not a keyframe"
-                        );
-                    }
-                }
+            if check_fragment_start
+                && let Some(first_buffer) = gops.first().and_then(|gop| gop.buffers.first())
+                && first_buffer
+                    .buffer
+                    .flags()
+                    .contains(gst::BufferFlags::DELTA_UNIT)
+            {
+                gst::error!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "First buffer of a new fragment is not a keyframe"
+                );
             }
         } else {
             // Non-chunk mode
@@ -2839,7 +2836,10 @@ impl FMP4Mux {
             fragment_end_pts.display(),
             fragment_filled,
             chunk_start_pts.display(),
-            settings.chunk_duration.map(|duration| chunk_start_pts + duration).display(),
+            settings
+                .chunk_duration
+                .map(|duration| chunk_start_pts + duration)
+                .display(),
         );
 
         for (idx, stream) in state.streams.iter_mut().enumerate() {
@@ -2863,10 +2863,10 @@ impl FMP4Mux {
             stream.chunk_filled = false;
 
             if settings.manual_split || all_eos {
-                if let Some(last_gop) = gops.last() {
-                    if chunk_end_pts.is_none_or(|chunk_end_pts| chunk_end_pts < last_gop.end_pts) {
-                        chunk_end_pts = Some(last_gop.end_pts);
-                    }
+                if let Some(last_gop) = gops.last()
+                    && chunk_end_pts.is_none_or(|chunk_end_pts| chunk_end_pts < last_gop.end_pts)
+                {
+                    chunk_end_pts = Some(last_gop.end_pts);
                 }
             } else if chunk_end_pts.is_none() {
                 let fragment_end_pts = fragment_end_pts.unwrap();
@@ -3010,13 +3010,12 @@ impl FMP4Mux {
             {
                 min_earliest_pts_position = Some(earliest_pts_position);
             }
-            if let Some(start_dts_position) = start_dts_position {
-                if min_start_dts_position
+            if let Some(start_dts_position) = start_dts_position
+                && min_start_dts_position
                     .opt_gt(start_dts_position)
                     .unwrap_or(true)
-                {
-                    min_start_dts_position = Some(start_dts_position);
-                }
+            {
+                min_start_dts_position = Some(start_dts_position);
             }
 
             drained_streams.push((
@@ -4188,8 +4187,8 @@ impl ObjectImpl for FMP4Mux {
                             return None;
                         }
 
-                        if let Some(fragment_start_pts) = state.fragment_start_pts {
-                            if time < fragment_start_pts {
+                        if let Some(fragment_start_pts) = state.fragment_start_pts
+                            && time < fragment_start_pts {
                                 gst::warning!(
                                     CAT,
                                     obj = element,
@@ -4197,8 +4196,6 @@ impl ObjectImpl for FMP4Mux {
                                 );
                                 return None;
                             }
-
-                        }
 
                         gst::debug!(
                             CAT,
@@ -5163,11 +5160,13 @@ impl ObjectSubclass for ISOFMP4Mux {
 impl ObjectImpl for ISOFMP4Mux {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecBoolean::builder("offset-to-zero")
-                .nick("Offset to Zero")
-                .blurb("Offsets all streams so that the earliest stream starts at 0")
-                .mutable_ready()
-                .build()]
+            vec![
+                glib::ParamSpecBoolean::builder("offset-to-zero")
+                    .nick("Offset to Zero")
+                    .blurb("Offsets all streams so that the earliest stream starts at 0")
+                    .mutable_ready()
+                    .build(),
+            ]
         });
 
         &PROPERTIES
@@ -5804,11 +5803,13 @@ impl ObjectSubclass for FMP4MuxPad {
 impl ObjectImpl for FMP4MuxPad {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecUInt::builder("trak-timescale")
-                .nick("Track Timescale")
-                .blurb("Timescale to use for the track (units per second, 0 is automatic)")
-                .mutable_ready()
-                .build()]
+            vec![
+                glib::ParamSpecUInt::builder("trak-timescale")
+                    .nick("Track Timescale")
+                    .blurb("Timescale to use for the track (units per second, 0 is automatic)")
+                    .mutable_ready()
+                    .build(),
+            ]
         });
 
         &PROPERTIES

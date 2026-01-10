@@ -1,6 +1,6 @@
 use burn::{
     module::{ConstantRecord, Module},
-    tensor::{backend::Backend, Device, Tensor},
+    tensor::{Device, Tensor, backend::Backend},
 };
 
 use super::bottleneck::SPP_POOLING;

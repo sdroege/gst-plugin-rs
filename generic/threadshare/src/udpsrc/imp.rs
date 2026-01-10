@@ -21,11 +21,11 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{task, Async, Context, PadSrc, Task, TaskState};
+use crate::runtime::{Async, Context, PadSrc, Task, TaskState, task};
 
 use crate::net;
-use crate::socket::{wrap_socket, GioSocketWrapper, Socket, SocketError, SocketRead};
-use futures::channel::mpsc::{channel, Receiver, Sender};
+use crate::socket::{GioSocketWrapper, Socket, SocketError, SocketRead, wrap_socket};
+use futures::channel::mpsc::{Receiver, Sender, channel};
 use futures::pin_mut;
 
 const DEFAULT_ADDRESS: Option<&str> = Some("0.0.0.0");
@@ -636,14 +636,13 @@ impl TaskImpl for UdpSrcTask {
             },
             socket_res = socket_fut => match socket_res {
                 Ok((mut buffer, saddr)) => {
-                    if let Some(saddr) = saddr {
-                        if self.retrieve_sender_address {
+                    if let Some(saddr) = saddr
+                        && self.retrieve_sender_address {
                             NetAddressMeta::add(
                                 buffer.get_mut().unwrap(),
                                 &gio::InetSocketAddress::from(saddr),
                             );
                         }
-                    }
 
                     Ok(buffer)
                 },
@@ -1138,10 +1137,10 @@ impl ElementImpl for UdpSrc {
 
         match event.view() {
             EventView::Eos(_) => {
-                if self.state() != TaskState::Started {
-                    if let Err(err) = self.start() {
-                        gst::error!(CAT, imp = self, "Failed to start task thread {err:?}");
-                    }
+                if self.state() != TaskState::Started
+                    && let Err(err) = self.start()
+                {
+                    gst::error!(CAT, imp = self, "Failed to start task thread {err:?}");
                 }
 
                 if self.state() == TaskState::Started {

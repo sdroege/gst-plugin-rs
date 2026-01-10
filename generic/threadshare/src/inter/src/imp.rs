@@ -146,8 +146,8 @@ use crate::runtime::{Context, PadSrc, Task};
 use crate::dataqueue::{DataQueue, DataQueueItem};
 
 use crate::inter::{
-    InterContext, InterContextWeak, DEFAULT_CONTEXT, DEFAULT_CONTEXT_WAIT, DEFAULT_INTER_CONTEXT,
-    INTER_CONTEXTS,
+    DEFAULT_CONTEXT, DEFAULT_CONTEXT_WAIT, DEFAULT_INTER_CONTEXT, INTER_CONTEXTS, InterContext,
+    InterContextWeak,
 };
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
@@ -658,10 +658,10 @@ impl InterSrc {
     fn set_upstream_latency_priv(&self, new_latency: gst::ClockTime) {
         {
             let mut cur_upstream_latency = self.upstream_latency.lock().unwrap();
-            if let Some(cur_upstream_latency) = *cur_upstream_latency {
-                if cur_upstream_latency == new_latency {
-                    return;
-                }
+            if let Some(cur_upstream_latency) = *cur_upstream_latency
+                && cur_upstream_latency == new_latency
+            {
+                return;
             }
             *cur_upstream_latency = Some(new_latency);
         }

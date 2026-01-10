@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use super::protocol as p;
+use crate::RUNTIME;
 use crate::signaller::{Signallable, SignallableImpl};
 use crate::utils::create_tls_connector;
-use crate::RUNTIME;
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use async_tungstenite::tungstenite::Message as WsMessage;
 use futures::channel::mpsc;
 use futures::prelude::*;
@@ -17,14 +17,14 @@ use std::sync::Mutex;
 use tokio::task;
 
 use aws_config::default_provider::credentials::DefaultCredentialsChain;
-use aws_credential_types::{provider::ProvideCredentials, Credentials};
+use aws_credential_types::{Credentials, provider::ProvideCredentials};
 use aws_sdk_kinesisvideo::{
-    types::{ChannelProtocol, ChannelRole, SingleMasterChannelEndpointConfiguration},
     Client,
+    types::{ChannelProtocol, ChannelRole, SingleMasterChannelEndpointConfiguration},
 };
 use aws_sdk_kinesisvideosignaling::Client as SignalingClient;
 use aws_sigv4::http_request::{
-    sign, SignableBody, SignableRequest, SignatureLocation, SigningSettings,
+    SignableBody, SignableRequest, SignatureLocation, SigningSettings, sign,
 };
 use aws_sigv4::sign::v4;
 use data_encoding::BASE64;
@@ -528,10 +528,10 @@ impl SignallableImpl for Signaller {
         let this = self.obj().clone();
         let imp = self.downgrade();
         task::spawn(async move {
-            if let Some(imp) = imp.upgrade() {
-                if let Err(err) = imp.connect().await {
-                    this.emit_by_name::<()>("error", &[&format!("{:?}", anyhow!(err))]);
-                }
+            if let Some(imp) = imp.upgrade()
+                && let Err(err) = imp.connect().await
+            {
+                this.emit_by_name::<()>("error", &[&format!("{:?}", anyhow!(err))]);
             }
         });
     }
@@ -555,13 +555,11 @@ impl SignallableImpl for Signaller {
         if let Some(mut sender) = state.websocket_sender.clone() {
             let imp = self.downgrade();
             RUNTIME.spawn(async move {
-                if let Err(err) = sender.send(msg).await {
-                    if let Some(imp) = imp.upgrade() {
-                        imp.obj().emit_by_name::<()>(
-                            "error",
-                            &[&format!("{:?}", anyhow!("Error: {err}"))],
-                        );
-                    }
+                if let Err(err) = sender.send(msg).await
+                    && let Some(imp) = imp.upgrade()
+                {
+                    imp.obj()
+                        .emit_by_name::<()>("error", &[&format!("{:?}", anyhow!("Error: {err}"))]);
                 }
             });
         }
@@ -593,13 +591,11 @@ impl SignallableImpl for Signaller {
         if let Some(mut sender) = state.websocket_sender.clone() {
             let imp = self.downgrade();
             RUNTIME.spawn(async move {
-                if let Err(err) = sender.send(msg).await {
-                    if let Some(imp) = imp.upgrade() {
-                        imp.obj().emit_by_name::<()>(
-                            "error",
-                            &[&format!("{:?}", anyhow!("Error: {err}"))],
-                        );
-                    }
+                if let Err(err) = sender.send(msg).await
+                    && let Some(imp) = imp.upgrade()
+                {
+                    imp.obj()
+                        .emit_by_name::<()>("error", &[&format!("{:?}", anyhow!("Error: {err}"))]);
                 }
             });
         }
@@ -616,24 +612,18 @@ impl SignallableImpl for Signaller {
             RUNTIME.block_on(async move {
                 sender.close_channel();
 
-                if let Some(handle) = send_task_handle {
-                    if let Err(err) = handle.await {
-                        if let Some(imp) = imp.upgrade() {
-                            gst::warning!(CAT, imp = imp, "Error while joining send task: {err}");
-                        }
-                    }
+                if let Some(handle) = send_task_handle
+                    && let Err(err) = handle.await
+                    && let Some(imp) = imp.upgrade()
+                {
+                    gst::warning!(CAT, imp = imp, "Error while joining send task: {err}");
                 }
 
-                if let Some(handle) = receive_task_handle {
-                    if let Err(err) = handle.await {
-                        if let Some(imp) = imp.upgrade() {
-                            gst::warning!(
-                                CAT,
-                                imp = imp,
-                                "Error while joining receive task: {err}"
-                            );
-                        }
-                    }
+                if let Some(handle) = receive_task_handle
+                    && let Err(err) = handle.await
+                    && let Some(imp) = imp.upgrade()
+                {
+                    gst::warning!(CAT, imp = imp, "Error while joining receive task: {err}");
                 }
             });
         }

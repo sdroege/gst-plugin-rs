@@ -7,7 +7,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use gst::{event::Eos, Caps};
+use gst::{Caps, event::Eos};
 use gst_check::Harness;
 
 fn init() {

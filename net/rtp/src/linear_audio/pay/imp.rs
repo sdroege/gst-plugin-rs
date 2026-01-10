@@ -110,59 +110,59 @@ impl crate::basepay::RtpBasePay2Impl for RtpLinearAudioPay {
         let mut reorder_map = None;
 
         // Figure out channel order for multi-channel audio and if channel reordering is required
-        if n_channels > 2 {
-            if let Some(positions) = info.positions() {
-                match channel_positions::find_channel_order_from_positions(positions) {
-                    Some(name) => {
+        if n_channels > 2
+            && let Some(positions) = info.positions()
+        {
+            match channel_positions::find_channel_order_from_positions(positions) {
+                Some(name) => {
+                    gst::info!(
+                        CAT,
+                        imp = self,
+                        "Using {name} channel order mapping for {n_channels} channels"
+                    );
+
+                    if name != "default" {
+                        src_caps = src_caps.field("channel-order", name);
+                    }
+
+                    let rtp_positions =
+                        channel_positions::get_channel_order(Some(name), n_channels as i32)
+                            .unwrap();
+
+                    let mut gst_positions = rtp_positions.to_vec();
+
+                    // Re-order channel positions according to GStreamer conventions. This should always
+                    // succeed because the input channel positioning comes from internal tables.
+                    AudioChannelPosition::positions_to_valid_order(&mut gst_positions).unwrap();
+
+                    // Is channel re-ordering actually required?
+                    if rtp_positions != gst_positions {
+                        let mut map = vec![0usize; n_channels as usize];
+
+                        gst_audio::channel_reorder_map(&gst_positions, rtp_positions, &mut map)
+                            .unwrap();
+
                         gst::info!(
                             CAT,
                             imp = self,
-                            "Using {name} channel order mapping for {n_channels} channels"
+                            "Channel positions (GStreamer) : {gst_positions:?}"
                         );
-
-                        if name != "default" {
-                            src_caps = src_caps.field("channel-order", name);
-                        }
-
-                        let rtp_positions =
-                            channel_positions::get_channel_order(Some(name), n_channels as i32)
-                                .unwrap();
-
-                        let mut gst_positions = rtp_positions.to_vec();
-
-                        // Re-order channel positions according to GStreamer conventions. This should always
-                        // succeed because the input channel positioning comes from internal tables.
-                        AudioChannelPosition::positions_to_valid_order(&mut gst_positions).unwrap();
-
-                        // Is channel re-ordering actually required?
-                        if rtp_positions != gst_positions {
-                            let mut map = vec![0usize; n_channels as usize];
-
-                            gst_audio::channel_reorder_map(&gst_positions, rtp_positions, &mut map)
-                                .unwrap();
-
-                            gst::info!(
-                                CAT,
-                                imp = self,
-                                "Channel positions (GStreamer) : {gst_positions:?}"
-                            );
-                            gst::info!(
-                                CAT,
-                                imp = self,
-                                "Channel positions (RTP)       : {rtp_positions:?}"
-                            );
-                            gst::info!(CAT, imp = self, "Channel reorder map           : {map:?}");
-
-                            reorder_map = Some(map);
-                        }
-                    }
-                    _ => {
-                        gst::element_imp_warning!(
-                            self,
-                            gst::StreamError::Encode,
-                            ["Couldn't find canonical channel order mapping for {positions:?}"]
+                        gst::info!(
+                            CAT,
+                            imp = self,
+                            "Channel positions (RTP)       : {rtp_positions:?}"
                         );
+                        gst::info!(CAT, imp = self, "Channel reorder map           : {map:?}");
+
+                        reorder_map = Some(map);
                     }
+                }
+                _ => {
+                    gst::element_imp_warning!(
+                        self,
+                        gst::StreamError::Encode,
+                        ["Couldn't find canonical channel order mapping for {positions:?}"]
+                    );
                 }
             }
         }

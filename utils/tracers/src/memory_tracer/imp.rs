@@ -59,11 +59,7 @@ struct MemoryEvent {
 
 impl MemoryEvent {
     fn event_type(&self) -> &str {
-        if self.is_alloc {
-            "alloc"
-        } else {
-            "free"
-        }
+        if self.is_alloc { "alloc" } else { "free" }
     }
 }
 
@@ -156,18 +152,20 @@ impl MemoryTracer {
 impl ObjectImpl for MemoryTracer {
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
-            vec![glib::subclass::Signal::builder("write-log")
-                .action()
-                .param_types([Option::<String>::static_type()])
-                .class_handler(|args| {
-                    let obj = args[0].get::<super::MemoryTracer>().unwrap();
-                    let file = args[1].get::<Option<String>>().unwrap();
+            vec![
+                glib::subclass::Signal::builder("write-log")
+                    .action()
+                    .param_types([Option::<String>::static_type()])
+                    .class_handler(|args| {
+                        let obj = args[0].get::<super::MemoryTracer>().unwrap();
+                        let file = args[1].get::<Option<String>>().unwrap();
 
-                    obj.imp().write_log(file);
+                        obj.imp().write_log(file);
 
-                    None
-                })
-                .build()]
+                        None
+                    })
+                    .build(),
+            ]
         });
 
         SIGNALS.as_ref()

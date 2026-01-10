@@ -58,8 +58,8 @@ fn peek_klv_len(data: &[u8]) -> Result<(usize, usize), KlvError> {
 }
 
 pub(crate) fn peek_klv(data: &[u8]) -> anyhow::Result<usize> {
-    use anyhow::Context;
     use KlvError::*;
+    use anyhow::Context;
 
     if data.len() < 17 {
         Err(InvalidHeader {

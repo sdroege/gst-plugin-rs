@@ -9,7 +9,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::tests::{
-    run_test_pipeline, run_test_pipeline_full, ExpectedBuffer, ExpectedPacket, Liveness, Source,
+    ExpectedBuffer, ExpectedPacket, Liveness, Source, run_test_pipeline, run_test_pipeline_full,
 };
 use gst::prelude::*;
 use gst_check::Harness;
@@ -86,46 +86,58 @@ fn test_opus_pay_dtx() {
 
         // TODO: check durations?
         let mut expected_pay = vec![
-            vec![ExpectedPacket::builder()
-                .pts(gst::ClockTime::ZERO)
-                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
-                .pt(96)
-                .rtp_time(0)
-                .marker_bit(true)
-                .build()],
-            vec![ExpectedPacket::builder()
-                .pts(gst::ClockTime::from_useconds(13500))
-                .flags(gst::BufferFlags::empty())
-                .pt(96)
-                .rtp_time(648)
-                .marker_bit(false)
-                .build()],
-            vec![ExpectedPacket::builder()
-                .pts(gst::ClockTime::from_useconds(33500))
-                .flags(gst::BufferFlags::empty())
-                .pt(96)
-                .rtp_time(648 + 960)
-                .marker_bit(false)
-                .build()],
+            vec![
+                ExpectedPacket::builder()
+                    .pts(gst::ClockTime::ZERO)
+                    .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
+                    .pt(96)
+                    .rtp_time(0)
+                    .marker_bit(true)
+                    .build(),
+            ],
+            vec![
+                ExpectedPacket::builder()
+                    .pts(gst::ClockTime::from_useconds(13500))
+                    .flags(gst::BufferFlags::empty())
+                    .pt(96)
+                    .rtp_time(648)
+                    .marker_bit(false)
+                    .build(),
+            ],
+            vec![
+                ExpectedPacket::builder()
+                    .pts(gst::ClockTime::from_useconds(33500))
+                    .flags(gst::BufferFlags::empty())
+                    .pt(96)
+                    .rtp_time(648 + 960)
+                    .marker_bit(false)
+                    .build(),
+            ],
         ];
 
         // TODO: check durations?
         let mut expected_depay = vec![
-            vec![ExpectedBuffer::builder()
-                .pts(gst::ClockTime::ZERO)
-                .size(3)
-                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
-                .build()],
-            vec![ExpectedBuffer::builder()
-                .pts(gst::ClockTime::from_useconds(13500))
-                .size(3)
-                .flags(gst::BufferFlags::empty())
-                .build()],
-            vec![ExpectedBuffer::builder()
-                .pts(gst::ClockTime::from_useconds(33500))
-                .size(1)
-                .flags(gst::BufferFlags::empty())
-                .build()],
+            vec![
+                ExpectedBuffer::builder()
+                    .pts(gst::ClockTime::ZERO)
+                    .size(3)
+                    .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+                    .build(),
+            ],
+            vec![
+                ExpectedBuffer::builder()
+                    .pts(gst::ClockTime::from_useconds(13500))
+                    .size(3)
+                    .flags(gst::BufferFlags::empty())
+                    .build(),
+            ],
+            vec![
+                ExpectedBuffer::builder()
+                    .pts(gst::ClockTime::from_useconds(33500))
+                    .size(1)
+                    .flags(gst::BufferFlags::empty())
+                    .build(),
+            ],
         ];
 
         if dtx_prop {
@@ -190,46 +202,58 @@ fn test_opus_pay_depay() {
 
     // TODO: check durations?
     let expected_pay = vec![
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::ZERO)
-            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
-            .pt(96)
-            .rtp_time(0)
-            .marker_bit(true)
-            .build()],
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_mseconds(20))
-            .flags(gst::BufferFlags::empty())
-            .pt(96)
-            .rtp_time(960)
-            .marker_bit(false)
-            .build()],
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_mseconds(40))
-            .flags(gst::BufferFlags::empty())
-            .pt(96)
-            .rtp_time(960 + 960)
-            .marker_bit(false)
-            .build()],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::ZERO)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
+                .pt(96)
+                .rtp_time(0)
+                .marker_bit(true)
+                .build(),
+        ],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(20))
+                .flags(gst::BufferFlags::empty())
+                .pt(96)
+                .rtp_time(960)
+                .marker_bit(false)
+                .build(),
+        ],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(40))
+                .flags(gst::BufferFlags::empty())
+                .pt(96)
+                .rtp_time(960 + 960)
+                .marker_bit(false)
+                .build(),
+        ],
     ];
 
     // TODO: check durations?
     let expected_depay = vec![
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(253)
-            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_mseconds(20))
-            .size(168)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_mseconds(40))
-            .size(166)
-            .flags(gst::BufferFlags::empty())
-            .build()],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(253)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(20))
+                .size(168)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(40))
+                .size(166)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
     ];
 
     run_test_pipeline(
@@ -481,46 +505,58 @@ fn test_opus_pay_depay_multichannel() {
 
     // TODO: check durations?
     let expected_pay = vec![
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::ZERO)
-            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
-            .pt(96)
-            .rtp_time(0)
-            .marker_bit(true)
-            .build()],
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_mseconds(20))
-            .flags(gst::BufferFlags::empty())
-            .pt(96)
-            .rtp_time(960)
-            .marker_bit(false)
-            .build()],
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_mseconds(40))
-            .flags(gst::BufferFlags::empty())
-            .pt(96)
-            .rtp_time(960 + 960)
-            .marker_bit(false)
-            .build()],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::ZERO)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
+                .pt(96)
+                .rtp_time(0)
+                .marker_bit(true)
+                .build(),
+        ],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(20))
+                .flags(gst::BufferFlags::empty())
+                .pt(96)
+                .rtp_time(960)
+                .marker_bit(false)
+                .build(),
+        ],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(40))
+                .flags(gst::BufferFlags::empty())
+                .pt(96)
+                .rtp_time(960 + 960)
+                .marker_bit(false)
+                .build(),
+        ],
     ];
 
     // TODO: check durations?
     let expected_depay = vec![
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(143)
-            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_mseconds(20))
-            .size(129)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_mseconds(40))
-            .size(133)
-            .flags(gst::BufferFlags::empty())
-            .build()],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(143)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(20))
+                .size(129)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(40))
+                .size(133)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
     ];
 
     let expected_depay_caps = input_caps.clone();

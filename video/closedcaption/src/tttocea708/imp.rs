@@ -246,10 +246,10 @@ impl TtToCea708 {
 
             state.force_carriage_return = false;
 
-            if state.prefix_newline {
-                if let Some(prefix) = settings.speaker_prefix.as_ref() {
-                    text.insert_str(0, prefix);
-                }
+            if state.prefix_newline
+                && let Some(prefix) = settings.speaker_prefix.as_ref()
+            {
+                text.insert_str(0, prefix);
             }
 
             state.prefix_newline = false;

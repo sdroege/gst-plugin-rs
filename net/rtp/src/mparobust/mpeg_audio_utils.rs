@@ -110,11 +110,7 @@ pub(crate) fn peek_frame_header(data: &[u8]) -> Result<FrameHeader, ()> {
     let channels = {
         let channel_bits = ((data[3] & 0b1100_0000) >> 6) as u32;
 
-        if channel_bits == 0b11 {
-            1
-        } else {
-            2
-        }
+        if channel_bits == 0b11 { 1 } else { 2 }
     };
 
     let frame_len = if bitrate != 0 {

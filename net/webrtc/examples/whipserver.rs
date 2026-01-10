@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use clap::Parser;
 use futures::prelude::*;
 use gst::glib;
@@ -8,7 +8,7 @@ use std::net::SocketAddr;
 use std::sync::{Arc, LazyLock, Mutex};
 use tokio::runtime;
 use url::Url;
-use warp::{http, Filter, Reply};
+use warp::{Filter, Reply, http};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -50,8 +50,11 @@ pub fn build_link_header(url_str: &str) -> Result<String, url::ParseError> {
     link_str += ">";
 
     if let Some(password) = url.password() {
-        link_str += &format!("; rel=\"ice-server\"; username=\"{}\"; credential:\"{}\"; credential-type:\"password\";",
-            url.username(), password);
+        link_str += &format!(
+            "; rel=\"ice-server\"; username=\"{}\"; credential:\"{}\"; credential-type:\"password\";",
+            url.username(),
+            password
+        );
     }
 
     Ok(link_str)

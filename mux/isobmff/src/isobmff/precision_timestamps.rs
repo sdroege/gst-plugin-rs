@@ -14,8 +14,8 @@ use super::PrecisionClockTimeUncertaintyNanosecondsTag;
 use super::PrecisionClockTypeTag;
 use super::TaiClockInfo;
 use crate::isobmff::{
-    boxes::{write_full_box, FULL_BOX_FLAGS_NONE, FULL_BOX_VERSION_0},
-    TaicClockType, TAIC_CLOCK_DRIFT_RATE_UNKNOWN, TAIC_TIME_UNCERTAINTY_UNKNOWN,
+    TAIC_CLOCK_DRIFT_RATE_UNKNOWN, TAIC_TIME_UNCERTAINTY_UNKNOWN, TaicClockType,
+    boxes::{FULL_BOX_FLAGS_NONE, FULL_BOX_VERSION_0, write_full_box},
 };
 
 impl<'a> Tag<'a> for PrecisionClockTypeTag {

@@ -291,11 +291,11 @@ impl State {
             self.need_flush_stop = false;
         }
 
-        if let Some(pull) = &mut self.pull {
-            if pull.need_stream_start {
-                events.push(gst::event::StreamStart::new(&pull.stream_id));
-                pull.need_stream_start = false;
-            }
+        if let Some(pull) = &mut self.pull
+            && pull.need_stream_start
+        {
+            events.push(gst::event::StreamStart::new(&pull.stream_id));
+            pull.need_stream_start = false;
         }
 
         if self.handle_as_st2038 {
@@ -546,7 +546,7 @@ impl MccParse {
 
         let len = data[2] as usize;
         let mut buffer = if state.handle_as_st2038 {
-            let buffer = convert_to_st2038_buffer(
+            convert_to_st2038_buffer(
                 false,
                 0xFF, /* Unknown/unspecified */
                 0xFF, /* Unknown/unspecified */
@@ -562,9 +562,7 @@ impl MccParse {
             .map_err(|err| {
                 gst::error!(CAT, imp = self, "Failed to convert to ST-2038 {err:?}");
                 gst::FlowError::Error
-            })?;
-
-            buffer
+            })?
         } else {
             gst::Buffer::from_mut_slice(OffsetVec {
                 vec: data,

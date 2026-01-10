@@ -866,14 +866,14 @@ impl State {
             smp_cnt += LIMITER_LOOKAHEAD + peak_delta - LIMITER_ATTACK_WINDOW;
 
             gst::debug!(
-               CAT,
-               imp = imp,
-               "Found peak {} at sample {}, going to attack state at sample {} (gain reduction {}-{})",
-               peak_value,
-               smp_cnt + LIMITER_ATTACK_WINDOW,
-               smp_cnt,
-               self.gain_reduction[0],
-               self.gain_reduction[1]
+                CAT,
+                imp = imp,
+                "Found peak {} at sample {}, going to attack state at sample {} (gain reduction {}-{})",
+                peak_value,
+                smp_cnt + LIMITER_ATTACK_WINDOW,
+                smp_cnt,
+                self.gain_reduction[0],
+                self.gain_reduction[1]
             );
         } else {
             // Process all samples, no peak found
@@ -914,10 +914,10 @@ impl State {
         while self.env_cnt < LIMITER_ATTACK_WINDOW && smp_cnt < nb_samples {
             // Stop once we're exactly 10ms before the new higher peak so we can
             // restart the attack state.
-            if let Some(new_peak_smp_cnt) = new_peak_smp_cnt {
-                if smp_cnt == new_peak_smp_cnt {
-                    break;
-                }
+            if let Some(new_peak_smp_cnt) = new_peak_smp_cnt
+                && smp_cnt == new_peak_smp_cnt
+            {
+                break;
             }
 
             // Linear interpolation between the start and target gain reduction
@@ -1270,14 +1270,14 @@ impl State {
                 self.gain_reduction[1] = gain_reduction;
 
                 gst::debug!(
-                   CAT,
-                   imp = imp,
-                   "Found new peak {} at sample {}, going back to attack state at sample {} (gain reduction {}-{})",
-                   peak_value,
-                   smp_cnt + LIMITER_ATTACK_WINDOW,
-                   smp_cnt,
-                   self.gain_reduction[0],
-                   self.gain_reduction[1],
+                    CAT,
+                    imp = imp,
+                    "Found new peak {} at sample {}, going back to attack state at sample {} (gain reduction {}-{})",
+                    peak_value,
+                    smp_cnt + LIMITER_ATTACK_WINDOW,
+                    smp_cnt,
+                    self.gain_reduction[0],
+                    self.gain_reduction[1],
                 );
             } else {
                 self.gain_reduction[1] = current_gain_reduction;

@@ -13,7 +13,8 @@ use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
 use aws_sdk_s3::{
-    config::{self, retry::RetryConfig, Credentials, Region},
+    Client,
+    config::{self, Credentials, Region, retry::RetryConfig},
     operation::{
         abort_multipart_upload::builders::AbortMultipartUploadFluentBuilder,
         complete_multipart_upload::builders::CompleteMultipartUploadFluentBuilder,
@@ -22,7 +23,6 @@ use aws_sdk_s3::{
     },
     primitives::ByteStream,
     types::{CompletedMultipartUpload, CompletedPart},
-    Client,
 };
 
 use std::collections::HashMap;
@@ -32,7 +32,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::s3url::*;
-use crate::s3utils::{self, duration_from_millis, duration_to_millis, WaitError};
+use crate::s3utils::{self, WaitError, duration_from_millis, duration_to_millis};
 
 use super::OnError;
 
@@ -936,7 +936,10 @@ impl ObjectImpl for S3Sink {
                 settings.retry_attempts = retry_attempts as u32;
             }
             "upload-part-retry-duration" | "complete-upload-retry-duration" => {
-                gst::warning!(CAT, "Use retry-attempts. retry/upload-part/complete-upload-retry duration are deprecated.");
+                gst::warning!(
+                    CAT,
+                    "Use retry-attempts. retry/upload-part/complete-upload-retry duration are deprecated."
+                );
             }
             "endpoint-uri" => {
                 settings.endpoint_uri = value
@@ -1176,16 +1179,16 @@ impl BaseSinkImpl for S3Sink {
     }
 
     fn event(&self, event: gst::Event) -> bool {
-        if let gst::EventView::Eos(_) = event.view() {
-            if let Err(error_message) = self.finalize_upload() {
-                gst::error!(
-                    CAT,
-                    imp = self,
-                    "Failed to finalize the upload: {}",
-                    error_message
-                );
-                return false;
-            }
+        if let gst::EventView::Eos(_) = event.view()
+            && let Err(error_message) = self.finalize_upload()
+        {
+            gst::error!(
+                CAT,
+                imp = self,
+                "Failed to finalize the upload: {}",
+                error_message
+            );
+            return false;
         }
 
         BaseSinkImplExt::parent_event(self, event)

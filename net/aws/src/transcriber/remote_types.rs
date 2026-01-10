@@ -1,7 +1,7 @@
 use aws_sdk_transcribestreaming::types as sdk_types;
 
 use serde::{Serialize, Serializer};
-use serde_with::{serde_as, SerializeAs};
+use serde_with::{SerializeAs, serde_as};
 
 #[serde_as]
 #[derive(serde_derive::Serialize)]

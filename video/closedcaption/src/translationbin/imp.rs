@@ -434,12 +434,11 @@ impl ElementImpl for TranslationBin {
     fn release_pad(&self, pad: &gst::Pad) {
         let srcpad = self.state.lock().unwrap().srcpads.take(pad);
 
-        if let Some(srcpad) = srcpad {
-            if let Some(tee) = self.state.lock().unwrap().tee.clone() {
-                if let Err(err) = self.unprepare_translation_srcpad(&self.obj(), &tee, &srcpad) {
-                    gst::warning!(CAT, "Failed to unprepare translation source pad: {err:?}");
-                }
-            }
+        if let Some(srcpad) = srcpad
+            && let Some(tee) = self.state.lock().unwrap().tee.clone()
+            && let Err(err) = self.unprepare_translation_srcpad(&self.obj(), &tee, &srcpad)
+        {
+            gst::warning!(CAT, "Failed to unprepare translation source pad: {err:?}");
         }
 
         let _ = self.obj().remove_pad(pad);

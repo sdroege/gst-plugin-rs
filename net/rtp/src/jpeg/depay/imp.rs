@@ -35,7 +35,7 @@ use std::sync::LazyLock;
 use crate::{
     basedepay::{RtpBaseDepay2Ext, RtpBaseDepay2Impl},
     jpeg::header::{
-        make_quant_tables, JpegHeader, MainHeader, QuantizationTableHeader, RestartHeader,
+        JpegHeader, MainHeader, QuantizationTableHeader, RestartHeader, make_quant_tables,
     },
 };
 

@@ -105,12 +105,12 @@ impl EstimatorImpl for LinearRegressionEstimator {
 
         // To avoid big movements in slope in the beginning, wait until we have
         // enough samples. It won't take long.
-        if self.samples.full() {
-            if let Some(slope) = self.samples.slope() {
-                // The slope is dimensionless, but pretend it is milliseconds. That
-                // makes the algorithm work.
-                self.estimate = Duration::nanoseconds((slope * 1_000_000f64) as i64) * GAIN;
-            }
+        if self.samples.full()
+            && let Some(slope) = self.samples.slope()
+        {
+            // The slope is dimensionless, but pretend it is milliseconds. That
+            // makes the algorithm work.
+            self.estimate = Duration::nanoseconds((slope * 1_000_000f64) as i64) * GAIN;
         }
     }
 

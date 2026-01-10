@@ -94,8 +94,8 @@ impl PadSinkHandler for QueuePadSinkHandler {
     fn sink_event(self, pad: &gst::Pad, imp: &Queue, event: gst::Event) -> bool {
         gst::debug!(CAT, obj = pad, "Handling non-serialized {event:?}");
 
-        if let gst::EventView::FlushStart(..) = event.view() {
-            if imp
+        if let gst::EventView::FlushStart(..) = event.view()
+            && imp
                 .task
                 .flush_start()
                 .block_on_or_add_subtask_then(imp.obj(), |elem, res| {
@@ -110,9 +110,8 @@ impl PadSinkHandler for QueuePadSinkHandler {
                     }
                 })
                 .is_err()
-            {
-                return false;
-            }
+        {
+            return false;
         }
 
         gst::log!(CAT, obj = pad, "Forwarding non-serialized {event:?}");
@@ -129,16 +128,16 @@ impl PadSinkHandler for QueuePadSinkHandler {
 
         let imp = elem.imp();
 
-        if let gst::EventView::FlushStop(..) = event.view() {
-            if let Err(err) = imp.task.flush_stop().await {
-                gst::error!(CAT, obj = pad, "FlushStop failed {:?}", err);
-                gst::element_imp_error!(
-                    imp,
-                    gst::StreamError::Failed,
-                    ("Internal data stream error"),
-                    ["FlushStop failed {:?}", err]
-                );
-            }
+        if let gst::EventView::FlushStop(..) = event.view()
+            && let Err(err) = imp.task.flush_stop().await
+        {
+            gst::error!(CAT, obj = pad, "FlushStop failed {:?}", err);
+            gst::element_imp_error!(
+                imp,
+                gst::StreamError::Failed,
+                ("Internal data stream error"),
+                ["FlushStop failed {:?}", err]
+            );
         }
 
         gst::log!(CAT, obj = pad, "Queuing serialized {:?}", event);

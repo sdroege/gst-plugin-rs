@@ -12,7 +12,7 @@ use gst_base::{
     prelude::*,
     subclass::base_transform::{InputBuffer, PrepareOutputBufferSuccess},
 };
-use gst_video::{subclass::prelude::*, VideoFormat};
+use gst_video::{VideoFormat, subclass::prelude::*};
 
 use std::sync::LazyLock;
 use std::sync::Mutex;
@@ -278,12 +278,14 @@ impl ObjectSubclass for RoundedCorners {
 impl ObjectImpl for RoundedCorners {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecUInt::builder("border-radius-px")
-                .nick("Border radius in pixels")
-                .blurb("Draw rounded corners with given border radius")
-                .default_value(DEFAULT_BORDER_RADIUS)
-                .mutable_playing()
-                .build()]
+            vec![
+                glib::ParamSpecUInt::builder("border-radius-px")
+                    .nick("Border radius in pixels")
+                    .blurb("Draw rounded corners with given border radius")
+                    .default_value(DEFAULT_BORDER_RADIUS)
+                    .mutable_playing()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

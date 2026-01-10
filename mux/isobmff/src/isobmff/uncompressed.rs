@@ -298,7 +298,11 @@ fn get_bit_depth_for_uncc_format(
     let component_index =
         component_type_to_component_index(video_info.format_info(), component_type);
     let component_bit_depth_minus_one = video_info.comp_depth(component_index) - 1;
-    gst::debug!(CAT_23001, "component_bit_depth_minus_one for video format {} index {component_index:?}: {component_bit_depth_minus_one:?}", video_info.format_info().name());
+    gst::debug!(
+        CAT_23001,
+        "component_bit_depth_minus_one for video format {} index {component_index:?}: {component_bit_depth_minus_one:?}",
+        video_info.format_info().name()
+    );
     component_bit_depth_minus_one.try_into().unwrap()
 }
 
@@ -325,7 +329,9 @@ fn get_sampling_type_for_uncc_format(video_info: &gst_video::VideoInfo) -> u8 {
         } else if vert_subsampling == 1 {
             // 4:2:0 or similar
             if !video_info.height().is_multiple_of(2) {
-                unreachable!("4:2:0 images must have an even number of rows in 23001-17, should have failed caps negotiation");
+                unreachable!(
+                    "4:2:0 images must have an even number of rows in 23001-17, should have failed caps negotiation"
+                );
             }
             return 2;
         } else {
@@ -486,7 +492,9 @@ fn get_row_align_size_for_uncc_format(video_info: &gst_video::VideoInfo) -> u32 
             // However we can handle it if everything is a multiple of 4, which requires no alignment.
             return 0;
         } else {
-            unreachable!("23001-17 Sub-sampled images must have image width that is a multiple of 4, should have failed caps negotiation");
+            unreachable!(
+                "23001-17 Sub-sampled images must have image width that is a multiple of 4, should have failed caps negotiation"
+            );
         }
     }
     let first_plane_stride = video_info.stride()[0] as u32;

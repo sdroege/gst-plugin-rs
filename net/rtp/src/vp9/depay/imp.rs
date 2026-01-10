@@ -314,7 +314,11 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
         {
             // Missed the marker packet for the last picture
             if state.current_picture_payload_descriptor.is_some() {
-                gst::warning!(CAT, imp = self, "Packet is part of a new picture but didn't receive last packet of previous picture");
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Packet is part of a new picture but didn't receive last packet of previous picture"
+                );
                 // TODO: Could potentially drain here?
                 self.reset(&mut state);
             }

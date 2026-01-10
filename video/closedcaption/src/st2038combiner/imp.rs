@@ -13,7 +13,7 @@
  *
  * Since: plugins-rs-0.15.0
  */
-use crate::st2038anc_utils::{add_ancillary_meta_to_buffer, AncData};
+use crate::st2038anc_utils::{AncData, add_ancillary_meta_to_buffer};
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -118,10 +118,10 @@ impl ElementImpl for St2038Combiner {
     fn release_pad(&self, pad: &gst::Pad) {
         {
             let mut state = self.state.lock().unwrap();
-            if let Some(st2038_pad) = &state.st2038_sinkpad {
-                if st2038_pad == pad.downcast_ref::<gst_base::AggregatorPad>().unwrap() {
-                    state.st2038_sinkpad.take();
-                }
+            if let Some(st2038_pad) = &state.st2038_sinkpad
+                && st2038_pad == pad.downcast_ref::<gst_base::AggregatorPad>().unwrap()
+            {
+                state.st2038_sinkpad.take();
             }
         }
 
@@ -629,44 +629,47 @@ impl St2038Combiner {
                     gst::FlowError::Error
                 })?;
 
-            gst::debug!(CAT,
+            gst::debug!(
+                CAT,
                 imp = self,
                 "ST-2038 buffer with PTS: {st2038_time}, current_video_running_time: {:?}, current_video_running_time_end: {:?}, previous_video_running_time_end: {:?}",
-                state.current_video_running_time, state.current_video_running_time_end, state.previous_video_running_time_end);
+                state.current_video_running_time,
+                state.current_video_running_time_end,
+                state.previous_video_running_time_end
+            );
 
             if let Some(current_video_running_time_end) = state.current_video_running_time_end {
                 if st2038_time >= current_video_running_time_end {
                     gst::debug!(
-                                CAT,
-                                imp = self,
-                                "Collected all ST-2038 data for this video buffer, {st2038_time} >= {current_video_running_time_end}"
-                            );
+                        CAT,
+                        imp = self,
+                        "Collected all ST-2038 data for this video buffer, {st2038_time} >= {current_video_running_time_end}"
+                    );
                     break;
                 }
             } else {
                 if let Some(previous_video_running_time_end) = state.previous_video_running_time_end
+                    && st2038_time < previous_video_running_time_end
                 {
-                    if st2038_time < previous_video_running_time_end {
-                        gst::debug!(
-                                    CAT,
-                                    imp = self,
-                                    "ST-2038 buffer before end of last video frame, dropping {st2038_time} < {previous_video_running_time_end}"
-                                );
-                        st2038_sinkpad.drop_buffer();
-                        continue;
-                    }
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "ST-2038 buffer before end of last video frame, dropping {st2038_time} < {previous_video_running_time_end}"
+                    );
+                    st2038_sinkpad.drop_buffer();
+                    continue;
                 }
 
-                if let Some(current_video_running_time) = state.current_video_running_time {
-                    if st2038_time < current_video_running_time {
-                        gst::debug!(
-                                    CAT,
-                                    imp = self,
-                                    "ST-2038 buffer before current video frame, dropping {st2038_time} < {current_video_running_time}"
-                                );
-                        st2038_sinkpad.drop_buffer();
-                        continue;
-                    }
+                if let Some(current_video_running_time) = state.current_video_running_time
+                    && st2038_time < current_video_running_time
+                {
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "ST-2038 buffer before current video frame, dropping {st2038_time} < {current_video_running_time}"
+                    );
+                    st2038_sinkpad.drop_buffer();
+                    continue;
                 }
             }
 
@@ -752,11 +755,7 @@ impl St2038Combiner {
         end_time: gst::ClockTime,
     ) -> Result<gst::ClockTime, gst::FlowError> {
         let time_end = if let Some(stop) = segment.stop() {
-            if end_time > stop {
-                stop
-            } else {
-                end_time
-            }
+            if end_time > stop { stop } else { end_time }
         } else {
             end_time
         };

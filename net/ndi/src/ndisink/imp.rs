@@ -67,11 +67,13 @@ impl ObjectSubclass for NdiSink {
 impl ObjectImpl for NdiSink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecString::builder("ndi-name")
-                .nick("NDI Name")
-                .blurb("NDI Name to use")
-                .doc_show_default()
-                .build()]
+            vec![
+                glib::ParamSpecString::builder("ndi-name")
+                    .nick("NDI Name")
+                    .blurb("NDI Name to use")
+                    .doc_show_default()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

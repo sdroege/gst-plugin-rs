@@ -1,11 +1,11 @@
 use burn::{
     module::Module,
     nn::pool::{MaxPool2d, MaxPool2dConfig},
-    tensor::{backend::Backend, Device, Tensor},
+    tensor::{Device, Tensor, backend::Backend},
 };
 use std::{vec, vec::Vec};
 
-use super::blocks::{expand, BaseConv, BaseConvConfig, Conv, ConvConfig};
+use super::blocks::{BaseConv, BaseConvConfig, Conv, ConvConfig, expand};
 
 pub(crate) const SPP_POOLING: [usize; 3] = [5, 9, 13];
 

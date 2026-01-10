@@ -6,7 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use futures::future::{self, abortable, AbortHandle};
+use futures::future::{self, AbortHandle, abortable};
 
 use gst::prelude::*;
 
@@ -168,13 +168,12 @@ impl DataQueue {
 
         let src_pad = inner.src_pad.clone();
         for item in inner.queue.drain(..) {
-            if let DataQueueItem::Event(event) = item {
-                if event.is_sticky()
-                    && event.type_() != gst::EventType::Segment
-                    && event.type_() != gst::EventType::Eos
-                {
-                    let _ = src_pad.store_sticky_event(&event);
-                }
+            if let DataQueueItem::Event(event) = item
+                && event.is_sticky()
+                && event.type_() != gst::EventType::Segment
+                && event.type_() != gst::EventType::Eos
+            {
+                let _ = src_pad.store_sticky_event(&event);
             }
         }
 
@@ -210,28 +209,28 @@ impl DataQueue {
         let queue_ts = inner.queue.iter().find_map(|i| i.timestamp());
         let ts = item.timestamp();
 
-        if let Some(max) = inner.max_size_buffers {
-            if max <= inner.cur_level_buffers {
-                gst::debug!(
-                    DATA_QUEUE_CAT,
-                    obj = obj,
-                    "Queue is full (buffers): {max} <= {}",
-                    inner.cur_level_buffers
-                );
-                return Err(item);
-            }
+        if let Some(max) = inner.max_size_buffers
+            && max <= inner.cur_level_buffers
+        {
+            gst::debug!(
+                DATA_QUEUE_CAT,
+                obj = obj,
+                "Queue is full (buffers): {max} <= {}",
+                inner.cur_level_buffers
+            );
+            return Err(item);
         }
 
-        if let Some(max) = inner.max_size_bytes {
-            if max <= inner.cur_level_bytes {
-                gst::debug!(
-                    DATA_QUEUE_CAT,
-                    obj = obj,
-                    "Queue is full (bytes): {max} <= {}",
-                    inner.cur_level_bytes
-                );
-                return Err(item);
-            }
+        if let Some(max) = inner.max_size_bytes
+            && max <= inner.cur_level_bytes
+        {
+            gst::debug!(
+                DATA_QUEUE_CAT,
+                obj = obj,
+                "Queue is full (bytes): {max} <= {}",
+                inner.cur_level_bytes
+            );
+            return Err(item);
         }
 
         // FIXME: Use running time

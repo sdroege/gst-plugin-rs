@@ -34,7 +34,7 @@ use std::sync::LazyLock;
 
 use crate::{
     basepay::RtpBasePay2Ext,
-    jpeg::header::{detect_static_quant_table, JpegHeader, MainHeader, QuantizationTableHeader},
+    jpeg::header::{JpegHeader, MainHeader, QuantizationTableHeader, detect_static_quant_table},
 };
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {

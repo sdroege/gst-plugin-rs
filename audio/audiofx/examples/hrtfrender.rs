@@ -8,7 +8,7 @@
 
 use gst::prelude::*;
 
-use anyhow::{bail, Error};
+use anyhow::{Error, bail};
 
 use std::sync::{Arc, Condvar, Mutex};
 use std::{env, thread, time};

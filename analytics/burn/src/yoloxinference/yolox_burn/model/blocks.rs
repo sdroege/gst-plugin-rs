@@ -2,10 +2,10 @@ use burn::{
     config::Config,
     module::Module,
     nn::{
-        conv::{Conv2d, Conv2dConfig},
         BatchNorm, BatchNormConfig, PaddingConfig2d,
+        conv::{Conv2d, Conv2dConfig},
     },
-    tensor::{activation::silu, backend::Backend, Device, Tensor},
+    tensor::{Device, Tensor, activation::silu, backend::Backend},
 };
 use std::vec;
 

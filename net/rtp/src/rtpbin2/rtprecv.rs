@@ -46,15 +46,15 @@ use std::task::{self, Poll, Waker};
 use std::time::{Duration, Instant, SystemTime};
 
 use futures::channel::mpsc as async_mpsc;
-use futures::{stream, StreamExt};
+use futures::{StreamExt, stream};
 use gst::{glib, prelude::*, subclass::prelude::*};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
-use super::internal::{pt_clock_rate_from_caps, GstRustLogger, SharedRtpState, SharedSession};
+use super::internal::{GstRustLogger, SharedRtpState, SharedSession, pt_clock_rate_from_caps};
 use super::jitterbuffer::{self, JitterBuffer};
 use super::session::{
-    KeyUnitRequestType, RecvReply, RequestRemoteKeyUnitReply, RtcpRecvReply, RtpProfile,
-    RTCP_MIN_REPORT_INTERVAL,
+    KeyUnitRequestType, RTCP_MIN_REPORT_INTERVAL, RecvReply, RequestRemoteKeyUnitReply,
+    RtcpRecvReply, RtpProfile,
 };
 use super::source::SourceState;
 use super::sync;
@@ -157,16 +157,16 @@ impl futures::stream::Stream for JitterBufferStream {
                         .store
                         .remove(&id)
                         .unwrap_or_else(|| panic!("Buffer with id {id} not in store!"));
-                    if let JitterBufferItem::Packet(ref mut packet) = item {
-                        if discont {
-                            gst::debug!(
-                                CAT,
-                                obj = self.recv_src_pad.pad,
-                                "Forwarding discont buffer",
-                            );
-                            let packet_mut = packet.make_mut();
-                            packet_mut.set_flags(gst::BufferFlags::DISCONT);
-                        }
+                    if let JitterBufferItem::Packet(ref mut packet) = item
+                        && discont
+                    {
+                        gst::debug!(
+                            CAT,
+                            obj = self.recv_src_pad.pad,
+                            "Forwarding discont buffer",
+                        );
+                        let packet_mut = packet.make_mut();
+                        packet_mut.set_flags(gst::BufferFlags::DISCONT);
                     }
 
                     gst::trace!(
@@ -757,10 +757,10 @@ impl RecvSessionSrcTask {
 
             // Check whether there's anything else we can do before leaving this blocking task
 
-            if let Ok(Some(cmd)) = self.cmd_rx.try_next() {
-                if Self::handle_cmd(&mut jb_streams, cmd).is_break() {
-                    return ControlFlow::Break(self);
-                }
+            if let Ok(Some(cmd)) = self.cmd_rx.try_next()
+                && Self::handle_cmd(&mut jb_streams, cmd).is_break()
+            {
+                return ControlFlow::Break(self);
             }
             // else, let the async task deal with errors
 
@@ -907,25 +907,24 @@ impl RtpRecv {
 
     fn iterate_internal_links(&self, pad: &gst::Pad) -> gst::Iterator<gst::Pad> {
         let state = self.state.lock().unwrap();
-        if let Some(&id) = state.pads_session_id_map.get(pad) {
-            if let Some(session) = state.session_by_id(id) {
-                if let Some(ref sinkpad) = session.rtp_recv_sinkpad {
-                    if sinkpad == pad {
-                        let pads = session
-                            .rtp_recv_srcpads
-                            .iter()
-                            // Only include pads that are already part of the element
-                            .filter(|r| state.pads_session_id_map.contains_key(&r.pad))
-                            .map(|r| r.pad.clone())
-                            .collect();
-                        return gst::Iterator::from_vec(pads);
-                    } else if session.rtp_recv_srcpads.iter().any(|r| &r.pad == pad) {
-                        return gst::Iterator::from_vec(vec![sinkpad.clone()]);
-                    }
-                }
-                // nothing to do for rtcp pads
+        if let Some(&id) = state.pads_session_id_map.get(pad)
+            && let Some(session) = state.session_by_id(id)
+            && let Some(ref sinkpad) = session.rtp_recv_sinkpad
+        {
+            if sinkpad == pad {
+                let pads = session
+                    .rtp_recv_srcpads
+                    .iter()
+                    // Only include pads that are already part of the element
+                    .filter(|r| state.pads_session_id_map.contains_key(&r.pad))
+                    .map(|r| r.pad.clone())
+                    .collect();
+                return gst::Iterator::from_vec(pads);
+            } else if session.rtp_recv_srcpads.iter().any(|r| &r.pad == pad) {
+                return gst::Iterator::from_vec(vec![sinkpad.clone()]);
             }
         }
+        // nothing to do for rtcp pads
         gst::Iterator::from_vec(vec![])
     }
 
@@ -1505,7 +1504,7 @@ impl RtpRecv {
             &mut held_buffers,
         )? {
             RecvRtpBuffer::SsrcCollision(ssrc) => {
-                return self.handle_ssrc_collision(session, [ssrc])
+                return self.handle_ssrc_collision(session, [ssrc]);
             }
             RecvRtpBuffer::IsRtcp(buffer) => {
                 drop(state);
@@ -1894,13 +1893,11 @@ impl RtpRecv {
                         else {
                             if let Some(local_send) =
                                 session.session.local_send_source_by_ssrc(ssrc)
+                                && local_send.state() != SourceState::Bye
+                                && Some(ssrc) != internal_ssrc
                             {
-                                if local_send.state() != SourceState::Bye
-                                    && Some(ssrc) != internal_ssrc
-                                {
-                                    all_remote = false;
-                                    break;
-                                }
+                                all_remote = false;
+                                break;
                             }
                             continue;
                         };
@@ -2112,20 +2109,22 @@ impl ObjectImpl for RtpRecv {
 
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
-            vec![glib::subclass::Signal::builder("get-session")
-                .param_types([u32::static_type()])
-                .return_type::<crate::rtpbin2::config::Rtp2Session>()
-                .action()
-                .class_handler(|args| {
-                    let element = args[0].get::<super::RtpRecv>().expect("signal arg");
-                    let id = args[1].get::<u32>().expect("signal arg");
-                    let bin = element.imp();
-                    let state = bin.state.lock().unwrap();
-                    state
-                        .session_by_id(id as usize)
-                        .map(|sess| sess.internal_session.config.to_value())
-                })
-                .build()]
+            vec![
+                glib::subclass::Signal::builder("get-session")
+                    .param_types([u32::static_type()])
+                    .return_type::<crate::rtpbin2::config::Rtp2Session>()
+                    .action()
+                    .class_handler(|args| {
+                        let element = args[0].get::<super::RtpRecv>().expect("signal arg");
+                        let id = args[1].get::<u32>().expect("signal arg");
+                        let bin = element.imp();
+                        let state = bin.state.lock().unwrap();
+                        state
+                            .session_by_id(id as usize)
+                            .map(|sess| sess.internal_session.config.to_value())
+                    })
+                    .build(),
+            ]
         });
 
         SIGNALS.as_ref()
@@ -2396,11 +2395,12 @@ impl ElementImpl for RtpRecv {
                 }
             }
             for id in removed_session_ids {
-                if let Some(session) = state.mut_session_by_id(id) {
-                    if session.rtp_recv_sinkpad.is_none() && session.rtcp_recv_sinkpad.is_none() {
-                        let id = session.internal_session.id;
-                        state.sessions.retain(|s| s.internal_session.id != id);
-                    }
+                if let Some(session) = state.mut_session_by_id(id)
+                    && session.rtp_recv_sinkpad.is_none()
+                    && session.rtcp_recv_sinkpad.is_none()
+                {
+                    let id = session.internal_session.id;
+                    state.sessions.retain(|s| s.internal_session.id != id);
                 }
             }
         }
@@ -2509,9 +2509,9 @@ impl Drop for RtpRecv {
 mod tests {
     use super::*;
     use crate::rtpbin2::{self, jitterbuffer::QueueResult};
+    use RecvSessionSrcTaskCommand::*;
     use rtp_types::RtpPacket;
     use std::{sync::mpsc, thread::sleep};
-    use RecvSessionSrcTaskCommand::*;
 
     const LATENCY: Duration = Duration::from_millis(20);
     const PACKET_DURATION: Duration = Duration::from_millis(10);
@@ -2589,20 +2589,27 @@ mod tests {
             jb_store.jitterbuffer.queue_serialized_item(),
             QueueResult::Forward(0)
         );
-        assert!(rspad.pad.push_event(
-            gst::event::StreamStart::builder(&format!("{session_id}_{}_{}", rspad.pt, rspad.ssrc))
+        assert!(
+            rspad.pad.push_event(
+                gst::event::StreamStart::builder(&format!(
+                    "{session_id}_{}_{}",
+                    rspad.pt, rspad.ssrc
+                ))
                 .build()
-        ));
+            )
+        );
         assert_eq!(
             jb_store.jitterbuffer.queue_serialized_item(),
             QueueResult::Forward(1)
         );
-        assert!(rspad
-            .0
-            .pad
-            .push_event(gst::event::Segment::new(&gst::FormattedSegment::<
-                gst::format::Time,
-            >::new())));
+        assert!(
+            rspad
+                .0
+                .pad
+                .push_event(gst::event::Segment::new(&gst::FormattedSegment::<
+                    gst::format::Time,
+                >::new()))
+        );
 
         if let Some(waker) = jb_store.waker.take() {
             waker.wake()

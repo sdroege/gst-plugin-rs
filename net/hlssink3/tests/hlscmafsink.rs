@@ -11,7 +11,7 @@ use glib::clone::{Downgrade, Upgrade};
 use gst::prelude::*;
 use gsthlssink3::hlssink3::HlsSink3PlaylistType;
 use std::io::Write;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 
 mod common;
 use crate::common::*;
@@ -172,16 +172,16 @@ fn test_hlscmafsink_video_with_single_media_file() -> Result<(), ()> {
                 break;
             }
             MessageView::Element(msg) => {
-                if let Some(structure) = msg.structure() {
-                    if structure.has_name("hls-segment-added") {
-                        let location = structure.get::<String>("location").unwrap();
-                        let byte_range = get_byte_ranges(structure);
-                        byte_ranges.extend(byte_range);
+                if let Some(structure) = msg.structure()
+                    && structure.has_name("hls-segment-added")
+                {
+                    let location = structure.get::<String>("location").unwrap();
+                    let byte_range = get_byte_ranges(structure);
+                    byte_ranges.extend(byte_range);
 
-                        hls_messages_sender
-                            .try_send(HlsSinkEvent::SegmentAddedMessage(location))
-                            .expect("Send segment added event");
-                    }
+                    hls_messages_sender
+                        .try_send(HlsSinkEvent::SegmentAddedMessage(location))
+                        .expect("Send segment added event");
                 }
             }
             MessageView::Error(err) => panic!("{err}"),

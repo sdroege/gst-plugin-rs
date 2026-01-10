@@ -9,7 +9,7 @@
 
 use std::io;
 
-use anyhow::{bail, Context as _};
+use anyhow::{Context as _, bail};
 use bitstream_io::{
     BigEndian, ByteWrite as _, ByteWriter, FromByteStream, FromByteStreamWith, ToByteStream,
     ToByteStreamWith,

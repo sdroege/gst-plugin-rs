@@ -221,17 +221,17 @@ impl OriginalBufferRestore {
     ) -> bool {
         if let gst::QueryViewMut::Custom(_) = query.view_mut() {
             let s = query.structure_mut();
-            if s.has_name("gst-original-buffer-forward-query") {
-                if let Ok(mut q) = s.get::<gst::Query>("query") {
-                    s.remove_field("query");
-                    assert!(q.is_writable());
-                    let res = self.src_pad.peer_query(q.get_mut().unwrap());
+            if s.has_name("gst-original-buffer-forward-query")
+                && let Ok(mut q) = s.get::<gst::Query>("query")
+            {
+                s.remove_field("query");
+                assert!(q.is_writable());
+                let res = self.src_pad.peer_query(q.get_mut().unwrap());
 
-                    s.set("query", q);
-                    s.set("result", res);
+                s.set("query", q);
+                s.set("result", res);
 
-                    return true;
-                }
+                return true;
             }
         }
 
@@ -278,33 +278,30 @@ impl OriginalBufferRestore {
                 continue;
             }
 
-            if meta.has_tag::<gst_video::video_meta::tags::Size>() {
-                if let (Some(meta_vinfo), Some(sink_vinfo)) =
+            if meta.has_tag::<gst_video::video_meta::tags::Size>()
+                && let (Some(meta_vinfo), Some(sink_vinfo)) =
                     (&state.meta_caps.vinfo, &state.sinkpad_caps.vinfo)
-                {
-                    if (meta_vinfo.width() != sink_vinfo.width()
-                        || meta_vinfo.height() != sink_vinfo.height())
-                        && meta
-                            .transform(
-                                outbuf.make_mut(),
-                                &gst_video::video_meta::VideoMetaTransformScale::new(
-                                    sink_vinfo, meta_vinfo,
-                                ),
-                            )
-                            .is_ok()
-                    {
-                        continue;
-                    }
-                }
+                && (meta_vinfo.width() != sink_vinfo.width()
+                    || meta_vinfo.height() != sink_vinfo.height())
+                && meta
+                    .transform(
+                        outbuf.make_mut(),
+                        &gst_video::video_meta::VideoMetaTransformScale::new(
+                            sink_vinfo, meta_vinfo,
+                        ),
+                    )
+                    .is_ok()
+            {
+                continue;
             }
 
             let _ = meta.transform(outbuf.make_mut(), &gst::meta::MetaTransformCopy::new(..));
         }
 
-        if let Some(event) = state.sinkpad_segment.take() {
-            if !self.src_pad.push_event(event) {
-                return Err(gst::FlowError::Error);
-            }
+        if let Some(event) = state.sinkpad_segment.take()
+            && !self.src_pad.push_event(event)
+        {
+            return Err(gst::FlowError::Error);
         }
 
         self.src_pad.push(outbuf)

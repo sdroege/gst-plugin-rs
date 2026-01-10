@@ -37,8 +37,8 @@ use std::sync::LazyLock;
 use super::transcribe::{TranscriberSettings, TranscriberStream, TranscriptEvent, TranscriptItem};
 use super::translate::{TranslateLoop, TranslatedItem, Translation};
 use super::{
-    AwsTranscriberResultStability, AwsTranscriberVocabularyFilterMethod,
-    TranslationTokenizationMethod, CAT,
+    AwsTranscriberResultStability, AwsTranscriberVocabularyFilterMethod, CAT,
+    TranslationTokenizationMethod,
 };
 use crate::s3utils::RUNTIME;
 
@@ -1022,10 +1022,10 @@ impl ElementImpl for Transcriber {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
-            "Transcriber",
-            "Audio/Text/Filter",
-            "Speech to Text filter, using AWS transcribe",
-            "Jordan Petridis <jordan@centricular.com>, Mathieu Duponchelle <mathieu@centricular.com>, François Laignel <francois@centricular.com>",
+                "Transcriber",
+                "Audio/Text/Filter",
+                "Speech to Text filter, using AWS transcribe",
+                "Jordan Petridis <jordan@centricular.com>, Mathieu Duponchelle <mathieu@centricular.com>, François Laignel <francois@centricular.com>",
             )
         });
 
@@ -1455,23 +1455,23 @@ impl TranslationPadTask {
             }
         };
 
-        if let Some(items_to_translate) = items_to_translate {
-            if !items_to_translate.is_empty() {
-                let res = self
-                    .to_translate_tx
-                    .as_mut()
-                    .expect("to_translation chan must be available in translation mode")
-                    .send(items_to_translate)
-                    .await;
+        if let Some(items_to_translate) = items_to_translate
+            && !items_to_translate.is_empty()
+        {
+            let res = self
+                .to_translate_tx
+                .as_mut()
+                .expect("to_translation chan must be available in translation mode")
+                .send(items_to_translate)
+                .await;
 
-                if res.is_err() {
-                    const ERR: &str = "to_translation chan terminated";
-                    gst::debug!(CAT, imp = self.pad, "{ERR}");
-                    return Err(gst::error_msg!(gst::StreamError::Failed, ["{ERR}"]));
-                }
-
-                self.pending_translations += 1;
+            if res.is_err() {
+                const ERR: &str = "to_translation chan terminated";
+                gst::debug!(CAT, imp = self.pad, "{ERR}");
+                return Err(gst::error_msg!(gst::StreamError::Failed, ["{ERR}"]));
             }
+
+            self.pending_translations += 1;
         }
 
         // Check pending translated items
@@ -1523,32 +1523,32 @@ impl TranslationPadTask {
             (last_position, state.discont_pending)
         };
 
-        if let Some(unsynced) = self.unsynced.take() {
-            if let Some(ref unsynced_pad) = self.unsynced_pad {
-                if unsynced_pad.last_flow_result().is_ok() {
-                    gst::log!(
-                        CAT,
-                        obj = unsynced_pad,
-                        "pushing serialized transcript with timestamp {now}"
-                    );
-                    gst::trace!(CAT, obj = unsynced_pad, "serialized transcript: {unsynced}");
+        if let Some(unsynced) = self.unsynced.take()
+            && let Some(ref unsynced_pad) = self.unsynced_pad
+        {
+            if unsynced_pad.last_flow_result().is_ok() {
+                gst::log!(
+                    CAT,
+                    obj = unsynced_pad,
+                    "pushing serialized transcript with timestamp {now}"
+                );
+                gst::trace!(CAT, obj = unsynced_pad, "serialized transcript: {unsynced}");
 
-                    let mut buf = gst::Buffer::from_mut_slice(unsynced.into_bytes());
-                    {
-                        let buf_mut = buf.get_mut().unwrap();
+                let mut buf = gst::Buffer::from_mut_slice(unsynced.into_bytes());
+                {
+                    let buf_mut = buf.get_mut().unwrap();
 
-                        buf_mut.set_pts(now);
-                    }
-
-                    let _ = unsynced_pad.push(buf);
-                } else {
-                    gst::log!(
-                        CAT,
-                        obj = unsynced_pad,
-                        "not pushing serialized transcript, last flow result: {:?}",
-                        unsynced_pad.last_flow_result()
-                    );
+                    buf_mut.set_pts(now);
                 }
+
+                let _ = unsynced_pad.push(buf);
+            } else {
+                gst::log!(
+                    CAT,
+                    obj = unsynced_pad,
+                    "not pushing serialized transcript, last flow result: {:?}",
+                    unsynced_pad.last_flow_result()
+                );
             }
         }
 

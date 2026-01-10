@@ -1,4 +1,4 @@
-use burn::tensor::{backend::Backend, ElementConversion, Tensor};
+use burn::tensor::{ElementConversion, Tensor, backend::Backend};
 use itertools::Itertools;
 
 pub struct BoundingBox {

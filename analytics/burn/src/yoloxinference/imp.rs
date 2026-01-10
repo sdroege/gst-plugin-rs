@@ -35,15 +35,15 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
-use super::yolox_burn::model::yolox;
 use super::ModelType;
+use super::yolox_burn::model::yolox;
 use crate::BackendType;
 
 use burn::{
     backend,
     module::{ConstantRecord, Module},
     record::{FullPrecisionSettings, Recorder, RecorderError},
-    tensor::{backend::Backend, Device, Tensor, TensorData},
+    tensor::{Device, Tensor, TensorData, backend::Backend},
 };
 
 const YOLOX_OUT: &glib::GStr = glib::gstr!("yolox-out");

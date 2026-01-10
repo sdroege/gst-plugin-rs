@@ -8,7 +8,7 @@
 
 #![allow(unused)]
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use bitstream_io::{
     BigEndian, BitRead, BitReader, ByteRead, ByteReader, FromBitStream, FromByteStream,
 };

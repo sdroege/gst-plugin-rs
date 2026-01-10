@@ -11,8 +11,8 @@ use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use gst::prelude::{ElementExt, GstObjectExt, PadExt, PadExtManual};
-use gst::subclass::{prelude::*, ElementMetadata};
-use gst::{glib, Caps, GroupId, Pad, PadDirection, PadPresence};
+use gst::subclass::{ElementMetadata, prelude::*};
+use gst::{Caps, GroupId, Pad, PadDirection, PadPresence, glib};
 
 use gst::{Element, PadTemplate};
 use std::sync::LazyLock;

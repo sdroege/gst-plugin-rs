@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::tests::{run_test_pipeline, ExpectedBuffer, ExpectedPacket, Source};
+use crate::tests::{ExpectedBuffer, ExpectedPacket, Source, run_test_pipeline};
 use gst::prelude::*;
 
 fn init() {
@@ -26,37 +26,41 @@ fn aac_hbr_not_fragmented() {
     for i in 0..102 {
         let position = i * 1024;
 
-        expected_pay.push(vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_nseconds(
-                position
-                    .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
-                    .unwrap(),
-            ))
-            .flags(if i == 0 {
-                gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER
-            } else {
-                gst::BufferFlags::MARKER
-            })
-            .rtp_time((position & 0xffff_ffff) as u32)
-            .build()]);
+        expected_pay.push(vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_nseconds(
+                    position
+                        .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
+                        .unwrap(),
+                ))
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER
+                } else {
+                    gst::BufferFlags::MARKER
+                })
+                .rtp_time((position & 0xffff_ffff) as u32)
+                .build(),
+        ]);
     }
 
     let mut expected_depay = Vec::with_capacity(102);
     for i in 0..102 {
         let position = i * 1024;
 
-        expected_depay.push(vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_nseconds(
-                position
-                    .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
-                    .unwrap(),
-            ))
-            .flags(if i == 0 {
-                gst::BufferFlags::DISCONT
-            } else {
-                gst::BufferFlags::empty()
-            })
-            .build()]);
+        expected_depay.push(vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_nseconds(
+                    position
+                        .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
+                        .unwrap(),
+                ))
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT
+                } else {
+                    gst::BufferFlags::empty()
+                })
+                .build(),
+        ]);
     }
 
     run_test_pipeline(Source::Bin(src), pay, depay, expected_pay, expected_depay);
@@ -106,18 +110,20 @@ fn aac_hbr_fragmented() {
     for i in 0..102 {
         let position = i * 1024;
 
-        expected_depay.push(vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_nseconds(
-                position
-                    .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
-                    .unwrap(),
-            ))
-            .flags(if i == 0 {
-                gst::BufferFlags::DISCONT
-            } else {
-                gst::BufferFlags::empty()
-            })
-            .build()]);
+        expected_depay.push(vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_nseconds(
+                    position
+                        .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
+                        .unwrap(),
+                ))
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT
+                } else {
+                    gst::BufferFlags::empty()
+                })
+                .build(),
+        ]);
     }
 
     run_test_pipeline(Source::Bin(src), pay, depay, expected_pay, expected_depay);
@@ -188,41 +194,45 @@ fn generic_not_fragmented() {
 
     let mut expected_pay = Vec::with_capacity(BUFFER_NB);
     for i in 0..PACKETS_PER_BUFFER {
-        expected_pay.push(vec![ExpectedPacket::builder()
-            .pts(pos_to_pts(i * PACKETS_PER_BUFFER))
-            .flags(if i == 0 {
-                gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER
-            } else {
-                gst::BufferFlags::MARKER
-            })
-            .rtp_time(pos_to_rtp(i * PACKETS_PER_BUFFER))
-            .build()]);
+        expected_pay.push(vec![
+            ExpectedPacket::builder()
+                .pts(pos_to_pts(i * PACKETS_PER_BUFFER))
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER
+                } else {
+                    gst::BufferFlags::MARKER
+                })
+                .rtp_time(pos_to_rtp(i * PACKETS_PER_BUFFER))
+                .build(),
+        ]);
     }
 
     let mut expected_depay = Vec::with_capacity(BUFFER_NB);
     for i in 0..BUFFER_NB {
-        expected_depay.push(vec![ExpectedBuffer::builder()
-            .pts(
-                pos_to_pts(i)
-                    + if i == 3 {
-                        11110.nseconds()
-                    } else {
-                        0.nseconds()
-                    },
-            )
-            .dts(match i {
-                0 => pos_to_pts(0),
-                1 => pos_to_pts(1 + 1),
-                2 => pos_to_pts(2 + 1) + 11110.nseconds(),
-                3 => pos_to_pts(3 - 2) + 11111.nseconds(),
-                _ => unreachable!(),
-            })
-            .flags(if i == 0 {
-                gst::BufferFlags::DISCONT
-            } else {
-                gst::BufferFlags::DELTA_UNIT
-            })
-            .build()]);
+        expected_depay.push(vec![
+            ExpectedBuffer::builder()
+                .pts(
+                    pos_to_pts(i)
+                        + if i == 3 {
+                            11110.nseconds()
+                        } else {
+                            0.nseconds()
+                        },
+                )
+                .dts(match i {
+                    0 => pos_to_pts(0),
+                    1 => pos_to_pts(1 + 1),
+                    2 => pos_to_pts(2 + 1) + 11110.nseconds(),
+                    3 => pos_to_pts(3 - 2) + 11111.nseconds(),
+                    _ => unreachable!(),
+                })
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT
+                } else {
+                    gst::BufferFlags::DELTA_UNIT
+                })
+                .build(),
+        ]);
     }
 
     run_test_pipeline(
@@ -324,22 +334,24 @@ fn generic_fragmented() {
 
     let mut expected_depay = Vec::with_capacity(BUFFER_NB);
     for i in 0..BUFFER_NB {
-        expected_depay.push(vec![ExpectedBuffer::builder()
-            .pts(pos_to_pts(i))
-            .dts(match i {
-                0 => pos_to_pts(0),
-                1 => pos_to_pts(1 + 1),
-                2 => pos_to_pts(2 + 1) + 11110.nseconds(),
-                3 => pos_to_pts(3 - 2) + 1.nseconds(),
-                _ => unreachable!(),
-            })
-            .size(BUFFER_SIZE)
-            .flags(if i == 0 {
-                gst::BufferFlags::DISCONT
-            } else {
-                gst::BufferFlags::DELTA_UNIT
-            })
-            .build()]);
+        expected_depay.push(vec![
+            ExpectedBuffer::builder()
+                .pts(pos_to_pts(i))
+                .dts(match i {
+                    0 => pos_to_pts(0),
+                    1 => pos_to_pts(1 + 1),
+                    2 => pos_to_pts(2 + 1) + 11110.nseconds(),
+                    3 => pos_to_pts(3 - 2) + 1.nseconds(),
+                    _ => unreachable!(),
+                })
+                .size(BUFFER_SIZE)
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT
+                } else {
+                    gst::BufferFlags::DELTA_UNIT
+                })
+                .build(),
+        ]);
     }
 
     run_test_pipeline(
@@ -474,11 +486,13 @@ fn generic_variable_au_size() {
                     pending_size = 0;
                 } else {
                     // Last AU
-                    expected_pay.push(vec![ExpectedPacket::builder()
-                        .pts(pos_to_pts(i))
-                        .flags(gst::BufferFlags::MARKER)
-                        .rtp_time(pos_to_rtp(i))
-                        .build()]);
+                    expected_pay.push(vec![
+                        ExpectedPacket::builder()
+                            .pts(pos_to_pts(i))
+                            .flags(gst::BufferFlags::MARKER)
+                            .rtp_time(pos_to_rtp(i))
+                            .build(),
+                    ]);
                 }
             } else if pending_packet.is_none() {
                 // Wait for more payload
@@ -499,22 +513,24 @@ fn generic_variable_au_size() {
 
     let mut expected_depay = Vec::with_capacity(AU_NB);
     for i in 0..AU_NB {
-        expected_depay.push(vec![ExpectedBuffer::builder()
-            .pts(pos_to_pts(i))
-            .dts(match i % 4 {
-                0 => pos_to_pts(0),
-                1 => pos_to_pts(1 + 1),
-                2 => pos_to_pts(2 + 1) + 11110.nseconds(),
-                3 => pos_to_pts(3 - 2) + 11111.nseconds(),
-                _ => unreachable!(),
-            })
-            .size(au_size(i))
-            .flags(if i == 0 {
-                gst::BufferFlags::DISCONT
-            } else {
-                gst::BufferFlags::DELTA_UNIT
-            })
-            .build()]);
+        expected_depay.push(vec![
+            ExpectedBuffer::builder()
+                .pts(pos_to_pts(i))
+                .dts(match i % 4 {
+                    0 => pos_to_pts(0),
+                    1 => pos_to_pts(1 + 1),
+                    2 => pos_to_pts(2 + 1) + 11110.nseconds(),
+                    3 => pos_to_pts(3 - 2) + 11111.nseconds(),
+                    _ => unreachable!(),
+                })
+                .size(au_size(i))
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT
+                } else {
+                    gst::BufferFlags::DELTA_UNIT
+                })
+                .build(),
+        ]);
     }
 
     run_test_pipeline(

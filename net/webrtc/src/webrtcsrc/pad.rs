@@ -3,10 +3,10 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::LazyLock;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 #[derive(Default)]
 pub struct WebRTCSrcPad {
@@ -48,10 +48,12 @@ impl ObjectSubclass for WebRTCSrcPad {
 impl ObjectImpl for WebRTCSrcPad {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPS: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecString::builder("msid")
-                .flags(glib::ParamFlags::READABLE)
-                .blurb("Remote MediaStream ID in use for this pad")
-                .build()]
+            vec![
+                glib::ParamSpecString::builder("msid")
+                    .flags(glib::ParamFlags::READABLE)
+                    .blurb("Remote MediaStream ID in use for this pad")
+                    .build(),
+            ]
         });
         PROPS.as_ref()
     }

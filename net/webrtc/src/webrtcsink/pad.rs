@@ -24,10 +24,12 @@ impl ObjectSubclass for WebRTCSinkPad {
 impl ObjectImpl for WebRTCSinkPad {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPS: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecString::builder("msid")
-                .flags(glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY)
-                .blurb("Remote MediaStream ID in use for this pad")
-                .build()]
+            vec![
+                glib::ParamSpecString::builder("msid")
+                    .flags(glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY)
+                    .blurb("Remote MediaStream ID in use for this pad")
+                    .build(),
+            ]
         });
         PROPS.as_ref()
     }

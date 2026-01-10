@@ -19,7 +19,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{self, task, timer, PadSrc, Task};
+use crate::runtime::{self, PadSrc, Task, task, timer};
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(

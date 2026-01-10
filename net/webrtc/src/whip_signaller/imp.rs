@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
+use crate::RUNTIME;
 use crate::signaller::{Signallable, SignallableExt, SignallableImpl};
 use crate::utils::{
-    build_link_header, build_reqwest_client, parse_redirect_location, set_ice_servers, wait,
-    wait_async, WaitError,
+    WaitError, build_link_header, build_reqwest_client, parse_redirect_location, set_ice_servers,
+    wait, wait_async,
 };
-use crate::RUNTIME;
 use gst::glib::{self, RustClosure};
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -19,7 +19,7 @@ use std::sync::Mutex;
 use std::net::SocketAddr;
 use tokio::sync::mpsc;
 use url::Url;
-use warp::{http, Filter, Reply};
+use warp::{Filter, Reply, http};
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -232,12 +232,10 @@ impl WhipClient {
 
         match resp.status() {
             reqwest::StatusCode::OK | reqwest::StatusCode::CREATED => {
-                if use_link_headers {
-                    if let Err(e) = set_ice_servers(webrtcbin, resp.headers()) {
-                        self.raise_error(e.to_string());
-                        return;
-                    };
-                }
+                if use_link_headers && let Err(e) = set_ice_servers(webrtcbin, resp.headers()) {
+                    self.raise_error(e.to_string());
+                    return;
+                };
 
                 // Get the url of the resource from 'location' header.
                 // The resource created is expected be a relative path
@@ -1149,14 +1147,14 @@ impl SignallableImpl for WhipServer {
 
         let handle = settings.server_handle.take();
 
-        if let Some(tx) = settings.shutdown_signal.take() {
-            if tx.send(()).is_err() {
-                gst::error!(
-                    CAT,
-                    imp = self,
-                    "Failed to send shutdown signal. Receiver dropped"
-                );
-            }
+        if let Some(tx) = settings.shutdown_signal.take()
+            && tx.send(()).is_err()
+        {
+            gst::error!(
+                CAT,
+                imp = self,
+                "Failed to send shutdown signal. Receiver dropped"
+            );
         }
 
         if let Some(handle) = handle {
@@ -1233,7 +1231,10 @@ impl ObjectImpl for WhipServer {
                 if let Err(e) =
                     self.set_host_addr(value.get::<Option<&str>>().expect("type checked upstream"))
                 {
-                    gst::error!(CAT, "Couldn't set the host address as {e:?}, fallback to the default value {DEFAULT_HOST_ADDR:?}");
+                    gst::error!(
+                        CAT,
+                        "Couldn't set the host address as {e:?}, fallback to the default value {DEFAULT_HOST_ADDR:?}"
+                    );
                 }
             }
             "stun-server" => {

@@ -199,15 +199,15 @@ impl RtpBaseDepay2Impl for RtpAc3Depay {
 
         // Clear out unfinished pending partial frame if needed
 
-        if frag_type == FragType::Start || frag_type == FragType::NotFragmented {
-            if let Some(partial_frame) = state.partial_frame.as_ref() {
-                gst::warning!(CAT, imp = self, "Dropping unfinished partial frame");
+        if (frag_type == FragType::Start || frag_type == FragType::NotFragmented)
+            && let Some(partial_frame) = state.partial_frame.as_ref()
+        {
+            gst::warning!(CAT, imp = self, "Dropping unfinished partial frame");
 
-                self.obj()
-                    .drop_packets(partial_frame.ext_seqnum..=packet.ext_seqnum() - 1);
+            self.obj()
+                .drop_packets(partial_frame.ext_seqnum..=packet.ext_seqnum() - 1);
 
-                state.partial_frame = None;
-            }
+            state.partial_frame = None;
         }
 
         // Skip to AC-3 payload data

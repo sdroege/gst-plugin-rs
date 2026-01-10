@@ -5,7 +5,7 @@
 //! * http://www.sienna-tv.com/ndi/ndiclosedcaptions.html
 //! * http://www.sienna-tv.com/ndi/ndiclosedcaptions608.html
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use data_encoding::BASE64;
 use smallvec::SmallVec;
 

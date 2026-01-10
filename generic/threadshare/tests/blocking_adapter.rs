@@ -67,9 +67,11 @@ fn send_initial_events(
     item_tx: &mut mpsc::Sender<Item>,
     res_rx: &mut mpsc::Receiver<Result<(), gst::FlowError>>,
 ) {
-    assert!(appsink
-        .try_pull_object(gst::ClockTime::from_mseconds(20))
-        .is_none());
+    assert!(
+        appsink
+            .try_pull_object(gst::ClockTime::from_mseconds(20))
+            .is_none()
+    );
 
     item_tx
         .try_send(Item::Event(

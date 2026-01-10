@@ -147,10 +147,11 @@ impl S302MParse {
             let buffer = buffer.make_mut();
 
             // Interpolate PTS
-            if let Some(last_pts) = state.last_pts {
-                if !state.discont && buffer.pts().is_none() {
-                    buffer.set_pts(last_pts);
-                }
+            if let Some(last_pts) = state.last_pts
+                && !state.discont
+                && buffer.pts().is_none()
+            {
+                buffer.set_pts(last_pts);
             }
 
             // Calculate duration

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use anyhow::{anyhow, Error};
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
+use anyhow::{Error, anyhow};
 use futures::prelude::*;
 use futures::ready;
 use gst_plugin_webrtc_protocol as p;

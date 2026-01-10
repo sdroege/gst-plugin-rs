@@ -40,15 +40,15 @@ async fn main() -> Result<(), Error> {
 
         match msg.view() {
             MessageView::Latency(..) => {
-                if let Some(o) = msg.src() {
-                    if let Ok(pipeline) = toplevel(o).downcast::<gst::Pipeline>() {
-                        pipeline
-                            .call_async_future(|pipeline: &gst::Pipeline| {
-                                eprintln!("Recalculating latency {pipeline:?}");
-                                let _ = pipeline.recalculate_latency();
-                            })
-                            .await;
-                    }
+                if let Some(o) = msg.src()
+                    && let Ok(pipeline) = toplevel(o).downcast::<gst::Pipeline>()
+                {
+                    pipeline
+                        .call_async_future(|pipeline: &gst::Pipeline| {
+                            eprintln!("Recalculating latency {pipeline:?}");
+                            let _ = pipeline.recalculate_latency();
+                        })
+                        .await;
                 }
             }
             MessageView::Eos(..) => {

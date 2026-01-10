@@ -88,8 +88,8 @@ impl Default for QuinnQuicTransportConfig {
         // Copied from Quinn::TransportConfig defaults
         const EXPECTED_RTT: u32 = 100; // ms
         const MAX_STREAM_BANDWIDTH: u32 = 12500 * 1000; // bytes/s
-                                                        // Window size needed to avoid pipeline
-                                                        // stalls
+        // Window size needed to avoid pipeline
+        // stalls
         const STREAM_RWND: u32 = MAX_STREAM_BANDWIDTH / 1000 * EXPECTED_RTT;
 
         Self {

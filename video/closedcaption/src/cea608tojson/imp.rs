@@ -417,27 +417,27 @@ impl State {
         // In unbuffered mode, we output the whole roll-up window
         // and need to move it when the preamble relocates it
         // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(1)(ii)
-        if self.settings.unbuffered {
-            if let Some(mode) = self.mode {
-                if mode.is_rollup() && self.cursor.row != preamble.row() as u32 {
-                    let offset = match mode {
-                        Cea608Mode::RollUp2 => 1,
-                        Cea608Mode::RollUp3 => 2,
-                        Cea608Mode::RollUp4 => 3,
-                        _ => unreachable!(),
-                    };
+        if self.settings.unbuffered
+            && let Some(mode) = self.mode
+            && mode.is_rollup()
+            && self.cursor.row != preamble.row() as u32
+        {
+            let offset = match mode {
+                Cea608Mode::RollUp2 => 1,
+                Cea608Mode::RollUp3 => 2,
+                Cea608Mode::RollUp4 => 3,
+                _ => unreachable!(),
+            };
 
-                    let current_top_row = self.cursor.row.saturating_sub(offset);
-                    let new_row_offset = preamble.row() as i32 - self.cursor.row as i32;
+            let current_top_row = self.cursor.row.saturating_sub(offset);
+            let new_row_offset = preamble.row() as i32 - self.cursor.row as i32;
 
-                    for row in current_top_row..self.cursor.row {
-                        if let Some(mut row) = self.rows.remove(&row) {
-                            let new_row = row.row as i32 + new_row_offset;
-                            if new_row >= 0 {
-                                row.row = new_row as u32;
-                                self.rows.insert(row.row, row);
-                            }
-                        }
+            for row in current_top_row..self.cursor.row {
+                if let Some(mut row) = self.rows.remove(&row) {
+                    let new_row = row.row as i32 + new_row_offset;
+                    if new_row >= 0 {
+                        row.row = new_row as u32;
+                        self.rows.insert(row.row, row);
                     }
                 }
             }
@@ -507,12 +507,12 @@ impl State {
                 row.pop(&mut self.cursor);
             }
 
-            if (text.char1.is_some() || text.char2.is_some()) && self.first_pts.is_none() {
-                if let Some(mode) = self.mode {
-                    if mode.is_rollup() || mode == Cea608Mode::PaintOn {
-                        self.first_pts = self.current_pts;
-                    }
-                }
+            if (text.char1.is_some() || text.char2.is_some())
+                && self.first_pts.is_none()
+                && let Some(mode) = self.mode
+                && (mode.is_rollup() || mode == Cea608Mode::PaintOn)
+            {
+                self.first_pts = self.current_pts;
             }
 
             if let Some(c) = text.char1 {
@@ -821,15 +821,17 @@ impl ObjectImpl for Cea608ToJson {
 
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecBoolean::builder("unbuffered")
-                .nick("Unbuffered")
-                .blurb(
-                    "Whether captions should be output at display time, \
+            vec![
+                glib::ParamSpecBoolean::builder("unbuffered")
+                    .nick("Unbuffered")
+                    .blurb(
+                        "Whether captions should be output at display time, \
                      instead of waiting to determine durations. Useful with live input",
-                )
-                .default_value(DEFAULT_UNBUFFERED)
-                .mutable_ready()
-                .build()]
+                    )
+                    .default_value(DEFAULT_UNBUFFERED)
+                    .mutable_ready()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

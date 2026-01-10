@@ -1,6 +1,6 @@
 use futures::future;
 use futures::prelude::*;
-use gst::{prelude::*, ErrorMessage};
+use gst::{ErrorMessage, prelude::*};
 use reqwest::header::HeaderMap;
 use reqwest::redirect::Policy;
 use std::sync::LazyLock;

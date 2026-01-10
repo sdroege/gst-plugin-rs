@@ -186,17 +186,19 @@ impl ObjectImpl for PadPushTimings {
 
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
-            vec![glib::subclass::Signal::builder("write-log")
-                .action()
-                .param_types([Option::<String>::static_type()])
-                .class_handler(|args| {
-                    let obj = args[0].get::<super::PadPushTimings>().unwrap();
+            vec![
+                glib::subclass::Signal::builder("write-log")
+                    .action()
+                    .param_types([Option::<String>::static_type()])
+                    .class_handler(|args| {
+                        let obj = args[0].get::<super::PadPushTimings>().unwrap();
 
-                    obj.imp().write_log(args[1].get::<Option<&str>>().unwrap());
+                        obj.imp().write_log(args[1].get::<Option<&str>>().unwrap());
 
-                    None
-                })
-                .build()]
+                        None
+                    })
+                    .build(),
+            ]
         });
 
         SIGNALS.as_ref()
@@ -265,15 +267,15 @@ impl PadPushTimings {
                 format!(":{pad_name}")
             };
 
-            if let Some(ref filter) = settings.include_filter {
-                if !filter.is_match(&name) {
-                    include = false;
-                }
+            if let Some(ref filter) = settings.include_filter
+                && !filter.is_match(&name)
+            {
+                include = false;
             }
-            if let Some(ref filter) = settings.exclude_filter {
-                if filter.is_match(&name) {
-                    include = false;
-                }
+            if let Some(ref filter) = settings.exclude_filter
+                && filter.is_match(&name)
+            {
+                include = false;
             }
 
             Pad {

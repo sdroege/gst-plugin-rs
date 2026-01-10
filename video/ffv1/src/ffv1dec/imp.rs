@@ -14,9 +14,9 @@ use ffv1::record::ConfigRecord;
 
 use gst::glib;
 use gst::subclass::prelude::*;
+use gst_video::VideoFormat;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
-use gst_video::VideoFormat;
 
 use std::sync::LazyLock;
 use std::sync::Mutex;

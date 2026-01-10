@@ -10,7 +10,7 @@ use gst::prelude::*;
 
 use either::*;
 
-use std::sync::{mpsc, Mutex};
+use std::sync::{Mutex, mpsc};
 use std::{thread, time::Duration};
 
 fn init() {

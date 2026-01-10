@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Context};
+use anyhow::{Context, anyhow, bail};
 use async_tungstenite::tungstenite::Message;
 use futures::prelude::*;
 use futures::{pin_mut, select, select_biased};
@@ -66,11 +66,7 @@ struct Args {
 
 impl Args {
     pub fn scheme(&self) -> &str {
-        if self.use_tls {
-            "wss"
-        } else {
-            "ws"
-        }
+        if self.use_tls { "wss" } else { "ws" }
     }
 
     async fn get_synced_clock(&self) -> anyhow::Result<gst::Clock> {
@@ -739,10 +735,10 @@ async fn listener_task(
     debug!("Closing signaller websocket");
     let _ = signaller_tx.close().await;
 
-    if let Ok(listener_res) = res {
-        if listener_res.is_err() {
-            listener_res?;
-        }
+    if let Ok(listener_res) = res
+        && listener_res.is_err()
+    {
+        listener_res?;
     }
 
     Ok(())

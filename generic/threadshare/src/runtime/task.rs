@@ -15,7 +15,7 @@ use futures::prelude::*;
 
 use std::fmt;
 use std::ops::Deref;
-use std::pin::{pin, Pin};
+use std::pin::{Pin, pin};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::task::Poll;
 

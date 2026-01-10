@@ -11,7 +11,7 @@ use gst::prelude::*;
 use gsthlssink3::hlssink3::HlsSink3PlaylistType;
 use std::io::Write;
 use std::sync::LazyLock;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 
 mod common;
 use crate::common::*;
@@ -204,13 +204,13 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
                 break;
             }
             MessageView::Element(msg) => {
-                if let Some(structure) = msg.structure() {
-                    if structure.has_name("hls-segment-added") {
-                        let location = structure.get::<String>("location").unwrap();
-                        hls_messages_sender
-                            .try_send(HlsSinkEvent::SegmentAddedMessage(location))
-                            .expect("Send segment added event");
-                    }
+                if let Some(structure) = msg.structure()
+                    && structure.has_name("hls-segment-added")
+                {
+                    let location = structure.get::<String>("location").unwrap();
+                    hls_messages_sender
+                        .try_send(HlsSinkEvent::SegmentAddedMessage(location))
+                        .expect("Send segment added event");
                 }
             }
             MessageView::Error(err) => panic!("{err}"),
@@ -293,9 +293,11 @@ fn test_hlssink3_element_with_audio_content() -> Result<(), ()> {
     audio_src.set_property("is-live", false);
     audio_src.set_property("num-buffers", BUFFER_NB);
 
-    let hls_avenc_aac = try_or_pause!(gst::ElementFactory::make("avenc_aac")
-        .name("hls_avenc_aac")
-        .build());
+    let hls_avenc_aac = try_or_pause!(
+        gst::ElementFactory::make("avenc_aac")
+            .name("hls_avenc_aac")
+            .build()
+    );
     let hlssink3 = gst::ElementFactory::make("hlssink3")
         .name("hlssink3")
         .property("target-duration", 6u32)
@@ -440,13 +442,13 @@ fn test_hlssink3_write_correct_playlist_content() -> Result<(), ()> {
                 break;
             }
             MessageView::Element(msg) => {
-                if let Some(structure) = msg.structure() {
-                    if structure.has_name("hls-segment-added") {
-                        let location = structure.get::<String>("location").unwrap();
-                        hls_messages_sender
-                            .try_send(HlsSinkEvent::SegmentAddedMessage(location))
-                            .expect("Send segment added event");
-                    }
+                if let Some(structure) = msg.structure()
+                    && structure.has_name("hls-segment-added")
+                {
+                    let location = structure.get::<String>("location").unwrap();
+                    hls_messages_sender
+                        .try_send(HlsSinkEvent::SegmentAddedMessage(location))
+                        .expect("Send segment added event");
                 }
             }
             MessageView::Error(..) => unreachable!(),
@@ -622,16 +624,16 @@ fn test_hlssink3_video_with_single_media_file() -> Result<(), ()> {
                 break;
             }
             MessageView::Element(msg) => {
-                if let Some(structure) = msg.structure() {
-                    if structure.has_name("hls-segment-added") {
-                        let location = structure.get::<String>("location").unwrap();
-                        let byte_range = get_byte_ranges(structure);
-                        byte_ranges.extend(byte_range);
+                if let Some(structure) = msg.structure()
+                    && structure.has_name("hls-segment-added")
+                {
+                    let location = structure.get::<String>("location").unwrap();
+                    let byte_range = get_byte_ranges(structure);
+                    byte_ranges.extend(byte_range);
 
-                        hls_messages_sender
-                            .try_send(HlsSinkEvent::SegmentAddedMessage(location))
-                            .expect("Send segment added event");
-                    }
+                    hls_messages_sender
+                        .try_send(HlsSinkEvent::SegmentAddedMessage(location))
+                        .expect("Send segment added event");
                 }
             }
             MessageView::Error(err) => panic!("{err}"),

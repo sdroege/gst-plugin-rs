@@ -31,17 +31,17 @@ use gst::subclass::prelude::*;
 use gst::{glib, prelude::*};
 
 use crate::RUNTIME;
-use futures::future::{abortable, AbortHandle};
+use futures::future::{AbortHandle, abortable};
 use reqwest::Response;
 use reqwest::{
-    header::{HeaderMap, HeaderValue},
     Client,
+    header::{HeaderMap, HeaderValue},
 };
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{LazyLock, Mutex};
 
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 
 use super::Overflow;
 
@@ -627,14 +627,15 @@ impl Synthesizer {
             state.previous_request_ids.clear();
         }
 
-        if let Some(position) = state.out_segment.position() {
-            if matches!(overflow, Overflow::Shift) && pts < position {
-                gst::debug!(
-                    CAT,
-                    "received pts {pts} < position {position}, shifting forward"
-                );
-                pts = position;
-            }
+        if let Some(position) = state.out_segment.position()
+            && matches!(overflow, Overflow::Shift)
+            && pts < position
+        {
+            gst::debug!(
+                CAT,
+                "received pts {pts} < position {position}, shifting forward"
+            );
+            pts = position;
         }
 
         let Some(buffer_rtime) = out_segment.to_running_time(pts) else {
@@ -810,12 +811,11 @@ impl Synthesizer {
         {
             let outbuf_mut = outbuf.get_mut().unwrap();
             buffer.foreach_meta(|meta| {
-                if meta.tags().is_empty() {
-                    if let Err(err) =
+                if meta.tags().is_empty()
+                    && let Err(err) =
                         meta.transform(outbuf_mut, &gst::meta::MetaTransformCopy::new(..))
-                    {
-                        gst::trace!(CAT, imp = self, "Could not copy meta {}: {err}", meta.api());
-                    }
+                {
+                    gst::trace!(CAT, imp = self, "Could not copy meta {}: {err}", meta.api());
                 }
                 std::ops::ControlFlow::Continue(())
             });
@@ -868,17 +868,16 @@ impl Synthesizer {
                 let outbuf_mut = outbuf.get_mut().unwrap();
                 for buffer in list.iter() {
                     buffer.foreach_meta(|meta| {
-                        if meta.tags().is_empty() {
-                            if let Err(err) =
+                        if meta.tags().is_empty()
+                            && let Err(err) =
                                 meta.transform(outbuf_mut, &gst::meta::MetaTransformCopy::new(..))
-                            {
-                                gst::trace!(
-                                    CAT,
-                                    imp = self,
-                                    "Could not copy meta {}: {err}",
-                                    meta.api()
-                                );
-                            }
+                        {
+                            gst::trace!(
+                                CAT,
+                                imp = self,
+                                "Could not copy meta {}: {err}",
+                                meta.api()
+                            );
                         }
                         std::ops::ControlFlow::Continue(())
                     });

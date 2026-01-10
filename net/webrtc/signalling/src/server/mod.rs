@@ -175,8 +175,8 @@ impl Server {
         let this_id_clone = this_id.clone();
         let state_clone = self.state.clone();
         let receive_task_handle = task::spawn(async move {
-            if let Some(tx) = tx.as_mut() {
-                if let Err(err) = tx
+            if let Some(tx) = tx.as_mut()
+                && let Err(err) = tx
                     .send((
                         this_id_clone.clone(),
                         Some(
@@ -188,18 +188,17 @@ impl Server {
                         ),
                     ))
                     .await
-                {
-                    warn!(this = %this_id_clone, "Error handling message: {:?}", err);
-                }
+            {
+                warn!(this = %this_id_clone, "Error handling message: {:?}", err);
             }
             while let Some(msg) = ws_stream.next().await {
                 info!("Received message {msg:?}");
                 match msg {
                     Ok(WsMessage::Text(msg)) => {
-                        if let Some(tx) = tx.as_mut() {
-                            if let Err(err) = tx.send((this_id_clone.clone(), Some(msg))).await {
-                                warn!(this = %this_id_clone, "Error handling message: {:?}", err);
-                            }
+                        if let Some(tx) = tx.as_mut()
+                            && let Err(err) = tx.send((this_id_clone.clone(), Some(msg))).await
+                        {
+                            warn!(this = %this_id_clone, "Error handling message: {:?}", err);
                         }
                     }
                     Ok(WsMessage::Close(reason)) => {

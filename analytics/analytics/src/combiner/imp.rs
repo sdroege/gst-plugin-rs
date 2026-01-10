@@ -501,28 +501,28 @@ impl AnalyticsCombiner {
             let pad_settings = pad_imp.settings.lock().unwrap().clone();
 
             // Take any leftover previous buffer now if it's not too far in the past
-            if pad_settings.batch_strategy == super::BatchStrategy::FirstInBatchWithOverlap {
-                if let Some(buffer) = pad_state.previous_buffer.take() {
-                    if buffer.running_time.is_none_or(|running_time| {
-                        running_time >= start_position.saturating_sub(settings.batch_duration / 2)
-                    }) {
-                        gst::trace!(
-                            CAT,
-                            obj = pad,
-                            "Taking previous buffer {:?} with running time {}",
-                            buffer.buffer,
-                            buffer.running_time.display(),
-                        );
-                        pad_state.pending_buffers.push_back(buffer);
-                    } else {
-                        gst::trace!(
-                            CAT,
-                            obj = pad,
-                            "Dropping previous buffer {:?} with running time {}",
-                            buffer.buffer,
-                            buffer.running_time.display(),
-                        );
-                    }
+            if pad_settings.batch_strategy == super::BatchStrategy::FirstInBatchWithOverlap
+                && let Some(buffer) = pad_state.previous_buffer.take()
+            {
+                if buffer.running_time.is_none_or(|running_time| {
+                    running_time >= start_position.saturating_sub(settings.batch_duration / 2)
+                }) {
+                    gst::trace!(
+                        CAT,
+                        obj = pad,
+                        "Taking previous buffer {:?} with running time {}",
+                        buffer.buffer,
+                        buffer.running_time.display(),
+                    );
+                    pad_state.pending_buffers.push_back(buffer);
+                } else {
+                    gst::trace!(
+                        CAT,
+                        obj = pad,
+                        "Dropping previous buffer {:?} with running time {}",
+                        buffer.buffer,
+                        buffer.running_time.display(),
+                    );
                 }
             }
 
@@ -584,10 +584,10 @@ impl AnalyticsCombiner {
                 {
                     // Buffer is still for this batch because of the batch strategy
                     gst::trace!(
-                    CAT,
-                    obj = pad,
-                    "Taking future buffer {buffer:?} with running time {running_time} because of batch strategy"
-                );
+                        CAT,
+                        obj = pad,
+                        "Taking future buffer {buffer:?} with running time {running_time} because of batch strategy"
+                    );
                 } else {
                     // Buffer is for the next batch
                     gst::trace!(
@@ -665,7 +665,8 @@ impl AnalyticsCombiner {
                             let mut serialized_events = vec![];
                             for buffer in pad_state.pending_buffers.drain(1..) {
                                 gst::trace!(
-                                    CAT, obj = pad,
+                                    CAT,
+                                    obj = pad,
                                     "Dropping buffer {:?} with running time {} because of batch strategy",
                                     buffer.buffer,
                                     buffer.running_time.display(),
@@ -689,7 +690,8 @@ impl AnalyticsCombiner {
                             let mut serialized_events = vec![];
                             for buffer in pad_state.pending_buffers.drain(..) {
                                 gst::trace!(
-                                    CAT, obj = pad,
+                                    CAT,
+                                    obj = pad,
                                     "Dropping buffer {:?} with running time {} because of batch strategy",
                                     buffer.buffer,
                                     buffer.running_time.display(),
@@ -756,7 +758,8 @@ impl AnalyticsCombiner {
                             let mut serialized_events = vec![];
                             for buffer in pad_state.pending_buffers.drain(..) {
                                 gst::trace!(
-                                    CAT, obj = pad,
+                                    CAT,
+                                    obj = pad,
                                     "Dropping buffer {:?} with running time {} because of batch strategy",
                                     buffer.buffer,
                                     buffer.running_time.display(),
@@ -768,7 +771,8 @@ impl AnalyticsCombiner {
 
                             if let Some(mut last_buffer) = last_buffer {
                                 gst::trace!(
-                                    CAT, obj = pad,
+                                    CAT,
+                                    obj = pad,
                                     "Keeping last buffer {:?} with running time {} for next batch because of batch strategy",
                                     last_buffer.buffer,
                                     last_buffer.running_time.display(),
@@ -800,23 +804,18 @@ impl AnalyticsCombiner {
                         buffer: None,
                     };
                     pad_state.pending_buffers.push_back(buffer);
-                } else {
-                    match pad_state.pending_buffers.pop_front() {
-                        Some(mut b) => {
-                            while !b.serialized_events.is_empty() {
-                                let event = &mut b.serialized_events[0];
-                                if !event.is_sticky() {
-                                    break;
-                                }
-                                if pad_state.store_sticky_event(event) {
-                                    self.obj().src_pad().mark_reconfigure();
-                                }
-                                b.serialized_events.remove(0);
-                            }
-                            pad_state.pending_buffers.push_front(b);
+                } else if let Some(mut b) = pad_state.pending_buffers.pop_front() {
+                    while !b.serialized_events.is_empty() {
+                        let event = &mut b.serialized_events[0];
+                        if !event.is_sticky() {
+                            break;
                         }
-                        _ => {}
+                        if pad_state.store_sticky_event(event) {
+                            self.obj().src_pad().mark_reconfigure();
+                        }
+                        b.serialized_events.remove(0);
                     }
+                    pad_state.pending_buffers.push_front(b);
                 }
             }
 

@@ -9,7 +9,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use super::{frame, SinkEvent};
+use super::{SinkEvent, frame};
 use crate::sink::frame::Frame;
 use crate::sink::paintable::Paintable;
 
@@ -24,8 +24,8 @@ use gst_video::subclass::prelude::*;
 
 use std::sync::LazyLock;
 use std::sync::{
-    atomic::{self, AtomicBool},
     Mutex,
+    atomic::{self, AtomicBool},
 };
 
 use crate::utils;
@@ -157,7 +157,11 @@ impl ObjectImpl for PaintableSink {
                 // checking if GtkBin is registered to know if libgtk3.so is already present
                 // GtkBin was dropped for GTK4 https://gitlab.gnome.org/GNOME/gtk/-/commit/3c165b3b77
                 if glib::types::Type::from_name("GtkBin").is_some() {
-                    gst::error!(CAT, imp = self, "Skipping the creation of paintable to avoid segfault between GTK3 and GTK4");
+                    gst::error!(
+                        CAT,
+                        imp = self,
+                        "Skipping the creation of paintable to avoid segfault between GTK3 and GTK4"
+                    );
                     return None::<&Paintable>.to_value();
                 }
 
@@ -434,13 +438,15 @@ impl ElementImpl for PaintableSink {
                 }
             }
 
-            vec![gst::PadTemplate::new(
-                "sink",
-                gst::PadDirection::Sink,
-                gst::PadPresence::Always,
-                &caps,
-            )
-            .unwrap()]
+            vec![
+                gst::PadTemplate::new(
+                    "sink",
+                    gst::PadDirection::Sink,
+                    gst::PadPresence::Always,
+                    &caps,
+                )
+                .unwrap(),
+            ]
         });
 
         PAD_TEMPLATES.as_ref()
@@ -659,12 +665,10 @@ impl BaseSinkImpl for PaintableSink {
             if let GLContext::Initialized {
                 wrapped_context, ..
             } = &*GL_CONTEXT.lock().unwrap()
+                && (wrapped_context.check_feature("GL_ARB_sync")
+                    || wrapped_context.check_feature("GL_EXT_EGL_sync"))
             {
-                if wrapped_context.check_feature("GL_ARB_sync")
-                    || wrapped_context.check_feature("GL_EXT_EGL_sync")
-                {
-                    query.add_allocation_meta::<gst_gl::GLSyncMeta>(None)
-                }
+                query.add_allocation_meta::<gst_gl::GLSyncMeta>(None)
             }
         }
 
@@ -1512,10 +1516,6 @@ impl ChildProxyImpl for PaintableSink {
 
     fn children_count(&self) -> u32 {
         let paintable = self.paintable.lock().unwrap();
-        if paintable.is_some() {
-            1
-        } else {
-            0
-        }
+        if paintable.is_some() { 1 } else { 0 }
     }
 }

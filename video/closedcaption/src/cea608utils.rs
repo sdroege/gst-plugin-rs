@@ -9,8 +9,8 @@
 use std::collections::VecDeque;
 
 use cea608_types::{
-    tables::{Channel, Color, MidRow, PreambleAddressCode, PreambleType},
     Cea608, Cea608State, Mode,
+    tables::{Channel, Color, MidRow, PreambleAddressCode, PreambleType},
 };
 use gst::glib;
 use serde::{Deserialize, Serialize};
@@ -673,14 +673,14 @@ impl Cea608Renderer {
                             italic_attr = Some(attr);
                         }
 
-                        if let Some(color) = midrow.color() {
-                            if color != last_color {
-                                foreground_color_attr.set_end_index(idx);
-                                attrs.insert(foreground_color_attr);
-                                foreground_color_attr = pango_foreground_color_from_608(color);
-                                foreground_color_attr.set_start_index(idx);
-                                last_color = color;
-                            }
+                        if let Some(color) = midrow.color()
+                            && color != last_color
+                        {
+                            foreground_color_attr.set_end_index(idx);
+                            attrs.insert(foreground_color_attr);
+                            foreground_color_attr = pango_foreground_color_from_608(color);
+                            foreground_color_attr.set_start_index(idx);
+                            last_color = color;
                         }
                     }
                     Cea608Cell::Empty => text.push(' '),

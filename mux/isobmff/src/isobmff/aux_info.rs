@@ -6,8 +6,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::isobmff::boxes::{write_full_box, FULL_BOX_VERSION_0, FULL_BOX_VERSION_1};
 use crate::isobmff::AuxiliaryInformation;
+use crate::isobmff::boxes::{FULL_BOX_VERSION_0, FULL_BOX_VERSION_1, write_full_box};
 use anyhow::Error;
 
 impl AuxiliaryInformation {

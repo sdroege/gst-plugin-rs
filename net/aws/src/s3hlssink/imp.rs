@@ -10,19 +10,19 @@
 
 use std::io::Write;
 use std::str::FromStr;
-use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::sync::LazyLock;
 use std::sync::Mutex;
-use std::thread::{spawn, JoinHandle};
+use std::sync::mpsc::{self, Receiver, SyncSender};
+use std::thread::{JoinHandle, spawn};
 use std::time::Duration;
 
 use gst::{element_imp_error, glib, prelude::*, subclass::prelude::*};
 
 use aws_sdk_s3::{
-    config::{self, retry::RetryConfig, Credentials, Region},
+    Client,
+    config::{self, Credentials, Region, retry::RetryConfig},
     primitives::ByteStream,
     types::ObjectCannedAcl,
-    Client,
 };
 use aws_types::sdk_config::SdkConfig;
 

@@ -37,8 +37,8 @@ use gst::{glib, subclass::prelude::*};
 
 use crate::basepay::{RtpBasePay2Ext, RtpBasePay2Impl};
 
-use crate::mp4a::parsers::AudioSpecificConfig;
 use crate::mp4a::ENCODING_NAME;
+use crate::mp4a::parsers::AudioSpecificConfig;
 
 #[derive(Default)]
 pub struct RtpMpeg4AudioPay;

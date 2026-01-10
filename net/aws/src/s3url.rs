@@ -8,7 +8,7 @@
 
 use crate::s3arn::parse_arn;
 use aws_sdk_s3::config::Region;
-use percent_encoding::{percent_decode, percent_encode, AsciiSet, CONTROLS};
+use percent_encoding::{AsciiSet, CONTROLS, percent_decode, percent_encode};
 use url::Url;
 
 #[derive(Clone)]

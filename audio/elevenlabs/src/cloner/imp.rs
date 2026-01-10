@@ -15,8 +15,8 @@ use gst::{glib, prelude::*};
 use tokio::sync::mpsc;
 
 use reqwest::{
-    header::{HeaderMap, HeaderValue},
     Client,
+    header::{HeaderMap, HeaderValue},
 };
 
 use crate::RUNTIME;
@@ -135,13 +135,12 @@ impl Cloner {
 
                     if let Some(mut old_segment) = state.segment.as_ref().cloned() {
                         old_segment.set_position(segment.position());
-                        if old_segment != segment {
-                            if let Some(current_speaker) = state.current_speaker.as_ref().cloned() {
-                                if let Err(err) = self.drain_writer(&mut state, &current_speaker) {
-                                    self.post_error_message(err);
-                                    return false;
-                                }
-                            }
+                        if old_segment != segment
+                            && let Some(current_speaker) = state.current_speaker.as_ref().cloned()
+                            && let Err(err) = self.drain_writer(&mut state, &current_speaker)
+                        {
+                            self.post_error_message(err);
+                            return false;
                         }
                     }
 
@@ -156,15 +155,13 @@ impl Cloner {
                 {
                     let mut state = self.state.lock().unwrap();
 
-                    if let Some(old_caps) = state.caps.as_ref() {
-                        if old_caps != caps {
-                            if let Some(current_speaker) = state.current_speaker.as_ref().cloned() {
-                                if let Err(err) = self.drain_writer(&mut state, &current_speaker) {
-                                    self.post_error_message(err);
-                                    return false;
-                                }
-                            }
-                        }
+                    if let Some(old_caps) = state.caps.as_ref()
+                        && old_caps != caps
+                        && let Some(current_speaker) = state.current_speaker.as_ref().cloned()
+                        && let Err(err) = self.drain_writer(&mut state, &current_speaker)
+                    {
+                        self.post_error_message(err);
+                        return false;
                     }
 
                     state.caps = Some(caps.to_owned());
@@ -259,19 +256,22 @@ impl Cloner {
                     return gst::Pad::event_default(pad, Some(&*self.obj()), event);
                 };
 
-                gst::debug!(CAT, imp = self, "received new item {content} for speaker {speaker} with running time {item_rtime} and duration {item_duration}");
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "received new item {content} for speaker {speaker} with running time {item_rtime} and duration {item_duration}"
+                );
 
                 let mut state = self.state.lock().unwrap();
 
                 let trim = state.current_speaker.is_none();
 
-                if let Some(old_speaker) = state.current_speaker.as_ref().cloned() {
-                    if speaker != *old_speaker {
-                        if let Err(err) = self.maybe_drain_writer(&mut state, &old_speaker) {
-                            self.post_error_message(err);
-                            return false;
-                        }
-                    }
+                if let Some(old_speaker) = state.current_speaker.as_ref().cloned()
+                    && speaker != *old_speaker
+                    && let Err(err) = self.maybe_drain_writer(&mut state, &old_speaker)
+                {
+                    self.post_error_message(err);
+                    return false;
                 }
 
                 state.current_speaker = Some(speaker.clone());
@@ -293,7 +293,11 @@ impl Cloner {
                         !trim
                     } else if sample_rtime > item_rtime + item_duration {
                         state.samples.push_front(sample);
-                        gst::log!(CAT, imp = self, "keeping sample with running time {sample_rtime} and duration {sample_duration}");
+                        gst::log!(
+                            CAT,
+                            imp = self,
+                            "keeping sample with running time {sample_rtime} and duration {sample_duration}"
+                        );
                         break;
                     } else {
                         true
@@ -310,7 +314,11 @@ impl Cloner {
 
                         self.write_sample(&mut state, &sample, &speaker);
                     } else {
-                        gst::log!(CAT, imp = self, "discarding sample with running time {sample_rtime} and duration {sample_duration}");
+                        gst::log!(
+                            CAT,
+                            imp = self,
+                            "discarding sample with running time {sample_rtime} and duration {sample_duration}"
+                        );
                     }
                 }
 

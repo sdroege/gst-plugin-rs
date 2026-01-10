@@ -9,7 +9,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::klv::klv_utils::*;
-use crate::tests::{run_test_pipeline_full, ExpectedBuffer, ExpectedPacket, Liveness, Source};
+use crate::tests::{ExpectedBuffer, ExpectedPacket, Liveness, Source, run_test_pipeline_full};
 
 fn init() {
     use std::sync::Once;
@@ -92,13 +92,15 @@ fn test_klv_pay_depay() {
             0 => gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER,
             _ => gst::BufferFlags::MARKER,
         };
-        expected_pay.push(vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_seconds(i as u64))
-            .flags(expected_flags)
-            .pt(96)
-            .rtp_time(i as u32 * 90_000)
-            .marker_bit(true)
-            .build()]);
+        expected_pay.push(vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_seconds(i as u64))
+                .flags(expected_flags)
+                .pt(96)
+                .rtp_time(i as u32 * 90_000)
+                .marker_bit(true)
+                .build(),
+        ]);
     }
 
     let mut expected_depay = vec![];
@@ -113,11 +115,13 @@ fn test_klv_pay_depay() {
             5 => 162,
             _ => unreachable!(),
         };
-        expected_depay.push(vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_seconds(i as u64))
-            .size(expected_size)
-            .flags(expected_flags)
-            .build()]);
+        expected_depay.push(vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_seconds(i as u64))
+                .size(expected_size)
+                .flags(expected_flags)
+                .build(),
+        ]);
     }
 
     let expected_output_caps = input_caps.clone();
@@ -213,11 +217,13 @@ fn test_klv_pay_depay_fragmented() {
             5 => 162,
             _ => unreachable!(),
         };
-        expected_depay.push(vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_seconds(i as u64))
-            .size(expected_size)
-            .flags(expected_flags)
-            .build()]);
+        expected_depay.push(vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_seconds(i as u64))
+                .size(expected_size)
+                .flags(expected_flags)
+                .build(),
+        ]);
     }
 
     let expected_output_caps = input_caps.clone();
@@ -269,14 +275,16 @@ fn test_klv_pay_depay_with_packet_loss() {
             0 => gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER,
             _ => gst::BufferFlags::MARKER,
         };
-        expected_pay.push(vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_seconds(i as u64))
-            .flags(expected_flags)
-            .pt(96)
-            .rtp_time(i as u32 * 90_000)
-            .marker_bit(true)
-            .drop(i == 0 || i == 2) // Drop 1st and 3rd packet
-            .build()]);
+        expected_pay.push(vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_seconds(i as u64))
+                .flags(expected_flags)
+                .pt(96)
+                .rtp_time(i as u32 * 90_000)
+                .marker_bit(true)
+                .drop(i == 0 || i == 2) // Drop 1st and 3rd packet
+                .build(),
+        ]);
     }
 
     let mut expected_depay = vec![];
@@ -298,11 +306,13 @@ fn test_klv_pay_depay_with_packet_loss() {
             5 => 162,
             _ => unreachable!(),
         };
-        expected_depay.push(vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_seconds(i as u64))
-            .size(expected_size)
-            .flags(expected_flags)
-            .build()]);
+        expected_depay.push(vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_seconds(i as u64))
+                .size(expected_size)
+                .flags(expected_flags)
+                .build(),
+        ]);
     }
 
     let expected_output_caps = input_caps.clone();
@@ -414,11 +424,13 @@ fn test_klv_pay_depay_fragmented_with_packet_loss() {
             };
             // If any of the fragments got dropped, we can't reconstruct the original payload
             if packet_mask == 0b0000 {
-                expected_depay.push(vec![ExpectedBuffer::builder()
-                    .pts(gst::ClockTime::from_seconds(i as u64))
-                    .size(expected_size)
-                    .flags(expected_flags)
-                    .build()]);
+                expected_depay.push(vec![
+                    ExpectedBuffer::builder()
+                        .pts(gst::ClockTime::from_seconds(i as u64))
+                        .size(expected_size)
+                        .flags(expected_flags)
+                        .build(),
+                ]);
             }
         }
 

@@ -39,7 +39,8 @@ fn test_encode() {
         0x5d, 0x10, 0x04, 0x02, 0x1c, 0xad, 0x3f,
     ];
 
-    let expected_output = format!("File Format=MacCaption_MCC V1.0\r\n\
+    let expected_output = format!(
+        "File Format=MacCaption_MCC V1.0\r\n\
 \r\n\
 ///////////////////////////////////////////////////////////////////////////////////\r\n\
 // Computer Prompting and Captioning Company\r\n\
@@ -83,7 +84,9 @@ Creation Date=Thursday, December 27, 2018\r\n\
 Creation Time=17:34:47\r\n\
 Time Code Rate=30DF\r\n\
 \r\n\
-11:12:13;14	T52S524F67ZZ72F4QRFF0222FE8CFFOM739181656E67817FFF74ZZ1CB4\r\n", env!("CARGO_PKG_VERSION"));
+11:12:13;14	T52S524F67ZZ72F4QRFF0222FE8CFFOM739181656E67817FFF74ZZ1CB4\r\n",
+        env!("CARGO_PKG_VERSION")
+    );
 
     let mut h = gst_check::Harness::new("mccenc");
     {

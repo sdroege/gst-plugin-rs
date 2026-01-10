@@ -2,13 +2,13 @@
 
 use gst::prelude::*;
 
-use crate::signaller::{prelude::*, Signallable, Signaller};
+use crate::RUNTIME;
+use crate::signaller::{Signallable, Signaller, prelude::*};
 use crate::utils::{
-    self, Codec, Codecs, NavigationEvent, AUDIO_CAPS, CONTROL_DATA_CHANNEL_LABEL,
-    INPUT_DATA_CHANNEL_LABEL, RTP_CAPS, VIDEO_CAPS,
+    self, AUDIO_CAPS, CONTROL_DATA_CHANNEL_LABEL, Codec, Codecs, INPUT_DATA_CHANNEL_LABEL,
+    NavigationEvent, RTP_CAPS, VIDEO_CAPS,
 };
 use crate::webrtcsrc::WebRTCSrcPad;
-use crate::RUNTIME;
 use anyhow::{Context, Error};
 use gst::glib;
 use gst::subclass::prelude::*;
@@ -526,10 +526,10 @@ impl SessionInner {
                 .collect::<gst::Caps>();
 
             let downstream_caps = srcpad.peer_query_caps(Some(&caps_with_raw));
-            if let Some(first_struct) = downstream_caps.structure(0) {
-                if first_struct.has_name(raw_caps.structure(0).unwrap().name()) {
-                    srcpad.imp().set_needs_decoding(true)
-                }
+            if let Some(first_struct) = downstream_caps.structure(0)
+                && first_struct.has_name(raw_caps.structure(0).unwrap().name())
+            {
+                srcpad.imp().set_needs_decoding(true)
             }
         }
 
@@ -543,8 +543,8 @@ impl SessionInner {
                     let state = element.imp().state.lock().unwrap();
                     if let Some(ref session) = state.session {
                         let session = session.0.lock().unwrap();
-                        let f = session.flow_combiner.lock().unwrap().update_flow(padret);
-                        f
+
+                        session.flow_combiner.lock().unwrap().update_flow(padret)
                     } else {
                         padret
                     }
@@ -643,23 +643,20 @@ impl SessionInner {
                                 let mut state = element.imp().state.lock().unwrap();
                                 if let Some(ref mut session) = state.session {
                                     let mut session = session.0.lock().unwrap();
-                                    if enable_control_data_channel {
-                                        if let Some(s) = cup.structure() {
-                                            if let Some(structure) =
-                                                utils::gvalue_to_json(&s.to_value())
-                                            {
-                                                let request =
-                                                    utils::ControlRequest::CustomUpstreamEvent {
-                                                        structure_name: s.name().to_string(),
-                                                        structure,
-                                                    };
-                                                session.send_control_request(
-                                                    request,
-                                                    &element,
-                                                    transceiver.mid().map(|s| s.to_string()),
-                                                );
-                                            }
-                                        }
+                                    if enable_control_data_channel
+                                        && let Some(s) = cup.structure()
+                                        && let Some(structure) =
+                                            utils::gvalue_to_json(&s.to_value())
+                                    {
+                                        let request = utils::ControlRequest::CustomUpstreamEvent {
+                                            structure_name: s.name().to_string(),
+                                            structure,
+                                        };
+                                        session.send_control_request(
+                                            request,
+                                            &element,
+                                            transceiver.mid().map(|s| s.to_string()),
+                                        );
                                     }
                                 }
                             }
@@ -1011,9 +1008,9 @@ impl SessionInner {
                 {
                     if desc_type == gst_webrtc::WebRTCSDPType::Offer {
                         gst::info!(
-                        CAT,
-                        obj = element,
-                        "Getting transceiver for {stream_id} and index {i} with caps: {caps:#?}"
+                            CAT,
+                            obj = element,
+                            "Getting transceiver for {stream_id} and index {i} with caps: {caps:#?}"
                         );
 
                         let mut transceiver = None;
@@ -1965,10 +1962,10 @@ impl State {
 
             let _ = bin.set_state(gst::State::Null);
 
-            if let Some(webrtcsrc) = bin.parent() {
-                if let Err(e) = webrtcsrc.downcast_ref::<gst::Bin>().unwrap().remove(&bin) {
-                    gst::error!(CAT, obj = bin, "Failed to remove bin for session: {e}",);
-                }
+            if let Some(webrtcsrc) = bin.parent()
+                && let Err(e) = webrtcsrc.downcast_ref::<gst::Bin>().unwrap().remove(&bin)
+            {
+                gst::error!(CAT, obj = bin, "Failed to remove bin for session: {e}",);
             }
 
             cvar.notify_one();
@@ -2433,20 +2430,22 @@ pub(super) mod livekit {
     impl ObjectImpl for LiveKitWebRTCSrcPad {
         fn signals() -> &'static [glib::subclass::Signal] {
             static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
-                vec![glib::subclass::Signal::builder("set-track-disabled")
-                    .param_types([bool::static_type()])
-                    .action()
-                    .class_handler(|values| {
-                        let pad = values[0]
-                            .get::<&super::super::LiveKitWebRTCSrcPad>()
-                            .unwrap();
-                        let disabled = values[1].get::<bool>().unwrap();
+                vec![
+                    glib::subclass::Signal::builder("set-track-disabled")
+                        .param_types([bool::static_type()])
+                        .action()
+                        .class_handler(|values| {
+                            let pad = values[0]
+                                .get::<&super::super::LiveKitWebRTCSrcPad>()
+                                .unwrap();
+                            let disabled = values[1].get::<bool>().unwrap();
 
-                        pad.imp().set_track_disabled(disabled);
+                            pad.imp().set_track_disabled(disabled);
 
-                        None
-                    })
-                    .build()]
+                            None
+                        })
+                        .build(),
+                ]
             });
 
             SIGNALS.as_ref()

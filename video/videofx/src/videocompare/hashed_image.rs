@@ -9,7 +9,7 @@
 use crate::HashAlgorithm;
 #[cfg(feature = "dssim")]
 use dssim_core::{Dssim, DssimImage};
-use gst_video::{prelude::*, VideoFormat};
+use gst_video::{VideoFormat, prelude::*};
 use image_hasher::{HashAlg, Hasher, HasherConfig, ImageHash};
 #[cfg(feature = "dssim")]
 use rgb::FromSlice;

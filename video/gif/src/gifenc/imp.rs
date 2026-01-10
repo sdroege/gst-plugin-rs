@@ -11,9 +11,9 @@
 use atomic_refcell::AtomicRefCell;
 use gst::glib;
 use gst::subclass::prelude::*;
+use gst_video::VideoFormat;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
-use gst_video::VideoFormat;
 use std::sync::LazyLock;
 use std::{
     io,
@@ -294,7 +294,11 @@ impl VideoEncoderImpl for GifEnc {
             new_state.reset(*settings);
             *self.state.borrow_mut() = Some(new_state);
         } else {
-            gst::debug!(CAT, imp = self, "Only non-essential parameters changed (colorimetry, framerate, etc.), keeping encoder state");
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Only non-essential parameters changed (colorimetry, framerate, etc.), keeping encoder state"
+            );
             // Update the video_info in the existing state without resetting the encoder
             if let Some(ref mut current_state) = *self.state.borrow_mut() {
                 current_state.video_info = video_info.clone();

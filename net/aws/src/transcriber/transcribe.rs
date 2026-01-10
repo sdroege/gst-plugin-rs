@@ -19,9 +19,9 @@ use futures::prelude::*;
 
 use std::sync::{Arc, Mutex};
 
+use super::CAT;
 use super::imp::{Settings, Transcriber};
 use super::remote_types::TranscriptDef;
-use super::CAT;
 
 #[derive(Debug)]
 pub struct TranscriberSettings {
@@ -127,11 +127,10 @@ impl TranscriberStream {
         // Stream the incoming buffers chunked
         let chunk_stream = buffer_rx.flat_map(move |(buffer, running_time)| {
             let mut discont_offset_tracker = discont_offset_tracker_clone.lock().unwrap();
-            if buffer.flags().contains(gst::BufferFlags::DISCONT) {
-                if let Some(last_chained_buffer_rtime) = discont_offset_tracker.last_chained_buffer_rtime {
+            if buffer.flags().contains(gst::BufferFlags::DISCONT)
+                && let Some(last_chained_buffer_rtime) = discont_offset_tracker.last_chained_buffer_rtime {
                     discont_offset_tracker.discont_offset += running_time.saturating_sub(last_chained_buffer_rtime);
                 }
-            }
 
             discont_offset_tracker.last_chained_buffer_rtime = Some(running_time);
             async_stream::stream! {

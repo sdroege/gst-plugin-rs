@@ -34,19 +34,21 @@ fn main() -> Result<(), Error> {
         eprintln!("Consumer added, starting renegotiation loop");
 
         let pipeline_weak = pipeline_weak.clone();
-        std::thread::spawn(move || loop {
-            std::thread::sleep(std::time::Duration::from_millis(5000));
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(5000));
 
-            let Some(pipeline) = pipeline_weak.upgrade() else {
-                break;
-            };
+                let Some(pipeline) = pipeline_weak.upgrade() else {
+                    break;
+                };
 
-            let _ = pipeline.post_message(
-                gst::message::Application::builder(
-                    gst::Structure::builder("application/timeout").build(),
-                )
-                .build(),
-            );
+                let _ = pipeline.post_message(
+                    gst::message::Application::builder(
+                        gst::Structure::builder("application/timeout").build(),
+                    )
+                    .build(),
+                );
+            }
         });
 
         None

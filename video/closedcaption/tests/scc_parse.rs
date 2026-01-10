@@ -9,8 +9,8 @@
 
 #![allow(clippy::single_match)]
 
-use gst::prelude::*;
 use gst::EventView;
+use gst::prelude::*;
 use gst_video::{ValidVideoTimeCode, VideoTimeCode};
 use pretty_assertions::assert_eq;
 use rand::{Rng, SeedableRng};

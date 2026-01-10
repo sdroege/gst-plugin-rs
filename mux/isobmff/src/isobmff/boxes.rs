@@ -10,11 +10,11 @@ use crate::av1::util::{av1_seq_level_idx, av1_tier};
 use crate::isobmff::flac::parse_flac_stream_header;
 use crate::isobmff::fmp4mux::boxes::write_mvex;
 use crate::isobmff::uncompressed::write_uncompressed_sample_entries;
-use crate::isobmff::{ac3, eac3, ChnlLayoutInfo, Chunk, Variant, CAT};
+use crate::isobmff::{CAT, ChnlLayoutInfo, Chunk, Variant, ac3, eac3};
 use crate::isobmff::{
-    transform_matrix::IDENTITY_MATRIX, PresentationConfiguration, TrackConfiguration,
+    PresentationConfiguration, TrackConfiguration, transform_matrix::IDENTITY_MATRIX,
 };
-use anyhow::{anyhow, bail, Context, Error};
+use anyhow::{Context, Error, anyhow, bail};
 use gst::prelude::MulDiv;
 use std::str::FromStr;
 
@@ -125,10 +125,10 @@ pub(crate) fn create_moov(
 ) -> Result<gst::Buffer, Error> {
     let mut v = vec![];
 
-    if cfg.variant.is_fragmented() {
-        if let (Some(brand), Some(compatible_brands)) = (major_brand, compatible_brands) {
-            write_ftyp(&mut v, brand, minor_version, compatible_brands)?;
-        }
+    if cfg.variant.is_fragmented()
+        && let (Some(brand), Some(compatible_brands)) = (major_brand, compatible_brands)
+    {
+        write_ftyp(&mut v, brand, minor_version, compatible_brands)?;
     }
 
     write_box(&mut v, b"moov", |v| write_moov(v, &cfg))?;
@@ -212,10 +212,11 @@ fn write_trak(
     write_box(v, b"mdia", |v| write_mdia(v, cfg, stream, creation_time))?;
     // TODO: see if we can handle this better
     if cfg.variant.is_fragmented() {
-        if !stream.elst_infos.is_empty() && cfg.write_edts {
-            if let Err(e) = write_edts(v, cfg, stream) {
-                gst::warning!(CAT, "Failed to write edts: {e}");
-            }
+        if !stream.elst_infos.is_empty()
+            && cfg.write_edts
+            && let Err(e) = write_edts(v, cfg, stream)
+        {
+            gst::warning!(CAT, "Failed to write edts: {e}");
         }
     } else {
         write_box(v, b"edts", |v| write_edts(v, cfg, stream))?;
@@ -671,10 +672,12 @@ fn split_by_sample_length_or_desc_idx(
         // Sample description index cannot change in the middle of a
         // chunk, each chunk must have a single sample description
         // index.
-        assert!(first_chunk
-            .samples
-            .windows(2)
-            .all(|w| w[0].sample_desc_idx == w[1].sample_desc_idx));
+        assert!(
+            first_chunk
+                .samples
+                .windows(2)
+                .all(|w| w[0].sample_desc_idx == w[1].sample_desc_idx)
+        );
 
         current_idx += 1;
 
@@ -1571,7 +1574,9 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                                 .expect("no bit-depth-chroma");
 
                             if bit_depth_luma != bit_depth_chroma {
-                                return Err(anyhow!("bit-depth-luma and bit-depth-chroma have different values which is an unsupported configuration"));
+                                return Err(anyhow!(
+                                    "bit-depth-luma and bit-depth-chroma have different values which is an unsupported configuration"
+                                ));
                             }
 
                             bit_depth_luma as u8

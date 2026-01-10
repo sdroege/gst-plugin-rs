@@ -15,7 +15,7 @@ use gst::{glib, prelude::*};
 
 use aws_sdk_s3::config::StalledStreamProtectionConfig;
 
-use futures::future::{abortable, AbortHandle};
+use futures::future::{AbortHandle, abortable};
 
 use std::sync::Mutex;
 
@@ -23,7 +23,7 @@ use std::sync::LazyLock;
 
 use super::{AwsOverflow, AwsPollyEngine, AwsPollyLanguageCode, AwsPollyVoiceId, CAT};
 use crate::s3utils::RUNTIME;
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 #[cfg(feature = "signalsmith_stretch")]
 use signalsmith_stretch::Stretch;
 
@@ -416,14 +416,15 @@ impl Polly {
         let mut buf = gst::Buffer::from_slice(bytes);
         let mut state = self.state.lock().unwrap();
 
-        if let Some(position) = state.out_segment.position() {
-            if matches!(overflow, AwsOverflow::Shift) && pts < position {
-                gst::debug!(
-                    CAT,
-                    "received pts {pts} < position {position}, shifting forward"
-                );
-                pts = position;
-            }
+        if let Some(position) = state.out_segment.position()
+            && matches!(overflow, AwsOverflow::Shift)
+            && pts < position
+        {
+            gst::debug!(
+                CAT,
+                "received pts {pts} < position {position}, shifting forward"
+            );
+            pts = position;
         }
 
         let Some(buffer_rtime) = out_segment.to_running_time(pts) else {
@@ -589,12 +590,11 @@ impl Polly {
         {
             let outbuf_mut = outbuf.get_mut().unwrap();
             buffer.foreach_meta(|meta| {
-                if meta.tags().is_empty() {
-                    if let Err(err) =
+                if meta.tags().is_empty()
+                    && let Err(err) =
                         meta.transform(outbuf_mut, &gst::meta::MetaTransformCopy::new(..))
-                    {
-                        gst::trace!(CAT, imp = self, "Could not copy meta {}: {err}", meta.api());
-                    }
+                {
+                    gst::trace!(CAT, imp = self, "Could not copy meta {}: {err}", meta.api());
                 }
                 std::ops::ControlFlow::Continue(())
             });
@@ -647,17 +647,16 @@ impl Polly {
                 let outbuf_mut = outbuf.get_mut().unwrap();
                 for buffer in list.iter() {
                     buffer.foreach_meta(|meta| {
-                        if meta.tags().is_empty() {
-                            if let Err(err) =
+                        if meta.tags().is_empty()
+                            && let Err(err) =
                                 meta.transform(outbuf_mut, &gst::meta::MetaTransformCopy::new(..))
-                            {
-                                gst::trace!(
-                                    CAT,
-                                    imp = self,
-                                    "Could not copy meta {}: {err}",
-                                    meta.api()
-                                );
-                            }
+                        {
+                            gst::trace!(
+                                CAT,
+                                imp = self,
+                                "Could not copy meta {}: {err}",
+                                meta.api()
+                            );
                         }
                         std::ops::ControlFlow::Continue(())
                     });

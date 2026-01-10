@@ -13,7 +13,7 @@ use gst::prelude::*;
 
 use futures::future::{AbortHandle, Aborted};
 use librespot_core::{
-    authentication::Credentials, cache::Cache, config::SessionConfig, session::Session, SpotifyUri,
+    SpotifyUri, authentication::Credentials, cache::Cache, config::SessionConfig, session::Session,
 };
 
 #[derive(Default, Debug, Clone)]

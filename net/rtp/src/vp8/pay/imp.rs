@@ -483,15 +483,15 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp8Pay {
         //
         // FIXME: This is only correct for prediction structures where higher layers always refers
         // to the previous base layer frame.
-        if meta.is_none_or(|meta| matches!(meta.layer_id, Some((0, _)))) {
-            if let Some(ref mut temporal_layer_zero_index) = state.temporal_layer_zero_index {
-                *temporal_layer_zero_index = temporal_layer_zero_index.wrapping_add(1);
-                gst::trace!(
-                    CAT,
-                    imp = self,
-                    "Updated temporal layer zero index to {temporal_layer_zero_index}"
-                );
-            }
+        if meta.is_none_or(|meta| matches!(meta.layer_id, Some((0, _))))
+            && let Some(ref mut temporal_layer_zero_index) = state.temporal_layer_zero_index
+        {
+            *temporal_layer_zero_index = temporal_layer_zero_index.wrapping_add(1);
+            gst::trace!(
+                CAT,
+                imp = self,
+                "Updated temporal layer zero index to {temporal_layer_zero_index}"
+            );
         }
 
         let next_picture_id = picture_id.map(PictureId::increment);

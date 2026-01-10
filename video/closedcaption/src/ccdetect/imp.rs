@@ -11,7 +11,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
 
-use crate::ccutils::{extract_cdp, ParseError, ParseErrorCode};
+use crate::ccutils::{ParseError, ParseErrorCode, extract_cdp};
 use std::sync::LazyLock;
 
 use std::sync::Mutex;

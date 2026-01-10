@@ -8,7 +8,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::tests::{run_test_pipeline, ExpectedBuffer, ExpectedPacket, Source};
+use crate::tests::{ExpectedBuffer, ExpectedPacket, Source, run_test_pipeline};
 
 fn init() {
     use std::sync::Once;
@@ -101,57 +101,73 @@ fn test_mp2t_pay_depay_single_ts_packets() {
     }
 
     let expected_pay = vec![
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::ZERO)
-            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
-            .pt(33)
-            .rtp_time(0)
-            .marker_bit(true)
-            .build()],
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::ZERO)
-            .flags(gst::BufferFlags::empty())
-            .pt(33)
-            .rtp_time(0)
-            .marker_bit(false)
-            .build()],
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::ZERO)
-            .flags(gst::BufferFlags::empty())
-            .pt(33)
-            .rtp_time(0)
-            .marker_bit(false)
-            .build()],
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_mseconds(80))
-            .flags(gst::BufferFlags::empty())
-            .pt(33)
-            .rtp_time(7200) // 80ms, 0.080 * 90000
-            .marker_bit(false)
-            .build()],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::ZERO)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
+                .pt(33)
+                .rtp_time(0)
+                .marker_bit(true)
+                .build(),
+        ],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::ZERO)
+                .flags(gst::BufferFlags::empty())
+                .pt(33)
+                .rtp_time(0)
+                .marker_bit(false)
+                .build(),
+        ],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::ZERO)
+                .flags(gst::BufferFlags::empty())
+                .pt(33)
+                .rtp_time(0)
+                .marker_bit(false)
+                .build(),
+        ],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(80))
+                .flags(gst::BufferFlags::empty())
+                .pt(33)
+                .rtp_time(7200) // 80ms, 0.080 * 90000
+                .marker_bit(false)
+                .build(),
+        ],
     ];
 
     let expected_depay = vec![
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(1316)
-            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(1316)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(1316)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_mseconds(80))
-            .size(376)
-            .flags(gst::BufferFlags::empty())
-            .build()],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(1316)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(1316)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(1316)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(80))
+                .size(376)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
     ];
 
     run_test_pipeline(
@@ -187,57 +203,73 @@ fn test_mp2t_pay_depay_7ts_packets() {
     ];
 
     let expected_pay = vec![
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::ZERO)
-            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
-            .pt(33)
-            .rtp_time(0)
-            .marker_bit(true)
-            .build()],
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::ZERO)
-            .flags(gst::BufferFlags::empty())
-            .pt(33)
-            .rtp_time(0)
-            .marker_bit(false)
-            .build()],
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::ZERO)
-            .flags(gst::BufferFlags::empty())
-            .pt(33)
-            .rtp_time(0)
-            .marker_bit(false)
-            .build()],
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_mseconds(80))
-            .flags(gst::BufferFlags::empty())
-            .pt(33)
-            .rtp_time(7200) // 80ms, 0.080 * 90000
-            .marker_bit(false)
-            .build()],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::ZERO)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
+                .pt(33)
+                .rtp_time(0)
+                .marker_bit(true)
+                .build(),
+        ],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::ZERO)
+                .flags(gst::BufferFlags::empty())
+                .pt(33)
+                .rtp_time(0)
+                .marker_bit(false)
+                .build(),
+        ],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::ZERO)
+                .flags(gst::BufferFlags::empty())
+                .pt(33)
+                .rtp_time(0)
+                .marker_bit(false)
+                .build(),
+        ],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(80))
+                .flags(gst::BufferFlags::empty())
+                .pt(33)
+                .rtp_time(7200) // 80ms, 0.080 * 90000
+                .marker_bit(false)
+                .build(),
+        ],
     ];
 
     let expected_depay = vec![
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(1316)
-            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(1316)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(1316)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_mseconds(80))
-            .size(1316) // includes padding packets
-            .flags(gst::BufferFlags::empty())
-            .build()],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(1316)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(1316)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(1316)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(80))
+                .size(1316) // includes padding packets
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
     ];
 
     run_test_pipeline(
@@ -317,41 +349,55 @@ fn test_mp2t_pay_depay_7ts_packets_mtu_split() {
     ]];
 
     let expected_depay = vec![
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(188)
-            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(188)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(188)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(188)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(188)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(188)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(188)
-            .flags(gst::BufferFlags::empty())
-            .build()],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(188)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(188)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(188)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(188)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(188)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(188)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(188)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
     ];
 
     run_test_pipeline(
@@ -409,43 +455,55 @@ fn test_mp2t_pay_depay_au_ts_packets() {
                 .marker_bit(false)
                 .build(),
         ],
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::ZERO)
-            .flags(gst::BufferFlags::empty())
-            .pt(33)
-            .rtp_time(0)
-            .marker_bit(false)
-            .build()],
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_mseconds(80))
-            .flags(gst::BufferFlags::empty())
-            .pt(33)
-            .rtp_time(7200) // 80ms, 0.080 * 90000
-            .marker_bit(false)
-            .build()],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::ZERO)
+                .flags(gst::BufferFlags::empty())
+                .pt(33)
+                .rtp_time(0)
+                .marker_bit(false)
+                .build(),
+        ],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(80))
+                .flags(gst::BufferFlags::empty())
+                .pt(33)
+                .rtp_time(7200) // 80ms, 0.080 * 90000
+                .marker_bit(false)
+                .build(),
+        ],
     ];
 
     let expected_depay = vec![
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(1316)
-            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(1316)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(1316)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::from_mseconds(80))
-            .size(376)
-            .flags(gst::BufferFlags::empty())
-            .build()],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(1316)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(1316)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(1316)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(80))
+                .size(376)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
     ];
 
     run_test_pipeline(
@@ -507,31 +565,39 @@ fn test_mp2t_pay_depay_m2ts_variant() {
                 .marker_bit(false)
                 .build(),
         ],
-        vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::from_mseconds(80))
-            .flags(gst::BufferFlags::empty())
-            .pt(33)
-            .pts(gst::ClockTime::ZERO)
-            .marker_bit(false)
-            .build()],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(80))
+                .flags(gst::BufferFlags::empty())
+                .pt(33)
+                .pts(gst::ClockTime::ZERO)
+                .marker_bit(false)
+                .build(),
+        ],
     ];
 
     let expected_depay = vec![
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(7 * 192)
-            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(7 * 192)
-            .flags(gst::BufferFlags::empty())
-            .build()],
-        vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(5 * 192)
-            .flags(gst::BufferFlags::empty())
-            .build()],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(7 * 192)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(7 * 192)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(5 * 192)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
     ];
 
     run_test_pipeline(
@@ -569,19 +635,23 @@ fn test_mp2t_pay_depay_single_packet() {
 
         let input_buffers = vec![input_buf];
 
-        let expected_pay = vec![vec![ExpectedPacket::builder()
-            .pts(gst::ClockTime::ZERO)
-            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
-            .pt(33)
-            .rtp_time(0)
-            .marker_bit(true)
-            .build()]];
+        let expected_pay = vec![vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::ZERO)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
+                .pt(33)
+                .rtp_time(0)
+                .marker_bit(true)
+                .build(),
+        ]];
 
-        let expected_depay = vec![vec![ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(packet_size)
-            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
-            .build()]];
+        let expected_depay = vec![vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(packet_size)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+                .build(),
+        ]];
 
         run_test_pipeline(
             Source::Buffers(input_caps, input_buffers),
@@ -616,19 +686,23 @@ fn test_mp2t_depay_skip_bytes() {
 
     let input_buffers = vec![input_buf];
 
-    let expected_pay = vec![vec![ExpectedPacket::builder()
-        .pts(gst::ClockTime::ZERO)
-        .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
-        .pt(33)
-        .rtp_time(0)
-        .marker_bit(true)
-        .build()]];
+    let expected_pay = vec![vec![
+        ExpectedPacket::builder()
+            .pts(gst::ClockTime::ZERO)
+            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
+            .pt(33)
+            .rtp_time(0)
+            .marker_bit(true)
+            .build(),
+    ]];
 
-    let expected_depay = vec![vec![ExpectedBuffer::builder()
-        .pts(gst::ClockTime::ZERO)
-        .size(192 - 4)
-        .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
-        .build()]];
+    let expected_depay = vec![vec![
+        ExpectedBuffer::builder()
+            .pts(gst::ClockTime::ZERO)
+            .size(192 - 4)
+            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+            .build(),
+    ]];
 
     run_test_pipeline(
         Source::Buffers(input_caps, input_buffers),
