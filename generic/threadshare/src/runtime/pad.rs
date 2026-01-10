@@ -806,17 +806,22 @@ impl PadSink {
                             let elem = imp.obj().clone();
                             let gst_pad = gst_pad.clone();
 
-                            if let Some((ctx, task_id)) = Context::current_task() {
-                                let delayed_fut = async move {
-                                    H::sink_chain(handler, gst_pad, elem, buffer).await
-                                };
-                                let _ =
-                                    ctx.add_sub_task(task_id, delayed_fut.map(|res| res.map(drop)));
+                            match Context::current_task() {
+                                Some((ctx, task_id)) => {
+                                    let delayed_fut = async move {
+                                        H::sink_chain(handler, gst_pad, elem, buffer).await
+                                    };
+                                    let _ = ctx.add_sub_task(
+                                        task_id,
+                                        delayed_fut.map(|res| res.map(drop)),
+                                    );
 
-                                Ok(gst::FlowSuccess::Ok)
-                            } else {
-                                let chain_fut = H::sink_chain(handler, gst_pad, elem, buffer);
-                                executor::block_on(chain_fut)
+                                    Ok(gst::FlowSuccess::Ok)
+                                }
+                                _ => {
+                                    let chain_fut = H::sink_chain(handler, gst_pad, elem, buffer);
+                                    executor::block_on(chain_fut)
+                                }
                             }
                         },
                     )
@@ -834,18 +839,23 @@ impl PadSink {
                             let elem = imp.obj().clone();
                             let gst_pad = gst_pad.clone();
 
-                            if let Some((ctx, task_id)) = Context::current_task() {
-                                let delayed_fut = async move {
-                                    H::sink_chain_list(handler, gst_pad, elem, list).await
-                                };
-                                let _ =
-                                    ctx.add_sub_task(task_id, delayed_fut.map(|res| res.map(drop)));
+                            match Context::current_task() {
+                                Some((ctx, task_id)) => {
+                                    let delayed_fut = async move {
+                                        H::sink_chain_list(handler, gst_pad, elem, list).await
+                                    };
+                                    let _ = ctx.add_sub_task(
+                                        task_id,
+                                        delayed_fut.map(|res| res.map(drop)),
+                                    );
 
-                                Ok(gst::FlowSuccess::Ok)
-                            } else {
-                                let chain_list_fut =
-                                    H::sink_chain_list(handler, gst_pad, elem, list);
-                                executor::block_on(chain_list_fut)
+                                    Ok(gst::FlowSuccess::Ok)
+                                }
+                                _ => {
+                                    let chain_list_fut =
+                                        H::sink_chain_list(handler, gst_pad, elem, list);
+                                    executor::block_on(chain_list_fut)
+                                }
                             }
                         },
                     )
@@ -866,22 +876,27 @@ impl PadSink {
                                 let elem = imp.obj().clone();
                                 let gst_pad = gst_pad.clone();
 
-                                if let Some((ctx, task_id)) = Context::current_task() {
-                                    let delayed_fut = async move {
-                                        H::sink_event_full_serialized(handler, gst_pad, elem, event)
+                                match Context::current_task() {
+                                    Some((ctx, task_id)) => {
+                                        let delayed_fut = async move {
+                                            H::sink_event_full_serialized(
+                                                handler, gst_pad, elem, event,
+                                            )
                                             .await
-                                    };
-                                    let _ = ctx.add_sub_task(
-                                        task_id,
-                                        delayed_fut.map(|res| res.map(drop)),
-                                    );
+                                        };
+                                        let _ = ctx.add_sub_task(
+                                            task_id,
+                                            delayed_fut.map(|res| res.map(drop)),
+                                        );
 
-                                    Ok(gst::FlowSuccess::Ok)
-                                } else {
-                                    let event_fut = H::sink_event_full_serialized(
-                                        handler, gst_pad, elem, event,
-                                    );
-                                    executor::block_on(event_fut)
+                                        Ok(gst::FlowSuccess::Ok)
+                                    }
+                                    _ => {
+                                        let event_fut = H::sink_event_full_serialized(
+                                            handler, gst_pad, elem, event,
+                                        );
+                                        executor::block_on(event_fut)
+                                    }
                                 }
                             } else {
                                 handler.sink_event_full(gst_pad, imp, event)

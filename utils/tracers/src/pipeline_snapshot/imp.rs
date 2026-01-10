@@ -671,10 +671,13 @@ impl PipelineSnapshot {
             for signal in &mut signals {
                 match signal {
                     SIGUSR1 => {
-                        if let Some(this) = this_weak.upgrade() {
-                            this.snapshot();
-                        } else {
-                            break;
+                        match this_weak.upgrade() {
+                            Some(this) => {
+                                this.snapshot();
+                            }
+                            _ => {
+                                break;
+                            }
                         };
                     }
                     _ => unreachable!(),

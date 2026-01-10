@@ -405,7 +405,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
                     continue;
                 }
 
-                if let Some(ref mut acc) = au_acc {
+                if let Some(acc) = au_acc {
                     if let Err(err) = acc.try_append(au) {
                         gst::warning!(CAT, imp = self, "Discarding pending fragmented AU: {err}");
                         *au_acc = None;
@@ -471,7 +471,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
                 None => au,
             };
 
-            if let Some(ref mut deint_buf) = deint_buf {
+            if let Some(deint_buf) = deint_buf {
                 if let Err(err) = deint_buf.push_and_pop(au, &mut aus) {
                     gst::warning!(
                         CAT,

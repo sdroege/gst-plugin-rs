@@ -51,12 +51,11 @@ impl<T> JoinHandle<T> {
     }
 
     pub fn is_current(&self) -> bool {
-        if let Some((cur_scheduler, task_id)) =
-            scheduler::Throttling::current().zip(TaskId::current())
-        {
-            cur_scheduler == self.scheduler && task_id == self.task_id
-        } else {
-            false
+        match scheduler::Throttling::current().zip(TaskId::current()) {
+            Some((cur_scheduler, task_id)) => {
+                cur_scheduler == self.scheduler && task_id == self.task_id
+            }
+            _ => false,
         }
     }
 

@@ -284,34 +284,36 @@ impl Stream {
     fn calculate_caps_timescale(&self, s: &gst::StructureRef) -> u32 {
         const DEFAULT_TIMESCALE: u32 = 10_000;
 
-        if let Ok(fps) = s.get::<gst::Fraction>("framerate") {
-            if fps.numer() == 0 {
-                return DEFAULT_TIMESCALE;
-            }
-
-            if fps.denom() == 1001 {
-                return fps.numer() as u32;
-            }
-
-            if fps.denom() != 1 {
-                if let Some(fps) = (fps.denom() as u64)
-                    .nseconds()
-                    .mul_div_round(1_000_000_000, fps.numer() as u64)
-                    .and_then(gst_video::guess_framerate)
-                {
-                    return (fps.numer() as u32)
-                        .mul_div_round(100, fps.denom() as u32)
-                        .unwrap_or(DEFAULT_TIMESCALE);
+        match s.get::<gst::Fraction>("framerate") {
+            Ok(fps) => {
+                if fps.numer() == 0 {
+                    return DEFAULT_TIMESCALE;
                 }
-            }
 
-            (fps.numer() as u32)
-                .mul_div_round(100, fps.denom() as u32)
-                .unwrap_or(DEFAULT_TIMESCALE)
-        } else if let Ok(rate) = s.get::<i32>("rate") {
-            rate as u32
-        } else {
-            DEFAULT_TIMESCALE
+                if fps.denom() == 1001 {
+                    return fps.numer() as u32;
+                }
+
+                if fps.denom() != 1 {
+                    if let Some(fps) = (fps.denom() as u64)
+                        .nseconds()
+                        .mul_div_round(1_000_000_000, fps.numer() as u64)
+                        .and_then(gst_video::guess_framerate)
+                    {
+                        return (fps.numer() as u32)
+                            .mul_div_round(100, fps.denom() as u32)
+                            .unwrap_or(DEFAULT_TIMESCALE);
+                    }
+                }
+
+                (fps.numer() as u32)
+                    .mul_div_round(100, fps.denom() as u32)
+                    .unwrap_or(DEFAULT_TIMESCALE)
+            }
+            _ => match s.get::<i32>("rate") {
+                Ok(rate) => rate as u32,
+                _ => DEFAULT_TIMESCALE,
+            },
         }
     }
 
@@ -1290,53 +1292,59 @@ impl MP4Mux {
                         state.last_tai_timestamp = meta.timestamp().nseconds();
                         let iso23001_17_timestamp_info = meta.info().unwrap(); // checked in filter
                         let mut timestamp_packet_flags = 0u8;
-                        if let Ok(synced) =
-                            iso23001_17_timestamp_info.get::<bool>("synchronization-state")
-                        {
-                            gst::trace!(
-                                CAT,
-                                imp = self,
-                                "synchronized to atomic source: {:?}",
-                                synced
-                            );
-                            if synced {
-                                timestamp_packet_flags |= 0x80u8;
+                        match iso23001_17_timestamp_info.get::<bool>("synchronization-state") {
+                            Ok(synced) => {
+                                gst::trace!(
+                                    CAT,
+                                    imp = self,
+                                    "synchronized to atomic source: {:?}",
+                                    synced
+                                );
+                                if synced {
+                                    timestamp_packet_flags |= 0x80u8;
+                                }
                             }
-                        } else {
-                            gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected synchronisation state, assuming not synchronised");
+                            _ => {
+                                gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected synchronisation state, assuming not synchronised");
+                            }
                         }
-                        if let Ok(generation_failure) =
-                            iso23001_17_timestamp_info.get::<bool>("timestamp-generation-failure")
+                        match iso23001_17_timestamp_info.get::<bool>("timestamp-generation-failure")
                         {
-                            gst::trace!(
-                                CAT,
-                                imp = self,
-                                "timestamp generation failure: {:?}",
-                                generation_failure
-                            );
-                            if generation_failure {
-                                timestamp_packet_flags |= 0x40u8;
+                            Ok(generation_failure) => {
+                                gst::trace!(
+                                    CAT,
+                                    imp = self,
+                                    "timestamp generation failure: {:?}",
+                                    generation_failure
+                                );
+                                if generation_failure {
+                                    timestamp_packet_flags |= 0x40u8;
+                                }
                             }
-                        } else if meta.timestamp().nseconds() > state.last_tai_timestamp {
-                            gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected generation failure flag, timestamp looks OK, assuming OK");
-                        } else {
-                            gst::warning!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected generation failure flag and unexpected timestamp value, assuming generation failure");
-                            timestamp_packet_flags |= 0x40u8;
+                            _ => {
+                                if meta.timestamp().nseconds() > state.last_tai_timestamp {
+                                    gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected generation failure flag, timestamp looks OK, assuming OK");
+                                } else {
+                                    gst::warning!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected generation failure flag and unexpected timestamp value, assuming generation failure");
+                                    timestamp_packet_flags |= 0x40u8;
+                                }
+                            }
                         }
-                        if let Ok(timestamp_is_modified) =
-                            iso23001_17_timestamp_info.get::<bool>("timestamp-is-modified")
-                        {
-                            gst::trace!(
-                                CAT,
-                                imp = self,
-                                "timestamp is modified: {:?}",
-                                timestamp_is_modified
-                            );
-                            if timestamp_is_modified {
-                                timestamp_packet_flags |= 0x20u8;
+                        match iso23001_17_timestamp_info.get::<bool>("timestamp-is-modified") {
+                            Ok(timestamp_is_modified) => {
+                                gst::trace!(
+                                    CAT,
+                                    imp = self,
+                                    "timestamp is modified: {:?}",
+                                    timestamp_is_modified
+                                );
+                                if timestamp_is_modified {
+                                    timestamp_packet_flags |= 0x20u8;
+                                }
                             }
-                        } else {
-                            gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected modification state value, assuming not modified");
+                            _ => {
+                                gst::info!(CAT, imp=self, "TAI ReferenceTimestampMeta did not contain expected modification state value, assuming not modified");
+                            }
                         }
                         timestamp_packet.extend(timestamp_packet_flags.to_be_bytes());
                         stream.pending_aux_info_data.push_back(PendingAuxInfoEntry {
@@ -1604,18 +1612,23 @@ impl MP4Mux {
                     }
                 }
                 "audio/x-opus" => {
-                    if let Some(header) = s
+                    match s
                         .get::<gst::ArrayRef>("streamheader")
                         .ok()
                         .and_then(|a| a.first().and_then(|v| v.get::<gst::Buffer>().ok()))
                     {
-                        if gst_pbutils::codec_utils_opus_parse_header(&header, None).is_err() {
-                            gst::error!(CAT, obj = pad, "Received invalid Opus header");
-                            return Err(gst::FlowError::NotNegotiated);
+                        Some(header) => {
+                            if gst_pbutils::codec_utils_opus_parse_header(&header, None).is_err() {
+                                gst::error!(CAT, obj = pad, "Received invalid Opus header");
+                                return Err(gst::FlowError::NotNegotiated);
+                            }
                         }
-                    } else if gst_pbutils::codec_utils_opus_parse_caps(&caps, None).is_err() {
-                        gst::error!(CAT, obj = pad, "Received invalid Opus caps");
-                        return Err(gst::FlowError::NotNegotiated);
+                        _ => {
+                            if gst_pbutils::codec_utils_opus_parse_caps(&caps, None).is_err() {
+                                gst::error!(CAT, obj = pad, "Received invalid Opus caps");
+                                return Err(gst::FlowError::NotNegotiated);
+                            }
+                        }
                     }
                 }
                 "audio/x-flac" => {

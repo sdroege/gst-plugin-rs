@@ -107,25 +107,29 @@ mod imp {
         params: glib::ffi::gpointer,
         _buffer: *mut gst::ffi::GstBuffer,
     ) -> glib::ffi::gboolean {
-        assert!(!params.is_null());
-        let meta = &mut *(meta as *mut OriginalBufferMeta);
-        let params = ptr::read(params as *const OriginalBufferMetaParams);
+        unsafe {
+            assert!(!params.is_null());
+            let meta = &mut *(meta as *mut OriginalBufferMeta);
+            let params = ptr::read(params as *const OriginalBufferMetaParams);
 
-        let OriginalBufferMetaParams { original, caps } = params;
+            let OriginalBufferMetaParams { original, caps } = params;
 
-        ptr::write(&mut meta.original, Some(original));
-        ptr::write(&mut meta.caps, caps);
+            ptr::write(&mut meta.original, Some(original));
+            ptr::write(&mut meta.caps, caps);
 
-        true.into_glib()
+            true.into_glib()
+        }
     }
 
     unsafe extern "C" fn original_buffer_meta_free(
         meta: *mut gst::ffi::GstMeta,
         _buffer: *mut gst::ffi::GstBuffer,
     ) {
-        let meta = &mut *(meta as *mut OriginalBufferMeta);
-        meta.original = None;
-        meta.caps = None;
+        unsafe {
+            let meta = &mut *(meta as *mut OriginalBufferMeta);
+            meta.original = None;
+            meta.caps = None;
+        }
     }
 
     unsafe extern "C" fn original_buffer_meta_transform(
@@ -135,21 +139,23 @@ mod imp {
         _type_: glib::ffi::GQuark,
         _data: glib::ffi::gpointer,
     ) -> glib::ffi::gboolean {
-        let dest = gst::BufferRef::from_mut_ptr(dest);
-        let meta = &*(meta as *const OriginalBufferMeta);
+        unsafe {
+            let dest = gst::BufferRef::from_mut_ptr(dest);
+            let meta = &*(meta as *const OriginalBufferMeta);
 
-        if dest.meta::<super::OriginalBufferMeta>().is_some() {
-            return true.into_glib();
+            if dest.meta::<super::OriginalBufferMeta>().is_some() {
+                return true.into_glib();
+            }
+            // We don't store a ref in the meta if it's self-refencing, but we add it
+            // when copying the meta to another buffer.
+            super::OriginalBufferMeta::add(
+                dest,
+                meta.original.as_ref().unwrap().clone(),
+                meta.caps.clone(),
+            );
+
+            true.into_glib()
         }
-        // We don't store a ref in the meta if it's self-refencing, but we add it
-        // when copying the meta to another buffer.
-        super::OriginalBufferMeta::add(
-            dest,
-            meta.original.as_ref().unwrap().clone(),
-            meta.caps.clone(),
-        );
-
-        true.into_glib()
     }
 
     pub(super) fn original_buffer_meta_get_info() -> *const gst::ffi::GstMetaInfo {

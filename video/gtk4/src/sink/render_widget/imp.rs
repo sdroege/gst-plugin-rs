@@ -101,10 +101,9 @@ impl WidgetImpl for RenderWidget {
         let scale = {
             #[cfg(feature = "gtk_v4_12")]
             {
-                if let Some(surface) = self.obj().native().and_then(|native| native.surface()) {
-                    surface.scale()
-                } else {
-                    self.obj().scale_factor() as f64
+                match self.obj().native().and_then(|native| native.surface()) {
+                    Some(surface) => surface.scale(),
+                    _ => self.obj().scale_factor() as f64,
                 }
             }
             #[cfg(not(feature = "gtk_v4_12"))]

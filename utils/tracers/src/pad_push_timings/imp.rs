@@ -248,7 +248,7 @@ impl PadPushTimings {
         let ptr = pad.as_ptr() as usize;
         let mut state = self.state.lock().unwrap();
 
-        let State {
+        let &mut State {
             ref mut pads,
             ref settings,
             ..
@@ -296,11 +296,7 @@ impl PadPushTimings {
         let ptr = pad.as_ptr() as usize;
         let mut state = self.state.lock().unwrap();
 
-        let State {
-            ref mut pads,
-            ref mut log,
-            ..
-        } = &mut *state;
+        let State { pads, log, .. } = &mut *state;
 
         let Some(pad) = pads.get_mut(&ptr) else {
             return;

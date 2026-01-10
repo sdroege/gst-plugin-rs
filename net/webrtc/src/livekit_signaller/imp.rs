@@ -609,7 +609,7 @@ impl Signaller {
         }
 
         let mut connection = self.connection.lock().unwrap();
-        if let Some(ref mut connection) = &mut *connection {
+        if let Some(connection) = &mut *connection {
             if participant.state == proto::participant_info::State::Disconnected as i32 {
                 connection.participants.remove(&participant.sid);
                 if connection
@@ -1144,18 +1144,19 @@ impl ObjectImpl for Signaller {
             "auth-token" => settings.auth_token.to_value(),
             "timeout" => settings.timeout.to_value(),
             channel @ ("reliable-channel" | "lossy-channel") => {
-                let channel = if let Some(connection) = &*self.connection.lock().unwrap() {
-                    if let Some(channels) = &connection.channels {
-                        if channel == "reliable-channel" {
-                            Some(channels.reliable_channel.clone())
+                let channel = match &*self.connection.lock().unwrap() {
+                    Some(connection) => {
+                        if let Some(channels) = &connection.channels {
+                            if channel == "reliable-channel" {
+                                Some(channels.reliable_channel.clone())
+                            } else {
+                                Some(channels.lossy_channel.clone())
+                            }
                         } else {
-                            Some(channels.lossy_channel.clone())
+                            None
                         }
-                    } else {
-                        None
                     }
-                } else {
-                    None
+                    _ => None,
                 };
                 channel.to_value()
             }

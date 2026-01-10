@@ -115,8 +115,8 @@ fn monitor_pipeline(pipeline: &gst::Pipeline, base_time: gst::ClockTime) -> Resu
         while let Some(msg) = bus_stream.next().await {
             use gst::MessageView;
 
-            if let Some(pipeline) = pipeline_clone.upgrade() {
-                match msg.view() {
+            match pipeline_clone.upgrade() {
+                Some(pipeline) => match msg.view() {
                     MessageView::Latency(..) => {
                         let _ = pipeline.recalculate_latency();
                     }
@@ -152,9 +152,10 @@ fn monitor_pipeline(pipeline: &gst::Pipeline, base_time: gst::ClockTime) -> Resu
                         }
                     }
                     _ => (),
+                },
+                _ => {
+                    break;
                 }
-            } else {
-                break;
             }
         }
     });
@@ -232,11 +233,14 @@ async fn main() -> Result<(), Error> {
                             println!("rp <producer_name>: Remove a producer");
                         } else {
                             let producer_name = command.get(1).unwrap().to_string();
-                            if let Some(producer) = producers.remove(&producer_name) {
-                                let _ = producer.pipeline.set_state(gst::State::Null);
-                                println!("Removed producer with name {producer_name}");
-                            } else {
-                                println!("No producer with name {producer_name}");
+                            match producers.remove(&producer_name) {
+                                Some(producer) => {
+                                    let _ = producer.pipeline.set_state(gst::State::Null);
+                                    println!("Removed producer with name {producer_name}");
+                                }
+                                _ => {
+                                    println!("No producer with name {producer_name}");
+                                }
                             }
                         }
                     }
@@ -245,11 +249,14 @@ async fn main() -> Result<(), Error> {
                             println!("rc <consumer_name>: Remove a consumer");
                         } else {
                             let consumer_name = command.get(1).unwrap().to_string();
-                            if let Some(consumer) = consumers.remove(&consumer_name) {
-                                let _ = consumer.pipeline.set_state(gst::State::Null);
-                                println!("Removed consumer with name {consumer_name}");
-                            } else {
-                                println!("No consumer with name {consumer_name}");
+                            match consumers.remove(&consumer_name) {
+                                Some(consumer) => {
+                                    let _ = consumer.pipeline.set_state(gst::State::Null);
+                                    println!("Removed consumer with name {consumer_name}");
+                                }
+                                _ => {
+                                    println!("No consumer with name {consumer_name}");
+                                }
                             }
                         }
                     }
@@ -265,17 +272,20 @@ async fn main() -> Result<(), Error> {
                                 continue;
                             }
 
-                            if let Some(producer) = producers.remove(&old_producer_name) {
-                                producer.sink.set_property("producer-name", &producer_name);
-                                producer
-                                    .overlay
-                                    .set_property("text", format!("Producer: {producer_name}"));
-                                println!(
+                            match producers.remove(&old_producer_name) {
+                                Some(producer) => {
+                                    producer.sink.set_property("producer-name", &producer_name);
+                                    producer
+                                        .overlay
+                                        .set_property("text", format!("Producer: {producer_name}"));
+                                    println!(
                                     "Changed producer name {old_producer_name} -> {producer_name}"
                                 );
-                                producers.insert(producer_name, producer);
-                            } else {
-                                println!("No producer with name {old_producer_name}");
+                                    producers.insert(producer_name, producer);
+                                }
+                                _ => {
+                                    println!("No producer with name {old_producer_name}");
+                                }
                             }
                         }
                     }

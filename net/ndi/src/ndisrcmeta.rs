@@ -112,23 +112,27 @@ mod imp {
         params: glib::ffi::gpointer,
         _buffer: *mut gst::ffi::GstBuffer,
     ) -> glib::ffi::gboolean {
-        assert!(!params.is_null());
+        unsafe {
+            assert!(!params.is_null());
 
-        let meta = &mut *(meta as *mut NdiSrcMeta);
-        let params = ptr::read(params as *const NdiSrcMetaParams);
+            let meta = &mut *(meta as *mut NdiSrcMeta);
+            let params = ptr::read(params as *const NdiSrcMetaParams);
 
-        ptr::write(&mut meta.ndi_buffer, Some(params.ndi_buffer));
+            ptr::write(&mut meta.ndi_buffer, Some(params.ndi_buffer));
 
-        true.into_glib()
+            true.into_glib()
+        }
     }
 
     unsafe extern "C" fn ndi_src_meta_free(
         meta: *mut gst::ffi::GstMeta,
         _buffer: *mut gst::ffi::GstBuffer,
     ) {
-        let meta = &mut *(meta as *mut NdiSrcMeta);
+        unsafe {
+            let meta = &mut *(meta as *mut NdiSrcMeta);
 
-        ptr::drop_in_place(&mut meta.ndi_buffer);
+            ptr::drop_in_place(&mut meta.ndi_buffer);
+        }
     }
 
     unsafe extern "C" fn ndi_src_meta_transform(

@@ -95,8 +95,8 @@ enum Context {
 impl Context {
     fn container_sequence_header(&self) -> Vec<u8> {
         match self {
-            Context::Eight(ref context) => context.container_sequence_header(),
-            Context::Sixteen(ref context) => context.container_sequence_header(),
+            Context::Eight(context) => context.container_sequence_header(),
+            Context::Sixteen(context) => context.container_sequence_header(),
         }
     }
 
@@ -104,7 +104,7 @@ impl Context {
         &mut self,
     ) -> Result<(data::FrameType, u64, u32, Vec<u8>), data::EncoderStatus> {
         match self {
-            Context::Eight(ref mut context) => context.receive_packet().map(|packet| {
+            Context::Eight(context) => context.receive_packet().map(|packet| {
                 (
                     packet.frame_type,
                     packet.input_frameno,
@@ -115,7 +115,7 @@ impl Context {
                     packet.data,
                 )
             }),
-            Context::Sixteen(ref mut context) => context.receive_packet().map(|packet| {
+            Context::Sixteen(context) => context.receive_packet().map(|packet| {
                 (
                     packet.frame_type,
                     packet.input_frameno,
@@ -136,7 +136,7 @@ impl Context {
         force_keyframe: bool,
     ) -> Result<(), data::EncoderStatus> {
         match self {
-            Context::Eight(ref mut context) => {
+            Context::Eight(context) => {
                 let mut enc_frame = context.new_frame();
                 enc_frame.planes[0].copy_from_raw_u8(
                     in_frame.plane_data(0).unwrap(),
@@ -170,7 +170,7 @@ impl Context {
                     }),
                 ))
             }
-            Context::Sixteen(ref mut context) => {
+            Context::Sixteen(context) => {
                 let mut enc_frame = context.new_frame();
                 enc_frame.planes[0].copy_from_raw_u8(
                     in_frame.plane_data(0).unwrap(),
@@ -209,8 +209,8 @@ impl Context {
 
     fn flush(&mut self) {
         match self {
-            Context::Eight(ref mut context) => context.flush(),
-            Context::Sixteen(ref mut context) => context.flush(),
+            Context::Eight(context) => context.flush(),
+            Context::Sixteen(context) => context.flush(),
         }
     }
 }

@@ -1357,7 +1357,7 @@ impl RtpBasePay2 {
         };
 
         let stats = self.stats.lock().unwrap();
-        let Some(ref stats) = &*stats else {
+        let Some(stats) = &*stats else {
             return;
         };
 

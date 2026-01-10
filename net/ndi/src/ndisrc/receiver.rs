@@ -200,8 +200,13 @@ impl Receiver {
                 return ReceiverItem::Timeout;
             } else if queue.flushing || queue.shutdown {
                 return ReceiverItem::Flushing;
-            } else if let Some(buffer) = queue.buffer_queue.pop_front() {
-                return ReceiverItem::Buffer(buffer);
+            } else {
+                match queue.buffer_queue.pop_front() {
+                    Some(buffer) => {
+                        return ReceiverItem::Buffer(buffer);
+                    }
+                    _ => {}
+                }
             }
 
             queue = (self.0.queue.0).1.wait(queue).unwrap();
@@ -324,14 +329,14 @@ impl Receiver {
                 Ok(Some(frame)) => {
                     // If TimestampMode::Clocked is used then directly use the clock time here,
                     // otherwise work with the running time.
-                    let receive_time_gst = if let Some(clock) = element.provide_clock() {
-                        Some(clock.internal_time())
-                    } else if let Some((clock, base_time)) =
-                        Option::zip(element.clock(), element.base_time())
-                    {
-                        Some(clock.time().saturating_sub(base_time))
-                    } else {
-                        None
+                    let receive_time_gst = match element.provide_clock() {
+                        Some(clock) => Some(clock.internal_time()),
+                        _ => match Option::zip(element.clock(), element.base_time()) {
+                            Some((clock, base_time)) => {
+                                Some(clock.time().saturating_sub(base_time))
+                            }
+                            _ => None,
+                        },
                     };
 
                     if let Some(receive_time_gst) = receive_time_gst {

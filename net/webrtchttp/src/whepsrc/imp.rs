@@ -843,33 +843,36 @@ impl WhepSrc {
                 }
             };
 
-            if let Ok(offer_sdp) = reply
+            match reply
                 .value("offer")
                 .map(|offer| offer.get::<gst_webrtc::WebRTCSessionDescription>().unwrap())
             {
-                gst::debug!(
-                    CAT,
-                    imp = self_,
-                    "Setting local description: {:?}",
-                    offer_sdp.sdp().as_text()
-                );
+                Ok(offer_sdp) => {
+                    gst::debug!(
+                        CAT,
+                        imp = self_,
+                        "Setting local description: {:?}",
+                        offer_sdp.sdp().as_text()
+                    );
 
-                self_.webrtcbin.emit_by_name::<()>(
-                    "set-local-description",
-                    &[&offer_sdp, &None::<gst::Promise>],
-                );
-            } else {
-                let error = reply
-                    .value("error")
-                    .expect("structure must have an error value")
-                    .get::<glib::Error>()
-                    .expect("value must be a GLib error");
+                    self_.webrtcbin.emit_by_name::<()>(
+                        "set-local-description",
+                        &[&offer_sdp, &None::<gst::Promise>],
+                    );
+                }
+                _ => {
+                    let error = reply
+                        .value("error")
+                        .expect("structure must have an error value")
+                        .get::<glib::Error>()
+                        .expect("value must be a GLib error");
 
-                gst::element_imp_error!(
-                    self_,
-                    gst::LibraryError::Failed,
-                    ["generate offer::Promise returned with error: {}", error]
-                );
+                    gst::element_imp_error!(
+                        self_,
+                        gst::LibraryError::Failed,
+                        ["generate offer::Promise returned with error: {}", error]
+                    );
+                }
             }
         });
 

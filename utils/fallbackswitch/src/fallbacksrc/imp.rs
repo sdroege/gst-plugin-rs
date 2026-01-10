@@ -714,7 +714,7 @@ impl ObjectImpl for FallbackSrc {
                 // If we have no state then we're stopped
                 let state = match &*state_guard {
                     None => return Status::Stopped.to_value(),
-                    Some(ref state) => state,
+                    Some(state) => state,
                 };
 
                 if !state.source.running {
@@ -1188,7 +1188,7 @@ impl FallbackSrc {
         let bin = gst::Bin::default();
 
         let source = match source {
-            Source::Uri(ref uri) => {
+            Source::Uri(uri) => {
                 let uri = self
                     .obj()
                     .emit_by_name::<glib::GString>("update-uri", &[uri]);
@@ -1204,7 +1204,7 @@ impl FallbackSrc {
 
                 source
             }
-            Source::Element(ref source) => CustomSource::new(source).upcast(),
+            Source::Element(source) => CustomSource::new(source).upcast(),
         };
 
         bin.add(&source).unwrap();
@@ -1855,7 +1855,7 @@ impl FallbackSrc {
                 if transition != gst::StateChange::ReadyToNull {
                     let _ = source.set_state(gst::State::Null);
                     let mut state_guard = self.state.lock();
-                    let Some(ref mut state) = &mut *state_guard else {
+                    let Some(state) = &mut *state_guard else {
                         return;
                     };
                     self.handle_source_error(
@@ -1877,7 +1877,7 @@ impl FallbackSrc {
                 );
 
                 let mut state_guard = self.state.lock();
-                let Some(ref mut state) = &mut *state_guard else {
+                let Some(state) = &mut *state_guard else {
                     return;
                 };
 
@@ -2995,11 +2995,11 @@ impl FallbackSrc {
             for output in state.streams.iter_mut().filter_map(|s| s.output.as_mut()) {
                 let branch = match output {
                     Output {
-                        main_branch: Some(ref mut branch),
+                        main_branch: Some(branch),
                         ..
                     } if !fallback_source => branch,
                     Output {
-                        fallback_branch: Some(ref mut branch),
+                        fallback_branch: Some(branch),
                         ..
                     } if fallback_source => branch,
                     _ => continue,
@@ -4032,7 +4032,7 @@ impl FallbackSrc {
                     gst::debug!(CAT, imp = imp, "Restarting source not needed anymore");
                     return;
                 }
-                Some(State {
+                &mut Some(State {
                     fallback_source: Some(ref source),
                     ..
                 }) if fallback_source && (!source.pending_restart || !source.running) => {
@@ -4056,12 +4056,9 @@ impl FallbackSrc {
                         o.main_branch.as_mut()
                     }
                 })
-                .filter_map(|branch| {
-                    if let Some(block) = branch.source_srcpad_block.take() {
-                        Some((&branch.source_srcpad, block))
-                    } else {
-                        None
-                    }
+                .filter_map(|branch| match branch.source_srcpad_block.take() {
+                    Some(block) => Some((&branch.source_srcpad, block)),
+                    _ => None,
                 })
             {
                 gst::debug!(
@@ -4122,7 +4119,7 @@ impl FallbackSrc {
                     gst::debug!(CAT, imp = imp, "Restarting source not needed anymore");
                     return;
                 }
-                Some(State {
+                &mut Some(State {
                     fallback_source: Some(ref source),
                     ..
                 }) if fallback_source && (!source.pending_restart || !source.running) => {
@@ -4194,7 +4191,7 @@ impl FallbackSrc {
                                 gst::debug!(CAT, imp = imp, "Restarting source not needed anymore");
                                 return;
                             }
-                            Some(State {
+                            &mut Some(State {
                                 fallback_source: Some(ref source),
                                 ..
                             }) if fallback_source
@@ -4274,7 +4271,7 @@ impl FallbackSrc {
                             );
                             let _ = source.set_state(gst::State::Null);
                             let mut state_guard = imp.state.lock();
-                            let Some(ref mut state) = &mut *state_guard else {
+                            let Some(state) = &mut *state_guard else {
                                 return;
                             };
                             imp.handle_source_error(
@@ -4286,7 +4283,7 @@ impl FallbackSrc {
                             element.notify("statistics");
                         } else {
                             let mut state_guard = imp.state.lock();
-                            let Some(ref mut state) = &mut *state_guard else {
+                            let Some(state) = &mut *state_guard else {
                                 return;
                             };
                             let source = if fallback_source {
@@ -4582,7 +4579,7 @@ impl FallbackSrc {
 
         let state = match &*state_guard {
             None => return Stats::default().to_structure(),
-            Some(ref state) => state,
+            Some(state) => state,
         };
 
         state.stats.to_structure()

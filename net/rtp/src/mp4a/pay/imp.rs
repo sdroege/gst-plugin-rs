@@ -180,10 +180,9 @@ impl RtpBasePay2Impl for RtpMpeg4AudioPay {
             }
         };
 
-        let rate = if let Ok(rate) = s.get::<i32>("rate") {
-            rate
-        } else {
-            config.sampling_freq as i32
+        let rate = match s.get::<i32>("rate") {
+            Ok(rate) => rate,
+            _ => config.sampling_freq as i32,
         };
 
         self.obj().set_src_caps(

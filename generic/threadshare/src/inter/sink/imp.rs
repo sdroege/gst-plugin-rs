@@ -80,24 +80,26 @@ impl InterContextSink {
     async fn add(name: String, sinkpad: gst::Pad) -> Option<Self> {
         let mut inter_ctxs = INTER_CONTEXTS.lock().await;
 
-        let shared = if let Some(shared) = inter_ctxs.get(&name).and_then(InterContextWeak::upgrade)
-        {
-            {
-                let mut shared = shared.write().await;
-                if shared.sinkpad.is_some() {
-                    gst::error!(CAT, "Attempt to set the InterContext sink more than once");
-                    return None;
+        let shared = match inter_ctxs.get(&name).and_then(InterContextWeak::upgrade) {
+            Some(shared) => {
+                {
+                    let mut shared = shared.write().await;
+                    if shared.sinkpad.is_some() {
+                        gst::error!(CAT, "Attempt to set the InterContext sink more than once");
+                        return None;
+                    }
+                    shared.sinkpad = Some(sinkpad);
                 }
-                shared.sinkpad = Some(sinkpad);
+
+                shared
             }
+            _ => {
+                let shared = InterContext::new(&name);
+                shared.write().await.sinkpad = Some(sinkpad);
+                inter_ctxs.insert(name, shared.downgrade());
 
-            shared
-        } else {
-            let shared = InterContext::new(&name);
-            shared.write().await.sinkpad = Some(sinkpad);
-            inter_ctxs.insert(name, shared.downgrade());
-
-            shared
+                shared
+            }
         };
 
         Some(InterContextSink {

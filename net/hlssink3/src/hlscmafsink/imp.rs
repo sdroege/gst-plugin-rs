@@ -38,7 +38,7 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 });
 
 macro_rules! base_imp {
-    ($i:expr) => {
+    ($i:expr_2021) => {
         $i.obj().upcast_ref::<HlsBaseSink>().imp()
     };
 }

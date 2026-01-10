@@ -237,7 +237,7 @@ impl BaseSinkImpl for NdiSink {
         let mut state_storage = self.state.lock().unwrap();
         let state = match &mut *state_storage {
             None => return Err(gst::loggable_error!(CAT, "Sink not started yet")),
-            Some(ref mut state) => state,
+            Some(state) => state,
         };
 
         let s = caps.structure(0).unwrap();
@@ -264,7 +264,7 @@ impl BaseSinkImpl for NdiSink {
         let mut state_storage = self.state.lock().unwrap();
         let state = match &mut *state_storage {
             None => return Err(gst::FlowError::Error),
-            Some(ref mut state) => state,
+            Some(state) => state,
         };
 
         if let Some(ref info) = state.video_info {

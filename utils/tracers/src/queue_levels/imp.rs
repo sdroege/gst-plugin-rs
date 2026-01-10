@@ -63,68 +63,82 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
-static QUEUE_TYPE: LazyLock<glib::Type> = LazyLock::new(|| {
-    if let Some(queue) = gst::ElementFactory::find("queue").and_then(|f| f.load().ok()) {
-        queue.element_type()
-    } else {
-        gst::warning!(CAT, "Can't instantiate queue element");
-        glib::Type::INVALID
-    }
-});
+static QUEUE_TYPE: LazyLock<glib::Type> =
+    LazyLock::new(
+        || match gst::ElementFactory::find("queue").and_then(|f| f.load().ok()) {
+            Some(queue) => queue.element_type(),
+            _ => {
+                gst::warning!(CAT, "Can't instantiate queue element");
+                glib::Type::INVALID
+            }
+        },
+    );
 
-static QUEUE2_TYPE: LazyLock<glib::Type> = LazyLock::new(|| {
-    if let Some(queue) = gst::ElementFactory::find("queue2").and_then(|f| f.load().ok()) {
-        queue.element_type()
-    } else {
-        gst::warning!(CAT, "Can't instantiate queue2 element");
-        glib::Type::INVALID
-    }
-});
+static QUEUE2_TYPE: LazyLock<glib::Type> =
+    LazyLock::new(
+        || match gst::ElementFactory::find("queue2").and_then(|f| f.load().ok()) {
+            Some(queue) => queue.element_type(),
+            _ => {
+                gst::warning!(CAT, "Can't instantiate queue2 element");
+                glib::Type::INVALID
+            }
+        },
+    );
 
-static MULTIQUEUE_TYPE: LazyLock<glib::Type> = LazyLock::new(|| {
-    if let Some(queue) = gst::ElementFactory::find("multiqueue").and_then(|f| f.load().ok()) {
-        queue.element_type()
-    } else {
-        gst::warning!(CAT, "Can't instantiate multiqueue element");
-        glib::Type::INVALID
-    }
-});
+static MULTIQUEUE_TYPE: LazyLock<glib::Type> =
+    LazyLock::new(
+        || match gst::ElementFactory::find("multiqueue").and_then(|f| f.load().ok()) {
+            Some(queue) => queue.element_type(),
+            _ => {
+                gst::warning!(CAT, "Can't instantiate multiqueue element");
+                glib::Type::INVALID
+            }
+        },
+    );
 
-static APPSRC_TYPE: LazyLock<glib::Type> = LazyLock::new(|| {
-    if let Some(queue) = gst::ElementFactory::find("appsrc").and_then(|f| f.load().ok()) {
-        queue.element_type()
-    } else {
-        gst::warning!(CAT, "Can't instantiate appsrc element");
-        glib::Type::INVALID
-    }
-});
+static APPSRC_TYPE: LazyLock<glib::Type> =
+    LazyLock::new(
+        || match gst::ElementFactory::find("appsrc").and_then(|f| f.load().ok()) {
+            Some(queue) => queue.element_type(),
+            _ => {
+                gst::warning!(CAT, "Can't instantiate appsrc element");
+                glib::Type::INVALID
+            }
+        },
+    );
 
-static TS_INTERSRC_TYPE: LazyLock<glib::Type> = LazyLock::new(|| {
-    if let Some(queue) = gst::ElementFactory::find("ts-intersrc").and_then(|f| f.load().ok()) {
-        queue.element_type()
-    } else {
-        gst::warning!(CAT, "Can't instantiate ts-intersrc element");
-        glib::Type::INVALID
-    }
-});
+static TS_INTERSRC_TYPE: LazyLock<glib::Type> =
+    LazyLock::new(
+        || match gst::ElementFactory::find("ts-intersrc").and_then(|f| f.load().ok()) {
+            Some(queue) => queue.element_type(),
+            _ => {
+                gst::warning!(CAT, "Can't instantiate ts-intersrc element");
+                glib::Type::INVALID
+            }
+        },
+    );
 
-static TS_PROXYSRC_TYPE: LazyLock<glib::Type> = LazyLock::new(|| {
-    if let Some(queue) = gst::ElementFactory::find("ts-proxysrc").and_then(|f| f.load().ok()) {
-        queue.element_type()
-    } else {
-        gst::warning!(CAT, "Can't instantiate ts-proxysrc element");
-        glib::Type::INVALID
-    }
-});
+static TS_PROXYSRC_TYPE: LazyLock<glib::Type> =
+    LazyLock::new(
+        || match gst::ElementFactory::find("ts-proxysrc").and_then(|f| f.load().ok()) {
+            Some(queue) => queue.element_type(),
+            _ => {
+                gst::warning!(CAT, "Can't instantiate ts-proxysrc element");
+                glib::Type::INVALID
+            }
+        },
+    );
 
-static TS_QUEUE_TYPE: LazyLock<glib::Type> = LazyLock::new(|| {
-    if let Some(queue) = gst::ElementFactory::find("ts-queue").and_then(|f| f.load().ok()) {
-        queue.element_type()
-    } else {
-        gst::warning!(CAT, "Can't instantiate ts-queue element");
-        glib::Type::INVALID
-    }
-});
+static TS_QUEUE_TYPE: LazyLock<glib::Type> =
+    LazyLock::new(
+        || match gst::ElementFactory::find("ts-queue").and_then(|f| f.load().ok()) {
+            Some(queue) => queue.element_type(),
+            _ => {
+                gst::warning!(CAT, "Can't instantiate ts-queue element");
+                glib::Type::INVALID
+            }
+        },
+    );
 
 fn is_queue_type(type_: glib::Type) -> bool {
     [

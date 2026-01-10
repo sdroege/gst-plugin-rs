@@ -22,7 +22,8 @@ fn init() {
 
     INIT.call_once(|| {
         // clear this environment because it affects the default settings
-        std::env::remove_var("http_proxy");
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("http_proxy") };
         gst::init().unwrap();
         gstreqwest::plugin_register_static().expect("reqwesthttpsrc tests");
     });
@@ -676,16 +677,19 @@ fn test_iradio_mode() {
     );
 
     {
-        if let Some(tag_event) = srcpad.sticky_event::<gst::event::Tag>(0) {
-            let tags = tag_event.tag();
-            assert_eq!(tags.get::<gst::tags::Organization>().unwrap().get(), "Name");
-            assert_eq!(tags.get::<gst::tags::Genre>().unwrap().get(), "Genre");
-            assert_eq!(
-                tags.get::<gst::tags::Location>().unwrap().get(),
-                "http://www.example.com",
-            );
-        } else {
-            unreachable!();
+        match srcpad.sticky_event::<gst::event::Tag>(0) {
+            Some(tag_event) => {
+                let tags = tag_event.tag();
+                assert_eq!(tags.get::<gst::tags::Organization>().unwrap().get(), "Name");
+                assert_eq!(tags.get::<gst::tags::Genre>().unwrap().get(), "Genre");
+                assert_eq!(
+                    tags.get::<gst::tags::Location>().unwrap().get(),
+                    "http://www.example.com",
+                );
+            }
+            _ => {
+                unreachable!();
+            }
         }
     }
 }

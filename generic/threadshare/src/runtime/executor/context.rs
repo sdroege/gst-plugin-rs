@@ -222,22 +222,25 @@ impl Context {
         F: FnOnce() -> O + Send + 'a,
         O: Send + 'a,
     {
-        if let Some(cur) = Context::current().as_ref() {
-            if cur == self {
-                panic!(
-                    "Attempt to enter Context {} within itself, this would deadlock",
-                    self.name()
-                );
-            } else {
-                gst::warning!(
-                    RUNTIME_CAT,
-                    "Entering Context {} within {}",
-                    self.name(),
-                    cur.name()
-                );
+        match Context::current().as_ref() {
+            Some(cur) => {
+                if cur == self {
+                    panic!(
+                        "Attempt to enter Context {} within itself, this would deadlock",
+                        self.name()
+                    );
+                } else {
+                    gst::warning!(
+                        RUNTIME_CAT,
+                        "Entering Context {} within {}",
+                        self.name(),
+                        cur.name()
+                    );
+                }
             }
-        } else {
-            gst::debug!(RUNTIME_CAT, "Entering Context {}", self.name());
+            _ => {
+                gst::debug!(RUNTIME_CAT, "Entering Context {}", self.name());
+            }
         }
 
         self.0.enter(f)

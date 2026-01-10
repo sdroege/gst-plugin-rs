@@ -757,12 +757,12 @@ impl<H: Borrow<Async<T>> + Clone, T: Send + 'static> Future for Ready<H, T> {
     type Output = io::Result<()>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let Self {
+        let &mut Self {
             ref handle,
-            dir,
-            ticks,
-            index,
-            _guard,
+            ref mut dir,
+            ref mut ticks,
+            ref mut index,
+            ref mut _guard,
             ..
         } = &mut *self;
 

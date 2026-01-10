@@ -45,7 +45,7 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 });
 
 macro_rules! try_create_element {
-    ($l:expr, $n:expr) => {
+    ($l:expr_2021, $n:expr_2021) => {
         match gst::ElementFactory::find($l) {
             Some(factory) => Ok(factory.create().name($n).build().unwrap()),
             None => {
@@ -54,7 +54,7 @@ macro_rules! try_create_element {
             }
         }
     };
-    ($l:expr) => {{
+    ($l:expr_2021) => {{
         let alias: String = format!("test_{}", $l);
         try_create_element!($l, <std::string::String as AsRef<str>>::as_ref(&alias))
     }};

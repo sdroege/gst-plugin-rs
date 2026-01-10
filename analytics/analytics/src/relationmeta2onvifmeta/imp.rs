@@ -233,9 +233,8 @@ impl RelationMeta2OnvifMeta {
 
     fn get_utc_time(&self, running_time: gst::ClockTime) -> gst::ClockTime {
         match self.settings.lock().unwrap().timesource {
-            TimeSource::Clock => {
-                if let (Some(base_time), Some(clock)) = (self.obj().base_time(), self.obj().clock())
-                {
+            TimeSource::Clock => match (self.obj().base_time(), self.obj().clock()) {
+                (Some(base_time), Some(clock)) => {
                     let utc_now = std::time::SystemTime::now()
                         .duration_since(std::time::SystemTime::UNIX_EPOCH)
                         .unwrap()
@@ -247,7 +246,8 @@ impl RelationMeta2OnvifMeta {
 
                     let rt_diff = utc_now - running_time_now;
                     running_time_now + rt_diff
-                } else {
+                }
+                _ => {
                     gst::error!(
                         CAT,
                         imp = self,
@@ -255,7 +255,7 @@ impl RelationMeta2OnvifMeta {
                     );
                     gst::ClockTime::ZERO
                 }
-            }
+            },
             TimeSource::RunningTime => running_time,
             TimeSource::ClockTime => {
                 if let Some(base_time) = self.obj().base_time() {

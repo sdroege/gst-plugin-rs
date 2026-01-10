@@ -578,7 +578,7 @@ fn write_trun(
 
     for Buffer {
         idx: _idx,
-        ref buffer,
+        buffer,
         timestamp: _timestamp,
         duration,
         composition_time_offset,

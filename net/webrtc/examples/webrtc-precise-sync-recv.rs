@@ -560,8 +560,8 @@ impl App {
 async fn connect_as_listener(
     signaller_url: &Url,
 ) -> anyhow::Result<(
-    Pin<Box<impl Sink<ToSignaller, Error = anyhow::Error>>>,
-    Pin<Box<impl Stream<Item = anyhow::Result<FromSignaller>>>>,
+    Pin<Box<impl Sink<ToSignaller, Error = anyhow::Error> + use<>>>,
+    Pin<Box<impl Stream<Item = anyhow::Result<FromSignaller>> + use<>>>,
 )> {
     async fn register(
         mut signaller_tx: Pin<&mut impl Sink<ToSignaller, Error = anyhow::Error>>,

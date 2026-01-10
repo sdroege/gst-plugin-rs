@@ -806,29 +806,32 @@ impl RTPDTMFSrcTask {
                     }
                 }
 
-                if let Ok(Some(ptime)) = s.get_optional::<u32>("ptime") {
-                    gst::log!(CAT, imp = imp, "Using peer ptime {ptime}");
-                    self.ptime = gst::ClockTime::from_mseconds(ptime as u64);
-                    *imp.ptime.lock().unwrap() = self.ptime;
-                } else {
-                    match s.get_optional::<u32>("maxptime") {
-                        Ok(Some(maxptime)) => {
-                            gst::log!(CAT, imp = imp, "Using peer maxptime {maxptime}");
-                            self.ptime = gst::ClockTime::from_mseconds(maxptime as u64);
-                            *imp.ptime.lock().unwrap() = self.ptime;
-                        }
-                        other => {
-                            if let Err(err) = other {
-                                // Would be cool to be able to fixate uint
-                                gst::warning!(
-                                    CAT,
-                                    imp = imp,
-                                    "Invalid type for peer 'ptime' / 'maxptime' in {s}: {err}"
-                                );
-                                s.remove_field("maxptime");
+                match s.get_optional::<u32>("ptime") {
+                    Ok(Some(ptime)) => {
+                        gst::log!(CAT, imp = imp, "Using peer ptime {ptime}");
+                        self.ptime = gst::ClockTime::from_mseconds(ptime as u64);
+                        *imp.ptime.lock().unwrap() = self.ptime;
+                    }
+                    _ => {
+                        match s.get_optional::<u32>("maxptime") {
+                            Ok(Some(maxptime)) => {
+                                gst::log!(CAT, imp = imp, "Using peer maxptime {maxptime}");
+                                self.ptime = gst::ClockTime::from_mseconds(maxptime as u64);
+                                *imp.ptime.lock().unwrap() = self.ptime;
                             }
-                            s.set("ptime", self.ptime);
-                            gst::log!(CAT, imp = imp, "Using internal ptime {}", self.ptime);
+                            other => {
+                                if let Err(err) = other {
+                                    // Would be cool to be able to fixate uint
+                                    gst::warning!(
+                                        CAT,
+                                        imp = imp,
+                                        "Invalid type for peer 'ptime' / 'maxptime' in {s}: {err}"
+                                    );
+                                    s.remove_field("maxptime");
+                                }
+                                s.set("ptime", self.ptime);
+                                gst::log!(CAT, imp = imp, "Using internal ptime {}", self.ptime);
+                            }
                         }
                     }
                 }

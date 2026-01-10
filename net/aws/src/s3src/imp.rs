@@ -567,24 +567,25 @@ impl BaseSrcImpl for S3Src {
         }
         drop(settings);
 
-        if let Ok(s3client) = self.connect() {
-            let size = self.head(&s3client)?;
-            let (bucket, key, version) = self.get_bucket_and_key();
+        match self.connect() {
+            Ok(s3client) => {
+                let size = self.head(&s3client)?;
+                let (bucket, key, version) = self.get_bucket_and_key();
 
-            *state = StreamingState::Started {
-                client: s3client,
-                size,
-                bucket,
-                key,
-                version,
-            };
+                *state = StreamingState::Started {
+                    client: s3client,
+                    size,
+                    bucket,
+                    key,
+                    version,
+                };
 
-            Ok(())
-        } else {
-            Err(gst::error_msg!(
+                Ok(())
+            }
+            _ => Err(gst::error_msg!(
                 gst::ResourceError::Failed,
                 ["Cannot connect to S3 resource"]
-            ))
+            )),
         }
     }
 

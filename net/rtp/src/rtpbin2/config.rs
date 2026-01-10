@@ -74,11 +74,14 @@ mod imp {
                     gst::warning!(CAT, "failed to parse key as a pt");
                     continue;
                 };
-                if let Ok(caps) = value.get::<gst::Caps>() {
-                    session.add_caps(caps);
-                } else {
-                    gst::warning!(CAT, "{pt} does not contain a caps value");
-                    continue;
+                match value.get::<gst::Caps>() {
+                    Ok(caps) => {
+                        session.add_caps(caps);
+                    }
+                    _ => {
+                        gst::warning!(CAT, "{pt} does not contain a caps value");
+                        continue;
+                    }
                 }
             }
         }

@@ -475,10 +475,13 @@ impl Synthesizer {
             if !resp.status().is_success() {
                 gst::error!(CAT, imp = self, "Request failed: {}", resp.status());
                 let status = resp.status();
-                if let Ok(text) = resp.text().await {
-                    return Err(anyhow!("Request failed: {} ({})", status, text));
-                } else {
-                    return Err(anyhow!("Request failed: {}", status));
+                match resp.text().await {
+                    Ok(text) => {
+                        return Err(anyhow!("Request failed: {} ({})", status, text));
+                    }
+                    _ => {
+                        return Err(anyhow!("Request failed: {}", status));
+                    }
                 }
             }
 

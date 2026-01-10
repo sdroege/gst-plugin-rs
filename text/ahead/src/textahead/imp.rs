@@ -368,72 +368,74 @@ impl TextAhead {
         }
         let settings = self.settings.lock().unwrap();
 
-        let (mut text, pts, duration) = if let Some(pending_segment) = state.pending_segment.take()
-        {
-            let duration = match (pending_segment.start(), state.pending[0].pts) {
-                (Some(start), Some(first_pts)) => Some(first_pts - start),
-                _ => None,
-            };
+        let (mut text, pts, duration) = match state.pending_segment.take() {
+            Some(pending_segment) => {
+                let duration = match (pending_segment.start(), state.pending[0].pts) {
+                    (Some(start), Some(first_pts)) => Some(first_pts - start),
+                    _ => None,
+                };
 
-            ("".to_string(), pending_segment.start(), duration)
-        } else {
-            let mut text = String::new();
-            let mut first_buffer = true;
+                ("".to_string(), pending_segment.start(), duration)
+            }
+            _ => {
+                let mut text = String::new();
+                let mut first_buffer = true;
 
-            // previous buffers
-            for previous in state.previous.iter() {
+                // previous buffers
+                for previous in state.previous.iter() {
+                    if !first_buffer && !settings.separator.is_empty() {
+                        text.push_str(&settings.separator);
+                    }
+
+                    if settings.ahead_attributes.is_empty() {
+                        text.push_str(&previous.text);
+                    } else {
+                        use std::fmt::Write;
+
+                        write!(
+                            &mut text,
+                            "<span {}>{}</span>",
+                            settings.previous_attributes, previous.text,
+                        )
+                        .unwrap();
+                    }
+
+                    first_buffer = false;
+                }
+
+                // current buffer
+                let current = state.pending.remove(0);
+
                 if !first_buffer && !settings.separator.is_empty() {
                     text.push_str(&settings.separator);
                 }
 
-                if settings.ahead_attributes.is_empty() {
-                    text.push_str(&previous.text);
+                if settings.current_attributes.is_empty() {
+                    text.push_str(&current.text);
                 } else {
                     use std::fmt::Write;
 
                     write!(
                         &mut text,
                         "<span {}>{}</span>",
-                        settings.previous_attributes, previous.text,
+                        settings.current_attributes, current.text
                     )
                     .unwrap();
                 }
 
-                first_buffer = false;
-            }
+                let pts = current.pts;
+                let duration = current.duration;
 
-            // current buffer
-            let current = state.pending.remove(0);
+                if settings.n_previous > 0 {
+                    state.previous.push_back(current);
 
-            if !first_buffer && !settings.separator.is_empty() {
-                text.push_str(&settings.separator);
-            }
-
-            if settings.current_attributes.is_empty() {
-                text.push_str(&current.text);
-            } else {
-                use std::fmt::Write;
-
-                write!(
-                    &mut text,
-                    "<span {}>{}</span>",
-                    settings.current_attributes, current.text
-                )
-                .unwrap();
-            }
-
-            let pts = current.pts;
-            let duration = current.duration;
-
-            if settings.n_previous > 0 {
-                state.previous.push_back(current);
-
-                if state.previous.len() > settings.n_previous as usize {
-                    state.previous.pop_front();
+                    if state.previous.len() > settings.n_previous as usize {
+                        state.previous.pop_front();
+                    }
                 }
-            }
 
-            (text, pts, duration)
+                (text, pts, duration)
+            }
         };
 
         // ahead buffers

@@ -27,7 +27,7 @@ pub enum ReadError {
 impl std::error::Error for ReadError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            ReadError::Io(ref io) => Some(io),
+            ReadError::Io(io) => Some(io),
             _ => None,
         }
     }
@@ -42,7 +42,7 @@ impl From<std::io::Error> for ReadError {
 impl fmt::Display for ReadError {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ReadError::Io(ref io) => fmt::Display::fmt(io, fmt),
+            ReadError::Io(io) => fmt::Display::fmt(io, fmt),
             ReadError::TooBig => write!(fmt, "Too big message"),
             ReadError::ParseError => write!(fmt, "Parse error"),
         }

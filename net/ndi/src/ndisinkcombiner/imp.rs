@@ -244,7 +244,7 @@ impl AggregatorImpl for NdiSinkCombiner {
 
         let state_storage = self.state.lock().unwrap();
         let state = match &*state_storage {
-            Some(ref state) => state,
+            Some(state) => state,
             None => return None,
         };
 
@@ -339,8 +339,8 @@ impl AggregatorImpl for NdiSinkCombiner {
             None => None,
         };
 
-        let audio_buffer_segment_and_pad =
-            if let Some(audio_pad) = self.audio_pad.lock().unwrap().clone() {
+        let audio_buffer_segment_and_pad = match self.audio_pad.lock().unwrap().clone() {
+            Some(audio_pad) => {
                 match audio_pad.peek_buffer() {
                     Some(audio_buffer) if audio_buffer.size() == 0 => {
                         // Skip empty/gap audio buffer
@@ -371,13 +371,13 @@ impl AggregatorImpl for NdiSinkCombiner {
                     }
                     None => None,
                 }
-            } else {
-                None
-            };
+            }
+            _ => None,
+        };
 
         let mut state_storage = self.state.lock().unwrap();
         let state = match &mut *state_storage {
-            Some(ref mut state) => state,
+            Some(state) => state,
             None => return Err(gst::FlowError::Flushing),
         };
 
@@ -406,7 +406,7 @@ impl AggregatorImpl for NdiSinkCombiner {
                     self.video_pad.drop_buffer();
                     return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
                 }
-                Some((ref buffer, _, pending_caps, pending_segment)) => (
+                Some((buffer, _, pending_caps, pending_segment)) => (
                     buffer.clone(),
                     Some(video_running_time),
                     pending_caps.clone(),
@@ -424,7 +424,7 @@ impl AggregatorImpl for NdiSinkCombiner {
                     );
                     return Err(gst::FlowError::Eos);
                 }
-                (None, Some((ref audio_buffer, ref audio_segment, _))) => {
+                (None, Some((audio_buffer, audio_segment, _))) => {
                     // Create an empty dummy buffer for attaching the audio. This is going to
                     // be dropped by the sink later.
                     let audio_running_time =
@@ -457,7 +457,7 @@ impl AggregatorImpl for NdiSinkCombiner {
 
                     (buffer, gst::ClockTime::NONE, None, None, None)
                 }
-                (Some((ref buffer, _, _, _)), _) => {
+                (Some((buffer, _, _, _)), _) => {
                     (buffer.clone(), gst::ClockTime::NONE, None, None, None)
                 }
             }
@@ -561,7 +561,7 @@ impl AggregatorImpl for NdiSinkCombiner {
 
                 let mut state_storage = self.state.lock().unwrap();
                 let state = match &mut *state_storage {
-                    Some(ref mut state) => state,
+                    Some(state) => state,
                     None => return false,
                 };
 
@@ -620,7 +620,7 @@ impl AggregatorImpl for NdiSinkCombiner {
                 gst::debug!(CAT, obj = pad, "Updating segment {:?}", segment);
                 let mut state_storage = self.state.lock().unwrap();
                 let state = match &mut *state_storage {
-                    Some(ref mut state) => state,
+                    Some(state) => state,
                     None => return false,
                 };
                 let mut send_segment_immediately = true;
@@ -640,7 +640,7 @@ impl AggregatorImpl for NdiSinkCombiner {
             EventView::FlushStop(_) if pad == &self.video_pad => {
                 let mut state_storage = self.state.lock().unwrap();
                 let state = match &mut *state_storage {
-                    Some(ref mut state) => state,
+                    Some(state) => state,
                     None => return false,
                 };
                 state.pending_segment = None;

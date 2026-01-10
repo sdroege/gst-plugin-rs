@@ -193,20 +193,26 @@ fn main() {
         .unwrap();
 
     if let Some(caps) = cli.audio_caps {
-        if let Ok(c) = gst::Caps::from_str(&caps) {
-            fallbacksrc.set_property("audio-caps", c);
-        } else {
-            gst::error!(CAT, "Invalid audio caps");
-            return;
+        match gst::Caps::from_str(&caps) {
+            Ok(c) => {
+                fallbacksrc.set_property("audio-caps", c);
+            }
+            _ => {
+                gst::error!(CAT, "Invalid audio caps");
+                return;
+            }
         }
     }
 
     if let Some(caps) = cli.video_caps {
-        if let Ok(c) = gst::Caps::from_str(&caps) {
-            fallbacksrc.set_property("video-caps", c);
-        } else {
-            gst::error!(CAT, "Invalid video caps");
-            return;
+        match gst::Caps::from_str(&caps) {
+            Ok(c) => {
+                fallbacksrc.set_property("video-caps", c);
+            }
+            _ => {
+                gst::error!(CAT, "Invalid video caps");
+                return;
+            }
         }
     }
 

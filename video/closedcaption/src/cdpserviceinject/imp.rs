@@ -313,10 +313,10 @@ impl BaseTransformImpl for CdpServiceInject {
 
         let mut state = self.state.lock().unwrap();
         let State {
-            ref mut cdp_parser,
-            ref mut cdp_writer,
-            ref mut pending_service_descriptor,
-            ref mut service_descriptor,
+            cdp_parser,
+            cdp_writer,
+            pending_service_descriptor,
+            service_descriptor,
             ..
         } = &mut *state;
 

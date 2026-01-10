@@ -181,34 +181,36 @@ impl TaskQueue {
         F: FnOnce() -> O + Send,
         O: Send,
     {
-        let tasks_clone = Arc::clone(&self.tasks);
-        let mut tasks = self.tasks.lock().unwrap();
-        let task_id = TaskId(tasks.vacant_entry().key());
+        unsafe {
+            let tasks_clone = Arc::clone(&self.tasks);
+            let mut tasks = self.tasks.lock().unwrap();
+            let task_id = TaskId(tasks.vacant_entry().key());
 
-        let task_fut = async move {
-            gst::trace!(RUNTIME_CAT, "Executing sync function as {task_id:?}");
+            let task_fut = async move {
+                gst::trace!(RUNTIME_CAT, "Executing sync function as {task_id:?}");
 
-            let _guard = CallOnDrop::new(move || {
-                let _ = tasks_clone.lock().unwrap().try_remove(task_id.0);
+                let _guard = CallOnDrop::new(move || {
+                    let _ = tasks_clone.lock().unwrap().try_remove(task_id.0);
 
-                gst::trace!(RUNTIME_CAT, "Done executing sync function as {task_id:?}");
+                    gst::trace!(RUNTIME_CAT, "Done executing sync function as {task_id:?}");
+                });
+
+                f()
+            };
+
+            let runnables = Arc::clone(&self.runnables);
+            // This is the unsafe call for which the lifetime must hold
+            // until the the Future is Ready and its Output retrieved.
+            let (runnable, task) = async_task::spawn_unchecked(task_fut, move |runnable| {
+                runnables.push(runnable).unwrap();
             });
+            tasks.insert(Task::new(task_id));
+            drop(tasks);
 
-            f()
-        };
+            runnable.schedule();
 
-        let runnables = Arc::clone(&self.runnables);
-        // This is the unsafe call for which the lifetime must hold
-        // until the the Future is Ready and its Output retrieved.
-        let (runnable, task) = async_task::spawn_unchecked(task_fut, move |runnable| {
-            runnables.push(runnable).unwrap();
-        });
-        tasks.insert(Task::new(task_id));
-        drop(tasks);
-
-        runnable.schedule();
-
-        task
+            task
+        }
     }
 
     pub fn pop_runnable(&self) -> Result<Runnable, concurrent_queue::PopError> {

@@ -890,30 +890,33 @@ impl ObjectImpl for MpegTsLiveSource {
                     let _ = self.obj().remove(&existing_source);
                     let _ = self.srcpad.set_target(None::<&gst::Pad>);
                 }
-                if let Some(source) = value
+                match value
                     .get::<Option<gst::Element>>()
                     .expect("type checked upstream")
                 {
-                    if self.obj().add(&source).is_err() {
-                        gst::warning!(CAT, imp = self, "Failed to add source");
-                        return;
-                    };
-                    if source.set_clock(Some(&self.internal_clock)).is_err() {
-                        gst::warning!(CAT, imp = self, "Failed to set clock on source");
-                        return;
-                    };
+                    Some(source) => {
+                        if self.obj().add(&source).is_err() {
+                            gst::warning!(CAT, imp = self, "Failed to add source");
+                            return;
+                        };
+                        if source.set_clock(Some(&self.internal_clock)).is_err() {
+                            gst::warning!(CAT, imp = self, "Failed to set clock on source");
+                            return;
+                        };
 
-                    let Some(target_pad) = source.static_pad("src") else {
-                        gst::warning!(CAT, imp = self, "Source element has no 'src' pad");
-                        return;
-                    };
-                    if self.srcpad.set_target(Some(&target_pad)).is_err() {
-                        gst::warning!(CAT, imp = self, "Failed to set ghost pad target");
-                        return;
+                        let Some(target_pad) = source.static_pad("src") else {
+                            gst::warning!(CAT, imp = self, "Source element has no 'src' pad");
+                            return;
+                        };
+                        if self.srcpad.set_target(Some(&target_pad)).is_err() {
+                            gst::warning!(CAT, imp = self, "Failed to set ghost pad target");
+                            return;
+                        }
+                        settings.source = Some(source);
                     }
-                    settings.source = Some(source);
-                } else {
-                    settings.source = None;
+                    _ => {
+                        settings.source = None;
+                    }
                 }
             }
             "window-size" => {

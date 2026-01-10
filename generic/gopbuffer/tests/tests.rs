@@ -19,7 +19,7 @@ fn init() {
 }
 
 macro_rules! check_buffer {
-    ($buf1:expr, $buf2:expr) => {
+    ($buf1:expr_2021, $buf2:expr_2021) => {
         assert_eq!($buf1.pts(), $buf2.pts());
         assert_eq!($buf1.dts(), $buf2.dts());
         assert_eq!($buf1.flags(), $buf2.flags());

@@ -618,12 +618,13 @@ fn make_converter_for_video_caps(caps: &gst::Caps, codec: &Codec) -> Result<gst:
                 .is_some_and(|factory| factory.name().starts_with("nvv4l2"))
             {
                 let queue = make_element("queue", None)?;
-                let nvconvert = if let Ok(nvconvert) = make_element("nvvideoconvert", None) {
-                    nvconvert.set_property_from_str("compute-hw", "Default");
-                    nvconvert.set_property_from_str("nvbuf-memory-type", "nvbuf-mem-default");
-                    nvconvert
-                } else {
-                    make_element("nvvidconv", None)?
+                let nvconvert = match make_element("nvvideoconvert", None) {
+                    Ok(nvconvert) => {
+                        nvconvert.set_property_from_str("compute-hw", "Default");
+                        nvconvert.set_property_from_str("nvbuf-memory-type", "nvbuf-mem-default");
+                        nvconvert
+                    }
+                    _ => make_element("nvvidconv", None)?,
                 };
 
                 ret.add_many([&queue, &nvconvert])?;
@@ -639,29 +640,32 @@ fn make_converter_for_video_caps(caps: &gst::Caps, codec: &Codec) -> Result<gst:
 
                 (d3d11upload, d3d11convert)
             } else if feature.contains(CUDA_MEMORY_FEATURE) {
-                if let Some(convert_factory) = gst::ElementFactory::find("cudaconvert") {
-                    let cudaupload = make_element("cudaupload", None)?;
-                    let cudaconvert = convert_factory.create().build()?;
-                    let cudascale = make_element("cudascale", None)?;
+                match gst::ElementFactory::find("cudaconvert") {
+                    Some(convert_factory) => {
+                        let cudaupload = make_element("cudaupload", None)?;
+                        let cudaconvert = convert_factory.create().build()?;
+                        let cudascale = make_element("cudascale", None)?;
 
-                    ret.add_many([&cudaupload, &cudaconvert, &cudascale])?;
-                    gst::Element::link_many([&cudaupload, &cudaconvert, &cudascale])?;
+                        ret.add_many([&cudaupload, &cudaconvert, &cudascale])?;
+                        gst::Element::link_many([&cudaupload, &cudaconvert, &cudascale])?;
 
-                    (cudaupload, cudascale)
-                } else {
-                    let cudadownload = make_element("cudadownload", None)?;
-                    let convert = make_element("videoconvert", None)?;
-                    let scale = make_element("videoscale", None)?;
+                        (cudaupload, cudascale)
+                    }
+                    _ => {
+                        let cudadownload = make_element("cudadownload", None)?;
+                        let convert = make_element("videoconvert", None)?;
+                        let scale = make_element("videoscale", None)?;
 
-                    gst::warning!(
-                        CAT,
-                        "No cudaconvert factory available, falling back to software"
-                    );
+                        gst::warning!(
+                            CAT,
+                            "No cudaconvert factory available, falling back to software"
+                        );
 
-                    ret.add_many([&cudadownload, &convert, &scale])?;
-                    gst::Element::link_many([&cudadownload, &convert, &scale])?;
+                        ret.add_many([&cudadownload, &convert, &scale])?;
+                        gst::Element::link_many([&cudadownload, &convert, &scale])?;
 
-                    (cudadownload, scale)
+                        (cudadownload, scale)
+                    }
                 }
             } else if feature.contains(GL_MEMORY_FEATURE) {
                 let glupload = make_element("glupload", None)?;
@@ -1323,11 +1327,12 @@ impl State {
         element: &super::BaseWebRTCSink,
         session_id: &str,
     ) -> Option<Session> {
-        if let Some(session) = self.sessions.remove(session_id) {
-            self.finalize_session(element, session.clone());
-            Some(session)
-        } else {
-            None
+        match self.sessions.remove(session_id) {
+            Some(session) => {
+                self.finalize_session(element, session.clone());
+                Some(session)
+            }
+            _ => None,
         }
     }
 
@@ -1788,11 +1793,14 @@ impl BaseWebRTCSink {
          * concept of *transport-wide* congestion control, and firefox doesn't
          * provide feedback for audio packets.
          */
-        if let Some(twcc_extension) = gst_rtp::RTPHeaderExtension::create_from_uri(RTP_TWCC_URI) {
-            twcc_extension.set_id(twcc_id);
-            payloader.emit_by_name::<()>("add-extension", &[&twcc_extension]);
-        } else {
-            anyhow::bail!("Failed to add TWCC extension, make sure 'gst-plugins-good:rtpmanager' is installed");
+        match gst_rtp::RTPHeaderExtension::create_from_uri(RTP_TWCC_URI) {
+            Some(twcc_extension) => {
+                twcc_extension.set_id(twcc_id);
+                payloader.emit_by_name::<()>("add-extension", &[&twcc_extension]);
+            }
+            _ => {
+                anyhow::bail!("Failed to add TWCC extension, make sure 'gst-plugins-good:rtpmanager' is installed");
+            }
         }
 
         Ok(())
@@ -1890,8 +1898,8 @@ impl BaseWebRTCSink {
         );
 
         if let Some(ssrc) = ssrc {
-            if let Some(pspec) = payloader.find_property("ssrc") {
-                match pspec.value_type() {
+            match payloader.find_property("ssrc") {
+                Some(pspec) => match pspec.value_type() {
                     glib::Type::I64 => {
                         payloader.set_property("ssrc", ssrc as i64);
                     }
@@ -1905,13 +1913,14 @@ impl BaseWebRTCSink {
                             "Unsupported ssrc type (expected i64 or u32)"
                         );
                     }
+                },
+                _ => {
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Failed to find 'ssrc' property on payloader"
+                    );
                 }
-            } else {
-                gst::warning!(
-                    CAT,
-                    imp = self,
-                    "Failed to find 'ssrc' property on payloader"
-                );
             }
         }
 
@@ -2676,21 +2685,24 @@ impl BaseWebRTCSink {
                         }
                     };
 
-                    if let Ok(answer) = reply.value("answer").map(|answer| {
+                    match reply.value("answer").map(|answer| {
                         answer
                             .get::<gst_webrtc::WebRTCSessionDescription>()
                             .unwrap()
                     }) {
-                        this.on_answer_created(answer, &session_id);
-                    } else {
-                        gst::warning!(
-                            CAT,
-                            imp = this,
-                            "Reply without an answer for session {}: {:?}",
-                            session_id,
-                            reply
-                        );
-                        let _ = this.remove_session(&session_id, true);
+                        Ok(answer) => {
+                            this.on_answer_created(answer, &session_id);
+                        }
+                        _ => {
+                            gst::warning!(
+                                CAT,
+                                imp = this,
+                                "Reply without an answer for session {}: {:?}",
+                                session_id,
+                                reply
+                            );
+                            let _ = this.remove_session(&session_id, true);
+                        }
                     }
                 }
             ));
@@ -2889,27 +2901,33 @@ impl BaseWebRTCSink {
                             }
                         };
 
-                        if let Ok(offer) = reply.value("offer").map(|offer| {
+                        match reply.value("offer").map(|offer| {
                             offer.get::<gst_webrtc::WebRTCSessionDescription>().unwrap()
                         }) {
-                            this.on_offer_created(offer, &session_id);
-                        } else if let Ok(err) = reply.get::<glib::Error>("error") {
-                            gst::error!(
-                                CAT,
-                                imp = this,
-                                "error when creating offer for session {}: {:?}",
-                                session_id,
-                                err
-                            );
-                            let _ = this.remove_session(&session_id, true);
-                        } else {
-                            gst::warning!(
-                                CAT,
-                                "Reply without an offer for session {}: {:?}",
-                                session_id,
-                                reply
-                            );
-                            let _ = this.remove_session(&session_id, true);
+                            Ok(offer) => {
+                                this.on_offer_created(offer, &session_id);
+                            }
+                            _ => match reply.get::<glib::Error>("error") {
+                                Ok(err) => {
+                                    gst::error!(
+                                        CAT,
+                                        imp = this,
+                                        "error when creating offer for session {}: {:?}",
+                                        session_id,
+                                        err
+                                    );
+                                    let _ = this.remove_session(&session_id, true);
+                                }
+                                _ => {
+                                    gst::warning!(
+                                        CAT,
+                                        "Reply without an offer for session {}: {:?}",
+                                        session_id,
+                                        reply
+                                    );
+                                    let _ = this.remove_session(&session_id, true);
+                                }
+                            },
                         }
                     }
                 ));
@@ -3967,77 +3985,82 @@ impl BaseWebRTCSink {
                     .insert(stream_name.clone(), mid.to_string());
             }
 
-            if let Some(producer) = state
+            match state
                 .streams
                 .get(stream_name)
                 .and_then(|stream| stream.producer.clone())
             {
-                drop(state_guard);
+                Some(producer) => {
+                    drop(state_guard);
 
-                let peer_id = session.peer_id.clone();
-                let session_codecs = session.codecs.clone().unwrap_or_else(|| codecs.clone());
-                let pipeline = session.pipeline.clone();
+                    let peer_id = session.peer_id.clone();
+                    let session_codecs = session.codecs.clone().unwrap_or_else(|| codecs.clone());
+                    let pipeline = session.pipeline.clone();
 
-                drop(session);
+                    drop(session);
 
-                let res = match self.setup_session_payloading_chain(
-                    &peer_id,
-                    webrtc_pad,
-                    &session_codecs,
-                    &sdp,
-                    &pipeline,
-                ) {
-                    Err(err) => {
+                    let res = match self.setup_session_payloading_chain(
+                        &peer_id,
+                        webrtc_pad,
+                        &session_codecs,
+                        &sdp,
+                        &pipeline,
+                    ) {
+                        Err(err) => {
+                            gst::error!(
+                                CAT,
+                                imp = self,
+                                "Failed to setup elements {} for session {}: {}",
+                                stream_name,
+                                session_id,
+                                err
+                            );
+                            remove = true;
+                            state_guard = self.state.lock().unwrap();
+                            session = session_clone.lock().unwrap();
+                            state = state_guard.deref_mut();
+                            break;
+                        }
+                        Ok(Some(res)) => res,
+                        Ok(None) => {
+                            state_guard = self.state.lock().unwrap();
+                            session = session_clone.lock().unwrap();
+                            state = state_guard.deref_mut();
+                            continue;
+                        }
+                    };
+
+                    state_guard = self.state.lock().unwrap();
+                    session = session_clone.lock().unwrap();
+                    state = state_guard.deref_mut();
+
+                    if let Err(err) =
+                        session.connect_input_stream(&self.obj(), &producer, webrtc_pad, res)
+                    {
                         gst::error!(
                             CAT,
                             imp = self,
-                            "Failed to setup elements {} for session {}: {}",
+                            "Failed to connect input stream {} for session {}: {}",
                             stream_name,
-                            session_id,
+                            session.id,
                             err
                         );
                         remove = true;
-                        state_guard = self.state.lock().unwrap();
-                        session = session_clone.lock().unwrap();
-                        state = state_guard.deref_mut();
                         break;
                     }
-                    Ok(Some(res)) => res,
-                    Ok(None) => {
-                        state_guard = self.state.lock().unwrap();
-                        session = session_clone.lock().unwrap();
-                        state = state_guard.deref_mut();
-                        continue;
-                    }
-                };
-
-                state_guard = self.state.lock().unwrap();
-                session = session_clone.lock().unwrap();
-                state = state_guard.deref_mut();
-
-                if let Err(err) =
-                    session.connect_input_stream(&self.obj(), &producer, webrtc_pad, res)
-                {
-                    gst::error!(
-                        CAT,
-                        imp = self,
-                        "Failed to connect input stream {} for session {}: {}",
-                        stream_name,
-                        session.id,
-                        err
-                    );
-                    remove = true;
-                    break;
                 }
-            } else if !removed_streams.contains(stream_name) {
-                gst::error!(
-                    CAT,
-                    imp = self,
-                    "No producer to connect session {} to",
-                    session.id,
-                );
-                remove = true;
-                break;
+                _ => {
+                    if !removed_streams.contains(stream_name) {
+                        gst::error!(
+                            CAT,
+                            imp = self,
+                            "No producer to connect session {} to",
+                            session.id,
+                        );
+                        remove = true;
+                        break;
+                    }
+                }
             }
         }
 
@@ -4055,12 +4078,13 @@ impl BaseWebRTCSink {
 
                 loop {
                     interval.tick().await;
-                    if let (Some(webrtcbin), Some(this)) =
-                        (webrtcbin.upgrade(), this_weak.upgrade())
-                    {
-                        this.process_stats(webrtcbin, &session_id_clone);
-                    } else {
-                        break;
+                    match (webrtcbin.upgrade(), this_weak.upgrade()) {
+                        (Some(webrtcbin), Some(this)) => {
+                            this.process_stats(webrtcbin, &session_id_clone);
+                        }
+                        _ => {
+                            break;
+                        }
                     }
                 }
             }));
@@ -4158,22 +4182,23 @@ impl BaseWebRTCSink {
     fn handle_sdp_answer(&self, session_id: &str, desc: &gst_webrtc::WebRTCSessionDescription) {
         let mut state = self.state.lock().unwrap();
 
-        if let Some(session) = state.sessions.get(session_id).map(|s| s.0.clone()) {
-            let mut session = session.lock().unwrap();
+        match state.sessions.get(session_id).map(|s| s.0.clone()) {
+            Some(session) => {
+                let mut session = session.lock().unwrap();
 
-            let sdp = desc.sdp().to_owned();
+                let sdp = desc.sdp().to_owned();
 
-            for webrtc_pad in session.webrtc_pads.values_mut() {
-                let media_idx = webrtc_pad.media_idx;
+                for webrtc_pad in session.webrtc_pads.values_mut() {
+                    let media_idx = webrtc_pad.media_idx;
 
-                if let Some(payload) = sdp
-                    .media(webrtc_pad.media_idx)
-                    .and_then(|media| media.format(0))
-                    .and_then(|format| format.parse::<i32>().ok())
-                {
-                    webrtc_pad.payload = Some(payload);
-                } else {
-                    gst::warning!(
+                    if let Some(payload) = sdp
+                        .media(webrtc_pad.media_idx)
+                        .and_then(|media| media.format(0))
+                        .and_then(|format| format.parse::<i32>().ok())
+                    {
+                        webrtc_pad.payload = Some(payload);
+                    } else {
+                        gst::warning!(
                         CAT,
                         imp = self,
                         "consumer from session {} did not provide valid payload for media index {} for session {}",
@@ -4182,36 +4207,38 @@ impl BaseWebRTCSink {
                         session_id,
                     );
 
-                    drop(session);
-                    if let Some(_session) = state.end_session(&self.obj(), session_id) {
-                        drop(state);
-                        let settings = self.settings.lock().unwrap();
-                        let signaller = settings.signaller.clone();
-                        drop(settings);
-                        signaller.end_session(session_id);
+                        drop(session);
+                        if let Some(_session) = state.end_session(&self.obj(), session_id) {
+                            drop(state);
+                            let settings = self.settings.lock().unwrap();
+                            let signaller = settings.signaller.clone();
+                            drop(settings);
+                            signaller.end_session(session_id);
+                        }
+
+                        gst::warning!(CAT, imp = self, "Consumer did not provide valid payload for media session: {session_id} media_ix: {media_idx}");
+                        return;
                     }
-
-                    gst::warning!(CAT, imp = self, "Consumer did not provide valid payload for media session: {session_id} media_ix: {media_idx}");
-                    return;
                 }
+
+                let promise = gst::Promise::with_change_func(glib::clone!(
+                    #[weak(rename_to = this)]
+                    self,
+                    #[to_owned]
+                    session_id,
+                    move |reply| {
+                        gst::debug!(CAT, imp = this, "received reply {:?}", reply);
+                        this.on_remote_description_set(&session_id, sdp);
+                    }
+                ));
+
+                let webrtcbin = session.webrtcbin.clone();
+                drop(session);
+                webrtcbin.emit_by_name::<()>("set-remote-description", &[desc, &promise]);
             }
-
-            let promise = gst::Promise::with_change_func(glib::clone!(
-                #[weak(rename_to = this)]
-                self,
-                #[to_owned]
-                session_id,
-                move |reply| {
-                    gst::debug!(CAT, imp = this, "received reply {:?}", reply);
-                    this.on_remote_description_set(&session_id, sdp);
-                }
-            ));
-
-            let webrtcbin = session.webrtcbin.clone();
-            drop(session);
-            webrtcbin.emit_by_name::<()>("set-remote-description", &[desc, &promise]);
-        } else {
-            gst::warning!(CAT, imp = self, "No consumer with ID {session_id}");
+            _ => {
+                gst::warning!(CAT, imp = self, "No consumer with ID {session_id}");
+            }
         }
     }
 
@@ -4329,8 +4356,8 @@ impl BaseWebRTCSink {
 
         let ret = {
             loop {
-                if let Some(msg) = stream.next().await {
-                    match msg.view() {
+                match stream.next().await {
+                    Some(msg) => match msg.view() {
                         gst::MessageView::Error(err) => {
                             gst::warning!(CAT, imp = self, "Error in discovery pipeline: {err:#?}");
                             pipe.0.debug_to_dot_file_with_ts(
@@ -4383,9 +4410,10 @@ impl BaseWebRTCSink {
                         _ => {
                             continue;
                         }
+                    },
+                    _ => {
+                        unreachable!()
                     }
-                } else {
-                    unreachable!()
                 }
             }
         };
@@ -4436,28 +4464,33 @@ impl BaseWebRTCSink {
                     )
                 })
                 .collect()
-        } else if let Some(codec) = codecs.find_for_payloadable_caps(&discovery_info.caps) {
-            let mut caps = discovery_info.caps.clone();
-
-            gst::info!(
-                CAT,
-                imp = self,
-                "Stream is already in the {} format, we still need to payload it",
-                codec.name
-            );
-
-            caps = cleanup_codec_caps(caps);
-
-            vec![self.run_discovery_pipeline(
-                &name,
-                &discovery_info,
-                codec,
-                caps,
-                &output_caps,
-                ExtensionConfigurationType::Auto,
-            )]
         } else {
-            anyhow::bail!("Unsupported caps: {}", discovery_info.caps);
+            match codecs.find_for_payloadable_caps(&discovery_info.caps) {
+                Some(codec) => {
+                    let mut caps = discovery_info.caps.clone();
+
+                    gst::info!(
+                        CAT,
+                        imp = self,
+                        "Stream is already in the {} format, we still need to payload it",
+                        codec.name
+                    );
+
+                    caps = cleanup_codec_caps(caps);
+
+                    vec![self.run_discovery_pipeline(
+                        &name,
+                        &discovery_info,
+                        codec,
+                        caps,
+                        &output_caps,
+                        ExtensionConfigurationType::Auto,
+                    )]
+                }
+                _ => {
+                    anyhow::bail!("Unsupported caps: {}", discovery_info.caps);
+                }
+            }
         };
 
         let mut payloader_caps = gst::Caps::new_empty();
@@ -5964,33 +5997,37 @@ impl WebRTCSink {
             let mut server_clone = server.clone();
             gst::info!(CAT, "Accepting connection from {}", address);
 
-            if let Some(acceptor) = acceptor.clone() {
-                tokio::spawn(async move {
-                    match tokio::time::timeout(TLS_HANDSHAKE_TIMEOUT, acceptor.accept(stream)).await
-                    {
-                        Ok(Ok(stream)) => server_clone.accept_async(stream).await,
-                        Ok(Err(err)) => {
-                            gst::warning!(
-                                CAT,
-                                "Failed to accept TLS connection from {}: {}",
-                                address,
-                                err
-                            );
-                            Err(ServerError::TLSHandshake(err))
+            match acceptor.clone() {
+                Some(acceptor) => {
+                    tokio::spawn(async move {
+                        match tokio::time::timeout(TLS_HANDSHAKE_TIMEOUT, acceptor.accept(stream))
+                            .await
+                        {
+                            Ok(Ok(stream)) => server_clone.accept_async(stream).await,
+                            Ok(Err(err)) => {
+                                gst::warning!(
+                                    CAT,
+                                    "Failed to accept TLS connection from {}: {}",
+                                    address,
+                                    err
+                                );
+                                Err(ServerError::TLSHandshake(err))
+                            }
+                            Err(elapsed) => {
+                                gst::warning!(
+                                    CAT,
+                                    "TLS connection timed out {} after {}",
+                                    address,
+                                    elapsed
+                                );
+                                Err(ServerError::TLSHandshakeTimeout(elapsed))
+                            }
                         }
-                        Err(elapsed) => {
-                            gst::warning!(
-                                CAT,
-                                "TLS connection timed out {} after {}",
-                                address,
-                                elapsed
-                            );
-                            Err(ServerError::TLSHandshakeTimeout(elapsed))
-                        }
-                    }
-                });
-            } else {
-                RUNTIME.spawn(async move { server_clone.accept_async(stream).await });
+                    });
+                }
+                _ => {
+                    RUNTIME.spawn(async move { server_clone.accept_async(stream).await });
+                }
             }
         }
 

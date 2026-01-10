@@ -261,11 +261,12 @@ impl AggregatorImpl for St2038AncMux {
 
             all_pads_eos = false;
 
-            let buffer = if let Some(buffer) = pad.peek_buffer() {
-                buffer
-            } else {
-                all_pads_done = false;
-                continue;
+            let buffer = match pad.peek_buffer() {
+                Some(buffer) => buffer,
+                _ => {
+                    all_pads_done = false;
+                    continue;
+                }
             };
 
             let segment = pad.segment().downcast::<gst::ClockTime>().unwrap();

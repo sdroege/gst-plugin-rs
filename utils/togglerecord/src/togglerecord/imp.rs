@@ -918,11 +918,14 @@ impl ToggleRecord {
 
                 gst::log!(CAT, obj = pad, "Clipping to segment {:?}", segment);
 
-                if let Some(data) = data.clip(&state, &segment) {
-                    return Ok(HandleResult::Pass(data));
-                } else {
-                    gst::warning!(CAT, obj = pad, "Complete buffer clipped!");
-                    return Ok(HandleResult::Drop);
+                match data.clip(&state, &segment) {
+                    Some(data) => {
+                        return Ok(HandleResult::Pass(data));
+                    }
+                    _ => {
+                        gst::warning!(CAT, obj = pad, "Complete buffer clipped!");
+                        return Ok(HandleResult::Drop);
+                    }
                 }
             } else if current_running_time
                 .opt_lt(last_recording_start)
@@ -976,16 +979,19 @@ impl ToggleRecord {
 
                 gst::log!(CAT, obj = pad, "Clipping to segment {:?}", segment,);
 
-                if let Some(data) = data.clip(&state, &segment) {
-                    return Ok(HandleResult::Pass(data));
-                } else {
-                    gst::warning!(CAT, obj = pad, "Complete buffer clipped!");
-                    return Ok(HandleResult::Eos(self.check_and_update_eos(
-                        pad,
-                        stream,
-                        &mut state,
-                        &mut rec_state,
-                    )));
+                match data.clip(&state, &segment) {
+                    Some(data) => {
+                        return Ok(HandleResult::Pass(data));
+                    }
+                    _ => {
+                        gst::warning!(CAT, obj = pad, "Complete buffer clipped!");
+                        return Ok(HandleResult::Eos(self.check_and_update_eos(
+                            pad,
+                            stream,
+                            &mut state,
+                            &mut rec_state,
+                        )));
+                    }
                 }
             } else if current_running_time_end
                 .opt_gt(rec_state.last_recording_stop)
@@ -1110,11 +1116,12 @@ impl ToggleRecord {
 
                     gst::log!(CAT, obj = pad, "Clipping to segment {:?}", segment,);
 
-                    if let Some(data) = data.clip(&state, &segment) {
-                        Ok(HandleResult::Pass(data))
-                    } else {
-                        gst::warning!(CAT, obj = pad, "Complete buffer clipped!");
-                        Ok(HandleResult::Drop)
+                    match data.clip(&state, &segment) {
+                        Some(data) => Ok(HandleResult::Pass(data)),
+                        _ => {
+                            gst::warning!(CAT, obj = pad, "Complete buffer clipped!");
+                            Ok(HandleResult::Drop)
+                        }
                     }
                 } else {
                     gst::log!(
@@ -1191,11 +1198,12 @@ impl ToggleRecord {
 
                     gst::log!(CAT, obj = pad, "Clipping to segment {:?}", segment);
 
-                    if let Some(data) = data.clip(&state, &segment) {
-                        Ok(HandleResult::Pass(data))
-                    } else {
-                        gst::warning!(CAT, obj = pad, "Complete buffer clipped!");
-                        Ok(HandleResult::Drop)
+                    match data.clip(&state, &segment) {
+                        Some(data) => Ok(HandleResult::Pass(data)),
+                        _ => {
+                            gst::warning!(CAT, obj = pad, "Complete buffer clipped!");
+                            Ok(HandleResult::Drop)
+                        }
                     }
                 } else {
                     gst::log!(

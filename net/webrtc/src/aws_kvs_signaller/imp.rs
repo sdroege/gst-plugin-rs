@@ -453,20 +453,26 @@ impl Signaller {
                 }
 
                 if let Err(ref err) = res {
-                    if let Some(imp) = imp.upgrade() {
-                        gst::error!(CAT, imp = imp, "Quitting send loop: {err}");
-                    } else {
-                        gst::error!(CAT, "Quitting send loop: {err}");
+                    match imp.upgrade() {
+                        Some(imp) => {
+                            gst::error!(CAT, imp = imp, "Quitting send loop: {err}");
+                        }
+                        _ => {
+                            gst::error!(CAT, "Quitting send loop: {err}");
+                        }
                     }
 
                     break;
                 }
             }
 
-            if let Some(imp) = imp.upgrade() {
-                gst::debug!(CAT, imp = imp, "Done sending");
-            } else {
-                gst::debug!(CAT, "Done sending");
+            match imp.upgrade() {
+                Some(imp) => {
+                    gst::debug!(CAT, imp = imp, "Done sending");
+                }
+                _ => {
+                    gst::debug!(CAT, "Done sending");
+                }
             }
 
             let _ = ws_sink.close(None).await;
@@ -477,8 +483,8 @@ impl Signaller {
         let imp = self.downgrade();
         let receive_task_handle = task::spawn(async move {
             while let Some(msg) = tokio_stream::StreamExt::next(&mut ws_stream).await {
-                if let Some(imp) = imp.upgrade() {
-                    match msg {
+                match imp.upgrade() {
+                    Some(imp) => match msg {
                         Ok(WsMessage::Text(msg)) => {
                             gst::trace!(CAT, "received message [{msg}]");
                             imp.handle_message(msg);
@@ -496,9 +502,10 @@ impl Signaller {
                             );
                             break;
                         }
+                    },
+                    _ => {
+                        break;
                     }
-                } else {
-                    break;
                 }
             }
 

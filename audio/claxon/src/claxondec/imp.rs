@@ -313,9 +313,9 @@ enum ByteVec {
 impl AsRef<[u8]> for ByteVec {
     fn as_ref(&self) -> &[u8] {
         match self {
-            ByteVec::I8(ref vec) => vec.as_byte_slice(),
-            ByteVec::I16(ref vec) => vec.as_byte_slice(),
-            ByteVec::I32(ref vec) => vec.as_byte_slice(),
+            ByteVec::I8(vec) => vec.as_byte_slice(),
+            ByteVec::I16(vec) => vec.as_byte_slice(),
+            ByteVec::I32(vec) => vec.as_byte_slice(),
         }
     }
 }
@@ -323,9 +323,9 @@ impl AsRef<[u8]> for ByteVec {
 impl AsMut<[u8]> for ByteVec {
     fn as_mut(&mut self) -> &mut [u8] {
         match self {
-            ByteVec::I8(ref mut vec) => vec.as_mut_byte_slice(),
-            ByteVec::I16(ref mut vec) => vec.as_mut_byte_slice(),
-            ByteVec::I32(ref mut vec) => vec.as_mut_byte_slice(),
+            ByteVec::I8(vec) => vec.as_mut_byte_slice(),
+            ByteVec::I16(vec) => vec.as_mut_byte_slice(),
+            ByteVec::I32(vec) => vec.as_mut_byte_slice(),
         }
     }
 }

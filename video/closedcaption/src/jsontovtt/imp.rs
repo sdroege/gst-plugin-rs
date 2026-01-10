@@ -290,16 +290,19 @@ impl State {
                     let mut buf =
                         Self::create_vtt_buffer(lines.pts, lines.duration, &output_text, base_line);
 
-                    if let Some(buf) = buf.take() {
-                        buffers.push(buf);
-                    } else {
-                        gst::debug!(
-                            CAT,
-                            imp = imp,
-                            "Dropping empty duration cue, pts: {}, text: {}",
-                            lines.pts,
-                            output_text
-                        );
+                    match buf.take() {
+                        Some(buf) => {
+                            buffers.push(buf);
+                        }
+                        _ => {
+                            gst::debug!(
+                                CAT,
+                                imp = imp,
+                                "Dropping empty duration cue, pts: {}, text: {}",
+                                lines.pts,
+                                output_text
+                            );
+                        }
                     }
                 }
             }

@@ -75,22 +75,26 @@ async fn main() -> Result<(), Error> {
         let mut server_clone = server.clone();
         info!("Accepting connection from {}", address);
 
-        if let Some(acceptor) = acceptor.clone() {
-            tokio::spawn(async move {
-                match tokio::time::timeout(TLS_HANDSHAKE_TIMEOUT, acceptor.accept(stream)).await {
-                    Ok(Ok(stream)) => server_clone.accept_async(stream).await,
-                    Ok(Err(err)) => {
-                        warn!("Failed to accept TLS connection from {}: {}", address, err);
-                        Err(ServerError::TLSHandshake(err))
+        match acceptor.clone() {
+            Some(acceptor) => {
+                tokio::spawn(async move {
+                    match tokio::time::timeout(TLS_HANDSHAKE_TIMEOUT, acceptor.accept(stream)).await
+                    {
+                        Ok(Ok(stream)) => server_clone.accept_async(stream).await,
+                        Ok(Err(err)) => {
+                            warn!("Failed to accept TLS connection from {}: {}", address, err);
+                            Err(ServerError::TLSHandshake(err))
+                        }
+                        Err(elapsed) => {
+                            warn!("TLS connection timed out {} after {}", address, elapsed);
+                            Err(ServerError::TLSHandshakeTimeout(elapsed))
+                        }
                     }
-                    Err(elapsed) => {
-                        warn!("TLS connection timed out {} after {}", address, elapsed);
-                        Err(ServerError::TLSHandshakeTimeout(elapsed))
-                    }
-                }
-            });
-        } else {
-            task::spawn(async move { server_clone.accept_async(stream).await });
+                });
+            }
+            _ => {
+                task::spawn(async move { server_clone.accept_async(stream).await });
+            }
         }
     }
 

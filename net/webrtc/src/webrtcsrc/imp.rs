@@ -892,38 +892,41 @@ impl SessionInner {
                     }
                 };
 
-                if let Ok(offer_sdp) = reply
+                match reply
                     .value("offer")
                     .map(|offer| offer.get::<gst_webrtc::WebRTCSessionDescription>().unwrap())
                 {
-                    webrtcbin.emit_by_name::<()>(
-                        "set-local-description",
-                        &[&offer_sdp, &None::<gst::Promise>],
-                    );
+                    Ok(offer_sdp) => {
+                        webrtcbin.emit_by_name::<()>(
+                            "set-local-description",
+                            &[&offer_sdp, &None::<gst::Promise>],
+                        );
 
-                    gst::log!(
-                        CAT,
-                        obj = ele,
-                        "Sending SDP, {}",
-                        offer_sdp.sdp().to_string()
-                    );
+                        gst::log!(
+                            CAT,
+                            obj = ele,
+                            "Sending SDP, {}",
+                            offer_sdp.sdp().to_string()
+                        );
 
-                    let signaller = ele.imp().signaller();
-                    signaller.send_sdp(sess_id.as_str(), &offer_sdp);
-                } else {
-                    let error = reply
-                        .value("error")
-                        .expect("structure must have an error value")
-                        .get::<glib::Error>()
-                        .expect("value must be a GLib error");
+                        let signaller = ele.imp().signaller();
+                        signaller.send_sdp(sess_id.as_str(), &offer_sdp);
+                    }
+                    _ => {
+                        let error = reply
+                            .value("error")
+                            .expect("structure must have an error value")
+                            .get::<glib::Error>()
+                            .expect("value must be a GLib error");
 
-                    gst::error!(
-                        CAT,
-                        obj = ele,
-                        "generate offer::Promise returned with error: {}",
-                        error
-                    );
-                    ele.imp().signaller().end_session(sess_id.as_str());
+                        gst::error!(
+                            CAT,
+                            obj = ele,
+                            "generate offer::Promise returned with error: {}",
+                            error
+                        );
+                        ele.imp().signaller().end_session(sess_id.as_str());
+                    }
                 }
             }
         ));

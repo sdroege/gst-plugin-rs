@@ -60,7 +60,8 @@ fn init() {
         gst::init().unwrap();
         gstsodium::plugin_register_static().unwrap();
         // set the nonce
-        std::env::set_var("GST_SODIUM_ENCRYPT_NONCE", hex::encode(&*NONCE));
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("GST_SODIUM_ENCRYPT_NONCE", hex::encode(&*NONCE)) };
     });
 }
 

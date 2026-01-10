@@ -65,13 +65,14 @@ impl Blocking {
 
             match cur_sched {
                 Scheduler::Throttling(hdl_weak) => {
-                    let msg = if let Some(hdl) = hdl_weak.upgrade() {
-                        format!(
-                            "Attempt to block on existing Context {}",
-                            hdl.context_name()
-                        )
-                    } else {
-                        "Attempt to block on terminated Context".to_string()
+                    let msg = match hdl_weak.upgrade() {
+                        Some(hdl) => {
+                            format!(
+                                "Attempt to block on existing Context {}",
+                                hdl.context_name()
+                            )
+                        }
+                        _ => "Attempt to block on terminated Context".to_string(),
                     };
                     gst::error!(RUNTIME_CAT, "{msg}");
                     panic!("{msg}");
@@ -250,38 +251,41 @@ impl Throttling {
 
             tasks_checked = 0;
             while tasks_checked < Self::MAX_SUCCESSIVE_TASKS {
-                if let Ok(runnable) = self.task_queue.pop_runnable() {
-                    panic::catch_unwind(|| runnable.run()).inspect_err(|_err| {
-                        gst::error!(RUNTIME_CAT, "A task panicked {}", self.context_name);
-                    })?;
+                match self.task_queue.pop_runnable() {
+                    Ok(runnable) => {
+                        panic::catch_unwind(|| runnable.run()).inspect_err(|_err| {
+                            gst::error!(RUNTIME_CAT, "A task panicked {}", self.context_name);
+                        })?;
 
-                    tasks_checked += 1;
-                } else {
-                    let mut must_unpark = self.must_unpark.lock().unwrap();
-                    loop {
-                        if *must_unpark {
-                            *must_unpark = false;
-                            continue 'main;
-                        }
+                        tasks_checked += 1;
+                    }
+                    _ => {
+                        let mut must_unpark = self.must_unpark.lock().unwrap();
+                        loop {
+                            if *must_unpark {
+                                *must_unpark = false;
+                                continue 'main;
+                            }
 
-                        if let Some(parking_duration) =
-                            self.max_throttling.checked_sub(last_react.elapsed())
-                        {
-                            #[cfg(feature = "tuning")]
-                            self.parked_duration.fetch_add(
-                                parking_duration.subsec_nanos() as u64,
-                                Ordering::Relaxed,
-                            );
+                            if let Some(parking_duration) =
+                                self.max_throttling.checked_sub(last_react.elapsed())
+                            {
+                                #[cfg(feature = "tuning")]
+                                self.parked_duration.fetch_add(
+                                    parking_duration.subsec_nanos() as u64,
+                                    Ordering::Relaxed,
+                                );
 
-                            let result = self
-                                .must_unpark_cvar
-                                .wait_timeout(must_unpark, parking_duration)
-                                .unwrap();
+                                let result = self
+                                    .must_unpark_cvar
+                                    .wait_timeout(must_unpark, parking_duration)
+                                    .unwrap();
 
-                            must_unpark = result.0;
-                        } else {
-                            *must_unpark = false;
-                            continue 'main;
+                                must_unpark = result.0;
+                            } else {
+                                *must_unpark = false;
+                                continue 'main;
+                            }
                         }
                     }
                 }
@@ -314,13 +318,10 @@ impl Throttling {
     fn is_current(&self) -> bool {
         CURRENT_SCHEDULER.with(|cur_sched| match cur_sched.get() {
             None | Some(Scheduler::Blocking(_)) => false,
-            Some(Scheduler::Throttling(hdl_weak)) => {
-                if let Some(hdl) = hdl_weak.upgrade() {
-                    std::ptr::eq(self, Arc::as_ptr(&hdl.0.scheduler))
-                } else {
-                    false
-                }
-            }
+            Some(Scheduler::Throttling(hdl_weak)) => match hdl_weak.upgrade() {
+                Some(hdl) => std::ptr::eq(self, Arc::as_ptr(&hdl.0.scheduler)),
+                _ => false,
+            },
         })
     }
 }

@@ -96,25 +96,29 @@ mod imp {
         params: glib::ffi::gpointer,
         _buffer: *mut gst::ffi::GstBuffer,
     ) -> glib::ffi::gboolean {
-        assert!(!params.is_null());
+        unsafe {
+            assert!(!params.is_null());
 
-        let meta = &mut *(meta as *mut QuinnQuicMeta);
-        let params = ptr::read(params as *const QuinnQuicMetaParams);
+            let meta = &mut *(meta as *mut QuinnQuicMeta);
+            let params = ptr::read(params as *const QuinnQuicMetaParams);
 
-        ptr::write(&mut meta.stream_id, params.stream_id);
-        ptr::write(&mut meta.is_datagram, params.is_datagram);
+            ptr::write(&mut meta.stream_id, params.stream_id);
+            ptr::write(&mut meta.is_datagram, params.is_datagram);
 
-        true.into_glib()
+            true.into_glib()
+        }
     }
 
     unsafe extern "C" fn custom_meta_free(
         meta: *mut gst::ffi::GstMeta,
         _buffer: *mut gst::ffi::GstBuffer,
     ) {
-        let meta = &mut *(meta as *mut QuinnQuicMeta);
+        unsafe {
+            let meta = &mut *(meta as *mut QuinnQuicMeta);
 
-        // Need to free/drop all our fields here.
-        ptr::drop_in_place(&mut meta.stream_id);
+            // Need to free/drop all our fields here.
+            ptr::drop_in_place(&mut meta.stream_id);
+        }
     }
 
     unsafe extern "C" fn custom_meta_transform(
@@ -124,15 +128,17 @@ mod imp {
         _type_: glib::ffi::GQuark,
         _data: glib::ffi::gpointer,
     ) -> glib::ffi::gboolean {
-        let meta = &*(meta as *mut QuinnQuicMeta);
+        unsafe {
+            let meta = &*(meta as *mut QuinnQuicMeta);
 
-        super::QuinnQuicMeta::add(
-            gst::BufferRef::from_mut_ptr(dest),
-            meta.stream_id,
-            meta.is_datagram,
-        );
+            super::QuinnQuicMeta::add(
+                gst::BufferRef::from_mut_ptr(dest),
+                meta.stream_id,
+                meta.is_datagram,
+            );
 
-        true.into_glib()
+            true.into_glib()
+        }
     }
 
     pub(super) fn custom_meta_get_info() -> *const gst::ffi::GstMetaInfo {

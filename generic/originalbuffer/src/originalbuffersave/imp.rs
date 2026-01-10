@@ -129,10 +129,9 @@ impl OriginalBufferSave {
         let mut query = gst::query::Custom::new(s);
         if self.src_pad.peer_query(&mut query) {
             let s = query.structure_mut();
-            if let (Ok(true), Ok(q)) = (s.get("result"), s.get::<gst::Query>("query")) {
-                Some(q)
-            } else {
-                None
+            match (s.get("result"), s.get::<gst::Query>("query")) {
+                (Ok(true), Ok(q)) => Some(q),
+                _ => None,
             }
         } else {
             None

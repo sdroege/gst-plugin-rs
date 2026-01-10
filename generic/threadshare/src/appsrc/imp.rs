@@ -297,16 +297,19 @@ impl AppSrc {
         let do_timestamp = self.settings.lock().unwrap().do_timestamp;
         if do_timestamp {
             let elem = self.obj();
-            if let Some(clock) = elem.clock() {
-                let base_time = elem.base_time();
-                let now = clock.time();
+            match elem.clock() {
+                Some(clock) => {
+                    let base_time = elem.base_time();
+                    let now = clock.time();
 
-                let buffer = buffer.make_mut();
-                buffer.set_dts(now.opt_checked_sub(base_time).ok().flatten());
-                buffer.set_pts(None);
-            } else {
-                gst::error!(CAT, imp = self, "Don't have a clock yet");
-                return false;
+                    let buffer = buffer.make_mut();
+                    buffer.set_dts(now.opt_checked_sub(base_time).ok().flatten());
+                    buffer.set_pts(None);
+                }
+                _ => {
+                    gst::error!(CAT, imp = self, "Don't have a clock yet");
+                    return false;
+                }
             }
         }
 

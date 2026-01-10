@@ -453,23 +453,24 @@ impl ObjectImpl for WhipSink {
 
                     let offer_sdp = match reply {
                         Ok(Some(reply)) => {
-                            if let Ok(sdp) = reply.value("offer").map(|offer| {
+                            match reply.value("offer").map(|offer| {
                                 offer.get::<gst_webrtc::WebRTCSessionDescription>().unwrap()
                             }) {
-                                sdp
-                            } else {
-                                let error = reply
-                                    .value("error")
-                                    .expect("structure must have an error value")
-                                    .get::<glib::Error>()
-                                    .expect("value must be a GLib error");
+                                Ok(sdp) => sdp,
+                                _ => {
+                                    let error = reply
+                                        .value("error")
+                                        .expect("structure must have an error value")
+                                        .get::<glib::Error>()
+                                        .expect("value must be a GLib error");
 
-                                gst::element_imp_error!(
-                                    whipsink,
-                                    gst::LibraryError::Failed,
-                                    ["generate offer::Promise returned with error: {}", error]
-                                );
-                                return;
+                                    gst::element_imp_error!(
+                                        whipsink,
+                                        gst::LibraryError::Failed,
+                                        ["generate offer::Promise returned with error: {}", error]
+                                    );
+                                    return;
+                                }
                             }
                         }
                         Ok(None) => {

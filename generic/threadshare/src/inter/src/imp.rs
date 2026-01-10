@@ -208,19 +208,19 @@ impl InterContextSrc {
     ) -> Self {
         let mut inter_ctxs = INTER_CONTEXTS.lock().await;
 
-        let shared = if let Some(shared) = inter_ctxs.get(&name).and_then(InterContextWeak::upgrade)
-        {
-            shared
-        } else {
-            let shared = InterContext::new(&name);
-            {
-                let mut shared = shared.write().await;
-                shared.dataqueues.reserve(capacity);
-                shared.sources.reserve(capacity);
-            }
-            inter_ctxs.insert(name, shared.downgrade());
+        let shared = match inter_ctxs.get(&name).and_then(InterContextWeak::upgrade) {
+            Some(shared) => shared,
+            _ => {
+                let shared = InterContext::new(&name);
+                {
+                    let mut shared = shared.write().await;
+                    shared.dataqueues.reserve(capacity);
+                    shared.sources.reserve(capacity);
+                }
+                inter_ctxs.insert(name, shared.downgrade());
 
-            shared
+                shared
+            }
         };
 
         let (dataqueue_key, srcpad_key) = {
@@ -316,14 +316,15 @@ impl PadSrcHandler for InterSrcPadHandler {
                 true
             }
             QueryViewMut::Caps(q) => {
-                let caps = if let Some(ref caps) = pad.current_caps() {
-                    q.filter()
+                let caps = match pad.current_caps() {
+                    Some(ref caps) => q
+                        .filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
-                        .unwrap_or_else(|| caps.clone())
-                } else {
-                    q.filter()
+                        .unwrap_or_else(|| caps.clone()),
+                    _ => q
+                        .filter()
                         .map(|f| f.to_owned())
-                        .unwrap_or_else(gst::Caps::new_any)
+                        .unwrap_or_else(gst::Caps::new_any),
                 };
 
                 q.set_result(&caps);
@@ -638,15 +639,18 @@ impl InterSrc {
 
     // Sets the upstream latency without blocking the caller.
     pub fn set_upstream_latency(&self, up_latency: gst::ClockTime) {
-        if let Some(ref ts_ctx) = *self.ts_ctx.lock().unwrap() {
-            let obj = self.obj().clone();
+        match *self.ts_ctx.lock().unwrap() {
+            Some(ref ts_ctx) => {
+                let obj = self.obj().clone();
 
-            gst::log!(CAT, imp = self, "Setting upstream latency async");
-            ts_ctx.spawn(async move {
-                obj.imp().set_upstream_latency_priv(up_latency);
-            });
-        } else {
-            gst::debug!(CAT, imp = self, "Not ready to handle upstream latency");
+                gst::log!(CAT, imp = self, "Setting upstream latency async");
+                ts_ctx.spawn(async move {
+                    obj.imp().set_upstream_latency_priv(up_latency);
+                });
+            }
+            _ => {
+                gst::debug!(CAT, imp = self, "Not ready to handle upstream latency");
+            }
         }
     }
 
@@ -991,23 +995,26 @@ impl ElementImpl for InterSrc {
     fn send_event(&self, event: gst::Event) -> bool {
         gst::log!(CAT, imp = self, "Handling {event:?}");
 
-        if let Some(ref ts_ctx) = *self.ts_ctx.lock().unwrap() {
-            gst::log!(CAT, imp = self, "Handling {event:?}");
+        match *self.ts_ctx.lock().unwrap() {
+            Some(ref ts_ctx) => {
+                gst::log!(CAT, imp = self, "Handling {event:?}");
 
-            let obj = self.obj().clone();
-            ts_ctx.spawn(async move {
-                let imp = obj.imp();
-                if let gst::EventView::FlushStart(_) = event.view() {
-                    let _ = obj.imp().flush_start();
-                }
+                let obj = self.obj().clone();
+                ts_ctx.spawn(async move {
+                    let imp = obj.imp();
+                    if let gst::EventView::FlushStart(_) = event.view() {
+                        let _ = obj.imp().flush_start();
+                    }
 
-                imp.srcpad.gst_pad().push_event(event)
-            });
+                    imp.srcpad.gst_pad().push_event(event)
+                });
 
-            true
-        } else {
-            gst::info!(CAT, imp = self, "Not ready to handle {event:?}");
-            false
+                true
+            }
+            _ => {
+                gst::info!(CAT, imp = self, "Not ready to handle {event:?}");
+                false
+            }
         }
     }
 

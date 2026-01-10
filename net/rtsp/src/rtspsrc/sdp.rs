@@ -18,7 +18,7 @@ use std::net::IpAddr;
 use url::Url;
 
 macro_rules! init_payload_info {
-    ($($t:expr),*,) => {
+    ($($t:expr_2021),*,) => {
         [
             $(
                 {

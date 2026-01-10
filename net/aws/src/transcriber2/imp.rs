@@ -862,12 +862,17 @@ impl Transcriber {
                             gst::info!(CAT, imp = this, "Result tx closed");
                             break;
                         }
-                    } else if let Some(this) = this_weak.upgrade() {
-                        gst::warning!(
+                    } else {
+                        match this_weak.upgrade() {
+                            Some(this) => {
+                                gst::warning!(
                             CAT,
                             imp = this,
                             "Transcribe ws returned unknown event: consider upgrading the SDK"
                         )
+                            }
+                            _ => {}
+                        }
                     }
                 }
             }));

@@ -58,22 +58,22 @@ impl AsyncWrite for TcpOrTlsStream {
         buf: &[u8],
     ) -> Poll<std::io::Result<usize>> {
         match self.get_mut() {
-            TcpOrTlsStream::Plain(ref mut s) => Pin::new(s).poll_write(cx, buf),
-            TcpOrTlsStream::Tls(ref mut s) => Pin::new(s).poll_write(cx, buf),
+            TcpOrTlsStream::Plain(s) => Pin::new(s).poll_write(cx, buf),
+            TcpOrTlsStream::Tls(s) => Pin::new(s).poll_write(cx, buf),
         }
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         match self.get_mut() {
-            TcpOrTlsStream::Plain(ref mut s) => Pin::new(s).poll_flush(cx),
-            TcpOrTlsStream::Tls(ref mut s) => Pin::new(s).poll_flush(cx),
+            TcpOrTlsStream::Plain(s) => Pin::new(s).poll_flush(cx),
+            TcpOrTlsStream::Tls(s) => Pin::new(s).poll_flush(cx),
         }
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         match self.get_mut() {
-            TcpOrTlsStream::Plain(ref mut s) => Pin::new(s).poll_shutdown(cx),
-            TcpOrTlsStream::Tls(ref mut s) => Pin::new(s).poll_shutdown(cx),
+            TcpOrTlsStream::Plain(s) => Pin::new(s).poll_shutdown(cx),
+            TcpOrTlsStream::Tls(s) => Pin::new(s).poll_shutdown(cx),
         }
     }
 }
@@ -85,8 +85,8 @@ impl AsyncRead for TcpOrTlsStream {
         buf: &mut ReadBuf<'_>,
     ) -> Poll<std::io::Result<()>> {
         match self.get_mut() {
-            TcpOrTlsStream::Plain(ref mut s) => Pin::new(s).poll_read(cx, buf),
-            TcpOrTlsStream::Tls(ref mut s) => Pin::new(s).poll_read(cx, buf),
+            TcpOrTlsStream::Plain(s) => Pin::new(s).poll_read(cx, buf),
+            TcpOrTlsStream::Tls(s) => Pin::new(s).poll_read(cx, buf),
         }
     }
 }

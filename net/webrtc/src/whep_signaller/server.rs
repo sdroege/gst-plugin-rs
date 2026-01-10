@@ -95,14 +95,15 @@ impl WhepServer {
                                 );
                                 let ans: Option<gst_sdp::SDPMessage>;
                                 let mut settings = signaller.imp().settings.lock().unwrap();
-                                if let Some(answer_desc) = webrtcbin
-                                    .property::<Option<WebRTCSessionDescription>>(
-                                        "local-description",
-                                    )
-                                {
-                                    ans = Some(answer_desc.sdp().to_owned());
-                                } else {
-                                    ans = None;
+                                match webrtcbin.property::<Option<WebRTCSessionDescription>>(
+                                    "local-description",
+                                ) {
+                                    Some(answer_desc) => {
+                                        ans = Some(answer_desc.sdp().to_owned());
+                                    }
+                                    _ => {
+                                        ans = None;
+                                    }
                                 }
 
                                 let tx = settings
@@ -185,7 +186,7 @@ impl WhepServer {
         id: String,
         body: &[u8],
         headermap: HeaderMap,
-    ) -> Result<impl warp::Reply, warp::Rejection> {
+    ) -> Result<impl warp::Reply + use<>, warp::Rejection> {
         let headers = headermap.into_iter().map(|h| (h.0, h.1)).collect();
         Ok(self.patch_session(id, body, headers).await.into_response())
     }
@@ -204,11 +205,14 @@ impl WhepServer {
         http::StatusCode::OK
     }
 
-    async fn delete_handler(&self, id: String) -> Result<impl warp::Reply, warp::Rejection> {
+    async fn delete_handler(
+        &self,
+        id: String,
+    ) -> Result<impl warp::Reply + use<>, warp::Rejection> {
         Ok(self.delete_session(id).await.into_response())
     }
 
-    async fn options_handler(&self) -> Result<impl warp::reply::Reply, warp::Rejection> {
+    async fn options_handler(&self) -> Result<impl warp::reply::Reply + use<>, warp::Rejection> {
         let mut links = http::HeaderMap::new();
         let settings = self.settings.lock().unwrap();
 
@@ -438,7 +442,7 @@ impl WhepServer {
         &self,
         body: &[u8],
         id: Option<String>,
-    ) -> Result<impl warp::reply::Reply, warp::Rejection> {
+    ) -> Result<impl warp::reply::Reply + use<>, warp::Rejection> {
         let (status, mut headermap, body) = self.create_session(body, id.clone()).await;
 
         let mut response_builder = http::Response::builder().status(status);
@@ -511,7 +515,10 @@ impl WhepServer {
         Ok(())
     }
 
-    fn filter(&self) -> impl Filter<Extract = impl warp::Reply> + Clone + Send + Sync + 'static {
+    fn filter(
+        &self,
+    ) -> impl Filter<Extract = impl warp::Reply + use<>> + Clone + Send + Sync + 'static + use<>
+    {
         let prefix = warp::path(ROOT);
 
         // POST /endpoint

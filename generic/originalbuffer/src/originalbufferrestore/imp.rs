@@ -279,7 +279,7 @@ impl OriginalBufferRestore {
             }
 
             if meta.has_tag::<gst_video::video_meta::tags::Size>() {
-                if let (Some(ref meta_vinfo), Some(ref sink_vinfo)) =
+                if let (Some(meta_vinfo), Some(sink_vinfo)) =
                     (&state.meta_caps.vinfo, &state.sinkpad_caps.vinfo)
                 {
                     if (meta_vinfo.width() != sink_vinfo.width()

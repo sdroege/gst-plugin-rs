@@ -169,7 +169,7 @@ impl ObjectImpl for PaintableSink {
                 }
 
                 let paintable = match &*paintable_guard {
-                    Some(ref paintable) => paintable,
+                    Some(paintable) => paintable,
                     None => {
                         gst::error!(CAT, imp = self, "Failed to create paintable");
                         return None::<&Paintable>.to_value();
@@ -1024,12 +1024,10 @@ impl PaintableSink {
 
         // Create the paintable from the main thread
         let paintable = utils::invoke_on_main_thread(move || {
-            let gdk_context =
-                if let GLContext::Initialized { gdk_context, .. } = &*GL_CONTEXT.lock().unwrap() {
-                    Some(gdk_context.get_ref().clone())
-                } else {
-                    None
-                };
+            let gdk_context = match &*GL_CONTEXT.lock().unwrap() {
+                GLContext::Initialized { gdk_context, .. } => Some(gdk_context.get_ref().clone()),
+                _ => None,
+            };
             ThreadGuard::new(Paintable::new(gdk_context))
         });
 

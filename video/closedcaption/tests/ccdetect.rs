@@ -30,7 +30,7 @@ struct NotifyState {
 }
 
 macro_rules! assert_push_data {
-    ($h:expr, $state:expr, $data:expr, $ts:expr, $cc608_count:expr, $cc708_count:expr) => {
+    ($h:expr_2021, $state:expr_2021, $data:expr_2021, $ts:expr_2021, $cc608_count:expr_2021, $cc708_count:expr_2021) => {
         let mut buf = gst::Buffer::from_mut_slice($data);
         buf.get_mut().unwrap().set_pts($ts);
 

@@ -411,34 +411,36 @@ pub(crate) struct TrackConfiguration {
 pub(crate) fn caps_to_timescale(caps: &gst::CapsRef) -> u32 {
     let s = caps.structure(0).unwrap();
 
-    if let Ok(fps) = s.get::<gst::Fraction>("framerate") {
-        if fps.numer() == 0 {
-            return 10_000;
-        }
+    match s.get::<gst::Fraction>("framerate") {
+        Ok(fps) => {
+            if fps.numer() == 0 {
+                return 10_000;
+            }
 
-        if fps.denom() != 1 && fps.denom() != 1001 {
-            if let Some(fps) = (fps.denom() as u64)
-                .nseconds()
-                .mul_div_round(1_000_000_000, fps.numer() as u64)
-                .and_then(gst_video::guess_framerate)
-            {
-                return (fps.numer() as u32)
+            if fps.denom() != 1 && fps.denom() != 1001 {
+                if let Some(fps) = (fps.denom() as u64)
+                    .nseconds()
+                    .mul_div_round(1_000_000_000, fps.numer() as u64)
+                    .and_then(gst_video::guess_framerate)
+                {
+                    return (fps.numer() as u32)
+                        .mul_div_round(100, fps.denom() as u32)
+                        .unwrap_or(10_000);
+                }
+            }
+
+            if fps.denom() == 1001 {
+                fps.numer() as u32
+            } else {
+                (fps.numer() as u32)
                     .mul_div_round(100, fps.denom() as u32)
-                    .unwrap_or(10_000);
+                    .unwrap_or(10_000)
             }
         }
-
-        if fps.denom() == 1001 {
-            fps.numer() as u32
-        } else {
-            (fps.numer() as u32)
-                .mul_div_round(100, fps.denom() as u32)
-                .unwrap_or(10_000)
-        }
-    } else if let Ok(rate) = s.get::<i32>("rate") {
-        rate as u32
-    } else {
-        10_000
+        _ => match s.get::<i32>("rate") {
+            Ok(rate) => rate as u32,
+            _ => 10_000,
+        },
     }
 }
 

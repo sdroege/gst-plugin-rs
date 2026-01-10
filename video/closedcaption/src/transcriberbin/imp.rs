@@ -94,22 +94,29 @@ fn parse_language_pair(
         MuxMethod::Cea708 => {
             if let Ok(caption_stream) = value.get::<String>() {
                 (key.to_string(), HashSet::from([caption_stream]))
-            } else if let Ok(caption_streams) = value.get::<gst::List>() {
-                let mut streams = HashSet::new();
-                for s in caption_streams.iter() {
-                    let service = s.get::<String>()?;
-                    if ["cc1", "cc3"].contains(&service.as_str()) || service.starts_with("708_") {
-                        streams.insert(service);
-                    } else {
-                        anyhow::bail!(
-                            "Unknown 708 service {}, valid values are cc1, cc3 or 708_*",
-                            key
-                        );
+            } else {
+                match value.get::<gst::List>() {
+                    Ok(caption_streams) => {
+                        let mut streams = HashSet::new();
+                        for s in caption_streams.iter() {
+                            let service = s.get::<String>()?;
+                            if ["cc1", "cc3"].contains(&service.as_str())
+                                || service.starts_with("708_")
+                            {
+                                streams.insert(service);
+                            } else {
+                                anyhow::bail!(
+                                    "Unknown 708 service {}, valid values are cc1, cc3 or 708_*",
+                                    key
+                                );
+                            }
+                        }
+                        (key.to_string(), streams)
+                    }
+                    _ => {
+                        anyhow::bail!("Unknown 708 translation language field {}", key);
                     }
                 }
-                (key.to_string(), streams)
-            } else {
-                anyhow::bail!("Unknown 708 translation language field {}", key);
             }
         }
     })
@@ -1560,7 +1567,7 @@ impl TranscriberBin {
         let mut updates = HashMap::new();
         let mut old_languages: HashSet<String> = channels_map.keys().cloned().collect();
 
-        if let Some(ref map) = languages {
+        if let Some(map) = languages {
             for (key, value) in map.iter() {
                 let language_code = key.to_string();
 
@@ -2283,7 +2290,7 @@ impl TranscriberBin {
         match query.view_mut() {
             QueryViewMut::Latency(q) => {
                 let state_guard = self.state.lock().unwrap();
-                if let Some(ref state) = &*state_guard {
+                if let Some(state) = &*state_guard {
                     let our_latency = self.our_latency(state, &self.settings.lock().unwrap());
                     let upstream_min = self.query_upstream_latency(state_guard);
 
@@ -2381,10 +2388,13 @@ impl TranscriberBin {
 
                     let had_framerate = state.framerate.is_some();
 
-                    if let Ok(framerate) = s.get::<gst::Fraction>("framerate") {
-                        state.framerate = Some(framerate);
-                    } else {
-                        state.framerate = Some(gst::Fraction::new(30, 1));
+                    match s.get::<gst::Fraction>("framerate") {
+                        Ok(framerate) => {
+                            state.framerate = Some(framerate);
+                        }
+                        _ => {
+                            state.framerate = Some(gst::Fraction::new(30, 1));
+                        }
                     }
 
                     if !had_framerate {
@@ -2427,10 +2437,9 @@ impl ChildProxyImpl for TranscriberBin {
     }
 
     fn child_by_name(&self, name: &str) -> Option<glib::Object> {
-        if let Some(child) = self.parent_child_by_name(name) {
-            Some(child)
-        } else {
-            self.obj().static_pad(name).map(|pad| pad.upcast())
+        match self.parent_child_by_name(name) {
+            Some(child) => Some(child),
+            _ => self.obj().static_pad(name).map(|pad| pad.upcast()),
         }
     }
 }

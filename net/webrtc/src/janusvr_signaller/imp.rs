@@ -941,10 +941,13 @@ impl SignallableImpl for Signaller {
         let imp = self.downgrade();
         RUNTIME.spawn(async move {
             if let Some(imp) = imp.upgrade() {
-                if let Err(err) = imp.connect().await {
-                    this.emit_by_name::<()>("error", &[&format!("{:?}", anyhow!(err))]);
-                } else {
-                    imp.create_session();
+                match imp.connect().await {
+                    Err(err) => {
+                        this.emit_by_name::<()>("error", &[&format!("{:?}", anyhow!(err))]);
+                    }
+                    _ => {
+                        imp.create_session();
+                    }
                 }
             }
         });

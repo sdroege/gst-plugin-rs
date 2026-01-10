@@ -800,18 +800,23 @@ impl AnalyticsCombiner {
                         buffer: None,
                     };
                     pad_state.pending_buffers.push_back(buffer);
-                } else if let Some(mut b) = pad_state.pending_buffers.pop_front() {
-                    while !b.serialized_events.is_empty() {
-                        let event = &mut b.serialized_events[0];
-                        if !event.is_sticky() {
-                            break;
+                } else {
+                    match pad_state.pending_buffers.pop_front() {
+                        Some(mut b) => {
+                            while !b.serialized_events.is_empty() {
+                                let event = &mut b.serialized_events[0];
+                                if !event.is_sticky() {
+                                    break;
+                                }
+                                if pad_state.store_sticky_event(event) {
+                                    self.obj().src_pad().mark_reconfigure();
+                                }
+                                b.serialized_events.remove(0);
+                            }
+                            pad_state.pending_buffers.push_front(b);
                         }
-                        if pad_state.store_sticky_event(event) {
-                            self.obj().src_pad().mark_reconfigure();
-                        }
-                        b.serialized_events.remove(0);
+                        _ => {}
                     }
-                    pad_state.pending_buffers.push_front(b);
                 }
             }
 

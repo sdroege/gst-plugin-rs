@@ -197,8 +197,8 @@ impl TransitionStatus {
                 trigger,
                 origin,
                 res_fut,
-            } => {
-                if let Some((ctx, task_id)) = Context::current_task() {
+            } => match Context::current_task() {
+                Some((ctx, task_id)) => {
                     gst::debug!(
                         RUNTIME_CAT,
                         obj = obj,
@@ -230,7 +230,8 @@ impl TransitionStatus {
                     });
 
                     Ok(TransitionOk::NotWaiting { trigger, origin })
-                } else {
+                }
+                _ => {
                     gst::debug!(
                         RUNTIME_CAT,
                         obj = obj,
@@ -252,7 +253,7 @@ impl TransitionStatus {
 
                     res
                 }
-            }
+            },
             Ready(res) => {
                 match res {
                     Ok(ref status) => {
@@ -326,8 +327,8 @@ impl TransitionStatus {
         match self {
             Pending {
                 trigger, res_fut, ..
-            } => {
-                if let Some((ctx, task_id)) = Context::current_task() {
+            } => match Context::current_task() {
+                Some((ctx, task_id)) => {
                     gst::debug!(
                         RUNTIME_CAT,
                         obj = obj,
@@ -360,7 +361,8 @@ impl TransitionStatus {
                     });
 
                     Ok(())
-                } else {
+                }
+                _ => {
                     gst::debug!(
                         RUNTIME_CAT,
                         obj = obj,
@@ -384,7 +386,7 @@ impl TransitionStatus {
                         }
                     }
                 }
-            }
+            },
             Ready(res) => match res {
                 Ok(ref status) => {
                     gst::log!(
@@ -970,7 +972,7 @@ struct StateMachine<Task: TaskImpl> {
 }
 
 macro_rules! exec_action {
-    ($self:ident, $action:ident, $triggering_evt:expr, $origin:expr, $task_inner:expr) => {{
+    ($self:ident, $action:ident, $triggering_evt:expr_2021, $origin:expr_2021, $task_inner:expr_2021) => {{
         match $self.task_impl.$action().await {
             Ok(()) => Ok($triggering_evt),
             Err(err) => {

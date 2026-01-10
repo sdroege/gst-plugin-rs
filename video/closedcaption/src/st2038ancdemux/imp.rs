@@ -216,7 +216,7 @@ impl St2038AncDemux {
             if let Some(running_time) = running_time {
                 let ts = ts.unwrap();
 
-                let State {
+                let &mut State {
                     ref mut streams,
                     ref segment,
                     ..

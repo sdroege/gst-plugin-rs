@@ -461,15 +461,16 @@ impl State {
         pts: gst::ClockTime,
         duration: Option<gst::ClockTime>,
     ) -> BufferOrEvent {
-        if let Some(mut buffer) = self.cea708.take_buffer(s334_1a_data) {
-            {
-                let buffer_ref = buffer.get_mut().unwrap();
-                buffer_ref.set_pts(Some(pts));
-                buffer_ref.set_duration(duration);
+        match self.cea708.take_buffer(s334_1a_data) {
+            Some(mut buffer) => {
+                {
+                    let buffer_ref = buffer.get_mut().unwrap();
+                    buffer_ref.set_pts(Some(pts));
+                    buffer_ref.set_duration(duration);
+                }
+                BufferOrEvent::Buffer(buffer)
             }
-            BufferOrEvent::Buffer(buffer)
-        } else {
-            BufferOrEvent::Event(gst::event::Gap::builder(pts).duration(duration).build())
+            _ => BufferOrEvent::Event(gst::event::Gap::builder(pts).duration(duration).build()),
         }
     }
 }

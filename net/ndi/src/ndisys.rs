@@ -448,58 +448,58 @@ pub fn load() -> Result<(), glib::BoolError> {
 }
 
 pub unsafe fn NDIlib_initialize() -> bool {
-    (FFI.get().unwrap_unchecked().initialize)()
+    unsafe { (FFI.get().unwrap_unchecked().initialize)() }
 }
 
 pub unsafe fn NDIlib_destroy() {
-    (FFI.get().unwrap_unchecked().destroy)()
+    unsafe { (FFI.get().unwrap_unchecked().destroy)() }
 }
 
 pub unsafe fn NDIlib_find_create_v2(
     p_create_settings: *const NDIlib_find_create_t,
 ) -> NDIlib_find_instance_t {
-    (FFI.get().unwrap_unchecked().find_create_v2)(p_create_settings)
+    unsafe { (FFI.get().unwrap_unchecked().find_create_v2)(p_create_settings) }
 }
 pub unsafe fn NDIlib_find_destroy(p_instance: NDIlib_find_instance_t) {
-    (FFI.get().unwrap_unchecked().find_destroy)(p_instance)
+    unsafe { (FFI.get().unwrap_unchecked().find_destroy)(p_instance) }
 }
 
 pub unsafe fn NDIlib_find_wait_for_sources(
     p_instance: NDIlib_find_instance_t,
     timeout_in_ms: u32,
 ) -> bool {
-    (FFI.get().unwrap_unchecked().find_wait_for_sources)(p_instance, timeout_in_ms)
+    unsafe { (FFI.get().unwrap_unchecked().find_wait_for_sources)(p_instance, timeout_in_ms) }
 }
 
 pub unsafe fn NDIlib_find_get_current_sources(
     p_instance: NDIlib_find_instance_t,
     p_no_sources: *mut u32,
 ) -> *const NDIlib_source_t {
-    (FFI.get().unwrap_unchecked().find_get_current_sources)(p_instance, p_no_sources)
+    unsafe { (FFI.get().unwrap_unchecked().find_get_current_sources)(p_instance, p_no_sources) }
 }
 
 pub unsafe fn NDIlib_recv_create_v3(
     p_create_settings: *const NDIlib_recv_create_v3_t,
 ) -> NDIlib_recv_instance_t {
-    (FFI.get().unwrap_unchecked().recv_create_v3)(p_create_settings)
+    unsafe { (FFI.get().unwrap_unchecked().recv_create_v3)(p_create_settings) }
 }
 
 pub unsafe fn NDIlib_recv_destroy(p_instance: NDIlib_recv_instance_t) {
-    (FFI.get().unwrap_unchecked().recv_destroy)(p_instance)
+    unsafe { (FFI.get().unwrap_unchecked().recv_destroy)(p_instance) }
 }
 
 pub unsafe fn NDIlib_recv_set_tally(
     p_instance: NDIlib_recv_instance_t,
     p_tally: *const NDIlib_tally_t,
 ) -> bool {
-    (FFI.get().unwrap_unchecked().recv_set_tally)(p_instance, p_tally)
+    unsafe { (FFI.get().unwrap_unchecked().recv_set_tally)(p_instance, p_tally) }
 }
 
 pub unsafe fn NDIlib_recv_send_metadata(
     p_instance: NDIlib_recv_instance_t,
     p_metadata: *const NDIlib_metadata_frame_t,
 ) -> bool {
-    (FFI.get().unwrap_unchecked().recv_send_metadata)(p_instance, p_metadata)
+    unsafe { (FFI.get().unwrap_unchecked().recv_send_metadata)(p_instance, p_metadata) }
 }
 
 pub unsafe fn NDIlib_recv_capture_v3(
@@ -509,70 +509,72 @@ pub unsafe fn NDIlib_recv_capture_v3(
     p_metadata: *mut NDIlib_metadata_frame_t,
     timeout_in_ms: u32,
 ) -> NDIlib_frame_type_e {
-    (FFI.get().unwrap_unchecked().recv_capture_v3)(
-        p_instance,
-        p_video_data,
-        p_audio_data,
-        p_metadata,
-        timeout_in_ms,
-    )
+    unsafe {
+        (FFI.get().unwrap_unchecked().recv_capture_v3)(
+            p_instance,
+            p_video_data,
+            p_audio_data,
+            p_metadata,
+            timeout_in_ms,
+        )
+    }
 }
 
 pub unsafe fn NDIlib_recv_free_video_v2(
     p_instance: NDIlib_recv_instance_t,
     p_video_data: *mut NDIlib_video_frame_v2_t,
 ) {
-    (FFI.get().unwrap_unchecked().recv_free_video_v2)(p_instance, p_video_data)
+    unsafe { (FFI.get().unwrap_unchecked().recv_free_video_v2)(p_instance, p_video_data) }
 }
 
 pub unsafe fn NDIlib_recv_free_audio_v3(
     p_instance: NDIlib_recv_instance_t,
     p_audio_data: *mut NDIlib_audio_frame_v3_t,
 ) {
-    (FFI.get().unwrap_unchecked().recv_free_audio_v3)(p_instance, p_audio_data)
+    unsafe { (FFI.get().unwrap_unchecked().recv_free_audio_v3)(p_instance, p_audio_data) }
 }
 
 pub unsafe fn NDIlib_recv_free_metadata(
     p_instance: NDIlib_recv_instance_t,
     p_metadata: *mut NDIlib_metadata_frame_t,
 ) {
-    (FFI.get().unwrap_unchecked().recv_free_metadata)(p_instance, p_metadata)
+    unsafe { (FFI.get().unwrap_unchecked().recv_free_metadata)(p_instance, p_metadata) }
 }
 
 pub unsafe fn NDIlib_recv_get_queue(
     p_instance: NDIlib_recv_instance_t,
     p_total: *mut NDIlib_recv_queue_t,
 ) {
-    (FFI.get().unwrap_unchecked().recv_get_queue)(p_instance, p_total)
+    unsafe { (FFI.get().unwrap_unchecked().recv_get_queue)(p_instance, p_total) }
 }
 
 pub unsafe fn NDIlib_send_create(
     p_create_settings: *const NDIlib_send_create_t,
 ) -> NDIlib_send_instance_t {
-    (FFI.get().unwrap_unchecked().send_create)(p_create_settings)
+    unsafe { (FFI.get().unwrap_unchecked().send_create)(p_create_settings) }
 }
 
 pub unsafe fn NDIlib_send_destroy(p_instance: NDIlib_send_instance_t) {
-    (FFI.get().unwrap_unchecked().send_destroy)(p_instance)
+    unsafe { (FFI.get().unwrap_unchecked().send_destroy)(p_instance) }
 }
 
 pub unsafe fn NDIlib_send_send_video_v2(
     p_instance: NDIlib_send_instance_t,
     p_video_data: *const NDIlib_video_frame_v2_t,
 ) {
-    (FFI.get().unwrap_unchecked().send_send_video_v2)(p_instance, p_video_data)
+    unsafe { (FFI.get().unwrap_unchecked().send_send_video_v2)(p_instance, p_video_data) }
 }
 
 pub unsafe fn NDIlib_send_send_audio_v3(
     p_instance: NDIlib_send_instance_t,
     p_audio_data: *const NDIlib_audio_frame_v3_t,
 ) {
-    (FFI.get().unwrap_unchecked().send_send_audio_v3)(p_instance, p_audio_data)
+    unsafe { (FFI.get().unwrap_unchecked().send_send_audio_v3)(p_instance, p_audio_data) }
 }
 
 pub unsafe fn NDIlib_send_send_metadata(
     p_instance: NDIlib_send_instance_t,
     p_metadata: *const NDIlib_metadata_frame_t,
 ) {
-    (FFI.get().unwrap_unchecked().send_send_metadata)(p_instance, p_metadata)
+    unsafe { (FFI.get().unwrap_unchecked().send_send_metadata)(p_instance, p_metadata) }
 }

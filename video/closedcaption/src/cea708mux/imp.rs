@@ -180,11 +180,12 @@ impl AggregatorImpl for Cea708Mux {
             }
             all_eos = false;
 
-            let buffer = if let Some(buffer) = pad.peek_buffer() {
-                buffer
-            } else {
-                need_data = true;
-                continue;
+            let buffer = match pad.peek_buffer() {
+                Some(buffer) => buffer,
+                _ => {
+                    need_data = true;
+                    continue;
+                }
             };
 
             let Ok(segment) = pad.segment().downcast::<gst::ClockTime>() else {

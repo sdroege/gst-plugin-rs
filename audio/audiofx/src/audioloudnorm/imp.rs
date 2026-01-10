@@ -1605,7 +1605,7 @@ impl AudioLoudNorm {
 
                 let mut state = self.state.borrow_mut();
                 let mut outbuf = None;
-                if let Some(ref mut state) = &mut *state {
+                if let Some(state) = &mut *state {
                     outbuf = match state.drain(self) {
                         Ok(outbuf) => Some(outbuf),
                         Err(gst::FlowError::Eos) => None,
@@ -1627,7 +1627,7 @@ impl AudioLoudNorm {
             EventView::Eos(_) | EventView::Segment(_) => {
                 let mut state = self.state.borrow_mut();
                 let mut outbuf = None;
-                if let Some(ref mut state) = &mut *state {
+                if let Some(state) = &mut *state {
                     outbuf = match state.drain(self) {
                         Ok(outbuf) => Some(outbuf),
                         Err(gst::FlowError::Eos) => None,

@@ -782,20 +782,23 @@ impl BaseTransformImpl for HrtfRender {
         let mut thread_pool_g = THREAD_POOL.lock().unwrap();
         let mut thread_pool = self.thread_pool.lock().unwrap();
 
-        if let Some(tp) = thread_pool_g.upgrade() {
-            *thread_pool = Some(tp);
-        } else {
-            let tp = ThreadPoolBuilder::new().build().map_err(|_| {
-                gst::error_msg!(
-                    gst::CoreError::Failed,
-                    ["Could not create rayon thread pool"]
-                )
-            })?;
+        match thread_pool_g.upgrade() {
+            Some(tp) => {
+                *thread_pool = Some(tp);
+            }
+            _ => {
+                let tp = ThreadPoolBuilder::new().build().map_err(|_| {
+                    gst::error_msg!(
+                        gst::CoreError::Failed,
+                        ["Could not create rayon thread pool"]
+                    )
+                })?;
 
-            let tp = Arc::new(tp);
+                let tp = Arc::new(tp);
 
-            *thread_pool = Some(tp);
-            *thread_pool_g = Arc::downgrade(thread_pool.as_ref().unwrap());
+                *thread_pool = Some(tp);
+                *thread_pool_g = Arc::downgrade(thread_pool.as_ref().unwrap());
+            }
         }
 
         Ok(())

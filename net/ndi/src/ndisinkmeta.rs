@@ -87,23 +87,27 @@ mod imp {
         params: glib::ffi::gpointer,
         _buffer: *mut gst::ffi::GstBuffer,
     ) -> glib::ffi::gboolean {
-        assert!(!params.is_null());
+        unsafe {
+            assert!(!params.is_null());
 
-        let meta = &mut *(meta as *mut NdiSinkAudioMeta);
-        let params = ptr::read(params as *const NdiSinkAudioMetaParams);
+            let meta = &mut *(meta as *mut NdiSinkAudioMeta);
+            let params = ptr::read(params as *const NdiSinkAudioMetaParams);
 
-        ptr::write(&mut meta.buffers, params.buffers);
+            ptr::write(&mut meta.buffers, params.buffers);
 
-        true.into_glib()
+            true.into_glib()
+        }
     }
 
     unsafe extern "C" fn ndi_sink_audio_meta_free(
         meta: *mut gst::ffi::GstMeta,
         _buffer: *mut gst::ffi::GstBuffer,
     ) {
-        let meta = &mut *(meta as *mut NdiSinkAudioMeta);
+        unsafe {
+            let meta = &mut *(meta as *mut NdiSinkAudioMeta);
 
-        ptr::drop_in_place(&mut meta.buffers);
+            ptr::drop_in_place(&mut meta.buffers);
+        }
     }
 
     unsafe extern "C" fn ndi_sink_audio_meta_transform(
@@ -113,11 +117,13 @@ mod imp {
         _type_: glib::ffi::GQuark,
         _data: glib::ffi::gpointer,
     ) -> glib::ffi::gboolean {
-        let meta = &*(meta as *mut NdiSinkAudioMeta);
+        unsafe {
+            let meta = &*(meta as *mut NdiSinkAudioMeta);
 
-        super::NdiSinkAudioMeta::add(gst::BufferRef::from_mut_ptr(dest), meta.buffers.clone());
+            super::NdiSinkAudioMeta::add(gst::BufferRef::from_mut_ptr(dest), meta.buffers.clone());
 
-        true.into_glib()
+            true.into_glib()
+        }
     }
 
     pub(super) fn ndi_sink_audio_meta_get_info() -> *const gst::ffi::GstMetaInfo {

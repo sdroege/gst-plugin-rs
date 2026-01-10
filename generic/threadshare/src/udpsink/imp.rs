@@ -783,7 +783,7 @@ impl UdpSink {
             SocketFamily::Ipv6 => &settings.socket_v6,
         };
 
-        if let Some(ref wrapped_socket) = wrapped_socket {
+        if let Some(wrapped_socket) = wrapped_socket {
             let socket: UdpSocket = wrapped_socket.get();
             let socket = ts_ctx.enter(|| {
                 Async::<UdpSocket>::try_from(socket).map_err(|err| {

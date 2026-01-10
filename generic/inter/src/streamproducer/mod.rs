@@ -21,10 +21,9 @@ static PRODUCERS: LazyLock<Mutex<HashMap<String, InterStreamProducer>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn toplevel(obj: &gst::Object) -> gst::Object {
-    if let Some(parent) = obj.parent() {
-        toplevel(&parent)
-    } else {
-        obj.clone()
+    match obj.parent() {
+        Some(parent) => toplevel(&parent),
+        _ => obj.clone(),
     }
 }
 
@@ -51,8 +50,8 @@ impl InterStreamProducer {
     ) -> Result<gst_utils::StreamProducer, Error> {
         let mut producers = PRODUCERS.lock().unwrap();
 
-        if let Some(producer) = producers.remove(name) {
-            match producer {
+        match producers.remove(name) {
+            Some(producer) => match producer {
                 InterStreamProducer::Pending { consumers } => {
                     let producer = gst_utils::StreamProducer::with(appsink, settings);
                     let mut links = HashMap::new();
@@ -84,27 +83,28 @@ impl InterStreamProducer {
                         name
                     ))
                 }
+            },
+            _ => {
+                let producer = gst_utils::StreamProducer::with(appsink, settings);
+
+                producers.insert(
+                    name.to_string(),
+                    InterStreamProducer::Active {
+                        producer: producer.clone(),
+                        links: HashMap::new(),
+                    },
+                );
+
+                Ok(producer)
             }
-        } else {
-            let producer = gst_utils::StreamProducer::with(appsink, settings);
-
-            producers.insert(
-                name.to_string(),
-                InterStreamProducer::Active {
-                    producer: producer.clone(),
-                    links: HashMap::new(),
-                },
-            );
-
-            Ok(producer)
         }
     }
 
     pub fn release(name: &str) -> Option<gst_app::AppSink> {
         let mut producers = PRODUCERS.lock().unwrap();
 
-        if let Some(producer) = producers.remove(name) {
-            match producer {
+        match producers.remove(name) {
+            Some(producer) => match producer {
                 InterStreamProducer::Pending { .. } => None,
                 InterStreamProducer::Active { links, .. } if links.is_empty() => None,
                 InterStreamProducer::Active { links, producer } => {
@@ -121,9 +121,8 @@ impl InterStreamProducer {
 
                     Some(producer.appsink().clone())
                 }
-            }
-        } else {
-            None
+            },
+            _ => None,
         }
     }
 

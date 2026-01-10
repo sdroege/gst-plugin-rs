@@ -329,7 +329,7 @@ impl TracerImpl for BufferLateness {
         let ptr = pad.as_ptr() as usize;
 
         let mut state = self.state.lock().unwrap();
-        let State {
+        let &mut State {
             ref mut pads,
             ref mut log,
             ref settings,

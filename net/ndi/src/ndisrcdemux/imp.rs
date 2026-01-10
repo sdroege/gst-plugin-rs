@@ -928,7 +928,7 @@ impl NdiSrcDemux {
         }
 
         match state.video_info.as_ref().unwrap() {
-            VideoInfo::Video(ref info) => {
+            VideoInfo::Video(info) => {
                 match info.format() {
                     gst_video::VideoFormat::Uyvy
                     | gst_video::VideoFormat::Bgra
@@ -1293,7 +1293,7 @@ impl NdiSrcDemux {
         }
 
         match state.audio_info.as_ref().unwrap() {
-            AudioInfo::Audio(ref info) => {
+            AudioInfo::Audio(info) => {
                 let no_samples = audio_frame.no_samples();
                 let timecode = audio_frame.timecode();
                 let timestamp = audio_frame.timestamp();
@@ -1448,7 +1448,7 @@ pub enum AudioInfo {
 impl AudioInfo {
     pub fn to_caps(&self) -> Result<gst::Caps, glib::BoolError> {
         match self {
-            AudioInfo::Audio(ref info) => info.to_caps(),
+            AudioInfo::Audio(info) => info.to_caps(),
             #[cfg(feature = "advanced-sdk")]
             AudioInfo::Opus {
                 sample_rate,
@@ -1513,10 +1513,10 @@ pub enum VideoInfo {
 impl VideoInfo {
     pub fn to_caps(&self) -> Result<gst::Caps, glib::BoolError> {
         match self {
-            VideoInfo::Video(ref info) => info.to_caps(),
+            VideoInfo::Video(info) => info.to_caps(),
             #[cfg(feature = "advanced-sdk")]
             VideoInfo::SpeedHQInfo {
-                ref variant,
+                variant,
                 xres,
                 yres,
                 fps_n,
@@ -1575,7 +1575,7 @@ impl VideoInfo {
 
     pub fn width(&self) -> u32 {
         match self {
-            VideoInfo::Video(ref info) => info.width(),
+            VideoInfo::Video(info) => info.width(),
             #[cfg(feature = "advanced-sdk")]
             VideoInfo::SpeedHQInfo { xres, .. }
             | VideoInfo::H264 { xres, .. }

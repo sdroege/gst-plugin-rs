@@ -128,24 +128,27 @@ impl ObjectImpl for InterSink {
                     .unwrap_or_else(|_| DEFAULT_PRODUCER_NAME.to_string());
 
                 if let Some(appsink) = InterStreamProducer::release(&old_producer_name) {
-                    if let Err(err) = InterStreamProducer::acquire(
+                    match InterStreamProducer::acquire(
                         &settings.producer_name,
                         &appsink,
                         settings.producer.clone(),
                     ) {
-                        drop(settings);
-                        gst::error!(CAT, imp = self, "{err}");
-                        self.post_error_message(gst::error_msg!(
-                            gst::StreamError::Failed,
-                            ["{err}"]
-                        ))
-                    } else {
-                        drop(settings);
-                        // This is required because StreamProducer obtains the latency
-                        // it needs to forward from Latency events, and we need to let the
-                        // application know it should recalculate latency to get the event
-                        // to travel upstream again
-                        self.post_message(gst::message::Latency::new());
+                        Err(err) => {
+                            drop(settings);
+                            gst::error!(CAT, imp = self, "{err}");
+                            self.post_error_message(gst::error_msg!(
+                                gst::StreamError::Failed,
+                                ["{err}"]
+                            ))
+                        }
+                        _ => {
+                            drop(settings);
+                            // This is required because StreamProducer obtains the latency
+                            // it needs to forward from Latency events, and we need to let the
+                            // application know it should recalculate latency to get the event
+                            // to travel upstream again
+                            self.post_message(gst::message::Latency::new());
+                        }
                     }
                 }
             }

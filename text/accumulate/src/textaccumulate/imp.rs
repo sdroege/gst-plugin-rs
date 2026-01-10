@@ -789,7 +789,7 @@ impl Accumulate {
                     if no_timeout {
                         std::time::Duration::MAX
                     } else if let Some(now) = this.obj().current_running_time() {
-                        if let Some(next_rtime) = this
+                        match this
                             .state
                             .lock()
                             .unwrap()
@@ -797,13 +797,12 @@ impl Accumulate {
                             .as_ref()
                             .and_then(|input| input.start_rtime())
                         {
-                            std::time::Duration::from_nanos(
+                            Some(next_rtime) => std::time::Duration::from_nanos(
                                 (next_rtime + upstream_min + latency + lateness)
                                     .saturating_sub(now)
                                     .nseconds(),
-                            )
-                        } else {
-                            std::time::Duration::MAX
+                            ),
+                            _ => std::time::Duration::MAX,
                         }
                     } else {
                         std::time::Duration::MAX

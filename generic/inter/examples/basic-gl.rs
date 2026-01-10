@@ -3,10 +3,9 @@ use gst::prelude::*;
 use std::sync::{Arc, Mutex};
 
 fn toplevel(obj: &gst::Object) -> gst::Object {
-    if let Some(parent) = obj.parent() {
-        toplevel(&parent)
-    } else {
-        obj.clone()
+    match obj.parent() {
+        Some(parent) => toplevel(&parent),
+        _ => obj.clone(),
     }
 }
 

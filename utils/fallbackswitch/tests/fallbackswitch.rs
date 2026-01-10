@@ -33,14 +33,14 @@ fn init() {
 }
 
 macro_rules! assert_fallback_buffer {
-    ($buffer:expr, $ts:expr) => {
+    ($buffer:expr_2021, $ts:expr_2021) => {
         assert_eq!($buffer.pts(), $ts);
         assert_eq!($buffer.size(), 160 * 120 * 4);
     };
 }
 
 macro_rules! assert_buffer {
-    ($buffer:expr, $ts:expr) => {
+    ($buffer:expr_2021, $ts:expr_2021) => {
         assert_eq!($buffer.pts(), $ts);
         assert_eq!($buffer.size(), 320 * 240 * 4);
     };

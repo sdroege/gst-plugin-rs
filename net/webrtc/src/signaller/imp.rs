@@ -227,12 +227,10 @@ impl Signaller {
         ));
 
         let obj = self.obj();
-        let meta =
-            if let Some(meta) = obj.emit_by_name::<Option<gst::Structure>>("request-meta", &[]) {
-                gvalue_to_json(&meta.to_value())
-            } else {
-                None
-            };
+        let meta = match obj.emit_by_name::<Option<gst::Structure>>("request-meta", &[]) {
+            Some(meta) => gvalue_to_json(&meta.to_value()),
+            _ => None,
+        };
 
         let receive_task_handle = RUNTIME.spawn(glib::clone!(
             #[to_owned(rename_to = this)]

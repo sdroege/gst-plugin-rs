@@ -191,17 +191,17 @@ fn check_last_frame_qrcode(
 
     // Check if JSON field validation is requested
     let json_field_specs: Option<Vec<gst::Structure>> =
-        if let Ok(single_spec) = structure.get::<gst::Structure>("expected-json-fields") {
-            Some(vec![single_spec])
-        } else if let Ok(array) = structure.get::<gst::List>("expected-json-fields") {
-            Some(
-                array
-                    .iter()
-                    .filter_map(|v| v.get::<gst::Structure>().ok())
-                    .collect(),
-            )
-        } else {
-            None
+        match structure.get::<gst::Structure>("expected-json-fields") {
+            Ok(single_spec) => Some(vec![single_spec]),
+            _ => match structure.get::<gst::List>("expected-json-fields") {
+                Ok(array) => Some(
+                    array
+                        .iter()
+                        .filter_map(|v| v.get::<gst::Structure>().ok())
+                        .collect(),
+                ),
+                _ => None,
+            },
         };
 
     if let Some(expected_json_fields) = json_field_specs {
@@ -234,24 +234,30 @@ fn check_last_frame_qrcode(
     }
 
     // Get expected data - can be either a string or an array of strings
-    let expected_values: Vec<String> = if let Ok(single_value) =
-        structure.get::<String>("expected-data")
-    {
-        // Single string value (backwards compatible)
-        vec![single_value]
-    } else if let Ok(array) = structure.get::<gst::List>("expected-data") {
-        // Array of strings
-        array
-            .iter()
-            .filter_map(|v| v.get::<String>().ok())
-            .collect()
-    } else {
-        return Err(gst_validate::ActionError::Error(format!(
+    let expected_values: Vec<String> = match structure.get::<String>("expected-data") {
+        Ok(single_value) => {
+            // Single string value (backwards compatible)
+            vec![single_value]
+        }
+        _ => {
+            match structure.get::<gst::List>("expected-data") {
+                Ok(array) => {
+                    // Array of strings
+                    array
+                        .iter()
+                        .filter_map(|v| v.get::<String>().ok())
+                        .collect()
+                }
+                _ => {
+                    return Err(gst_validate::ActionError::Error(format!(
             "Either a string or an array of strings must be provided for 'expected-data' parameter, got {:?} \
                 and expected-json-fields parameter is {:?}",
             structure.get::<glib::Value>("expected-data"),
             structure.get::<glib::Value>("expected-json-fields")
         )));
+                }
+            }
+        }
     };
 
     if expected_values.is_empty() {

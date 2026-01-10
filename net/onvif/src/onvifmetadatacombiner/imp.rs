@@ -215,46 +215,47 @@ impl OnvifMetadataCombiner {
                 );
                 Some(duration)
             }
-            None => {
-                if let Some(next_buffer) = self.media_sink_pad.peek_buffer() {
-                    match next_buffer.pts().zip(current_media_buffer.pts()) {
-                        Some((next_pts, current_pts)) => {
-                            let duration = next_pts.saturating_sub(current_pts);
+            None => match self.media_sink_pad.peek_buffer() {
+                Some(next_buffer) => match next_buffer.pts().zip(current_media_buffer.pts()) {
+                    Some((next_pts, current_pts)) => {
+                        let duration = next_pts.saturating_sub(current_pts);
 
-                            gst::trace!(
-                                CAT,
-                                imp = self,
-                                "calculated duration for current media buffer from next buffer: {}",
-                                duration
-                            );
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "calculated duration for current media buffer from next buffer: {}",
+                            duration
+                        );
 
-                            Some(duration)
-                        }
-                        None => {
-                            gst::trace!(
-                                CAT,
-                                imp = self,
-                                "could not calculate duration for current media buffer"
-                            );
-                            Some(gst::ClockTime::ZERO)
-                        }
+                        Some(duration)
                     }
-                } else if timeout {
-                    gst::trace!(
-                        CAT,
-                        imp = self,
-                        "could not calculate duration for current media buffer"
-                    );
-                    Some(gst::ClockTime::ZERO)
-                } else {
-                    gst::trace!(
-                        CAT,
-                        imp = self,
-                        "No next buffer to peek at yet to calculate duration"
-                    );
-                    None
+                    None => {
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "could not calculate duration for current media buffer"
+                        );
+                        Some(gst::ClockTime::ZERO)
+                    }
+                },
+                _ => {
+                    if timeout {
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "could not calculate duration for current media buffer"
+                        );
+                        Some(gst::ClockTime::ZERO)
+                    } else {
+                        gst::trace!(
+                            CAT,
+                            imp = self,
+                            "No next buffer to peek at yet to calculate duration"
+                        );
+                        None
+                    }
                 }
-            }
+            },
         }
     }
 
@@ -263,86 +264,89 @@ impl OnvifMetadataCombiner {
         state: &mut State,
         timeout: bool,
     ) -> Result<Option<gst::Buffer>, gst::FlowError> {
-        if let Some(current_media_buffer) = state
+        match state
             .current_media_buffer
             .take()
             .or_else(|| self.media_sink_pad.pop_buffer())
         {
-            if let Some(current_media_start) =
-                crate::lookup_reference_timestamp(&current_media_buffer)
-            {
-                gst::trace!(
-                    CAT,
-                    imp = self,
-                    "Handling media buffer with reference timestamp {}",
-                    current_media_start
-                );
+            Some(current_media_buffer) => {
+                if let Some(current_media_start) =
+                    crate::lookup_reference_timestamp(&current_media_buffer)
+                {
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "Handling media buffer with reference timestamp {}",
+                        current_media_start
+                    );
 
-                match self.media_buffer_duration(&current_media_buffer, timeout) {
-                    Some(duration) => {
-                        let end = current_media_start + duration;
+                    match self.media_buffer_duration(&current_media_buffer, timeout) {
+                        Some(duration) => {
+                            let end = current_media_start + duration;
 
-                        gst::trace!(
-                            CAT,
-                            imp = self,
-                            "Consuming meta for media buffer from {}-{}",
-                            current_media_start,
-                            end
-                        );
-
-                        if self.consume_meta(state, end)? {
                             gst::trace!(
                                 CAT,
                                 imp = self,
-                                "Consumed all meta for media buffer from {}-{}",
+                                "Consuming meta for media buffer from {}-{}",
                                 current_media_start,
                                 end
                             );
-                            Ok(Some(current_media_buffer))
-                        } else if timeout {
-                            gst::warning!(
+
+                            if self.consume_meta(state, end)? {
+                                gst::trace!(
+                                    CAT,
+                                    imp = self,
+                                    "Consumed all meta for media buffer from {}-{}",
+                                    current_media_start,
+                                    end
+                                );
+                                Ok(Some(current_media_buffer))
+                            } else if timeout {
+                                gst::warning!(
                                 CAT,
                                 imp = self,
                                 "Timed out but did not receive all meta for media buffer from {}-{} yet",
                                 current_media_start,
                                 end
                             );
-                            Ok(Some(current_media_buffer))
-                        } else {
+                                Ok(Some(current_media_buffer))
+                            } else {
+                                gst::trace!(
+                                    CAT,
+                                    imp = self,
+                                    "Waiting for more meta for media buffer from {}-{}",
+                                    current_media_start,
+                                    end
+                                );
+                                state.current_media_buffer = Some(current_media_buffer);
+                                Ok(None)
+                            }
+                        }
+                        None => {
                             gst::trace!(
                                 CAT,
                                 imp = self,
-                                "Waiting for more meta for media buffer from {}-{}",
-                                current_media_start,
-                                end
+                                "Can't calculate media buffer duration yet, waiting for next"
                             );
+
                             state.current_media_buffer = Some(current_media_buffer);
                             Ok(None)
                         }
                     }
-                    None => {
-                        gst::trace!(
-                            CAT,
-                            imp = self,
-                            "Can't calculate media buffer duration yet, waiting for next"
-                        );
+                } else {
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "Returning media buffer without reference timestamp"
+                    );
 
-                        state.current_media_buffer = Some(current_media_buffer);
-                        Ok(None)
-                    }
+                    Ok(Some(current_media_buffer))
                 }
-            } else {
-                gst::trace!(
-                    CAT,
-                    imp = self,
-                    "Returning media buffer without reference timestamp"
-                );
-
-                Ok(Some(current_media_buffer))
             }
-        } else {
-            gst::trace!(CAT, imp = self, "No media buffer queued currently");
-            Ok(None)
+            _ => {
+                gst::trace!(CAT, imp = self, "No media buffer queued currently");
+                Ok(None)
+            }
         }
     }
 }
@@ -353,47 +357,52 @@ impl AggregatorImpl for OnvifMetadataCombiner {
 
         let mut state = self.state.lock().unwrap();
 
-        if let Some(mut buffer) = self.consume_media(&mut state, timeout)? {
-            let mut buflist = gst::BufferList::new();
+        match self.consume_media(&mut state, timeout)? {
+            Some(mut buffer) => {
+                let mut buflist = gst::BufferList::new();
 
-            {
-                let buflist_mut = buflist.get_mut().unwrap();
+                {
+                    let buflist_mut = buflist.get_mut().unwrap();
 
-                for mut frame in state.meta_frames.drain(..) {
-                    {
-                        let frame = frame.make_mut();
-                        frame.set_dts(None);
-                        frame.set_pts(None);
+                    for mut frame in state.meta_frames.drain(..) {
+                        {
+                            let frame = frame.make_mut();
+                            frame.set_dts(None);
+                            frame.set_pts(None);
+                        }
+                        buflist_mut.add(frame);
                     }
-                    buflist_mut.add(frame);
+                }
+
+                drop(state);
+
+                {
+                    let buf = buffer.make_mut();
+                    let mut meta = gst::meta::CustomMeta::add(buf, "OnvifXMLFrameMeta").unwrap();
+
+                    let s = meta.mut_structure();
+                    s.set("frames", buflist);
+                }
+
+                let position = buffer
+                    .pts()
+                    .opt_add(buffer.duration().unwrap_or(gst::ClockTime::ZERO));
+
+                gst::log!(CAT, imp = self, "Updating position: {:?}", position);
+
+                self.obj().set_position(position);
+
+                self.finish_buffer(buffer)
+            }
+            _ => {
+                if self.media_sink_pad.is_eos() {
+                    gst::debug!(CAT, imp = self, "EOS");
+                    Err(gst::FlowError::Eos)
+                } else {
+                    gst::trace!(CAT, imp = self, "Need more data");
+                    Err(AGGREGATOR_FLOW_NEED_DATA)
                 }
             }
-
-            drop(state);
-
-            {
-                let buf = buffer.make_mut();
-                let mut meta = gst::meta::CustomMeta::add(buf, "OnvifXMLFrameMeta").unwrap();
-
-                let s = meta.mut_structure();
-                s.set("frames", buflist);
-            }
-
-            let position = buffer
-                .pts()
-                .opt_add(buffer.duration().unwrap_or(gst::ClockTime::ZERO));
-
-            gst::log!(CAT, imp = self, "Updating position: {:?}", position);
-
-            self.obj().set_position(position);
-
-            self.finish_buffer(buffer)
-        } else if self.media_sink_pad.is_eos() {
-            gst::debug!(CAT, imp = self, "EOS");
-            Err(gst::FlowError::Eos)
-        } else {
-            gst::trace!(CAT, imp = self, "Need more data");
-            Err(AGGREGATOR_FLOW_NEED_DATA)
         }
     }
 

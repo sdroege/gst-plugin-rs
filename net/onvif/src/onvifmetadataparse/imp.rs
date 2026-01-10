@@ -321,7 +321,7 @@ impl OnvifMetadataParse {
         buffer: gst::Buffer,
         running_time: gst::Signed<gst::ClockTime>,
     ) -> Result<(), gst::FlowError> {
-        let State {
+        let &mut State {
             ref mut pre_queued_buffers,
             ref mut queued_frames,
             ref utc_time_running_time_mapping,
@@ -603,8 +603,8 @@ impl OnvifMetadataParse {
         drain_utc_time: Option<gst::ClockTime>,
     ) -> Result<Vec<BufferOrEvent>, gst::FlowError> {
         let State {
-            ref mut queued_frames,
-            ref mut out_segment,
+            queued_frames,
+            out_segment,
             utc_time_running_time_mapping,
             ..
         } = &mut *state;
@@ -973,8 +973,8 @@ impl OnvifMetadataParse {
                     _ => (),
                 }
 
-                let State {
-                    utc_time_running_time_mapping,
+                let &mut State {
+                    ref mut utc_time_running_time_mapping,
                     ref in_segment,
                     ref mut queued_frames,
                     ref mut pre_queued_buffers,
@@ -1342,45 +1342,55 @@ impl OnvifMetadataParse {
                     gst::debug!(CAT, imp = self, "EOS, waiting on cond");
                     state = self.cond.wait(state).unwrap();
                     gst::trace!(CAT, imp = self, "Woke up");
-                } else if let Some(clock_wait) = state.clock_wait.clone() {
-                    gst::trace!(
-                        CAT,
-                        imp = self,
-                        "Waiting on timer with time {}, now {}",
-                        clock_wait.time(),
-                        clock_wait.clock().as_ref().map(gst::Clock::time).display(),
-                    );
-
-                    drop(state);
-                    let res = clock_wait.wait();
-                    state = self.state.lock().unwrap();
-
-                    // Unset clock wait if it didn't change in the meantime: waiting again
-                    // on it is going to return immediately and instead if there's nothing
-                    // new to drain then we need to wait on the condvar
-                    if state.clock_wait.as_ref() == Some(&clock_wait) {
-                        state.clock_wait = None;
-                    }
-
-                    match res {
-                        (Ok(_), jitter) => {
-                            gst::trace!(CAT, imp = self, "Woke up after waiting for {}", jitter);
-                            last_clock_wait_time = Some(clock_wait.time());
-                        }
-                        (Err(err), jitter) => {
+                } else {
+                    match state.clock_wait.clone() {
+                        Some(clock_wait) => {
                             gst::trace!(
                                 CAT,
                                 imp = self,
-                                "Woke up with error {:?} and jitter {}",
-                                err,
-                                jitter
+                                "Waiting on timer with time {}, now {}",
+                                clock_wait.time(),
+                                clock_wait.clock().as_ref().map(gst::Clock::time).display(),
                             );
+
+                            drop(state);
+                            let res = clock_wait.wait();
+                            state = self.state.lock().unwrap();
+
+                            // Unset clock wait if it didn't change in the meantime: waiting again
+                            // on it is going to return immediately and instead if there's nothing
+                            // new to drain then we need to wait on the condvar
+                            if state.clock_wait.as_ref() == Some(&clock_wait) {
+                                state.clock_wait = None;
+                            }
+
+                            match res {
+                                (Ok(_), jitter) => {
+                                    gst::trace!(
+                                        CAT,
+                                        imp = self,
+                                        "Woke up after waiting for {}",
+                                        jitter
+                                    );
+                                    last_clock_wait_time = Some(clock_wait.time());
+                                }
+                                (Err(err), jitter) => {
+                                    gst::trace!(
+                                        CAT,
+                                        imp = self,
+                                        "Woke up with error {:?} and jitter {}",
+                                        err,
+                                        jitter
+                                    );
+                                }
+                            }
+                        }
+                        _ => {
+                            gst::debug!(CAT, imp = self, "Waiting on cond");
+                            state = self.cond.wait(state).unwrap();
+                            gst::trace!(CAT, imp = self, "Woke up");
                         }
                     }
-                } else {
-                    gst::debug!(CAT, imp = self, "Waiting on cond");
-                    state = self.cond.wait(state).unwrap();
-                    gst::trace!(CAT, imp = self, "Woke up");
                 }
 
                 // And retry if there's anything to drain now.

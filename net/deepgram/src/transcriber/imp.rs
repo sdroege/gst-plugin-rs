@@ -815,49 +815,53 @@ impl Transcriber {
 
             let this_weak = self.downgrade();
             state.receive_handle = Some(RUNTIME.spawn(async move {
-                let mut results = if let Some(this) = this_weak.upgrade() {
-                    gst::info!(CAT, imp = this, "establishing connection");
+                let mut results = match this_weak.upgrade() {
+                    Some(this) => {
+                        gst::info!(CAT, imp = this, "establishing connection");
 
-                    match client
-                        .transcription()
-                        .stream_request_with_options(
-                            OptionsBuilder::new()
-                                .punctuate(true)
-                                .diarize(diarize)
-                                .model(deepgram::common::options::Model::Nova3)
-                                .language(language_code.into())
-                                .build(),
-                        )
-                        .keep_alive()
-                        .encoding(Encoding::Linear16)
-                        .sample_rate(sample_rate)
-                        .channels(channels as u16)
-                        .interim_results(use_interim_results)
-                        .stream(audio_rx.map(|buffer| {
-                            let data = buffer.map_readable().unwrap();
-                            Ok::<bytes::Bytes, std::sync::mpsc::RecvError>(
-                                bytes::Bytes::copy_from_slice(data.as_slice()),
+                        match client
+                            .transcription()
+                            .stream_request_with_options(
+                                OptionsBuilder::new()
+                                    .punctuate(true)
+                                    .diarize(diarize)
+                                    .model(deepgram::common::options::Model::Nova3)
+                                    .language(language_code.into())
+                                    .build(),
                             )
-                        }))
-                        .await
-                    {
-                        Err(err) => {
-                            let err = format!("Error while building transcription stream: {err}");
-                            gst::error!(CAT, imp = this, "{err}");
-                            this.post_error_message(gst::error_msg!(
-                                gst::LibraryError::Failed,
-                                ["{err}"]
-                            ));
-                            return;
-                        }
-                        Ok(results) => {
-                            gst::info!(CAT, imp = this, "connection established!");
+                            .keep_alive()
+                            .encoding(Encoding::Linear16)
+                            .sample_rate(sample_rate)
+                            .channels(channels as u16)
+                            .interim_results(use_interim_results)
+                            .stream(audio_rx.map(|buffer| {
+                                let data = buffer.map_readable().unwrap();
+                                Ok::<bytes::Bytes, std::sync::mpsc::RecvError>(
+                                    bytes::Bytes::copy_from_slice(data.as_slice()),
+                                )
+                            }))
+                            .await
+                        {
+                            Err(err) => {
+                                let err =
+                                    format!("Error while building transcription stream: {err}");
+                                gst::error!(CAT, imp = this, "{err}");
+                                this.post_error_message(gst::error_msg!(
+                                    gst::LibraryError::Failed,
+                                    ["{err}"]
+                                ));
+                                return;
+                            }
+                            Ok(results) => {
+                                gst::info!(CAT, imp = this, "connection established!");
 
-                            results
+                                results
+                            }
                         }
                     }
-                } else {
-                    return;
+                    _ => {
+                        return;
+                    }
                 };
 
                 loop {

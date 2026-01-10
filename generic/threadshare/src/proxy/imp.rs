@@ -358,7 +358,7 @@ impl ProxySink {
                 } = *shared_ctx;
 
                 if let Some(ref mut pending_queue) = *pq {
-                    if let Some(ref dataqueue) = dataqueue {
+                    if let Some(dataqueue) = dataqueue {
                         let mut failed_item = None;
                         while let Some(item) = pending_queue.items.pop_front() {
                             if let Err(item) = self.push(dataqueue, item) {
@@ -413,8 +413,8 @@ impl ProxySink {
                 } = *shared_ctx;
 
                 match (pending_queue, dataqueue) {
-                    (None, Some(ref dataqueue)) => self.push(dataqueue, item),
-                    (Some(ref mut pending_queue), Some(ref dataqueue)) => {
+                    (None, Some(dataqueue)) => self.push(dataqueue, item),
+                    (Some(pending_queue), Some(dataqueue)) => {
                         if !pending_queue.scheduled {
                             let mut failed_item = None;
                             while let Some(item) = pending_queue.items.pop_front() {
@@ -826,14 +826,15 @@ impl PadSrcHandler for ProxySrcPadHandler {
                 true
             }
             QueryViewMut::Caps(q) => {
-                let caps = if let Some(ref caps) = pad.current_caps() {
-                    q.filter()
+                let caps = match pad.current_caps() {
+                    Some(ref caps) => q
+                        .filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
-                        .unwrap_or_else(|| caps.clone())
-                } else {
-                    q.filter()
+                        .unwrap_or_else(|| caps.clone()),
+                    _ => q
+                        .filter()
                         .map(|f| f.to_owned())
-                        .unwrap_or_else(gst::Caps::new_any)
+                        .unwrap_or_else(gst::Caps::new_any),
                 };
 
                 q.set_result(&caps);
@@ -1057,15 +1058,18 @@ static SRC_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 impl ProxySrc {
     // Sets the upstream latency without blocking the caller.
     pub fn set_upstream_latency(&self, up_latency: gst::ClockTime) {
-        if let Some(ref ts_ctx) = *self.ts_ctx.lock().unwrap() {
-            let obj = self.obj().clone();
+        match *self.ts_ctx.lock().unwrap() {
+            Some(ref ts_ctx) => {
+                let obj = self.obj().clone();
 
-            gst::log!(SRC_CAT, imp = self, "Setting upstream latency async");
-            ts_ctx.spawn(async move {
-                obj.imp().set_upstream_latency_priv(up_latency);
-            });
-        } else {
-            gst::debug!(SRC_CAT, imp = self, "Not ready to handle upstream latency");
+                gst::log!(SRC_CAT, imp = self, "Setting upstream latency async");
+                ts_ctx.spawn(async move {
+                    obj.imp().set_upstream_latency_priv(up_latency);
+                });
+            }
+            _ => {
+                gst::debug!(SRC_CAT, imp = self, "Not ready to handle upstream latency");
+            }
         }
     }
 

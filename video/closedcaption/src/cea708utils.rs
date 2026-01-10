@@ -458,8 +458,14 @@ impl Cea708Renderer {
             }
 
             self.composition = composition;
-        } else if let Some(rectangle) = self.cea608.generate_rectangle() {
-            self.composition = gst_video::VideoOverlayComposition::new(Some(&rectangle)).ok();
+        } else {
+            match self.cea608.generate_rectangle() {
+                Some(rectangle) => {
+                    self.composition =
+                        gst_video::VideoOverlayComposition::new(Some(&rectangle)).ok();
+                }
+                _ => {}
+            }
         }
         self.composition.clone()
     }

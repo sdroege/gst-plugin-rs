@@ -671,14 +671,15 @@ impl WhipServer {
                                 );
                                 let ans: Option<gst_sdp::SDPMessage>;
                                 let mut settings = signaller.imp().settings.lock().unwrap();
-                                if let Some(answer_desc) = webrtcbin
-                                    .property::<Option<WebRTCSessionDescription>>(
-                                        "local-description",
-                                    )
-                                {
-                                    ans = Some(answer_desc.sdp().to_owned());
-                                } else {
-                                    ans = None;
+                                match webrtcbin.property::<Option<WebRTCSessionDescription>>(
+                                    "local-description",
+                                ) {
+                                    Some(answer_desc) => {
+                                        ans = Some(answer_desc.sdp().to_owned());
+                                    }
+                                    _ => {
+                                        ans = None;
+                                    }
                                 }
                                 let tx = settings
                                     .sdp_answer
@@ -707,7 +708,10 @@ impl WhipServer {
         })
     }
 
-    async fn patch_handler(&self, _id: String) -> Result<impl warp::Reply, warp::Rejection> {
+    async fn patch_handler(
+        &self,
+        _id: String,
+    ) -> Result<impl warp::Reply + use<>, warp::Rejection> {
         // FIXME: implement ICE Trickle and ICE restart
         // emit signal `handle-ice` to for ICE trickle
         let reply = warp::reply::reply();
@@ -731,12 +735,15 @@ impl WhipServer {
         http::StatusCode::OK
     }
 
-    async fn delete_handler(&self, id: String) -> Result<impl warp::Reply, warp::Rejection> {
+    async fn delete_handler(
+        &self,
+        id: String,
+    ) -> Result<impl warp::Reply + use<>, warp::Rejection> {
         Ok(self.delete_session(id).await.into_response())
     }
 
     #[allow(clippy::single_match)]
-    async fn options_handler(&self) -> Result<impl warp::reply::Reply, warp::Rejection> {
+    async fn options_handler(&self) -> Result<impl warp::reply::Reply + use<>, warp::Rejection> {
         let settings = self.settings.lock().unwrap();
         drop(settings);
 
@@ -964,7 +971,7 @@ impl WhipServer {
         &self,
         body: &[u8],
         id: Option<String>,
-    ) -> Result<impl warp::reply::Reply, warp::Rejection> {
+    ) -> Result<impl warp::reply::Reply + use<>, warp::Rejection> {
         let (status, mut headermap, body) = self.create_session(body, id.clone()).await;
 
         let mut response_builder = http::Response::builder().status(status);
@@ -1039,7 +1046,10 @@ impl WhipServer {
         Ok(())
     }
 
-    fn filter(&self) -> impl Filter<Extract = impl warp::Reply> + Clone + Send + Sync + 'static {
+    fn filter(
+        &self,
+    ) -> impl Filter<Extract = impl warp::Reply + use<>> + Clone + Send + Sync + 'static + use<>
+    {
         let prefix = warp::path(ROOT);
 
         // POST /endpoint

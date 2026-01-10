@@ -33,38 +33,38 @@ pub fn gvalue_to_json(val: &gst::glib::Value) -> Option<serde_json::Value> {
         glib::Type::U_LONG | glib::Type::U64 => Some(val.get::<u64>().unwrap().into()),
         glib::Type::F32 => Some(val.get::<f32>().unwrap().into()),
         glib::Type::F64 => Some(val.get::<f64>().unwrap().into()),
-        _ => {
-            if let Ok(s) = val.get::<gst::Structure>() {
-                serde_json::to_value(
-                    s.iter()
-                        .filter_map(|(name, value)| {
-                            gvalue_to_json(value).map(|value| (name.to_string(), value))
-                        })
-                        .collect::<HashMap<String, serde_json::Value>>(),
-                )
-                .ok()
-            } else if let Ok(a) = val.get::<gst::Array>() {
-                serde_json::to_value(
+        _ => match val.get::<gst::Structure>() {
+            Ok(s) => serde_json::to_value(
+                s.iter()
+                    .filter_map(|(name, value)| {
+                        gvalue_to_json(value).map(|value| (name.to_string(), value))
+                    })
+                    .collect::<HashMap<String, serde_json::Value>>(),
+            )
+            .ok(),
+            _ => match val.get::<gst::Array>() {
+                Ok(a) => serde_json::to_value(
                     a.iter()
                         .filter_map(|value| gvalue_to_json(value))
                         .collect::<Vec<serde_json::Value>>(),
                 )
-                .ok()
-            } else if let Some((_klass, values)) = gst::glib::FlagsValue::from_value(val) {
-                Some(
-                    values
-                        .iter()
-                        .map(|value| value.nick())
-                        .collect::<Vec<&str>>()
-                        .join("+")
-                        .into(),
-                )
-            } else if let Ok(value) = val.serialize() {
-                Some(value.as_str().into())
-            } else {
-                None
-            }
-        }
+                .ok(),
+                _ => match gst::glib::FlagsValue::from_value(val) {
+                    Some((_klass, values)) => Some(
+                        values
+                            .iter()
+                            .map(|value| value.nick())
+                            .collect::<Vec<&str>>()
+                            .join("+")
+                            .into(),
+                    ),
+                    _ => match val.serialize() {
+                        Ok(value) => Some(value.as_str().into()),
+                        _ => None,
+                    },
+                },
+            },
+        },
     }
 }
 
@@ -465,14 +465,13 @@ impl Codec {
         let encoder = Self::get_encoder_for_caps(caps, encoders);
         let payloader = Self::get_payloader_for_codec(name, payloaders);
 
-        let encoding_info = if let (encoder, Some(payloader)) = (encoder, payloader) {
-            Some(EncodingInfo {
+        let encoding_info = match (encoder, payloader) {
+            (encoder, Some(payloader)) => Some(EncodingInfo {
                 encoder,
                 payloader,
                 output_filter: None,
-            })
-        } else {
-            None
+            }),
+            _ => None,
         };
 
         Self {
@@ -603,12 +602,9 @@ impl Codec {
                     template_caps.iter().any(|s| {
                         s.has_field("encoding-name")
                             && s.get::<gst::List>("encoding-name").map_or_else(
-                                |_| {
-                                    if let Ok(encoding_name) = s.get::<&str>("encoding-name") {
-                                        encoding_name == codec
-                                    } else {
-                                        false
-                                    }
+                                |_| match s.get::<&str>("encoding-name") {
+                                    Ok(encoding_name) => encoding_name == codec,
+                                    _ => false,
                                 },
                                 |encoding_names| {
                                     encoding_names.iter().any(|v| {
@@ -651,25 +647,26 @@ impl Codec {
                     s.has_field("encoding-name")
                         && s.get::<gst::List>("encoding-name").map_or_else(
                             |_| {
-                                if let Ok(encoding_name) = s.get::<&str>("encoding-name") {
-                                    if encoding_name == codec {
-                                        if s.has_field("clock-rate") {
-                                            match s.get_optional::<i32>("clock-rate") {
-                                                Ok(Some(rate)) => {
-                                                    *clock_rate = Some(rate);
-                                                }
-                                                _ => {
-                                                    // if None or Err or IntRange
-                                                    *clock_rate = None;
-                                                }
-                                            };
+                                match s.get::<&str>("encoding-name") {
+                                    Ok(encoding_name) => {
+                                        if encoding_name == codec {
+                                            if s.has_field("clock-rate") {
+                                                match s.get_optional::<i32>("clock-rate") {
+                                                    Ok(Some(rate)) => {
+                                                        *clock_rate = Some(rate);
+                                                    }
+                                                    _ => {
+                                                        // if None or Err or IntRange
+                                                        *clock_rate = None;
+                                                    }
+                                                };
+                                            }
+                                            true
+                                        } else {
+                                            false
                                         }
-                                        true
-                                    } else {
-                                        false
                                     }
-                                } else {
-                                    false
+                                    _ => false,
                                 }
                             },
                             |encoding_names| {
@@ -1613,23 +1610,26 @@ pub async fn create_tls_connector<P: AsRef<Path>>(
 ) -> Result<TlsConnector, std::io::Error> {
     let ring_provider = rustls::crypto::ring::default_provider();
 
-    if let Some(certificate_file) = (!insecure_tls).then_some(certificate_file).flatten() {
-        let root_cert_store = get_root_certstore(certificate_file).await?;
-        let config = rustls::ClientConfig::builder_with_provider(ring_provider.into())
-            .with_safe_default_protocol_versions()
-            .unwrap()
-            .with_root_certificates(root_cert_store)
-            .with_no_client_auth();
+    match (!insecure_tls).then_some(certificate_file).flatten() {
+        Some(certificate_file) => {
+            let root_cert_store = get_root_certstore(certificate_file).await?;
+            let config = rustls::ClientConfig::builder_with_provider(ring_provider.into())
+                .with_safe_default_protocol_versions()
+                .unwrap()
+                .with_root_certificates(root_cert_store)
+                .with_no_client_auth();
 
-        Ok(TlsConnector::from(Arc::new(config)))
-    } else {
-        let config = rustls::ClientConfig::builder_with_provider(ring_provider.into())
-            .with_safe_default_protocol_versions()
-            .unwrap()
-            .dangerous()
-            .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_no_client_auth();
+            Ok(TlsConnector::from(Arc::new(config)))
+        }
+        _ => {
+            let config = rustls::ClientConfig::builder_with_provider(ring_provider.into())
+                .with_safe_default_protocol_versions()
+                .unwrap()
+                .dangerous()
+                .with_custom_certificate_verifier(SkipServerVerification::new())
+                .with_no_client_auth();
 
-        Ok(TlsConnector::from(Arc::new(config)))
+            Ok(TlsConnector::from(Arc::new(config)))
+        }
     }
 }

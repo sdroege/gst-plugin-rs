@@ -725,33 +725,35 @@ impl AllocatorData {
     /// SAFETY: There must be no other thread freezing the same allocator data and codec frame
     /// at the same time.
     unsafe fn freeze(&self, imp: &Dav1dDec, codec_frame: &mut gst_video::VideoCodecFrame) {
-        use glib::translate::*;
+        unsafe {
+            use glib::translate::*;
 
-        let inner = self.0.get();
+            let inner = self.0.get();
 
-        if let Some(cframe) = (*inner).cframe {
-            let buffer_ptr = (*(*inner).vframe.as_ptr()).buffer;
-            gst::debug!(
-                CAT,
-                imp = imp,
-                "Allocated frame ({:?}) is used for multiple output frames ({} and {})",
-                (*inner).vframe.buffer(),
-                codec_frame.system_frame_number(),
-                cframe.as_ref().system_frame_number,
-            );
-            // Take an additional reference for storing in the second video codec frame
-            gst::ffi::gst_mini_object_ref(buffer_ptr as *mut _);
-        } else {
-            // Steal the reference from the video frame and make sure to keep the video
-            // codec frame alive as long as the video frame is mapped.
-            (*(*inner).vframe.as_mut_ptr()).map[0].flags |=
-                gst_video::ffi::GST_VIDEO_FRAME_MAP_FLAG_NO_REF;
-            (*inner).cframe = Some(ptr::NonNull::new_unchecked(
-                gst_video::ffi::gst_video_codec_frame_ref(codec_frame.to_glib_none().0),
-            ));
+            if let Some(cframe) = (*inner).cframe {
+                let buffer_ptr = (*(*inner).vframe.as_ptr()).buffer;
+                gst::debug!(
+                    CAT,
+                    imp = imp,
+                    "Allocated frame ({:?}) is used for multiple output frames ({} and {})",
+                    (*inner).vframe.buffer(),
+                    codec_frame.system_frame_number(),
+                    cframe.as_ref().system_frame_number,
+                );
+                // Take an additional reference for storing in the second video codec frame
+                gst::ffi::gst_mini_object_ref(buffer_ptr as *mut _);
+            } else {
+                // Steal the reference from the video frame and make sure to keep the video
+                // codec frame alive as long as the video frame is mapped.
+                (*(*inner).vframe.as_mut_ptr()).map[0].flags |=
+                    gst_video::ffi::GST_VIDEO_FRAME_MAP_FLAG_NO_REF;
+                (*inner).cframe = Some(ptr::NonNull::new_unchecked(
+                    gst_video::ffi::gst_video_codec_frame_ref(codec_frame.to_glib_none().0),
+                ));
+            }
+
+            codec_frame.set_output_buffer(from_glib_full((*(*inner).vframe.as_ptr()).buffer));
         }
-
-        codec_frame.set_output_buffer(from_glib_full((*(*inner).vframe.as_ptr()).buffer));
     }
 
     fn frame(&self) -> gst_video::VideoFrameRef<&gst::BufferRef> {

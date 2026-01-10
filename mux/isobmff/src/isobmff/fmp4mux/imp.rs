@@ -388,34 +388,36 @@ impl Stream {
 
         let s = self.caps.structure(0).unwrap();
 
-        if let Ok(fps) = s.get::<gst::Fraction>("framerate") {
-            if fps.numer() == 0 {
-                return 10_000;
-            }
+        match s.get::<gst::Fraction>("framerate") {
+            Ok(fps) => {
+                if fps.numer() == 0 {
+                    return 10_000;
+                }
 
-            if fps.denom() != 1 && fps.denom() != 1001 {
-                if let Some(fps) = (fps.denom() as u64)
-                    .nseconds()
-                    .mul_div_round(1_000_000_000, fps.numer() as u64)
-                    .and_then(gst_video::guess_framerate)
-                {
-                    return (fps.numer() as u32)
+                if fps.denom() != 1 && fps.denom() != 1001 {
+                    if let Some(fps) = (fps.denom() as u64)
+                        .nseconds()
+                        .mul_div_round(1_000_000_000, fps.numer() as u64)
+                        .and_then(gst_video::guess_framerate)
+                    {
+                        return (fps.numer() as u32)
+                            .mul_div_round(100, fps.denom() as u32)
+                            .unwrap_or(10_000);
+                    }
+                }
+
+                if fps.denom() == 1001 {
+                    fps.numer() as u32
+                } else {
+                    (fps.numer() as u32)
                         .mul_div_round(100, fps.denom() as u32)
-                        .unwrap_or(10_000);
+                        .unwrap_or(10_000)
                 }
             }
-
-            if fps.denom() == 1001 {
-                fps.numer() as u32
-            } else {
-                (fps.numer() as u32)
-                    .mul_div_round(100, fps.denom() as u32)
-                    .unwrap_or(10_000)
-            }
-        } else if let Ok(rate) = s.get::<i32>("rate") {
-            rate as u32
-        } else {
-            10_000
+            _ => match s.get::<i32>("rate") {
+                Ok(rate) => rate as u32,
+                _ => 10_000,
+            },
         }
     }
 
@@ -3092,13 +3094,16 @@ impl FMP4Mux {
                     .opt_ge(current_end_time.saturating_sub(start_time))
                     .unwrap_or(true)
             {
-                if let Some(buffer) = bufs.pop_front() {
-                    current_end_time = buffer.timestamp + buffer.duration;
-                    dequeued_bytes += buffer.buffer.size() as u64;
-                    interleaved_buffers.push(buffer);
-                } else {
-                    // No buffers left in this stream, go to next stream
-                    break;
+                match bufs.pop_front() {
+                    Some(buffer) => {
+                        current_end_time = buffer.timestamp + buffer.duration;
+                        dequeued_bytes += buffer.buffer.size() as u64;
+                        interleaved_buffers.push(buffer);
+                    }
+                    _ => {
+                        // No buffers left in this stream, go to next stream
+                        break;
+                    }
                 }
             }
         }
@@ -3725,18 +3730,23 @@ impl FMP4Mux {
                     }
                 }
                 "audio/x-opus" => {
-                    if let Some(header) = s
+                    match s
                         .get::<gst::ArrayRef>("streamheader")
                         .ok()
                         .and_then(|a| a.first().and_then(|v| v.get::<gst::Buffer>().ok()))
                     {
-                        if gst_pbutils::codec_utils_opus_parse_header(&header, None).is_err() {
-                            gst::error!(CAT, obj = pad, "Received invalid Opus header");
-                            return Err(gst::FlowError::NotNegotiated);
+                        Some(header) => {
+                            if gst_pbutils::codec_utils_opus_parse_header(&header, None).is_err() {
+                                gst::error!(CAT, obj = pad, "Received invalid Opus header");
+                                return Err(gst::FlowError::NotNegotiated);
+                            }
                         }
-                    } else if gst_pbutils::codec_utils_opus_parse_caps(&caps, None).is_err() {
-                        gst::error!(CAT, obj = pad, "Received invalid Opus caps");
-                        return Err(gst::FlowError::NotNegotiated);
+                        _ => {
+                            if gst_pbutils::codec_utils_opus_parse_caps(&caps, None).is_err() {
+                                gst::error!(CAT, obj = pad, "Received invalid Opus caps");
+                                return Err(gst::FlowError::NotNegotiated);
+                            }
+                        }
                     }
                 }
                 "audio/x-flac" => {

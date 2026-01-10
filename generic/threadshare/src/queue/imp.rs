@@ -452,7 +452,7 @@ impl Queue {
             None => self.push(dataqueue, item),
             Some(PendingQueue {
                 scheduled: false,
-                ref mut items,
+                items,
                 ..
             }) => {
                 let mut failed_item = None;
@@ -528,56 +528,57 @@ impl Queue {
 
             let mut pending_queue = self.pending_queue.lock().unwrap();
 
-            if let Err(item) = self.queue_until_full(dataqueue, &mut pending_queue, item) {
-                if pending_queue
-                    .as_ref()
-                    .map(|pq| !pq.scheduled)
-                    .unwrap_or(true)
-                {
-                    if pending_queue.is_none() {
-                        // Lock order: last_res, then pending_queue
-                        drop(pending_queue);
-                        if *self.last_res.lock().unwrap() == Err(gst::FlowError::Flushing) {
-                            return Err(gst::FlowError::Flushing);
+            match self.queue_until_full(dataqueue, &mut pending_queue, item) {
+                Err(item) => {
+                    if pending_queue
+                        .as_ref()
+                        .map(|pq| !pq.scheduled)
+                        .unwrap_or(true)
+                    {
+                        if pending_queue.is_none() {
+                            // Lock order: last_res, then pending_queue
+                            drop(pending_queue);
+                            if *self.last_res.lock().unwrap() == Err(gst::FlowError::Flushing) {
+                                return Err(gst::FlowError::Flushing);
+                            }
+                            pending_queue = self.pending_queue.lock().unwrap();
+
+                            *pending_queue = Some(PendingQueue {
+                                more_queue_space_sender: None,
+                                scheduled: false,
+                                items: VecDeque::new(),
+                            });
                         }
-                        pending_queue = self.pending_queue.lock().unwrap();
 
-                        *pending_queue = Some(PendingQueue {
-                            more_queue_space_sender: None,
-                            scheduled: false,
-                            items: VecDeque::new(),
-                        });
-                    }
+                        let schedule_now = !matches!(
+                            item,
+                            DataQueueItem::Event(ref ev) if ev.type_() != gst::EventType::Eos,
+                        );
 
-                    let schedule_now = !matches!(
-                        item,
-                        DataQueueItem::Event(ref ev) if ev.type_() != gst::EventType::Eos,
-                    );
+                        pending_queue.as_mut().unwrap().items.push_back(item);
 
-                    pending_queue.as_mut().unwrap().items.push_back(item);
+                        gst::log!(
+                            CAT,
+                            imp = self,
+                            "Queue is full - Pushing first item on pending queue"
+                        );
 
-                    gst::log!(
-                        CAT,
-                        imp = self,
-                        "Queue is full - Pushing first item on pending queue"
-                    );
+                        if schedule_now {
+                            gst::log!(CAT, imp = self, "Scheduling pending queue now");
+                            pending_queue.as_mut().unwrap().scheduled = true;
 
-                    if schedule_now {
-                        gst::log!(CAT, imp = self, "Scheduling pending queue now");
-                        pending_queue.as_mut().unwrap().scheduled = true;
-
-                        let wait_fut = self.schedule_pending_queue();
-                        Some(wait_fut)
+                            let wait_fut = self.schedule_pending_queue();
+                            Some(wait_fut)
+                        } else {
+                            gst::log!(CAT, imp = self, "Scheduling pending queue later");
+                            None
+                        }
                     } else {
-                        gst::log!(CAT, imp = self, "Scheduling pending queue later");
+                        pending_queue.as_mut().unwrap().items.push_back(item);
                         None
                     }
-                } else {
-                    pending_queue.as_mut().unwrap().items.push_back(item);
-                    None
                 }
-            } else {
-                None
+                _ => None,
             }
         };
 

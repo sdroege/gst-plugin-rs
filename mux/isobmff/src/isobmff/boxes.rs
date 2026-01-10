@@ -845,33 +845,36 @@ fn write_dops(v: &mut Vec<u8>, caps: &gst::Caps) -> Result<(), Error> {
 
     // TODO: Use audio clipping meta to calculate pre_skip
 
-    if let Some(header) = caps
+    match caps
         .structure(0)
         .unwrap()
         .get::<gst::ArrayRef>("streamheader")
         .ok()
         .and_then(|a| a.first().and_then(|v| v.get::<gst::Buffer>().ok()))
     {
-        (
-            rate,
-            channels,
-            channel_mapping_family,
-            stream_count,
-            coupled_count,
-            pre_skip,
-            output_gain,
-        ) = gst_pbutils::codec_utils_opus_parse_header(&header, Some(&mut channel_mapping))
-            .unwrap();
-    } else {
-        (
-            rate,
-            channels,
-            channel_mapping_family,
-            stream_count,
-            coupled_count,
-        ) = gst_pbutils::codec_utils_opus_parse_caps(caps, Some(&mut channel_mapping)).unwrap();
-        output_gain = 0;
-        pre_skip = 0;
+        Some(header) => {
+            (
+                rate,
+                channels,
+                channel_mapping_family,
+                stream_count,
+                coupled_count,
+                pre_skip,
+                output_gain,
+            ) = gst_pbutils::codec_utils_opus_parse_header(&header, Some(&mut channel_mapping))
+                .unwrap();
+        }
+        _ => {
+            (
+                rate,
+                channels,
+                channel_mapping_family,
+                stream_count,
+                coupled_count,
+            ) = gst_pbutils::codec_utils_opus_parse_caps(caps, Some(&mut channel_mapping)).unwrap();
+            output_gain = 0;
+            pre_skip = 0;
+        }
     }
 
     write_box(v, b"dOps", move |v| {
@@ -1595,78 +1598,80 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                 }
                 "video/x-av1" => {
                     write_box(v, b"av1C", move |v| {
-                        if let Ok(codec_data) = s.get::<&gst::BufferRef>("codec_data") {
-                            let map = codec_data
-                                .map_readable()
-                                .context("codec_data not mappable")?;
+                        match s.get::<&gst::BufferRef>("codec_data") {
+                            Ok(codec_data) => {
+                                let map = codec_data
+                                    .map_readable()
+                                    .context("codec_data not mappable")?;
 
-                            v.extend_from_slice(&map);
-                        } else {
-                            let presentation_delay_minus_one = if let Ok(presentation_delay) =
-                                s.get::<i32>("presentation-delay")
-                            {
-                                Some(
-                                    (1u8 << 5)
-                                        | std::cmp::max(
-                                            0xF,
-                                            (presentation_delay.saturating_sub(1) & 0xF) as u8,
-                                        ),
-                                )
-                            } else {
-                                None
-                            };
-
-                            let profile = match s.get::<&str>("profile").unwrap() {
-                                "main" => 0,
-                                "high" => 1,
-                                "professional" => 2,
-                                _ => unreachable!(),
-                            };
-                            let level = av1_seq_level_idx(s.get::<&str>("level").ok());
-                            let tier = av1_tier(s.get::<&str>("tier").ok());
-                            let (high_bitdepth, twelve_bit) =
-                                match s.get::<u32>("bit-depth-luma").unwrap() {
-                                    8 => (false, false),
-                                    10 => (true, false),
-                                    12 => (true, true),
-                                    _ => unreachable!(),
-                                };
-                            let (monochrome, chroma_sub_x, chroma_sub_y) =
-                                match s.get::<&str>("chroma-format").unwrap() {
-                                    "4:0:0" => (true, true, true),
-                                    "4:2:0" => (false, true, true),
-                                    "4:2:2" => (false, true, false),
-                                    "4:4:4" => (false, false, false),
-                                    _ => unreachable!(),
-                                };
-
-                            let chrome_sample_position = match s.get::<&str>("chroma-site") {
-                                Ok("v-cosited") => 1,
-                                Ok("v-cosited+h-cosited") => 2,
-                                _ => 0,
-                            };
-
-                            let codec_data = [
-                                0x80 | 0x01,            // marker | version
-                                (profile << 5) | level, // profile | level
-                                (tier << 7)
-                                    | ((high_bitdepth as u8) << 6)
-                                    | ((twelve_bit as u8) << 5)
-                                    | ((monochrome as u8) << 4)
-                                    | ((chroma_sub_x as u8) << 3)
-                                    | ((chroma_sub_y as u8) << 2)
-                                    | chrome_sample_position, // tier | high bitdepth | twelve bit | monochrome | chroma sub x |
-                                // chroma sub y | chroma sample position
-                                if let Some(presentation_delay_minus_one) =
-                                    presentation_delay_minus_one
+                                v.extend_from_slice(&map);
+                            }
+                            _ => {
+                                let presentation_delay_minus_one = match s
+                                    .get::<i32>("presentation-delay")
                                 {
-                                    0x10 | presentation_delay_minus_one // reserved | presentation delay present | presentation delay
-                                } else {
-                                    0
-                                },
-                            ];
+                                    Ok(presentation_delay) => Some(
+                                        (1u8 << 5)
+                                            | std::cmp::max(
+                                                0xF,
+                                                (presentation_delay.saturating_sub(1) & 0xF) as u8,
+                                            ),
+                                    ),
+                                    _ => None,
+                                };
 
-                            v.extend_from_slice(&codec_data);
+                                let profile = match s.get::<&str>("profile").unwrap() {
+                                    "main" => 0,
+                                    "high" => 1,
+                                    "professional" => 2,
+                                    _ => unreachable!(),
+                                };
+                                let level = av1_seq_level_idx(s.get::<&str>("level").ok());
+                                let tier = av1_tier(s.get::<&str>("tier").ok());
+                                let (high_bitdepth, twelve_bit) =
+                                    match s.get::<u32>("bit-depth-luma").unwrap() {
+                                        8 => (false, false),
+                                        10 => (true, false),
+                                        12 => (true, true),
+                                        _ => unreachable!(),
+                                    };
+                                let (monochrome, chroma_sub_x, chroma_sub_y) =
+                                    match s.get::<&str>("chroma-format").unwrap() {
+                                        "4:0:0" => (true, true, true),
+                                        "4:2:0" => (false, true, true),
+                                        "4:2:2" => (false, true, false),
+                                        "4:4:4" => (false, false, false),
+                                        _ => unreachable!(),
+                                    };
+
+                                let chrome_sample_position = match s.get::<&str>("chroma-site") {
+                                    Ok("v-cosited") => 1,
+                                    Ok("v-cosited+h-cosited") => 2,
+                                    _ => 0,
+                                };
+
+                                let codec_data = [
+                                    0x80 | 0x01,            // marker | version
+                                    (profile << 5) | level, // profile | level
+                                    (tier << 7)
+                                        | ((high_bitdepth as u8) << 6)
+                                        | ((twelve_bit as u8) << 5)
+                                        | ((monochrome as u8) << 4)
+                                        | ((chroma_sub_x as u8) << 3)
+                                        | ((chroma_sub_y as u8) << 2)
+                                        | chrome_sample_position, // tier | high bitdepth | twelve bit | monochrome | chroma sub x |
+                                    // chroma sub y | chroma sample position
+                                    if let Some(presentation_delay_minus_one) =
+                                        presentation_delay_minus_one
+                                    {
+                                        0x10 | presentation_delay_minus_one // reserved | presentation delay present | presentation delay
+                                    } else {
+                                        0
+                                    },
+                                ];
+
+                                v.extend_from_slice(&codec_data);
+                            }
                         }
 
                         if let Some(extra_data) = &stream.extra_header_data {

@@ -31,7 +31,7 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 });
 
 macro_rules! base_imp {
-    ($i:expr) => {
+    ($i:expr_2021) => {
         $i.obj().upcast_ref::<HlsBaseSink>().imp()
     };
 }
@@ -639,26 +639,27 @@ impl HlsSink3 {
         };
 
         let (duration, duration_msec) = {
-            if let Ok(fragment_duration) = s.get::<gst::ClockTime>("fragment-duration") {
-                (
+            match s.get::<gst::ClockTime>("fragment-duration") {
+                Ok(fragment_duration) => (
                     fragment_duration,
                     fragment_duration.mseconds() as f32 / 1_000f32,
-                )
-            } else {
-                let opened_at = match state.fragment_opened_at.take() {
-                    Some(opened_at) => opened_at,
-                    None => {
-                        gst::error!(CAT, imp = self, "Unknown segment duration");
-                        return;
-                    }
-                };
+                ),
+                _ => {
+                    let opened_at = match state.fragment_opened_at.take() {
+                        Some(opened_at) => opened_at,
+                        None => {
+                            gst::error!(CAT, imp = self, "Unknown segment duration");
+                            return;
+                        }
+                    };
 
-                let fragment_duration = closed_at - opened_at;
+                    let fragment_duration = closed_at - opened_at;
 
-                (
-                    fragment_duration,
-                    fragment_duration.mseconds() as f32 / 1_000f32,
-                )
+                    (
+                        fragment_duration,
+                        fragment_duration.mseconds() as f32 / 1_000f32,
+                    )
+                }
             }
         };
 

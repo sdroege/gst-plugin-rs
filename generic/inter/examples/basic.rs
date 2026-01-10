@@ -4,10 +4,9 @@ use futures::stream::select_all;
 use gst::prelude::*;
 
 fn toplevel(obj: &gst::Object) -> gst::Object {
-    if let Some(parent) = obj.parent() {
-        toplevel(&parent)
-    } else {
-        obj.clone()
+    match obj.parent() {
+        Some(parent) => toplevel(&parent),
+        _ => obj.clone(),
     }
 }
 

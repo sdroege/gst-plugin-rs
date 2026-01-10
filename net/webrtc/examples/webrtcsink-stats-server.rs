@@ -42,38 +42,38 @@ fn serialize_value(val: &gst::glib::Value) -> Option<serde_json::Value> {
         Type::U_LONG | Type::U64 => Some(val.get::<u64>().unwrap().into()),
         Type::F32 => Some(val.get::<f32>().unwrap().into()),
         Type::F64 => Some(val.get::<f64>().unwrap().into()),
-        _ => {
-            if let Ok(s) = val.get::<gst::Structure>() {
-                serde_json::to_value(
-                    s.iter()
-                        .filter_map(|(name, value)| {
-                            serialize_value(value).map(|value| (name.to_string(), value))
-                        })
-                        .collect::<HashMap<String, serde_json::Value>>(),
-                )
-                .ok()
-            } else if let Ok(a) = val.get::<gst::Array>() {
-                serde_json::to_value(
+        _ => match val.get::<gst::Structure>() {
+            Ok(s) => serde_json::to_value(
+                s.iter()
+                    .filter_map(|(name, value)| {
+                        serialize_value(value).map(|value| (name.to_string(), value))
+                    })
+                    .collect::<HashMap<String, serde_json::Value>>(),
+            )
+            .ok(),
+            _ => match val.get::<gst::Array>() {
+                Ok(a) => serde_json::to_value(
                     a.iter()
                         .filter_map(|value| serialize_value(value))
                         .collect::<Vec<serde_json::Value>>(),
                 )
-                .ok()
-            } else if let Some((_klass, values)) = gst::glib::FlagsValue::from_value(val) {
-                Some(
-                    values
-                        .iter()
-                        .map(|value| value.nick())
-                        .collect::<Vec<&str>>()
-                        .join("+")
-                        .into(),
-                )
-            } else if let Ok(value) = val.serialize() {
-                Some(value.as_str().into())
-            } else {
-                None
-            }
-        }
+                .ok(),
+                _ => match gst::glib::FlagsValue::from_value(val) {
+                    Some((_klass, values)) => Some(
+                        values
+                            .iter()
+                            .map(|value| value.nick())
+                            .collect::<Vec<&str>>()
+                            .join("+")
+                            .into(),
+                    ),
+                    _ => match val.serialize() {
+                        Ok(value) => Some(value.as_str().into()),
+                        _ => None,
+                    },
+                },
+            },
+        },
     }
 }
 
@@ -137,11 +137,12 @@ async fn run(args: Args) -> Result<(), Error> {
     ws.connect("encoder-setup", false, |values| {
         let encoder = values[3].get::<gst::Element>().unwrap();
 
-        let configured = if let Some(factory) = encoder.factory() {
-            info!("Encoder: {}", factory.name());
-            matches!(factory.name().as_str(), "does-not-exist")
-        } else {
-            false
+        let configured = match encoder.factory() {
+            Some(factory) => {
+                info!("Encoder: {}", factory.name());
+                matches!(factory.name().as_str(), "does-not-exist")
+            }
+            _ => false,
         };
 
         Some(configured.to_value())
@@ -154,27 +155,30 @@ async fn run(args: Args) -> Result<(), Error> {
 
         loop {
             interval.tick().await;
-            if let Some(ws) = ws_clone.upgrade() {
-                let stats = ws.property::<gst::Structure>("stats");
-                let stats = serialize_value(&stats.to_value()).unwrap();
-                debug!("Stats: {}", serde_json::to_string_pretty(&stats).unwrap());
-                let msg = WsMessage::text(serde_json::to_string(&stats).unwrap());
+            match ws_clone.upgrade() {
+                Some(ws) => {
+                    let stats = ws.property::<gst::Structure>("stats");
+                    let stats = serialize_value(&stats.to_value()).unwrap();
+                    debug!("Stats: {}", serde_json::to_string_pretty(&stats).unwrap());
+                    let msg = WsMessage::text(serde_json::to_string(&stats).unwrap());
 
-                let listeners = state_clone.lock().unwrap().listeners.clone();
+                    let listeners = state_clone.lock().unwrap().listeners.clone();
 
-                for mut listener in listeners {
-                    if listener.sender.send(msg.clone()).await.is_err() {
-                        let mut state = state_clone.lock().unwrap();
-                        let index = state
-                            .listeners
-                            .iter()
-                            .position(|l| l.id == listener.id)
-                            .unwrap();
-                        state.listeners.remove(index);
+                    for mut listener in listeners {
+                        if listener.sender.send(msg.clone()).await.is_err() {
+                            let mut state = state_clone.lock().unwrap();
+                            let index = state
+                                .listeners
+                                .iter()
+                                .position(|l| l.id == listener.id)
+                                .unwrap();
+                            state.listeners.remove(index);
+                        }
                     }
                 }
-            } else {
-                break;
+                _ => {
+                    break;
+                }
             }
         }
     });

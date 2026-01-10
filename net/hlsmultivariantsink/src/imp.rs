@@ -425,14 +425,13 @@ fn get_existing_hlssink_for_variant(
             let hlssink = hlssink_element(muxer_type, sink_name.clone());
             (false, sink_name, hlssink)
         }
-        HlsMultivariantSinkMuxerType::MpegTs => {
-            if let Some(hlssink) = elem.obj().by_name(&sink_name) {
-                (true, sink_name, hlssink)
-            } else {
+        HlsMultivariantSinkMuxerType::MpegTs => match elem.obj().by_name(&sink_name) {
+            Some(hlssink) => (true, sink_name, hlssink),
+            _ => {
                 let hlssink = hlssink_element(muxer_type, sink_name.clone());
                 (false, sink_name, hlssink)
             }
-        }
+        },
     }
 }
 

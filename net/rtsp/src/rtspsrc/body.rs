@@ -93,11 +93,9 @@ impl Clone for Body {
 impl fmt::Debug for Inner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Inner::Vec(ref vec) => f.debug_tuple("Vec").field(&vec).finish(),
-            Inner::Custom(ref custom) => {
-                f.debug_tuple("Custom").field(&(**custom).as_ref()).finish()
-            }
-            Inner::Buffer(ref mapped) => mapped.fmt(f),
+            Inner::Vec(vec) => f.debug_tuple("Vec").field(&vec).finish(),
+            Inner::Custom(custom) => f.debug_tuple("Custom").field(&(**custom).as_ref()).finish(),
+            Inner::Buffer(mapped) => mapped.fmt(f),
         }
     }
 }

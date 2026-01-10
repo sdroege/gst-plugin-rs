@@ -91,10 +91,10 @@ impl MediaFormat {
     pub(super) fn ice_audio_info(&self) -> Option<String> {
         match self {
             MediaFormat::None => None,
-            MediaFormat::Mpeg1Audio(ref audio_info)
-            | MediaFormat::AacAudio(ref audio_info)
-            | MediaFormat::FlacAudio(ref audio_info, ..)
-            | MediaFormat::OggAudio(ref audio_info, ..) => Some(format!(
+            MediaFormat::Mpeg1Audio(audio_info)
+            | MediaFormat::AacAudio(audio_info)
+            | MediaFormat::FlacAudio(audio_info, ..)
+            | MediaFormat::OggAudio(audio_info, ..) => Some(format!(
                 "channels={};samplerate={}",
                 audio_info.channels, audio_info.rate
             )),
@@ -106,8 +106,8 @@ impl MediaFormat {
             MediaFormat::None => vec![],
             MediaFormat::Mpeg1Audio(..) => vec![],
             MediaFormat::AacAudio(..) => vec![],
-            MediaFormat::FlacAudio(_, ref stream_headers) => stream_headers.clone(),
-            MediaFormat::OggAudio(_, _, ref stream_headers) => stream_headers.clone(),
+            MediaFormat::FlacAudio(_, stream_headers) => stream_headers.clone(),
+            MediaFormat::OggAudio(_, _, stream_headers) => stream_headers.clone(),
         }
     }
 }
