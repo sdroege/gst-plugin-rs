@@ -1,5 +1,5 @@
 macro_rules! debug_or_trace {
-    ($cat:expr_2021, $raise_log_level:expr_2021, $qual:ident = $obj:expr_2021, $rest:tt $(,)?) => {
+    ($cat:expr, $raise_log_level:expr, $qual:ident = $obj:expr, $rest:tt $(,)?) => {
         if $raise_log_level {
             gst::debug!($cat, $qual = $obj, $rest);
         } else {
@@ -9,7 +9,7 @@ macro_rules! debug_or_trace {
 }
 
 macro_rules! log_or_trace {
-    ($cat:expr_2021, $raise_log_level:expr_2021, $qual:ident = $obj:expr_2021, $rest:tt $(,)?) => {
+    ($cat:expr, $raise_log_level:expr, $qual:ident = $obj:expr, $rest:tt $(,)?) => {
         if $raise_log_level {
             gst::log!($cat, $qual = $obj, $rest);
         } else {

@@ -972,7 +972,7 @@ struct StateMachine<Task: TaskImpl> {
 }
 
 macro_rules! exec_action {
-    ($self:ident, $action:ident, $triggering_evt:expr_2021, $origin:expr_2021, $task_inner:expr_2021) => {{
+    ($self:ident, $action:ident, $triggering_evt:expr, $origin:expr, $task_inner:expr) => {{
         match $self.task_impl.$action().await {
             Ok(()) => Ok($triggering_evt),
             Err(err) => {
