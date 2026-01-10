@@ -147,7 +147,7 @@ lto = "off"
 [workspace.package]
 version = "0.15.0-alpha.1"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-edition = "2021"
+edition = "2024"
 rust-version = "1.92"
 
 [workspace.dependencies]

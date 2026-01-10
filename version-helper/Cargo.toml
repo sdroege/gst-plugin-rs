@@ -9,7 +9,7 @@ repository.workspace = true
 license = "MIT"
 homepage = "https://gstreamer.freedesktop.org"
 keywords = ["gstreamer", "multimedia", "cargo"]
-edition.workspace = true
+edition = "2021"
 rust-version = "1.69"
 
 [dependencies]
