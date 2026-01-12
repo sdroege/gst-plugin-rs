@@ -1272,7 +1272,7 @@ impl MP4Mux {
                 {
                     gst::trace!(
                         CAT,
-                        imp = self,
+                        obj = stream.sinkpad,
                         "got TAI ReferenceTimestampMeta on the buffer"
                     );
                     let mut timestamp_packet = Vec::<u8>::with_capacity(9);
@@ -1285,7 +1285,7 @@ impl MP4Mux {
                     {
                         gst::trace!(
                             CAT,
-                            imp = self,
+                            obj = stream.sinkpad,
                             "synchronized to atomic source: {:?}",
                             synced
                         );
@@ -1295,7 +1295,7 @@ impl MP4Mux {
                     } else {
                         gst::info!(
                             CAT,
-                            imp = self,
+                            obj = stream.sinkpad,
                             "TAI ReferenceTimestampMeta did not contain expected synchronisation state, assuming not synchronised"
                         );
                     }
@@ -1304,7 +1304,7 @@ impl MP4Mux {
                     {
                         gst::trace!(
                             CAT,
-                            imp = self,
+                            obj = stream.sinkpad,
                             "timestamp generation failure: {:?}",
                             generation_failure
                         );
@@ -1314,13 +1314,13 @@ impl MP4Mux {
                     } else if meta.timestamp().nseconds() > stream.last_tai_timestamp {
                         gst::info!(
                             CAT,
-                            imp = self,
+                            obj = stream.sinkpad,
                             "TAI ReferenceTimestampMeta did not contain expected generation failure flag, timestamp looks OK, assuming OK"
                         );
                     } else {
                         gst::warning!(
                             CAT,
-                            imp = self,
+                            obj = stream.sinkpad,
                             "TAI ReferenceTimestampMeta did not contain expected generation failure flag and unexpected timestamp value, assuming generation failure"
                         );
                         timestamp_packet_flags |= 0x40u8;
@@ -1330,7 +1330,7 @@ impl MP4Mux {
                     {
                         gst::trace!(
                             CAT,
-                            imp = self,
+                            obj = stream.sinkpad,
                             "timestamp is modified: {:?}",
                             timestamp_is_modified
                         );
@@ -1340,7 +1340,7 @@ impl MP4Mux {
                     } else {
                         gst::info!(
                             CAT,
-                            imp = self,
+                            obj = stream.sinkpad,
                             "TAI ReferenceTimestampMeta did not contain expected modification state value, assuming not modified"
                         );
                     }
