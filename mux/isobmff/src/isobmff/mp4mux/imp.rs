@@ -220,6 +220,10 @@ struct Stream {
 
     /// Information needed for creating `chnl` box
     chnl_layout_info: Option<ChnlLayoutInfo>,
+
+    #[cfg(feature = "v1_28")]
+    /// The last TAI timestamp value, in nanoseconds after epoch
+    last_tai_timestamp: u64,
 }
 
 impl Stream {
@@ -392,10 +396,6 @@ struct State {
 
     /// Size of the `mdat` as written so far.
     mdat_size: u64,
-
-    #[cfg(feature = "v1_28")]
-    /// The last TAI timestamp value, in nanoseconds after epoch
-    last_tai_timestamp: u64,
 }
 
 impl State {
@@ -1277,7 +1277,7 @@ impl MP4Mux {
                     );
                     let mut timestamp_packet = Vec::<u8>::with_capacity(9);
                     timestamp_packet.extend(meta.timestamp().nseconds().to_be_bytes());
-                    state.last_tai_timestamp = meta.timestamp().nseconds();
+                    stream.last_tai_timestamp = meta.timestamp().nseconds();
                     let iso23001_17_timestamp_info = meta.info().unwrap(); // checked in filter
                     let mut timestamp_packet_flags = 0u8;
                     if let Ok(synced) =
@@ -1311,7 +1311,7 @@ impl MP4Mux {
                         if generation_failure {
                             timestamp_packet_flags |= 0x40u8;
                         }
-                    } else if meta.timestamp().nseconds() > state.last_tai_timestamp {
+                    } else if meta.timestamp().nseconds() > stream.last_tai_timestamp {
                         gst::info!(
                             CAT,
                             imp = self,
@@ -1357,11 +1357,18 @@ impl MP4Mux {
                     // generate a failure packet, because we always need aux info for a sample
                     let mut timestamp_packet = Vec::<u8>::with_capacity(9);
                     // The timestamp must monotonically increase
-                    let timestamp = state.last_tai_timestamp + 1;
+                    let timestamp = stream.last_tai_timestamp + 1;
                     timestamp_packet.extend(timestamp.to_be_bytes());
-                    state.last_tai_timestamp = timestamp;
+                    stream.last_tai_timestamp = timestamp;
                     let flags = 0x40u8; // not sync'd | generation failure | not modified,
                     timestamp_packet.extend(flags.to_be_bytes());
+
+                    gst::log!(
+                        CAT,
+                        obj = stream.sinkpad,
+                        "Buffer did not contain TAI ReferenceTimestampMeta, falling back to timestamp {}",
+                        timestamp
+                    );
 
                     stream
                         .pending_aux_info_data
@@ -1752,6 +1759,8 @@ impl MP4Mux {
                 aux_info: BTreeMap::new(),
                 pending_aux_info_data: HashMap::new(),
                 chnl_layout_info,
+                #[cfg(feature = "v1_28")]
+                last_tai_timestamp: 0,
             });
         }
 
