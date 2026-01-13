@@ -887,14 +887,16 @@ impl SignallableImpl for Signaller {
                 ),
             );
 
-            imp.obj().emit_by_name::<()>(
-                "session-requested",
-                &[
-                    &"unique",
-                    &"unique",
-                    &None::<gst_webrtc::WebRTCSessionDescription>,
-                ],
-            );
+            if imp.role() == Some(WebRTCSignallerRole::Producer) {
+                imp.obj().emit_by_name::<()>(
+                    "session-requested",
+                    &[
+                        &"unique",
+                        &"unique",
+                        &None::<gst_webrtc::WebRTCSessionDescription>,
+                    ],
+                );
+            }
         });
     }
 
