@@ -413,6 +413,9 @@ coverage:
     - mkdir -p coverage
     - grcov . --binary-path ./target/debug/ -s . -t html,cobertura --branch --ignore-not-existing --ignore "*target*" --ignore "*/build.rs" -o ./coverage/
     # output coverage summary for gitlab parsing.
+    # Remove the XML file that gitlab parses for now, because it's too large
+    # for gitlab (see below)
+    - rm coverage/cobertura.xml
     # TODO: use grcov once https://github.com/mozilla/grcov/issues/556 is fixed
     - grep "%" coverage/html/index.html | head -1 || true
   artifacts:
@@ -420,9 +423,12 @@ coverage:
       - 'coverage'
     reports:
       junit: "junit_reports/*.xml"
-      coverage_report:
-        coverage_format: cobertura
-        path: "coverage/cobertura.xml"
+      # Disable this for now, cobertura.xml is way too large (693 MB) and needs
+      # to be split and pruned for gitlab to be able to process it within the
+      # RAM available to the gitlab background worker jobs.
+      #coverage_report:
+      #  coverage_format: cobertura
+      #  path: "coverage/cobertura.xml"
 
 cerbero trigger:
   image: python:alpine
