@@ -1603,10 +1603,28 @@ fn test_encode_uncompressed_audio(audio_format: &str, rate: u16, channels: u16) 
         .set_state(gst::State::Null)
         .expect("Unable to set the pipeline to the `Null` state");
 
-    test_expected_uncompressed_audio_output(location, rate, channels);
+    let sample_size: u16 = match audio_format {
+        "F32LE" => 32,
+        "F64LE" => 64,
+        "S16LE" => 16,
+        "S24LE" => 24,
+        "S32LE" => 32,
+        _ => unimplemented!(),
+    };
+    test_expected_uncompressed_audio_output(location, rate, channels, sample_size);
 }
 
-fn test_expected_uncompressed_audio_output(location: &Path, rate: u16, channels: u16) {
+fn test_expected_uncompressed_audio_output(
+    location: &Path,
+    rate: u16,
+    channels: u16,
+    sample_size: u16,
+) {
+    let layout = match channels {
+        2 => 2,
+        8 => 12,
+        _ => unimplemented!(),
+    };
     check_generic_single_trak_file_structure(
         location,
         b"iso4".into(),
@@ -1616,6 +1634,8 @@ fn test_expected_uncompressed_audio_output(location: &Path, rate: u16, channels:
             is_audio: true,
             audio_channel_count: channels,
             audio_sample_rate: rate.into(),
+            audio_sample_size: sample_size,
+            audio_channel_layout: layout,
             ..Default::default()
         },
     );

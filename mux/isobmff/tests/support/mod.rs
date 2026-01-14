@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: MPL-2.0
 //
 
+use mp4_atom::ChannelStructure;
+
 pub struct ExpectedConfiguration {
     pub is_audio: bool,
     pub width: u32,
@@ -23,6 +25,7 @@ pub struct ExpectedConfiguration {
     pub audio_sample_size: u16,
     pub codecs_len: u32,
     pub codecs: Vec<mp4_atom::Codec>,
+    pub audio_channel_layout: u8,
 }
 
 impl Default for ExpectedConfiguration {
@@ -43,6 +46,7 @@ impl Default for ExpectedConfiguration {
             audio_sample_size: 0,
             codecs_len: 1,
             codecs: Vec::new(),
+            audio_channel_layout: 2,
         }
     }
 }
@@ -337,14 +341,48 @@ fn check_stsd_sanity(stsd: &mp4_atom::Stsd, expected_config: &ExpectedConfigurat
             mp4_atom::Codec::Eac3(eac3) => {
                 check_eac3_codec_sanity(eac3, expected_config);
             }
+            mp4_atom::Codec::Ipcm(ipcm) => {
+                check_audio_sample_entry_sanity(&ipcm.audio, expected_config);
+                check_pcmc_sanity(&ipcm.pcmc, expected_config);
+                assert!(ipcm.btrt.is_none());
+                assert!(ipcm.chnl.is_some());
+                let chnl = ipcm.chnl.as_ref().unwrap();
+                check_audio_channel_sanity(chnl, expected_config);
+            }
+            mp4_atom::Codec::Fpcm(fpcm) => {
+                check_audio_sample_entry_sanity(&fpcm.audio, expected_config);
+                check_pcmc_sanity(&fpcm.pcmc, expected_config);
+                assert!(fpcm.btrt.is_none());
+                assert!(fpcm.chnl.is_some());
+                let chnl = fpcm.chnl.as_ref().unwrap();
+                check_audio_channel_sanity(chnl, expected_config);
+            }
+            mp4_atom::Codec::Sowt(_sowt) => {
+                todo!("Unsupported codec type: sowt");
+            }
+            mp4_atom::Codec::Twos(_twos) => {
+                todo!("Unsupported codec type: twos");
+            }
+            mp4_atom::Codec::Lpcm(_lpcm) => {
+                todo!("Unsupported codec type: lpcm");
+            }
+            mp4_atom::Codec::In24(_in24) => {
+                todo!("Unsupported codec type: in24");
+            }
+            mp4_atom::Codec::In32(_in32) => {
+                todo!("Unsupported codec type: in32");
+            }
+            mp4_atom::Codec::Fl32(_fl32) => {
+                todo!("Unsupported codec type: fl32");
+            }
+            mp4_atom::Codec::Fl64(_fl64) => {
+                todo!("Unsupported codec type: fl64");
+            }
+            mp4_atom::Codec::S16l(_s16l) => {
+                todo!("Unsupported codec type: s16l");
+            }
             mp4_atom::Codec::Unknown(four_cc) => {
-                let ipcm = mp4_atom::FourCC::new(b"ipcm");
-                let fpcm = mp4_atom::FourCC::new(b"fpcm");
-                if expected_config.is_audio && (*four_cc == ipcm || *four_cc == fpcm) {
-                    // Do nothing for now, mp4-atom does not support these yet.
-                } else {
-                    todo!("Unsupported codec type: {:?}", four_cc);
-                }
+                todo!("Unsupported codec type: {:?}", four_cc);
             }
         }
     }
@@ -377,6 +415,27 @@ fn check_stsd_sanity(stsd: &mp4_atom::Stsd, expected_config: &ExpectedConfigurat
             }
         }
     }
+}
+
+fn check_pcmc_sanity(pcmc: &mp4_atom::PcmC, expected_config: &ExpectedConfiguration) {
+    assert!(!pcmc.big_endian);
+    assert_eq!(pcmc.sample_size, expected_config.audio_sample_size as u8);
+}
+
+fn check_audio_channel_sanity(chnl: &mp4_atom::Chnl, expected_config: &ExpectedConfiguration) {
+    assert!(chnl.base_channel_count.is_none());
+    assert!(chnl.channel_structure.is_some());
+    let channel_structure = chnl.channel_structure.as_ref().unwrap();
+    assert_eq!(
+        *channel_structure,
+        ChannelStructure::DefinedLayout {
+            layout: expected_config.audio_channel_layout,
+            omitted_channels_map: Some(0),
+            channel_order_definition: None
+        }
+    );
+    assert!(chnl.format_ordering.is_none());
+    assert!(chnl.object_count.is_none());
 }
 
 fn check_flac_codec_sanity(flac: &mp4_atom::Flac, expected_config: &ExpectedConfiguration) {
