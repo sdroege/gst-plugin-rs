@@ -171,7 +171,8 @@ struct TranscriptionConfig {
     max_delay: f32,
     additional_vocab: Vec<Vocable>,
     diarization: Diarization,
-    speaker_diarization_config: SpeakerDiarizationConfig,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    speaker_diarization_config: Option<SpeakerDiarizationConfig>,
     transcript_filtering_config: TranscriptFilteringConfig,
 }
 
@@ -1452,6 +1453,14 @@ impl Transcriber {
                 settings.max_delay_ms as f32 / 1000.
             };
 
+            let speaker_diarization_config = match settings.diarization {
+                SpeechmaticsTranscriberDiarization::None => None,
+                SpeechmaticsTranscriberDiarization::Speaker => Some(SpeakerDiarizationConfig {
+                    max_speakers: settings.max_speakers,
+                    speakers: state.labeled_speakers.clone(),
+                }),
+            };
+
             let start_message = StartRecognition {
                 message: "StartRecognition".to_string(),
                 audio_format: AudioType {
@@ -1468,10 +1477,7 @@ impl Transcriber {
                     max_delay,
                     additional_vocab: state.additional_vocabulary.clone(),
                     diarization: settings.diarization.into(),
-                    speaker_diarization_config: SpeakerDiarizationConfig {
-                        max_speakers: settings.max_speakers,
-                        speakers: state.labeled_speakers.clone(),
-                    },
+                    speaker_diarization_config,
                     transcript_filtering_config: TranscriptFilteringConfig {
                         remove_disfluencies: settings.remove_disfluencies,
                     },
