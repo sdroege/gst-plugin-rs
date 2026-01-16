@@ -14,9 +14,8 @@ use crate::isobmff::{CAT, ChnlLayoutInfo, Chunk, Variant, ac3, eac3};
 use crate::isobmff::{
     PresentationConfiguration, TrackConfiguration, transform_matrix::IDENTITY_MATRIX,
 };
-use anyhow::{Context, Error, anyhow, bail};
+use anyhow::{Context, Error, bail};
 use gst::prelude::MulDiv;
-use std::str::FromStr;
 
 pub(crate) const FULL_BOX_VERSION_0: u8 = 0;
 pub(crate) const FULL_BOX_VERSION_1: u8 = 1;
@@ -1542,25 +1541,40 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                     })?;
                 }
                 "video/x-vp8" | "video/x-vp9" => {
-                    let profile: u8 = match s.get::<&str>("profile").expect("no vpX profile") {
-                        "0" => Some(0),
-                        "1" => Some(1),
-                        "2" => Some(2),
-                        "3" => Some(3),
-                        _ => None,
+                    #[cfg(feature = "v1_30")]
+                    {
+                        let vpcc =
+                            gst_pbutils::codec_utils_vpx_create_vpcc_from_caps(&caps.to_owned())
+                                .context("failed to create vpcC from caps")?;
+                        let map = vpcc.map_readable().context("vpcC not mappable")?;
+                        write_box(v, b"vpcC", move |v| {
+                            v.extend_from_slice(&map);
+                            Ok(())
+                        })?;
                     }
-                    .context("unsupported vpX profile")?;
+                    #[cfg(not(feature = "v1_30"))]
+                    {
+                        use anyhow::anyhow;
+                        use std::str::FromStr;
 
-                    let colorimetry = gst_video::VideoColorimetry::from_str(
-                        s.get::<&str>("colorimetry").expect("no colorimetry"),
-                    )
-                    .context("failed to parse colorimetry")?;
+                        let profile: u8 = match s.get::<&str>("profile").expect("no vpX profile") {
+                            "0" => Some(0),
+                            "1" => Some(1),
+                            "2" => Some(2),
+                            "3" => Some(3),
+                            _ => None,
+                        }
+                        .context("unsupported vpX profile")?;
 
-                    let video_full_range =
-                        colorimetry.range() == gst_video::VideoColorRange::Range0_255;
+                        let colorimetry = gst_video::VideoColorimetry::from_str(
+                            s.get::<&str>("colorimetry").expect("no colorimetry"),
+                        )
+                        .context("failed to parse colorimetry")?;
 
-                    let chroma_format: u8 =
-                        if s.name() == "video/x-vp8" {
+                        let video_full_range =
+                            colorimetry.range() == gst_video::VideoColorRange::Range0_255;
+
+                        let chroma_format: u8 = if s.name() == "video/x-vp8" {
                             // VP8 only supports a profile value of 0
                             // which is chroma-format 4:2:0 and 8-bits
                             // per sample.
@@ -1585,46 +1599,47 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                             .context("unsupported chroma-format")?
                         };
 
-                    let bit_depth: u8 = {
-                        if s.name() == "video/x-vp8" {
-                            // VP8 only supports a profile value of 0
-                            // which is chroma-format 4:2:0 and 8-bits
-                            // per sample.
-                            8
-                        } else {
-                            let bit_depth_luma =
-                                s.get::<u32>("bit-depth-luma").expect("no bit-depth-luma");
-                            let bit_depth_chroma = s
-                                .get::<u32>("bit-depth-chroma")
-                                .expect("no bit-depth-chroma");
+                        let bit_depth: u8 = {
+                            if s.name() == "video/x-vp8" {
+                                // VP8 only supports a profile value of 0
+                                // which is chroma-format 4:2:0 and 8-bits
+                                // per sample.
+                                8
+                            } else {
+                                let bit_depth_luma =
+                                    s.get::<u32>("bit-depth-luma").expect("no bit-depth-luma");
+                                let bit_depth_chroma = s
+                                    .get::<u32>("bit-depth-chroma")
+                                    .expect("no bit-depth-chroma");
 
-                            if bit_depth_luma != bit_depth_chroma {
-                                return Err(anyhow!(
-                                    "bit-depth-luma and bit-depth-chroma have different values which is an unsupported configuration"
-                                ));
+                                if bit_depth_luma != bit_depth_chroma {
+                                    return Err(anyhow!(
+                                        "bit-depth-luma and bit-depth-chroma have different values which is an unsupported configuration"
+                                    ));
+                                }
+
+                                bit_depth_luma as u8
                             }
+                        };
 
-                            bit_depth_luma as u8
-                        }
-                    };
-
-                    write_full_box(v, b"vpcC", 1, 0, move |v| {
-                        v.push(profile);
-                        // XXX: hardcoded level 1
-                        v.push(10);
-                        let mut byte: u8 = 0;
-                        byte |= (bit_depth & 0xF) << 4;
-                        byte |= (chroma_format & 0x7) << 1;
-                        byte |= video_full_range as u8;
-                        v.push(byte);
-                        v.push(colorimetry.primaries().to_iso() as u8);
-                        v.push(colorimetry.transfer().to_iso() as u8);
-                        v.push(colorimetry.matrix().to_iso() as u8);
-                        // 16-bit length field for codec initialization, unused
-                        v.push(0);
-                        v.push(0);
-                        Ok(())
-                    })?;
+                        write_full_box(v, b"vpcC", 1, 0, move |v| {
+                            v.push(profile);
+                            // XXX: hardcoded level 1
+                            v.push(10);
+                            let mut byte: u8 = 0;
+                            byte |= (bit_depth & 0xF) << 4;
+                            byte |= (chroma_format & 0x7) << 1;
+                            byte |= video_full_range as u8;
+                            v.push(byte);
+                            v.push(colorimetry.primaries().to_iso() as u8);
+                            v.push(colorimetry.transfer().to_iso() as u8);
+                            v.push(colorimetry.matrix().to_iso() as u8);
+                            // 16-bit length field for codec initialization, unused
+                            v.push(0);
+                            v.push(0);
+                            Ok(())
+                        })?;
+                    }
                 }
                 "video/x-av1" => {
                     write_box(v, b"av1C", move |v| {
