@@ -29,8 +29,10 @@ mod yoloxinference;
 #[repr(C)]
 #[enum_type(name = "GstBurnBackendType")]
 pub enum BackendType {
-    #[default]
+    #[cfg(feature = "ndarray")]
     NdArray,
+    #[default]
+    Cpu,
     #[cfg(feature = "vulkan")]
     Vulkan,
 }

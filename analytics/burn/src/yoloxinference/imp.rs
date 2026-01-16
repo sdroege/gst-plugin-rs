@@ -484,9 +484,14 @@ impl Model {
 
     fn load_model(settings: &Settings) -> Result<Self, anyhow::Error> {
         let (model, num_classes) = match settings.backend_type {
+            #[cfg(feature = "ndarray")]
             BackendType::NdArray => {
                 let device = Device::<backend::NdArray>::default();
                 Self::load_model_internal::<backend::NdArray>(device, settings)?
+            }
+            BackendType::Cpu => {
+                let device = Device::<backend::Cpu>::default();
+                Self::load_model_internal::<backend::Cpu>(device, settings)?
             }
             #[cfg(feature = "vulkan")]
             BackendType::Vulkan => {

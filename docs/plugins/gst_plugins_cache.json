@@ -2533,7 +2533,7 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "nd-array (0)",
+                        "default": "cpu (0)",
                         "mutable": "ready",
                         "readable": true,
                         "type": "GstBurnBackendType",
@@ -2616,8 +2616,8 @@
                 "kind": "enum",
                 "values": [
                     {
-                        "desc": "NdArray",
-                        "name": "nd-array",
+                        "desc": "Cpu",
+                        "name": "cpu",
                         "value": "0"
                     }
                 ]
