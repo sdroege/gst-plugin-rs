@@ -1,5 +1,5 @@
 mod blocks;
-pub(crate) mod bottleneck;
+mod bottleneck;
 pub mod boxes;
 mod darknet;
 mod head;

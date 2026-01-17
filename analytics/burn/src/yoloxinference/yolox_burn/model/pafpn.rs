@@ -7,7 +7,6 @@ use burn::{
         ops::{InterpolateMode, InterpolateOptions},
     },
 };
-use std::vec;
 
 use super::{
     blocks::{BaseConv, BaseConvConfig, Conv, ConvConfig, expand},

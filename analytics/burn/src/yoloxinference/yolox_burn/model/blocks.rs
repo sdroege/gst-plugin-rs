@@ -7,7 +7,6 @@ use burn::{
     },
     tensor::{Device, Tensor, activation::silu, backend::Backend},
 };
-use std::vec;
 
 /// Compute the number of channels based on the provided factor.
 pub fn expand(num_channels: usize, factor: f64) -> usize {
@@ -18,6 +17,7 @@ pub fn expand(num_channels: usize, factor: f64) -> usize {
 /// Allows to switch between regular and depthwise separable convolution blocks based on the
 /// architecture.
 #[derive(Module, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum Conv<B: Backend> {
     /// Basic convolution block used for all variants.
     BaseConv(BaseConv<B>),

@@ -41,8 +41,6 @@ use crate::BackendType;
 
 use burn::{
     backend,
-    module::{ConstantRecord, Module},
-    record::{FullPrecisionSettings, Recorder, RecorderError},
     tensor::{Device, Tensor, TensorData, backend::Backend},
 };
 
@@ -600,78 +598,64 @@ impl Model {
             }
             Some(ref path) => {
                 fn load_weights<B: Backend>(
+                    model: &mut yolox::Yolox<B>,
                     path: &Path,
-                    device: &Device<B>,
-                ) -> Result<yolox::YoloxRecord<B>, RecorderError> {
-                    use burn_import::pytorch::{LoadArgs, PyTorchFileRecorder};
+                ) -> Result<(), burn_store::PytorchStoreError> {
+                    use burn_store::{ModuleSnapshot, PytorchStore};
 
                     // Load weights from torch state_dict
-                    let load_args = LoadArgs::new(path.into())
+                    let mut store = PytorchStore::from_file(path)
                         // State dict contains "model", "amp", "optimizer", "start_epoch"
                         .with_top_level_key("model")
                         // Map backbone.C3_* -> backbone.c3_*
-                        .with_key_remap("backbone\\.C3_(.+)", "backbone.c3_$1")
+                        .with_key_remapping("backbone\\.C3_(.+)", "backbone.c3_$1")
                         // Map backbone.backbone.dark[i].0.* -> backbone.backbone.dark[i].conv.*
-                        .with_key_remap(
+                        .with_key_remapping(
                             "(backbone\\.backbone\\.dark[2-5])\\.0\\.(.+)",
                             "$1.conv.$2",
                         )
                         // Map backbone.backbone.dark[i].1.* -> backbone.backbone.dark[i].c3.*
-                        .with_key_remap("(backbone\\.backbone\\.dark[2-4])\\.1\\.(.+)", "$1.c3.$2")
+                        .with_key_remapping(
+                            "(backbone\\.backbone\\.dark[2-4])\\.1\\.(.+)",
+                            "$1.c3.$2",
+                        )
                         // Map backbone.backbone.dark5.1.* -> backbone.backbone.dark5.spp.*
-                        .with_key_remap("(backbone\\.backbone\\.dark5)\\.1\\.(.+)", "$1.spp.$2")
+                        .with_key_remapping("(backbone\\.backbone\\.dark5)\\.1\\.(.+)", "$1.spp.$2")
                         // Map backbone.backbone.dark5.2.* -> backbone.backbone.dark5.c3.*
-                        .with_key_remap("(backbone\\.backbone\\.dark5)\\.2\\.(.+)", "$1.c3.$2")
+                        .with_key_remapping("(backbone\\.backbone\\.dark5)\\.2\\.(.+)", "$1.c3.$2")
                         // Map head.{cls | reg}_convs.x.[i].* -> head.{cls | reg}_convs.x.conv[i].*
-                        .with_key_remap(
+                        .with_key_remapping(
                             "(head\\.(cls|reg)_convs\\.[0-9]+)\\.([0-9]+)\\.(.+)",
                             "$1.conv$3.$4",
                         );
 
-                    let mut record: yolox::YoloxRecord<B> =
-                        PyTorchFileRecorder::<FullPrecisionSettings>::new()
-                            .load(load_args, device)?;
+                    model.load_from(&mut store)?;
 
-                    if let Some(ref mut spp) = record.backbone.backbone.dark5.spp {
-                        // Handle the initialization for Vec<MaxPool2d>, which has no parameters.
-                        // Without this, the vector would be initialized as empty and thus no MaxPool2d
-                        // layers would be applied, which is incorrect.
-                        if spp.m.is_empty() {
-                            spp.m = vec![ConstantRecord; crate::yoloxinference::yolox_burn::model::bottleneck::SPP_POOLING.len()];
-                        }
-                    }
-
-                    Ok(record)
+                    Ok(())
                 }
 
-                let record = load_weights::<B>(path, &device).context("Failed to load weights")?;
-
-                let model = match settings.model_type {
+                let mut model = match settings.model_type {
                     ModelType::Nano => {
                         yolox::Yolox::yolox_nano(settings.num_classes as usize, &device)
-                            .load_record(record)
                     }
                     ModelType::Tiny => {
                         yolox::Yolox::yolox_tiny(settings.num_classes as usize, &device)
-                            .load_record(record)
                     }
                     ModelType::Small => {
                         yolox::Yolox::yolox_s(settings.num_classes as usize, &device)
-                            .load_record(record)
                     }
                     ModelType::Medium => {
                         yolox::Yolox::yolox_m(settings.num_classes as usize, &device)
-                            .load_record(record)
                     }
                     ModelType::Large => {
                         yolox::Yolox::yolox_l(settings.num_classes as usize, &device)
-                            .load_record(record)
                     }
                     ModelType::ExtraLarge => {
                         yolox::Yolox::yolox_x(settings.num_classes as usize, &device)
-                            .load_record(record)
                     }
                 };
+
+                load_weights::<B>(&mut model, path).context("Failed to load weights")?;
 
                 (model, settings.num_classes)
             }

@@ -12,7 +12,6 @@ use gst::prelude::*;
 pub mod imp;
 #[allow(unused)]
 #[allow(clippy::unused_enumerate_index)]
-#[allow(clippy::large_enum_variant)]
 mod yolox_burn;
 
 /**

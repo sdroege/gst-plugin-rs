@@ -3,7 +3,6 @@ use burn::{
     nn::pool::{MaxPool2d, MaxPool2dConfig},
     tensor::{Device, Tensor, backend::Backend},
 };
-use std::{vec, vec::Vec};
 
 use super::blocks::{BaseConv, BaseConvConfig, Conv, ConvConfig, expand};
 

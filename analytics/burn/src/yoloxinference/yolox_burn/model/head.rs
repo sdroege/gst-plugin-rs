@@ -7,7 +7,6 @@ use burn::{
     tensor::{Device, Int, Shape, Tensor, activation::sigmoid, backend::Backend},
 };
 use itertools::{izip, multiunzip};
-use std::{vec, vec::Vec};
 
 use super::{
     blocks::{BaseConv, BaseConvConfig, ConvBlock, ConvBlockConfig, expand},

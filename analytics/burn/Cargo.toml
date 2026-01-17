@@ -15,7 +15,7 @@ gst-base = { workspace = true, features = ["v1_28"] }
 gst-analytics = { workspace = true, features = ["v1_28"] }
 gst-video = { workspace = true, features = ["v1_28"] }
 burn = { version = "0.20", default-features = false, features = ["cpu"] }
-burn-import = { version = "0.20", default-features = false, features = ["pytorch"] }
+burn-store = { version = "0.20", default-features = false, features = ["std", "pytorch"] }
 dirs = { version = "6", optional = true }
 serde = { version = "1.0.192", default-features = false, features = ["derive", "alloc"] }
 byte-slice-cast = "1"
