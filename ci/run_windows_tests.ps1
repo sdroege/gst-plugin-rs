@@ -36,6 +36,9 @@ function Run-Tests {
     if (($Features -eq '--all-features') -or ($Features -eq '')) {
         $local_exclude += @("--exclude", "gst-plugin-gtk4")
     }
+    if ($Features -eq '--no-default-features') {
+        $local_exclude += @("--exclude", "gst-plugin-burn")
+    }
 
     Write-Host "Features: $Features"
     Write-Host "Exclude string: $local_exclude"

@@ -16,7 +16,7 @@ parent="${CI_PROJECT_DIR:-$(pwd)}"
 new_report_dir="$parent/junit_reports"
 mkdir -p "$new_report_dir"
 
-for cfg in "",default "--all-features --exclude gst-plugin-gtk4",all "--no-default-features",no-default; do
+for cfg in "",default "--all-features --exclude gst-plugin-gtk4",all "--no-default-features --exclude gst-plugin-burn",no-default; do
     IFS="," read cfg junit <<< "${cfg}"
 
     echo "Building and testing with $cfg"

@@ -29,12 +29,15 @@ mod yoloxinference;
 #[repr(C)]
 #[enum_type(name = "GstBurnBackendType")]
 pub enum BackendType {
+    #[cfg_attr(not(feature = "cpu"), default)]
     #[cfg(feature = "ndarray")]
-    NdArray,
-    #[default]
-    Cpu,
+    NdArray = 0,
+    #[cfg_attr(feature = "cpu", default)]
+    #[cfg(feature = "cpu")]
+    Cpu = 1,
+    #[cfg_attr(not(any(feature = "cpu", feature = "ndarray")), default)]
     #[cfg(feature = "vulkan")]
-    Vulkan,
+    Vulkan = 2,
 }
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

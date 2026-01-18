@@ -487,6 +487,7 @@ impl Model {
                 let device = Device::<backend::NdArray>::default();
                 Self::load_model_internal::<backend::NdArray>(device, settings)?
             }
+            #[cfg(feature = "cpu")]
             BackendType::Cpu => {
                 let device = Device::<backend::Cpu>::default();
                 Self::load_model_internal::<backend::Cpu>(device, settings)?
