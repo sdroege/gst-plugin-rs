@@ -13,19 +13,19 @@ gtk.workspace = true
 gdk-wayland = { workspace = true, optional = true}
 gdk-x11 = { workspace = true, optional = true}
 
-gst = { workspace = true, features = ["v1_16"] }
+gst = { workspace = true, features = ["v1_18"] }
 gst-base.workspace = true
-gst-video.workspace = true
-gst-gl = { workspace = true, features = ["v1_16"] }
+gst-video = { workspace = true, features = ["v1_18"] }
+gst-gl = { workspace = true, features = ["v1_18"] }
 gst-allocators = { workspace = true, features = ["v1_24"], optional = true }
 
-gst-gl-wayland = { workspace = true, features = ["v1_16"], optional = true }
-gst-gl-x11 = { workspace = true, features = ["v1_16"], optional = true }
-gst-gl-egl = { workspace = true, features = ["v1_16"], optional = true }
+gst-gl-wayland = { workspace = true, features = ["v1_18"], optional = true }
+gst-gl-x11 = { workspace = true, features = ["v1_18"], optional = true }
+gst-gl-egl = { workspace = true, features = ["v1_18"], optional = true }
 async-channel = "2.0.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-gst-gl = { workspace = true, features = ["v1_16"] }
+gst-gl = { workspace = true, features = ["v1_18"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 gdk-win32.workspace = true
