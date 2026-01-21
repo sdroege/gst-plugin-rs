@@ -15,6 +15,10 @@
 use gst::glib;
 
 mod buffer_lateness;
+#[cfg(feature = "tracing-chrome")]
+mod chrometracing;
+#[cfg(feature = "tracing-subscriber")]
+mod fmttracing;
 #[cfg(feature = "v1_26")]
 mod memory_tracer;
 mod pad_push_timings;
@@ -22,6 +26,8 @@ mod pcap_writer;
 #[cfg(unix)]
 mod pipeline_snapshot;
 mod queue_levels;
+#[cfg(feature = "gst-tracing")]
+mod rusttracing;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(unix)]
@@ -32,6 +38,12 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     pcap_writer::register(plugin)?;
     #[cfg(feature = "v1_26")]
     memory_tracer::register(plugin)?;
+    #[cfg(feature = "gst-tracing")]
+    rusttracing::register(plugin)?;
+    #[cfg(feature = "tracing-chrome")]
+    chrometracing::register(plugin)?;
+    #[cfg(feature = "tracing-subscriber")]
+    fmttracing::register(plugin)?;
     Ok(())
 }
 

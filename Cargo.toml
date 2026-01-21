@@ -185,6 +185,7 @@ gst-plugin-version-helper = { path="./version-helper", version = "0.8" }
 gst-rtp = { package = "gstreamer-rtp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
 gst-sdp = { package = "gstreamer-sdp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
 gst-tag = { package = "gstreamer-tag", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-tracing = { package = "gstreamer-tracing", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
 gst-utils = { package = "gstreamer-utils", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
 gst-validate = { package = "gstreamer-validate", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }

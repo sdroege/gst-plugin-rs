@@ -10,6 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 gst.workspace = true
+gst-tracing = { workspace = true, optional = true }
 anyhow = "1"
 regex = "1"
 atomic_refcell = "0.1"
@@ -24,6 +25,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 url = "2"
 futures = "0.3"
+tracing = { version="0.1", optional = true}
+tracing-chrome = { version = "0.7", optional = true }
+tracing-subscriber = { version = "0.3", optional = true }
+tracing-perfetto-sdk-layer = { version = "0.1", optional = true }
+tracing-perfetto-sdk-schema = { version = "0.1", optional = true }
+tracing-appender = { version = "0.2", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.4"
@@ -37,11 +44,16 @@ path = "src/lib.rs"
 gst-plugin-version-helper.workspace = true
 
 [features]
+default = ["gstreamer-tracing", "tracing-chrome", "tracing-subscriber", "perfetto"]
 static = []
 capi = []
 doc = ["gst/v1_18"]
 v1_22 = ["gst/v1_22"]
 v1_26 = ["gst/v1_26"]
+gst-tracing = ["dep:gst-tracing", "dep:tracing"]
+tracing-chrome = ["gst-tracing", "dep:tracing-chrome", "dep:tracing-subscriber"]
+tracing-subscriber = ["gst-tracing", "dep:tracing-subscriber"]
+perfetto = ["gst-tracing", "dep:tracing-perfetto-sdk-layer", "dep:tracing-perfetto-sdk-schema", "dep:tracing-appender"]
 
 [package.metadata.capi]
 min_version = "0.9.21"
