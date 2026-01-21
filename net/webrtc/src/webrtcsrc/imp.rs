@@ -26,6 +26,8 @@ const DEFAULT_STUN_SERVER: Option<&str> = Some("stun://stun.l.google.com:19302")
 const DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION: bool = false;
 const DEFAULT_ENABLE_CONTROL_DATA_CHANNEL: bool = false;
 const DEFAULT_DO_RETRANSMISSION: bool = true;
+const AUDIO_REQUEST_PAD_NAME_PREFIX: &str = "req_audio_";
+const VIDEO_REQUEST_PAD_NAME_PREFIX: &str = "req_video_";
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -51,6 +53,8 @@ struct Settings {
 pub struct BaseWebRTCSrc {
     settings: Mutex<Settings>,
     state: Mutex<State>,
+    n_request_video_pads: AtomicU16,
+    n_request_audio_pads: AtomicU16,
 }
 
 #[glib::object_subclass]
@@ -504,9 +508,12 @@ impl SessionInner {
 
             srcpad.imp().set_webrtc_pad(webrtcbin_pad.downgrade());
 
-            element
-                .add_pad(srcpad)
-                .expect("Adding ghost pad should never fail");
+            // if srcpad is request pad, it might have already been added to the element
+            if srcpad.parent().is_none() {
+                element
+                    .add_pad(srcpad)
+                    .expect("Adding ghost pad should never fail");
+            }
             let media_type = caps
                 .structure(0)
                 .expect("Passing empty caps is invalid")
@@ -794,63 +801,280 @@ impl SessionInner {
         ghostpad
     }
 
-    fn generate_offer(&self, element: &super::BaseWebRTCSrc) {
-        let webrtcbin = self.webrtcbin();
-        let direction = gst_webrtc::WebRTCRTPTransceiverDirection::Recvonly;
-        let mut pt = 96..127;
-        let settings = element.imp().settings.lock().unwrap();
-        let caps = settings
-            .video_codecs
-            .iter()
-            .chain(settings.audio_codecs.iter())
-            .map(|codec| {
-                let name = &codec.name;
+    fn get_rtp_caps_for_codecs(
+        element: &super::BaseWebRTCSrc,
+        pt: &mut std::ops::Range<i32>,
+        codecs: &[Codec],
+        media: &str,
+        default_clock_rate: i32,
+    ) -> Option<gst::Caps> {
+        let mut rtp_caps = gst::Caps::new_empty();
+        {
+            let caps = rtp_caps.get_mut().unwrap();
 
+            for c in codecs.iter() {
                 let Some(pt) = pt.next() else {
                     gst::warning!(
                         CAT,
                         obj = element,
-                        "exhausted the list of dynamic payload types, not adding transceiver for {name}"
+                        "exhausted the list of dynamic payload types"
                     );
                     return None;
                 };
 
-                let (media, clock_rate) = if codec.is_video() {
-                    ("video", codec.clock_rate().unwrap_or(90000))
-                } else {
-                    ("audio", codec.clock_rate().unwrap_or(48000))
-                };
+                let mut st = gst::Structure::builder("application/x-rtp")
+                    .field("media", media)
+                    .field("payload", pt)
+                    .field("clock-rate", c.clock_rate().unwrap_or(default_clock_rate))
+                    .field("encoding-name", c.name.as_str())
+                    .build();
 
-                let mut caps = gst::Caps::new_empty();
-                {
-                    let caps = caps.get_mut().unwrap();
-                    let mut s = gst::Structure::builder("application/x-rtp")
-                        .field("media", media)
-                        .field("payload", pt)
-                        .field("encoding-name", name.as_str())
-                        .field("clock-rate", clock_rate)
-                        .build();
+                if c.name.eq_ignore_ascii_case("H264") {
+                    // support the constrained-baseline profile for now
+                    // TODO: extend this to other supported profiles by querying the decoders
+                    //
+                    // FIXME: webrtcsink is returning answer with inactive attribute if
+                    // the profile-level-id is 42exxx but works with 42cxxx
+                    st.set("profile-level-id", "42e016");
+                }
+                caps.append_structure(st);
+            }
+        }
+        Some(rtp_caps)
+    }
 
-                    if name.eq_ignore_ascii_case("H264") {
+    fn get_rtp_caps_for_pad(
+        element: &super::BaseWebRTCSrc,
+        pt: &mut std::ops::Range<i32>,
+        p: &gst::Pad,
+        peer_caps: &gst::Caps,
+    ) -> Option<gst::Caps> {
+        gst::trace!(CAT, obj = element, "{peer_caps:#?}");
+
+        let rtp_caps = if peer_caps
+            .structure(0)
+            .unwrap()
+            .has_name("application/x-rtp")
+        {
+            let mut p_caps = peer_caps.clone();
+
+            // FIXME: in case there is non fixate values in the caps, webrtcbin is not generating
+            // valid SDP
+            p_caps.fixate();
+
+            let p_caps = p_caps.make_mut();
+            gst::trace!(CAT, obj = element, "{p_caps:#?}");
+            for i in 0..p_caps.size() {
+                if let Some(s) = p_caps.structure_mut(i) {
+                    let Some(pt) = pt.next() else {
+                        gst::warning!(
+                            CAT,
+                            obj = element,
+                            "exhaused the list of dynamic payload types, not adding transceiver for pad {}",
+                            p.name()
+                        );
+                        return None;
+                    };
+                    s.set("payload", pt);
+                }
+            }
+            p_caps.to_owned()
+        } else {
+            // downstream needs encoded. get the encoding name from the mime-type
+            let mut caps = gst::Caps::new_empty();
+            let Some(pt) = pt.next() else {
+                gst::warning!(
+                    CAT,
+                    obj = element,
+                    "exhaused the list of dynamic payload types, not adding transceiver for pad {}",
+                    p.name()
+                );
+                return None;
+            };
+
+            if p.name().contains("video") {
+                let video_caps = caps.get_mut().unwrap();
+                let mut s = gst::Structure::builder("application/x-rtp")
+                    .field("media", "video")
+                    .field("payload", pt)
+                    .field("clock-rate", 90000)
+                    .build();
+
+                match peer_caps.structure(0).unwrap().name().as_str() {
+                    "video/x-h264" => {
+                        s.set("encoding-name", "H264");
                         // support the constrained-baseline profile for now
                         // TODO: extend this to other supported profiles by querying the decoders
+                        //
+                        // FIXME: webrtcsink is returning answer with inactive attribute if
+                        // this is present in the offer SDP
                         s.set("profile-level-id", "42e016");
                     }
-
-                    caps.append_structure(s);
+                    "video/x-vp8" => {
+                        s.set("encoding-name", "VP8");
+                    }
+                    "video/x-vp9" => {
+                        s.set("encoding-name", "VP9");
+                    }
+                    "video/x-av1" => {
+                        s.set("encoding-name", "AV1");
+                    }
+                    "video/x-h265" => {
+                        s.set("encoding-name", "H265");
+                    }
+                    _ => unimplemented!(),
                 }
-                Some(caps)
-            });
+                video_caps.append_structure(s);
+            } else {
+                let audio_caps = caps.get_mut().unwrap();
+                let mut s = gst::Structure::builder("application/x-rtp")
+                    .field("media", "audio")
+                    .field("payload", pt)
+                    .field("clock-rate", 48000)
+                    .build();
 
-        for c in caps.flatten() {
-            gst::info!(CAT, obj = element, "Adding transceiver with caps: {c:#?}");
-            let transceiver = webrtcbin.emit_by_name::<gst_webrtc::WebRTCRTPTransceiver>(
-                "add-transceiver",
-                &[&direction, &c],
-            );
+                match peer_caps.structure(0).unwrap().name().as_str() {
+                    "audio/x-opus" => {
+                        s.set("encoding-name", "OPUS");
+                    }
+                    _ => unimplemented!(),
+                }
+                audio_caps.append_structure(s);
+            }
+            caps
+        };
 
-            transceiver.set_property("do_nack", settings.do_retransmission);
-            transceiver.set_property("fec-type", gst_webrtc::WebRTCFECType::UlpRed);
+        Some(rtp_caps)
+    }
+
+    fn generate_offer(&mut self, element: &super::BaseWebRTCSrc) {
+        let webrtcbin = self.webrtcbin();
+        let direction = gst_webrtc::WebRTCRTPTransceiverDirection::Recvonly;
+        let mut pt = 96..127;
+        let settings = element.imp().settings.lock().unwrap();
+        let encoded_caps = settings
+            .video_codecs
+            .iter()
+            .chain(settings.audio_codecs.iter())
+            .map(|c| c.caps.to_owned())
+            .collect::<gst::Caps>();
+
+        let filter_caps = [
+            encoded_caps.clone(),
+            RTP_CAPS.clone(),
+            VIDEO_CAPS.clone(),
+            AUDIO_CAPS.clone(),
+        ]
+        .into_iter()
+        .collect::<gst::Caps>();
+
+        if element.src_pads().is_empty() {
+            // no pads requested by the user, so send all configured codecs in the offer
+            if let Some(video_caps) = Self::get_rtp_caps_for_codecs(
+                element,
+                &mut pt,
+                &settings.video_codecs,
+                "video",
+                90000,
+            ) {
+                gst::info!(
+                    CAT,
+                    obj = element,
+                    "Adding video transceiver with caps: {video_caps:#?}"
+                );
+
+                let transceiver = webrtcbin.emit_by_name::<gst_webrtc::WebRTCRTPTransceiver>(
+                    "add-transceiver",
+                    &[&direction, &video_caps],
+                );
+
+                transceiver.set_property("do_nack", settings.do_retransmission);
+                transceiver.set_property("fec-type", gst_webrtc::WebRTCFECType::UlpRed);
+            }
+
+            if let Some(audio_caps) = Self::get_rtp_caps_for_codecs(
+                element,
+                &mut pt,
+                &settings.audio_codecs,
+                "audio",
+                48000,
+            ) {
+                gst::info!(
+                    CAT,
+                    obj = element,
+                    "Adding video transceiver with caps: {audio_caps:#?}"
+                );
+
+                let transceiver = webrtcbin.emit_by_name::<gst_webrtc::WebRTCRTPTransceiver>(
+                    "add-transceiver",
+                    &[&direction, &audio_caps],
+                );
+
+                transceiver.set_property("do_nack", settings.do_retransmission);
+                transceiver.set_property("fec-type", gst_webrtc::WebRTCFECType::UlpRed);
+            }
+        } else {
+            for (i, p) in element.src_pads().iter().enumerate() {
+                gst::trace!(CAT, obj = element, "pad {}", p.name());
+                if p.peer().is_some() {
+                    let peer_caps = p.peer_query_caps(Some(&filter_caps));
+                    let rtp_caps = if peer_caps.is_any()
+                        || peer_caps.structure(0).unwrap().has_name("video/x-raw")
+                        || peer_caps.structure(0).unwrap().has_name("audio/x-raw")
+                    {
+                        if p.name().contains("video") {
+                            Self::get_rtp_caps_for_codecs(
+                                element,
+                                &mut pt,
+                                &settings.video_codecs,
+                                "video",
+                                90000,
+                            )
+                        } else {
+                            Self::get_rtp_caps_for_codecs(
+                                element,
+                                &mut pt,
+                                &settings.audio_codecs,
+                                "audio",
+                                48000,
+                            )
+                        }
+                    } else {
+                        // downstream needs RTP payloaded or encoded data
+                        Self::get_rtp_caps_for_pad(element, &mut pt, p, &peer_caps)
+                    };
+
+                    if let Some(rtp_caps) = rtp_caps {
+                        gst::info!(
+                            CAT,
+                            obj = element,
+                            "Adding transceiver with caps: {rtp_caps:#?}"
+                        );
+
+                        let transceiver = webrtcbin
+                            .emit_by_name::<gst_webrtc::WebRTCRTPTransceiver>(
+                                "add-transceiver",
+                                &[&direction, &rtp_caps],
+                            );
+
+                        transceiver.set_property("do_nack", settings.do_retransmission);
+                        transceiver.set_property("fec-type", gst_webrtc::WebRTCFECType::UlpRed);
+
+                        if let Ok(ghost) = p.clone().downcast::<WebRTCSrcPad>() {
+                            let stream_id = self.get_stream_id(None, Some(i as u32)).unwrap();
+                            ghost.imp().set_stream_id(&stream_id);
+                            self.pending_srcpads
+                                .insert(stream_id, (ghost.clone(), rtp_caps.to_owned()));
+                        } else {
+                            gst::error!(
+                                CAT,
+                                obj = element,
+                                "failed to get downcasted version of ghost, not adding to pending_srcpads"
+                            );
+                        }
+                    }
+                }
+            }
         }
 
         let webrtcbin_weak = webrtcbin.downgrade();
@@ -941,7 +1165,46 @@ impl SessionInner {
         let sdp = desc.sdp();
         let desc_type = desc.type_();
         let webrtcbin = self.webrtcbin();
+
+        let request_src_pads = element.src_pads().clone();
+
         for (i, media) in sdp.medias().enumerate() {
+            if media.attributes().any(|attr| attr.key() == "inactive") {
+                gst::warning!(
+                    CAT,
+                    obj = element,
+                    "Skipping inactive media: {i} in the remote description"
+                );
+
+                if i < request_src_pads.len() {
+                    gst::info!(
+                        CAT,
+                        obj = element,
+                        "Sending EOS on pad {}",
+                        request_src_pads[i].name()
+                    );
+
+                    if !request_src_pads[i].push_event(gst::event::Eos::new()) {
+                        gst::error!(
+                            CAT,
+                            obj = element,
+                            "Failed to push EOS on {}",
+                            request_src_pads[i].name()
+                        );
+                    }
+                }
+                continue;
+            }
+
+            if !request_src_pads.is_empty() && desc_type == gst_webrtc::WebRTCSDPType::Answer {
+                gst::info!(
+                    CAT,
+                    obj = element,
+                    "webrtcsrc is the offerer and has src pads already, so not consuming remote answer medias",
+                );
+                break;
+            }
+
             let (codec_names, do_retransmission) = {
                 let settings = element.imp().settings.lock().unwrap();
                 (
@@ -1002,9 +1265,101 @@ impl SessionInner {
 
             if !caps.is_empty() {
                 let stream_id = self.get_stream_id(None, Some(i as u32)).unwrap();
-                if element
-                    .imp()
-                    .create_and_probe_src_pad(&caps, &stream_id, self)
+                let mut matching_pad_found = false;
+
+                // get the media name from the SDPMedia or from the first struct in the caps
+                let media_name = media.media().unwrap_or_else(|| {
+                    caps.structure(0)
+                        .and_then(|s| s.get::<&str>("media").ok())
+                        .unwrap_or("none")
+                });
+
+                // Use the src pad having the same index as this media and if the caps of the src
+                // pad are a subset of the media caps, then set the stream id to the pad
+                // and use that pad, otherwise set the media transceiver direction to
+                // inactive and send EOS on the pad.
+                //
+                // This implementation follows the same codec order in the media and src
+                // pads much like how webrtcsink does currently.
+
+                if i < request_src_pads.len() && request_src_pads[i].name().contains(media_name) {
+                    let mut peer_caps = request_src_pads[i].peer_query_caps(None);
+
+                    peer_caps.fixate();
+
+                    if peer_caps.is_any() {
+                        matching_pad_found = true;
+                    } else if let Some(s) = peer_caps.structure(0) {
+                        for c in caps.iter() {
+                            gst::trace!(
+                                CAT,
+                                obj = element,
+                                "Comparing media caps: {c:#?} with peer caps: {peer_caps:#?} for pad {}",
+                                request_src_pads[i].name()
+                            );
+
+                            let codec_name = c.get::<&str>("encoding-name").unwrap();
+                            let media_type = c.get::<&str>("media").unwrap();
+
+                            gst::trace!(
+                                CAT,
+                                obj = element,
+                                "Comparing with codec name: {codec_name} and {s:?}",
+                            );
+
+                            if s.name().contains(codec_name.to_lowercase().as_str())
+                                || (s.name().contains(media_type))
+                                || s.has_field("encoding-name")
+                                    && s.get::<gst::List>("encoding-name").map_or_else(
+                                        |_| match s.get::<&str>("encoding-name") {
+                                            Ok(encoding_name) => encoding_name == codec_name,
+                                            _ => false,
+                                        },
+                                        |encoding_names| {
+                                            encoding_names.iter().any(|v| {
+                                                v.get::<&str>().is_ok_and(|encoding_name| {
+                                                    encoding_name == codec_name
+                                                })
+                                            })
+                                        },
+                                    )
+                            {
+                                gst::trace!(
+                                    CAT,
+                                    obj = element,
+                                    "Using media: {media:#?} for pad {} with peer caps: {peer_caps:#?}",
+                                    request_src_pads[i].name()
+                                );
+
+                                // use this pad to for this media, so set the media stream id to the pad
+                                let ws_pad =
+                                    request_src_pads[i].downcast_ref::<WebRTCSrcPad>().unwrap();
+
+                                ws_pad.imp().set_stream_id(&stream_id);
+
+                                self.pending_srcpads
+                                    .insert(stream_id.clone(), (ws_pad.clone(), caps.to_owned()));
+
+                                matching_pad_found = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // use the transceiver in the answer either
+                //   - if there are request pads and found a matching src pad
+                //   with the media, or
+                //
+                //   - if there are no request pads created and succesfully created a sometimes
+                //   pad
+                //
+                // else mark the transceiver as inactive
+                //
+                if !request_src_pads.is_empty()
+                    || element
+                        .imp()
+                        .create_and_probe_src_pad(&caps, &stream_id, self)
                 {
                     if desc_type == gst_webrtc::WebRTCSDPType::Offer {
                         gst::info!(
@@ -1039,9 +1394,37 @@ impl SessionInner {
                             &[&gst_webrtc::WebRTCRTPTransceiverDirection::Recvonly, &caps])
                         });
 
-                        transceiver.set_property("do_nack", do_retransmission);
-                        transceiver.set_property("fec-type", gst_webrtc::WebRTCFECType::UlpRed);
-                        transceiver.set_property("codec-preferences", caps);
+                        if !request_src_pads.is_empty() && !matching_pad_found {
+                            gst::warning!(
+                                CAT,
+                                obj = element,
+                                "Setting transceiver for media {i} as inactive, no matching pad found",
+                            );
+                            transceiver
+                                .set_direction(gst_webrtc::WebRTCRTPTransceiverDirection::Inactive);
+
+                            if i < request_src_pads.len() {
+                                gst::info!(
+                                    CAT,
+                                    obj = element,
+                                    "Sending EOS on pad {}",
+                                    request_src_pads[i].name()
+                                );
+
+                                if !request_src_pads[i].push_event(gst::event::Eos::new()) {
+                                    gst::error!(
+                                        CAT,
+                                        obj = element,
+                                        "Failed to push EOS on {}",
+                                        request_src_pads[i].name()
+                                    );
+                                }
+                            }
+                        } else {
+                            transceiver.set_property("do_nack", do_retransmission);
+                            transceiver.set_property("fec-type", gst_webrtc::WebRTCFECType::UlpRed);
+                            transceiver.set_property("codec-preferences", caps);
+                        }
                     } else {
                         // SDP type is answer,
                         // so the transceiver must have already been created while sending offer
@@ -1774,12 +2157,23 @@ impl ElementImpl for BaseWebRTCSrc {
                     audio_caps_builder.structure(codec.caps.structure(0).unwrap().to_owned());
             }
 
+            let video_caps = video_caps_builder.build();
+            let audio_caps = audio_caps_builder.build();
+
             vec![
                 gst::PadTemplate::with_gtype(
                     "video_%u",
                     gst::PadDirection::Src,
                     gst::PadPresence::Sometimes,
-                    &video_caps_builder.build(),
+                    &video_caps,
+                    WebRTCSrcPad::static_type(),
+                )
+                .unwrap(),
+                gst::PadTemplate::with_gtype(
+                    format!("{}%u", VIDEO_REQUEST_PAD_NAME_PREFIX).as_str(),
+                    gst::PadDirection::Src,
+                    gst::PadPresence::Request,
+                    &video_caps,
                     WebRTCSrcPad::static_type(),
                 )
                 .unwrap(),
@@ -1787,7 +2181,15 @@ impl ElementImpl for BaseWebRTCSrc {
                     "audio_%u",
                     gst::PadDirection::Src,
                     gst::PadPresence::Sometimes,
-                    &audio_caps_builder.build(),
+                    &audio_caps,
+                    WebRTCSrcPad::static_type(),
+                )
+                .unwrap(),
+                gst::PadTemplate::with_gtype(
+                    format!("{}%u", AUDIO_REQUEST_PAD_NAME_PREFIX).as_str(),
+                    gst::PadDirection::Src,
+                    gst::PadPresence::Request,
+                    &audio_caps,
                     WebRTCSrcPad::static_type(),
                 )
                 .unwrap(),
@@ -1866,6 +2268,74 @@ impl ElementImpl for BaseWebRTCSrc {
             }
             _ => true,
         }
+    }
+
+    fn request_new_pad(
+        &self,
+        templ: &gst::PadTemplate,
+        name: Option<&str>,
+        caps: Option<&gst::Caps>,
+    ) -> Option<gst::Pad> {
+        gst::trace!(CAT, imp = self, "{:?} {:?} {:?}", templ.name(), caps, name);
+
+        let pad_name = if templ.name().starts_with(VIDEO_REQUEST_PAD_NAME_PREFIX) {
+            format!(
+                "{}{}",
+                VIDEO_REQUEST_PAD_NAME_PREFIX,
+                self.n_request_video_pads.fetch_add(1, Ordering::SeqCst)
+            )
+        } else if templ.name().starts_with(AUDIO_REQUEST_PAD_NAME_PREFIX) {
+            format!(
+                "{}{}",
+                AUDIO_REQUEST_PAD_NAME_PREFIX,
+                self.n_request_audio_pads.fetch_add(1, Ordering::SeqCst)
+            )
+        } else {
+            return None;
+        };
+
+        if let Some(n) = name {
+            gst::info!(
+                CAT,
+                imp = self,
+                "not using the pad name {n} requested, pad serial is autoenumerated internally"
+            );
+        }
+
+        gst::info!(CAT, imp = self, "Creating new pad {pad_name}");
+
+        let src_pad = gst::GhostPad::builder_from_template(templ)
+            .name(pad_name)
+            .build()
+            .downcast::<WebRTCSrcPad>()
+            .unwrap();
+
+        src_pad.set_active(true).unwrap();
+        src_pad.use_fixed_caps();
+        self.obj().add_pad(&src_pad).unwrap();
+
+        Some(src_pad.into())
+    }
+
+    fn release_pad(&self, pad: &gst::Pad) {
+        let element = self.obj();
+        let ws = element
+            .upcast_ref::<crate::webrtcsrc::BaseWebRTCSrc>()
+            .imp();
+
+        gst::info!(CAT, obj = element, "releasing {pad:?}");
+
+        let state = ws.state.lock().unwrap();
+        if let Some(s) = &state.session {
+            // remove the pad from the pending src pads hashmap in case it is not used yet
+            let mut session = s.0.lock().unwrap();
+            let _ = session.take_pending_src_pad(pad);
+        }
+        drop(state);
+
+        if let Err(e) = self.obj().remove_pad(pad) {
+            gst::error!(CAT, obj = element, "could remove {pad:?}: {e:?}");
+        };
     }
 }
 
