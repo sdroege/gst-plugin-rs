@@ -29,7 +29,7 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "audioloudnorm",
         gst::DebugColorFlags::empty(),
-        Some("Audio Loudless Normalization Filter"),
+        Some("Audio Loudness Normalization Filter"),
     )
 });
 
