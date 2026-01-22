@@ -976,6 +976,8 @@ impl PayloadChainBuilder {
         elements.push(
             gst::ElementFactory::make("errorignore")
                 .property("ignore-notlinked", true)
+                .property("ignore-error", false)
+                .property("ignore-notnegotiated", false)
                 .property("convert-to", gst::FlowReturn::Ok)
                 .build()
                 .with_context(|| "Failed to make element errorignore".to_string())?,
