@@ -82,13 +82,18 @@ class CargoAnalyzer:
     def extract_version(self, feature_name):
         if feature_name.startswith('v') and not feature_name == 'vulkan':
             verindex = 1
-        elif feature_name.startswith('gst'):
+        elif feature_name.startswith('gst') and len(feature_name) > 3 and feature_name[3].isdigit():
             verindex = 3
         else:
             return None
 
-        (majver, minver) = feature_name[verindex:].split("_")
-        return (int(majver), int(minver))
+        parts = feature_name[verindex:].split("_")
+        if len(parts) != 2:
+            return None
+        try:
+            return (int(parts[0]), int(parts[1]))
+        except ValueError:
+            return None
 
     def extract_features(self, cargo_data):
         features = cargo_data['features']

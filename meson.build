@@ -487,6 +487,14 @@ if rav1e_option.allowed()
   endif
 endif
 
+if tracers_option.allowed()
+  protoc = find_program('protoc', required: false)
+  if protoc.found()
+    features += 'gst-plugin-tracers/perfetto'
+    extra_env += {'PROTOC': protoc.full_path()}
+  endif
+endif
+
 if get_option('default_library') == 'static'
   extra_env += {
     # Tell the pkg-config crate to think of all libraries as static

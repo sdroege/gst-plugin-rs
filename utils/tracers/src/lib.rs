@@ -23,6 +23,8 @@ mod fmttracing;
 mod memory_tracer;
 mod pad_push_timings;
 mod pcap_writer;
+#[cfg(feature = "perfetto")]
+mod perfettotracing;
 #[cfg(unix)]
 mod pipeline_snapshot;
 mod queue_levels;
@@ -44,6 +46,8 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     chrometracing::register(plugin)?;
     #[cfg(feature = "tracing-subscriber")]
     fmttracing::register(plugin)?;
+    #[cfg(feature = "perfetto")]
+    perfettotracing::register(plugin)?;
     Ok(())
 }
 
