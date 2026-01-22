@@ -2746,9 +2746,9 @@ impl FMP4Mux {
             Vec<(FragmentHeaderStream, VecDeque<Buffer>)>,
             // Minimum earliest PTS position of all streams
             Option<gst::ClockTime>,
-            // Minimum earliest PTS of all streams
-            Option<gst::ClockTime>,
             // Minimum start DTS position of all streams (if any stream has DTS)
+            Option<gst::ClockTime>,
+            // Start PTS of this drained fragment or chunk
             Option<gst::ClockTime>,
             // End PTS of this drained fragment or chunk, i.e. start PTS of the next fragment or
             // chunk
@@ -2763,7 +2763,6 @@ impl FMP4Mux {
         let mut drained_streams = Vec::with_capacity(state.streams.len());
 
         let mut min_earliest_pts_position = None;
-        let mut min_earliest_pts = None;
         let mut min_start_dts_position = None;
         let mut chunk_end_pts = None;
 
@@ -3002,9 +3001,6 @@ impl FMP4Mux {
                 start_dts.display(),
             );
 
-            if min_earliest_pts.opt_gt(earliest_pts).unwrap_or(true) {
-                min_earliest_pts = Some(earliest_pts);
-            }
             if min_earliest_pts_position
                 .opt_gt(earliest_pts_position)
                 .unwrap_or(true)
@@ -3040,8 +3036,8 @@ impl FMP4Mux {
         Ok((
             drained_streams,
             min_earliest_pts_position,
-            min_earliest_pts,
             min_start_dts_position,
+            Some(chunk_start_pts),
             chunk_end_pts,
             fragment_filled,
             fragment_start,
@@ -3230,8 +3226,8 @@ impl FMP4Mux {
         let (
             drained_streams,
             min_earliest_pts_position,
-            min_earliest_pts,
             min_start_dts_position,
+            chunk_start_pts,
             chunk_end_pts,
             fragment_filled,
             fragment_start,
@@ -3293,7 +3289,7 @@ impl FMP4Mux {
         // If there are actual buffers to output then create headers as needed and create a
         // bufferlist for all buffers that have to be output.
         let min_earliest_pts_position = min_earliest_pts_position.unwrap();
-        let min_earliest_pts = min_earliest_pts.unwrap();
+        let chunk_start_pts = chunk_start_pts.unwrap();
         let chunk_end_pts = chunk_end_pts.unwrap();
 
         gst::debug!(
@@ -3305,7 +3301,7 @@ impl FMP4Mux {
             ),
             fragment_start,
             fragment_filled,
-            min_earliest_pts,
+            chunk_start_pts,
             chunk_end_pts,
         );
 
@@ -3363,7 +3359,7 @@ impl FMP4Mux {
             let buffer = fmp4_fragment_header.get_mut().unwrap();
             buffer.set_pts(min_earliest_pts_position);
             buffer.set_dts(min_start_dts_position);
-            buffer.set_duration(chunk_end_pts.checked_sub(min_earliest_pts));
+            buffer.set_duration(chunk_end_pts.checked_sub(chunk_start_pts));
             buffer.set_offset(sequence_number as u64);
             buffer.set_offset_end(u64::MAX);
 
