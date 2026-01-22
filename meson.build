@@ -602,8 +602,8 @@ foreach plugin_name, details: plugins
         break
       endif
     endforeach
-    features += examples_features
     if example_deps_found
+      features += examples_features
       examples += example
     endif
   endforeach
