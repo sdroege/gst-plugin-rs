@@ -265,6 +265,7 @@ fn check_stsd_sanity(stsd: &mp4_atom::Stsd, expected_config: &ExpectedConfigurat
                 assert_eq!(avc1.visual.width, expected_config.width as u16);
                 assert_eq!(avc1.visual.height, expected_config.height as u16);
                 assert_eq!(avc1.visual.depth, 24);
+                assert_eq!(avc1.visual.compressor, "AVC Coding".into());
                 if expected_config.has_taic {
                     assert!(avc1.taic.as_ref().is_some_and(|taic| {
                         assert_eq!(taic.clock_type, expected_config.taic_clock_type.into());
@@ -382,6 +383,9 @@ fn check_stsd_sanity(stsd: &mp4_atom::Stsd, expected_config: &ExpectedConfigurat
             }
             mp4_atom::Codec::Unknown(four_cc) => {
                 todo!("Unsupported codec type: {:?}", four_cc);
+            }
+            &_ => {
+                todo!("Unsupported codec type (wildcard case)");
             }
         }
     }
@@ -568,6 +572,7 @@ fn check_eac3_sample_entry_sanity(
 
 fn check_uncv_codec_sanity(uncv: &mp4_atom::Uncv, expected_config: &ExpectedConfiguration) {
     check_visual_sample_entry_sanity(&uncv.visual, expected_config);
+    assert_eq!(uncv.visual.compressor, mp4_atom::Compressor::default());
     // See ISO/IEC 23001-17 Table 5 for the profiles
     let valid_v0_profiles: Vec<mp4_atom::FourCC> = vec![
         b"2vuy".into(),

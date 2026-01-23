@@ -1482,7 +1482,32 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
             v.extend(1u16.to_be_bytes());
 
             // Compressor name
-            v.extend([0u8; 32]);
+            v.extend(match s.name().as_str() {
+                "video/x-h264" => {
+                    // ISO/IEC 14496-15:2024 Section 5.4.2.1.3
+                    *b"\x0aAVC Coding\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+                }
+                "video/x-h265" => {
+                    // ISO/IEC 14496-15:2024 Section 8.4.1.1.3
+                    *b"\x0bHEVC Coding\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+                }
+                "video/x-av1" => {
+                    // https://aomediacodec.github.io/av1-isobmff/#av1sampleentry-semantics
+                    *b"\x0aAOM Coding\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+                }
+                "video/x-vp8" | "video/x-vp9" => {
+                    // https://github.com/webmproject/vp9-dash/blob/main/VPCodecISOMediaFileFormatBinding.md#semantics
+                    *b"\x0aVPC Coding\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+                }
+                "video/x-raw" => {
+                    // ISO/IEC 23001-17:2024 Section 4.2
+                    [0u8; 32]
+                }
+                _ => {
+                    // ISO/IEC 14496-12:2022 Section 12.1.3.3, default
+                    [0u8; 32]
+                }
+            });
 
             // Depth
             v.extend(0x0018u16.to_be_bytes());
