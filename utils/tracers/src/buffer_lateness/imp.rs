@@ -341,6 +341,8 @@ impl TracerImpl for BufferLateness {
             ..
         } = &mut *state;
         if let Some(pad) = pads.get_mut(&ptr) {
+            // FIXME: https://github.com/rust-lang/rust-clippy/issues/16188
+            #[allow(clippy::panicking_unwrap)]
             if pad.element_name.is_none() {
                 pad.element_name = Some(Arc::new(element.name()));
 

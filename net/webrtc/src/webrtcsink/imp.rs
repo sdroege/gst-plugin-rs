@@ -6066,10 +6066,12 @@ impl WebRTCSink {
                     host => host.to_string(),
                 };
 
-                let scheme = if settings.signalling_server_cert.is_some()
-                    && settings.signalling_server_key.is_some()
-                {
-                    let cafile = settings.signalling_server_cert.as_ref().unwrap();
+                let scheme = if let Some((signalling_server_cert, _signalling_server_key)) =
+                    Option::zip(
+                        settings.signalling_server_cert.as_ref(),
+                        settings.signalling_server_key.as_ref(),
+                    ) {
+                    let cafile = signalling_server_cert;
                     signaller.set_property("cafile", cafile);
                     "wss"
                 } else {

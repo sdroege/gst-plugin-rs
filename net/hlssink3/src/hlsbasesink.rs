@@ -499,7 +499,9 @@ impl HlsBaseSink {
         };
 
         let settings = self.settings.lock().unwrap();
-        if settings.single_media_file.is_none() {
+        if let Some(ref single_media_file) = settings.single_media_file {
+            Some(single_media_file.clone())
+        } else {
             let location = match sprintf::sprintf!(&context.segment_template, fragment_id) {
                 Ok(file_name) => file_name,
                 Err(err) => {
@@ -511,8 +513,6 @@ impl HlsBaseSink {
             gst::trace!(CAT, imp = self, "Segment location formatted: {}", location);
 
             Some(location)
-        } else {
-            Some(settings.single_media_file.as_ref().unwrap().clone())
         }
     }
 

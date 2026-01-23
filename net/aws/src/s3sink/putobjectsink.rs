@@ -473,11 +473,13 @@ impl S3PutObjectSink {
             NextFile::MaxDuration => {
                 let mut new_duration = gst::ClockTime::ZERO;
 
-                if buffer.pts().is_some() && started_state.file_start_pts.is_some() {
-                    new_duration = buffer.pts().unwrap() - started_state.file_start_pts.unwrap();
+                if let Some((pts, file_start_pts)) =
+                    Option::zip(buffer.pts(), started_state.file_start_pts)
+                {
+                    new_duration = pts - file_start_pts;
 
-                    if buffer.duration().is_some() {
-                        new_duration += buffer.duration().unwrap();
+                    if let Some(duration) = buffer.duration() {
+                        new_duration += duration;
                     }
                 }
 
