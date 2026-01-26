@@ -18,7 +18,7 @@ tokio = { version = "1.36.0", default-features = false, features = ["time", "rt-
 futures = "0.3.30"
 quinn = { version = "0.11.6", default-features = false, features = ["runtime-tokio", "log", "bloom", "ring"] }
 quinn-proto = { version = "0.11.9", default-features = false, features = ["log", "ring"] }
-web-transport-quinn = { version = "0.10", default-features = false, features = ["ring"] }
+web-transport-quinn = { version = "0.11", default-features = false, features = ["ring"] }
 rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
 rustls-pki-types = "1"
 rcgen = "0.14"
@@ -29,6 +29,7 @@ itertools = "0.14"
 env_logger = "0.11"
 url = "2.5.2"
 rustls-platform-verifier = "0.6"
+http = "1"
 
 [dev-dependencies]
 gst-check = { workspace = true, features = ["v1_20"] }

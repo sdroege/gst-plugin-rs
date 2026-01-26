@@ -114,10 +114,14 @@ impl SharedConnection {
                         ))
                     })?;
 
-                    gst::info!(CAT, "Accepted incoming connection from {}", request.url());
+                    gst::info!(
+                        CAT,
+                        "Accepted incoming connection from {}",
+                        request.connect().url
+                    );
 
                     // FIXME: We now accept all request without verifying the URL
-                    request.ok().await.unwrap()
+                    request.respond(http::StatusCode::OK).await.unwrap()
                 }
                 QuinnQuicRole::Client => {
                     let url = url.expect("Url should be valid");

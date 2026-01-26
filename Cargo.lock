@@ -4658,6 +4658,7 @@ dependencies = [
  "gstreamer",
  "gstreamer-base",
  "gstreamer-check",
+ "http 1.4.0",
  "itertools 0.14.0",
  "quinn",
  "quinn-proto",
@@ -9419,6 +9420,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sfv"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d471eaefb14f4b30032525bdb124b36e55ba9cb1292080e06f1a236cd10fe87"
+dependencies = [
+ "base64 0.22.1",
+ "indexmap 2.13.0",
+ "ref-cast",
+]
+
+[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11094,12 +11106,13 @@ dependencies = [
 
 [[package]]
 name = "web-transport-proto"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "660175a6d1643adb93b71c4f853d4f20f0fce47f53ae579afe9f7711fe84870d"
+checksum = "ee133824c73a492e5739a449fb088571d8a418c2de29520035639107d6a7d6bc"
 dependencies = [
  "bytes",
  "http 1.4.0",
+ "sfv",
  "thiserror 2.0.18",
  "tokio",
  "url",
@@ -11107,9 +11120,9 @@ dependencies = [
 
 [[package]]
 name = "web-transport-quinn"
-version = "0.10.2"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f44b4e68a3e7adb790793e24ec8b5923a610a8c2df1d6cd58849f9e4759d04"
+checksum = "deee7c8762fe9b405f6d3ba383ea0938429c82e367b725d0ce9eb62772649b29"
 dependencies = [
  "bytes",
  "futures",
