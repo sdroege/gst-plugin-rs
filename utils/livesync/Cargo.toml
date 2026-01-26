@@ -15,6 +15,7 @@ num-rational = { version = "0.4", default-features = false, features = [] }
 parking_lot = "0.12"
 
 [dev-dependencies]
+gst-app = { workspace = true, features = [ "v1_20" ] }
 gst-check.workspace = true
 gst-plugin-gtk4.workspace = true
 gtk.workspace = true

@@ -4582,6 +4582,7 @@ dependencies = [
  "gst-plugin-gtk4",
  "gst-plugin-version-helper",
  "gstreamer",
+ "gstreamer-app",
  "gstreamer-audio",
  "gstreamer-check",
  "gtk4",

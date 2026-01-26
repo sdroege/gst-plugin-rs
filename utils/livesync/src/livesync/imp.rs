@@ -528,21 +528,45 @@ impl State {
         buf: &gst::BufferRef,
         segment: &gst::FormattedSegment<gst::ClockTime>,
     ) -> Option<RunningTimeRange> {
-        let mut timestamp_start = buf.pts()?;
+        let pts = buf.pts()?;
+        let duration = buf.duration().expect("existing or added above");
 
         if !self.single_segment {
-            timestamp_start = segment
-                .to_running_time(timestamp_start)
-                .unwrap_or(gst::ClockTime::ZERO);
-            timestamp_start += self.latency + self.upstream_latency.unwrap();
-        } else {
-            timestamp_start += self.upstream_latency.unwrap();
-        }
+            let (start, stop) = if segment.rate() > 0.0 {
+                (pts, pts + duration)
+            } else {
+                (pts + duration, pts)
+            };
 
-        Some(RunningTimeRange {
-            start: timestamp_start,
-            end: timestamp_start + buf.duration().unwrap(),
-        })
+            Some(RunningTimeRange {
+                start: (segment
+                    .to_running_time_full(start)
+                    .expect("pts & duration defined")
+                    + self.latency
+                    + self.upstream_latency.unwrap())
+                .positive()
+                .unwrap_or(gst::ClockTime::ZERO),
+                end: (segment
+                    .to_running_time_full(stop)
+                    .expect("pts & duration defined")
+                    + self.latency
+                    + self.upstream_latency.unwrap())
+                .positive()
+                .unwrap_or(gst::ClockTime::ZERO),
+            })
+        } else {
+            // Notes:
+            // * Buffer already updated with input segment running times
+            //   and adjusted depending on the rate
+            // * Input segment was offset by configured latency in `sink_event`
+
+            let start = pts + self.upstream_latency.unwrap();
+
+            Some(RunningTimeRange {
+                start,
+                end: start + duration,
+            })
+        }
     }
 
     fn pending_events(&self) -> bool {
@@ -1092,12 +1116,31 @@ impl LiveSync {
         })?;
 
         if state.single_segment {
+            // Re-timestamp buffer so it can sync on the output segment
+            // without changing start, stop & base
+
+            let in_pts = buf_mut.pts().expect("checked above");
+            let duration = buf_mut.duration().expect("existing or added above");
+
+            let (in_start_pts, in_end_pts) = if segment.rate() >= 0.0 {
+                (in_pts, in_pts + duration)
+            } else {
+                (in_pts + duration, in_pts)
+            };
+
             let pts = segment
-                .to_running_time_full(buf_mut.pts())
-                .and_then(|r| r.positive())
+                .to_running_time_full(in_start_pts)
+                .expect("in_pts & duration defined")
+                .positive()
+                .or_else(|| self.obj().current_running_time());
+            let pts_end = segment
+                .to_running_time_full(in_end_pts)
+                .expect("in_pts & duration defined")
+                .positive()
                 .or_else(|| self.obj().current_running_time());
 
-            buf_mut.set_pts(pts.map(|t| t + state.latency));
+            buf_mut.set_pts(pts.opt_add(state.latency));
+            buf_mut.set_duration(pts_end.opt_sub(pts).unwrap_or(duration));
         }
 
         let rt_range = state.running_time_range(buf_mut, segment);
@@ -1166,33 +1209,35 @@ impl LiveSync {
             return;
         };
 
-        let eos = {
-            let mut state = self.state.lock();
+        let mut state = self.state.lock();
 
-            match state.srcresult {
-                // Can be set to Flushing by another thread
-                Err(e) => err = e,
+        match state.srcresult {
+            // Can be set to Flushing by another thread
+            Err(e) => err = e,
 
-                // Communicate our flow return
-                Ok(_) => state.srcresult = Err(err),
-            }
-            state.clock_id = None;
-            self.cond.notify_all();
-
-            state.eos
-        };
+            // Communicate our flow return
+            Ok(_) => state.srcresult = Err(err),
+        }
+        state.clock_id = None;
+        self.cond.notify_all();
 
         // Following GstQueue's behavior:
         // > let app know about us giving up if upstream is not expected to do so
         // > EOS is already taken care of elsewhere
-        if eos && !matches!(err, gst::FlowError::Flushing | gst::FlowError::Eos) {
+        if state.eos && !matches!(err, gst::FlowError::Flushing | gst::FlowError::Eos) {
             gst::warning!(
                 CAT,
                 imp = self,
                 "Loop returned {err} and we are not flushing & EOS hasn't been pushed"
             );
             self.flow_error(err);
+        } else if state.stream_enqueued() {
+            // Don't stop now, there's an incoming segment
+            state.srcresult = Ok(gst::FlowSuccess::Ok);
+            return;
         }
+
+        drop(state);
 
         gst::log!(CAT, imp = self, "Loop stopping");
         let _ = self.srcpad.pause_task();
@@ -1420,9 +1465,6 @@ impl LiveSync {
         }
 
         let buffer = state.out_buffer.clone().unwrap();
-        let sync_ts = state
-            .out_last_rt_range
-            .map_or(gst::ClockTime::ZERO, |t| t.start);
 
         if let Some(caps) = caps {
             gst::debug!(CAT, imp = self, "Sending new caps: {caps}");
@@ -1435,39 +1477,38 @@ impl LiveSync {
             state.out_duration = duration_from_caps(&caps);
         }
 
-        if let Some((mut segment, seqnum)) = segment {
-            if !state.single_segment {
-                if let Some(stop) = segment.stop() {
-                    gst::debug!(
-                        CAT,
-                        imp = self,
-                        "Removing stop {stop} from outgoing segment",
-                    );
-                    segment.set_stop(gst::ClockTime::NONE);
-                }
+        if let Some((in_segment, in_seqnum)) = segment {
+            let out_segment_seqnum = if !state.single_segment {
+                Some((in_segment, in_seqnum))
+            } else if let Some((_out_segment, out_seqnum)) = state.out_segment.as_mut() {
+                *out_seqnum = in_seqnum;
+                None
+            } else {
+                // Initialise the live (single) segment:
+                //
+                // * act as an unlimited segment, input buffers should be clipped
+                //   conforming to the input segment when they are received.
+                // * use a constant rate, buffers will be updated to comply with
+                //   the input rate.
+                // * single segment timestamps are expressed in runtime time.
+                Some((gst::FormattedSegment::<gst::ClockTime>::new(), in_seqnum))
+            };
 
-                gst::debug!(CAT, imp = self, "Forwarding segment: {segment:?}");
+            if let Some((mut out_segment, out_seqnum)) = out_segment_seqnum {
+                out_segment.set_position(buffer.pts().opt_add(buffer.duration()));
 
-                let event = gst::event::Segment::new(&segment);
-                MutexGuard::unlocked(&mut state, || self.srcpad.push_event(event));
-                state.srcresult.inspect_err(|err| {
-                    gst::info!(CAT, imp = self, "Error pushing Segment event: {err:?}");
-                })?;
-            } else if state.out_segment.is_none() {
-                // Create live segment
-                let mut live_segment = gst::FormattedSegment::<gst::ClockTime>::new();
-                live_segment.set_position(sync_ts);
+                let event = gst::event::Segment::builder(&out_segment)
+                    .seqnum(out_seqnum)
+                    .build();
 
-                gst::debug!(CAT, imp = self, "Sending new segment: {live_segment:?}");
+                state.out_segment = Some((out_segment, out_seqnum));
 
-                let event = gst::event::Segment::new(&live_segment);
+                gst::debug!(CAT, imp = self, "Forwarding {event:?}");
                 MutexGuard::unlocked(&mut state, || self.srcpad.push_event(event));
                 state.srcresult.inspect_err(|err| {
                     gst::info!(CAT, imp = self, "Error pushing Segment event: {err:?}");
                 })?;
             }
-
-            state.out_segment = Some((segment, seqnum));
         }
 
         state
@@ -1475,7 +1516,7 @@ impl LiveSync {
             .as_mut()
             .expect("defined at this stage")
             .0
-            .set_position(buffer.dts_or_pts().opt_add(buffer.duration()));
+            .set_position(buffer.pts().opt_add(buffer.duration()));
 
         state.num_out += 1;
         drop(state);
@@ -1604,7 +1645,11 @@ impl LiveSync {
         let mut duplicate = state.out_buffer_duplicate;
 
         let duration = out_buffer.duration().unwrap();
-        let pts = out_buffer.pts().map(|t| t + duration);
+        let pts = if state.single_segment || state.out_segment.as_ref().unwrap().0.rate() > 0.0 {
+            out_buffer.pts().opt_add(duration)
+        } else {
+            out_buffer.pts().opt_saturating_sub(duration)
+        };
 
         if let Some(source) = source {
             gst::debug!(
@@ -1681,6 +1726,7 @@ impl LiveSync {
         state.out_last_rt_range =
             state.running_time_range(state.out_buffer.as_ref().unwrap(), out_segment);
         state.num_duplicate += 1;
+
         Ok(())
     }
 }
