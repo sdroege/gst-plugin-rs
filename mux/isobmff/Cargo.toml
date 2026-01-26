@@ -32,7 +32,7 @@ chrono = "0.4.35"
 dash-mpd = { version = "0.19", default-features = false }
 m3u8-rs = "6.0"
 mp4-atom = { version = "0.10.1", features = ["strict"] }
-quick-xml = { version = "0.38", features = ["serialize"] }
+quick-xml = { version = "0.39", features = ["serialize"] }
 serde = "1"
 tempfile = "3"
 url = "2"

@@ -4527,7 +4527,7 @@ dependencies = [
  "m3u8-rs",
  "mp4-atom",
  "num-integer",
- "quick-xml 0.38.4",
+ "quick-xml 0.39.0",
  "serde",
  "tempfile",
  "url",
@@ -4598,7 +4598,7 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-video",
  "libloading 0.9.0",
- "quick-xml 0.38.4",
+ "quick-xml 0.39.0",
  "smallvec",
  "thiserror 2.0.18",
 ]
