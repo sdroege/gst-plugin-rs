@@ -334,10 +334,16 @@ impl Transcriber {
             return Err(gst::FlowError::Flushing);
         };
 
-        futures::executor::block_on(buffer_tx.send((buffer, rtime))).map_err(|err| {
-            gst::element_imp_error!(self, gst::StreamError::Failed, ["Streaming failed: {err}"]);
-            gst::FlowError::Error
-        })?;
+        RUNTIME
+            .block_on(buffer_tx.send((buffer, rtime)))
+            .map_err(|err| {
+                gst::element_imp_error!(
+                    self,
+                    gst::StreamError::Failed,
+                    ["Streaming failed: {err}"]
+                );
+                gst::FlowError::Error
+            })?;
 
         self.state.lock().unwrap().buffer_tx = Some(buffer_tx);
 
@@ -431,8 +437,7 @@ impl Transcriber {
 
         let (buffer_tx, buffer_rx) = mpsc::channel(1);
 
-        let _enter = RUNTIME.enter();
-        let mut transcriber_stream = futures::executor::block_on(TranscriberStream::try_new(
+        let mut transcriber_stream = RUNTIME.block_on(TranscriberStream::try_new(
             self,
             transcription_settings,
             settings.lateness,
@@ -576,7 +581,6 @@ impl Transcriber {
         };
 
         gst::info!(CAT, imp = self, "Loading aws config...");
-        let _enter_guard = RUNTIME.enter();
 
         let config_loader = match (access_key, secret_access_key) {
             (Some(key), Some(secret_key)) => {
@@ -605,7 +609,7 @@ impl Transcriber {
         let config_loader =
             config_loader.stalled_stream_protection(StalledStreamProtectionConfig::disabled());
 
-        let config = futures::executor::block_on(config_loader.load());
+        let config = RUNTIME.block_on(config_loader.load());
         gst::debug!(CAT, imp = self, "Using region {}", config.region().unwrap());
 
         *self.aws_config.lock().unwrap() = Some(config);
@@ -1838,8 +1842,8 @@ impl TranslateSrcPad {
         gst::debug!(CAT, imp = self, "Starting task");
 
         let elem = self.parent();
-        let _enter = RUNTIME.enter();
-        let mut pad_task = futures::executor::block_on(TranslationPadTask::try_new(self, elem))
+        let mut pad_task = RUNTIME
+            .block_on(TranslationPadTask::try_new(self, elem))
             .map_err(|err| gst::loggable_error!(CAT, "Failed to start pad task {err}"))?;
 
         let imp = self.ref_counted();
@@ -1847,8 +1851,7 @@ impl TranslateSrcPad {
             let (abortable_task_iter, abort_handle) = future::abortable(pad_task.run_iter());
             imp.state.lock().unwrap().task_abort_handle = Some(abort_handle);
 
-            let _enter = RUNTIME.enter();
-            match futures::executor::block_on(abortable_task_iter) {
+            match RUNTIME.block_on(abortable_task_iter) {
                 Ok(Ok(())) => (),
                 Ok(Err(err)) => {
                     // Don't bring down the whole element if this Pad fails

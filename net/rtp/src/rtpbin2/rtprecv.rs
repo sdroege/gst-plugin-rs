@@ -577,7 +577,9 @@ impl Drop for RecvSession {
         {
             return;
         }
-        let _ = futures::executor::block_on(rtp_task_handle);
+        let _ = rtpbin2::get_or_init_runtime()
+            .expect("initialized in change_state()")
+            .block_on(rtp_task_handle);
     }
 }
 

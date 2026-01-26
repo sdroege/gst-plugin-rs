@@ -665,10 +665,7 @@ impl ReqwestHttpSrc {
             }
         };
 
-        let res = {
-            let _enter = RUNTIME.enter();
-            futures::executor::block_on(future)
-        };
+        let res = RUNTIME.block_on(future);
 
         /* Clear out the canceller */
         let mut canceller = self.canceller.lock().unwrap();

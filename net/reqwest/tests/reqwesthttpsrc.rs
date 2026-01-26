@@ -164,7 +164,7 @@ impl Harness {
             }
         });
 
-        let local_addr = futures::executor::block_on(local_addr_receiver).unwrap();
+        let local_addr = rt.block_on(local_addr_receiver).unwrap();
         src.set_property("location", format!("http://{local_addr}/"));
 
         // Let the test setup anything needed on the HTTP source now
@@ -1289,10 +1289,7 @@ fn test_proxy() {
             println!("shutting down proxy server");
         });
 
-        (
-            proxy_handle,
-            futures::executor::block_on(proxy_addr_receiver).unwrap(),
-        )
+        (proxy_handle, h.rt.block_on(proxy_addr_receiver).unwrap())
     };
 
     // Set the HTTP source to Playing so that everything can start.
@@ -1310,7 +1307,7 @@ fn test_proxy() {
 
     // Don't leave threads hanging around.
     proxy_handle.abort();
-    let _ = futures::executor::block_on(proxy_handle);
+    let _ = h.rt.block_on(proxy_handle);
 }
 
 /// Adapter from tokio IO traits to hyper IO traits.

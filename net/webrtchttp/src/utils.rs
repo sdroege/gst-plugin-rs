@@ -158,10 +158,7 @@ where
         }
     };
 
-    let res = {
-        let _enter = RUNTIME.enter();
-        futures::executor::block_on(future)
-    };
+    let res = RUNTIME.block_on(future);
 
     let mut canceller = canceller_mutex.lock().unwrap();
     if matches!(*canceller, Canceller::Cancelled) {

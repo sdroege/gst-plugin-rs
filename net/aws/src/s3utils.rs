@@ -92,8 +92,7 @@ where
     // FIXME: add a timeout as well
 
     let res = {
-        let _enter = RUNTIME.enter();
-        futures::executor::block_on(async {
+        RUNTIME.block_on(async {
             match abortable_future.await {
                 // Future resolved successfully
                 Ok(Ok(res)) => Ok(res),
@@ -175,8 +174,7 @@ pub fn wait_config(
     let abortable_future = future::Abortable::new(config_future, abort_registration);
 
     let res = {
-        let _enter = RUNTIME.enter();
-        futures::executor::block_on(async {
+        RUNTIME.block_on(async {
             match abortable_future.await {
                 // Future resolved successfully
                 Ok(config) => Ok(config),

@@ -6,7 +6,6 @@ use crate::RUNTIME;
 use crate::utils::{WaitError, wait_async};
 
 use anyhow::anyhow;
-use futures::executor::block_on;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -367,7 +366,7 @@ impl Signaller {
             .as_mut()
             .and_then(|connection| connection.room_timeout_task.take());
         if let Some(room_timeout_task) = room_timeout_task {
-            block_on(room_timeout_task).unwrap();
+            RUNTIME.block_on(room_timeout_task).unwrap();
         }
     }
 
@@ -961,8 +960,10 @@ impl SignallableImpl for Signaller {
 
         let connection = self.connection.lock().unwrap().take();
         if let Some(connection) = connection {
-            block_on(connection.signal_task).unwrap();
-            block_on(Self::close_signal_client(&connection.signal_client));
+            RUNTIME.block_on(async {
+                connection.signal_task.await.unwrap();
+                Self::close_signal_client(&connection.signal_client).await;
+            });
         }
         self.obj().notify("connection-state");
     }

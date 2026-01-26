@@ -235,10 +235,7 @@ where
         }
     };
 
-    let res = {
-        let _enter = RUNTIME.enter();
-        futures::executor::block_on(future)
-    };
+    let res = RUNTIME.block_on(future);
 
     canceller_guard = canceller.lock().unwrap();
     *canceller_guard = None;

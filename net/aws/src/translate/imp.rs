@@ -670,36 +670,37 @@ impl Translate {
         };
 
         gst::log!(CAT, imp = self, "Loading aws config...");
-        let _enter_guard = RUNTIME.enter();
 
-        let config_loader = match (access_key, secret_access_key) {
-            (Some(key), Some(secret_key)) => {
-                gst::log!(CAT, imp = self, "Using settings credentials");
-                aws_config::defaults(*AWS_BEHAVIOR_VERSION).credentials_provider(
-                    aws_sdk_translate::config::Credentials::new(
-                        key,
-                        secret_key,
-                        session_token,
-                        None,
-                        "translate",
-                    ),
-                )
-            }
-            _ => {
-                gst::log!(CAT, imp = self, "Attempting to get credentials from env...");
-                aws_config::defaults(*AWS_BEHAVIOR_VERSION)
-            }
-        };
+        let config = RUNTIME.block_on(async move {
+            let config_loader = match (access_key, secret_access_key) {
+                (Some(key), Some(secret_key)) => {
+                    gst::log!(CAT, imp = self, "Using settings credentials");
+                    aws_config::defaults(*AWS_BEHAVIOR_VERSION).credentials_provider(
+                        aws_sdk_translate::config::Credentials::new(
+                            key,
+                            secret_key,
+                            session_token,
+                            None,
+                            "translate",
+                        ),
+                    )
+                }
+                _ => {
+                    gst::log!(CAT, imp = self, "Attempting to get credentials from env...");
+                    aws_config::defaults(*AWS_BEHAVIOR_VERSION)
+                }
+            };
 
-        let config_loader = config_loader.region(
-            aws_config::meta::region::RegionProviderChain::default_provider()
-                .or_else(DEFAULT_REGION),
-        );
+            let config_loader = config_loader.region(
+                aws_config::meta::region::RegionProviderChain::default_provider()
+                    .or_else(DEFAULT_REGION),
+            );
 
-        let config_loader =
-            config_loader.stalled_stream_protection(StalledStreamProtectionConfig::disabled());
+            let config_loader =
+                config_loader.stalled_stream_protection(StalledStreamProtectionConfig::disabled());
 
-        let config = futures::executor::block_on(config_loader.load());
+            config_loader.load().await
+        });
         gst::log!(CAT, imp = self, "Using region {}", config.region().unwrap());
 
         *self.aws_config.lock().unwrap() = Some(config);
