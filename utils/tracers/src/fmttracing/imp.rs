@@ -30,14 +30,13 @@ use gstreamer_tracing::tracer::{TracingTracer, TracingTracerImpl};
 use tracing::error;
 
 #[derive(Default)]
-pub struct FmtTracer {}
+pub struct FmtTracer;
 
 #[glib::object_subclass]
 impl ObjectSubclass for FmtTracer {
     const NAME: &'static str = "GstFmtTracer";
     type Type = super::FmtTracer;
     type ParentType = TracingTracer;
-    type Interfaces = ();
 }
 
 impl ObjectImpl for FmtTracer {

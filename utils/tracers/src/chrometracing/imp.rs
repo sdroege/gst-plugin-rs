@@ -53,7 +53,6 @@ impl ObjectSubclass for ChromeTracer {
     const NAME: &'static str = "GstChromeTracer";
     type Type = super::ChromeTracer;
     type ParentType = TracingTracer;
-    type Interfaces = ();
 }
 
 impl ObjectImpl for ChromeTracer {
