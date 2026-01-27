@@ -255,6 +255,10 @@ impl Polly {
         let (client, in_format, out_segment) = {
             let state = self.state.lock().unwrap();
 
+            if state.client.is_none() {
+                return Ok(None);
+            }
+
             (
                 state.client.as_ref().expect("connected").clone(),
                 state.in_format.as_ref().expect("received caps").clone(),
