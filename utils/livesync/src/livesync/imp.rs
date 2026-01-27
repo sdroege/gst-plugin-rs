@@ -1165,6 +1165,13 @@ impl LiveSync {
             return Ok(gst::FlowSuccess::Ok);
         }
 
+        if state.single_segment
+            && segment.rate() < 0.0
+            && let Some(ref audio_info) = state.in_audio_info
+        {
+            buffer = self.reverse_raw_audio_buffer(buffer, audio_info);
+        }
+
         gst::trace!(
             CAT,
             obj = pad,
@@ -1728,5 +1735,76 @@ impl LiveSync {
         state.num_duplicate += 1;
 
         Ok(())
+    }
+
+    // Reverses raw audio buffer samples.
+    //
+    // In reverse playback, raw audio buffers samples must be reversed. Decoders handle
+    // this, but raw audio samples streamed directly off a demuxer are in forward order,
+    // and the segment rate is < 0.0, so audio sinks reverse samples before rendering.
+    // In single-segment mode, the output segment is > 0.0, so we must reverse samples.
+    //
+    // This must be called:
+    //
+    // * In single-segment mode only.
+    // * After buffer was clipped and pts was translated to the single segment (rate == 1.0).
+    fn reverse_raw_audio_buffer(
+        &self,
+        buffer: gst::Buffer,
+        info: &gst_audio::AudioInfo,
+    ) -> gst::Buffer {
+        // pts already translated to single segment running time (rate == 1.0),
+        // so this is the actual running time when the buffer must start
+        let pts = buffer.pts().unwrap();
+
+        let Ok(mut outbuf) = gst::Buffer::with_size(buffer.size()) else {
+            gst::warning!(
+                CAT,
+                imp = self,
+                "Allocation failure for reversed audio buffer {buffer:?}",
+            );
+            return buffer;
+        };
+
+        let outbuf_mut = outbuf.make_mut();
+
+        if buffer
+            .copy_into(outbuf_mut, gst::BUFFER_COPY_METADATA, ..)
+            .is_err()
+        {
+            gst::info!(
+                CAT,
+                imp = self,
+                "Meta copy failure for reversed audio buffer {buffer:?}",
+            );
+        }
+
+        gst::trace!(
+            CAT,
+            imp = self,
+            "Reversing samples for audio buffer {buffer:?}",
+        );
+
+        let inbuf = gst_audio::AudioBuffer::from_buffer_readable(buffer, info).unwrap();
+        if inbuf.n_samples() == 0 {
+            return outbuf;
+        }
+
+        outbuf_mut.set_pts(pts);
+
+        let mut outbuf = gst_audio::AudioBuffer::from_buffer_writable(outbuf, info).unwrap();
+
+        for plane in 0..inbuf.n_planes() {
+            let in_plane = inbuf.plane_data(plane).unwrap();
+            let out_plane = outbuf.plane_data_mut(plane).unwrap();
+
+            let in_rev_frames = in_plane.chunks_exact(info.bpf() as usize).rev();
+            let out_frames = out_plane.chunks_exact_mut(info.bpf() as usize);
+
+            std::iter::zip(in_rev_frames, out_frames)
+                .for_each(|(in_rev_frame, out_frame)| out_frame.copy_from_slice(in_rev_frame));
+        }
+
+        outbuf.into_buffer()
     }
 }

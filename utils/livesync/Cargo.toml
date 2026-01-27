@@ -10,7 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 gst.workspace = true
-gst-audio.workspace = true
+gst-audio = { workspace = true, features = [ "v1_20" ] }
 num-rational = { version = "0.4", default-features = false, features = [] }
 parking_lot = "0.12"
 
