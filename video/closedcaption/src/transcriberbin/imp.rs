@@ -3139,6 +3139,12 @@ impl BinImpl for TranscriberBin {
                         );
                         pad_state.target_passthrough_state = TargetPassthroughState::Enabled;
                         let pad_weak = pad.downgrade();
+                        let warning_message = gst::message::Warning::builder_from_error(m.error())
+                            .debug_if_some(m.debug().as_deref())
+                            .details_if_some(m.details().map(|s| s.to_owned()))
+                            .src(pad)
+                            .build();
+                        let _ = self.obj().post_message(warning_message);
                         self.obj().call_async(move |bin| {
                             let Some(pad) = pad_weak.upgrade() else {
                                 return;
