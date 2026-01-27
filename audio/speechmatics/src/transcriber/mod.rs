@@ -71,12 +71,38 @@ pub enum SpeechmaticsTranscriberDiarization {
     Speaker = 1,
 }
 
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
+#[repr(u32)]
+#[enum_type(name = "GstSpeechmaticsAudioEventType")]
+#[non_exhaustive]
+pub enum SpeechmaticsAudioEventType {
+    #[enum_value(name = "Laughter", nick = "laughter")]
+    Laughter = 0,
+    #[enum_value(name = "Applause", nick = "applause")]
+    Applause = 1,
+    #[enum_value(name = "Music", nick = "music")]
+    Music = 2,
+}
+
+impl From<SpeechmaticsAudioEventType> for String {
+    fn from(value: SpeechmaticsAudioEventType) -> Self {
+        match value {
+            SpeechmaticsAudioEventType::Laughter => "laughter",
+            SpeechmaticsAudioEventType::Applause => "applause",
+            SpeechmaticsAudioEventType::Music => "music",
+        }
+        .to_string()
+    }
+}
+
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "doc")]
     {
         TranscriberSrcPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
         SpeechmaticsTranscriberDiarization::static_type()
             .mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        TranscriberSrcPad::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        SpeechmaticsAudioEventType::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
     gst::Element::register(
         Some(plugin),

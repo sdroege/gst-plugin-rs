@@ -17347,6 +17347,17 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "audio-event-types": {
+                        "blurb": "Audio Event Types",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    },
                     "diarization": {
                         "blurb": "Defines how to separate speakers in the audio",
                         "conditionally-available": false,

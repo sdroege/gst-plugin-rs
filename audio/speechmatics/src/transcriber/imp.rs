@@ -28,7 +28,7 @@ use atomic_refcell::AtomicRefCell;
 
 use std::sync::LazyLock;
 
-use super::SpeechmaticsTranscriberDiarization;
+use super::{SpeechmaticsAudioEventType, SpeechmaticsTranscriberDiarization};
 
 #[derive(serde::Deserialize, Debug)]
 #[allow(dead_code)]
@@ -182,12 +182,47 @@ struct TranslationConfig {
     enable_partials: bool,
 }
 
+#[derive(serde::Deserialize, Debug)]
+#[allow(dead_code)]
+struct StartAudioEvent {
+    start_time: f32,
+    #[serde(rename = "type")]
+    type_: String,
+}
+
+#[derive(serde::Deserialize, Debug)]
+#[allow(dead_code)]
+struct AudioEventStarted {
+    event: StartAudioEvent,
+}
+
+#[derive(serde::Deserialize, Debug)]
+#[allow(dead_code)]
+struct EndAudioEvent {
+    end_time: f32,
+    #[serde(rename = "type")]
+    type_: String,
+}
+
+#[derive(serde::Deserialize, Debug)]
+#[allow(dead_code)]
+struct AudioEventEnded {
+    event: EndAudioEvent,
+}
+
+#[derive(serde::Serialize, Debug)]
+struct AudioEventsConfig {
+    types: Vec<String>,
+}
+
 #[derive(serde::Serialize, Debug)]
 struct StartRecognition {
     message: String,
     audio_format: AudioType,
     transcription_config: TranscriptionConfig,
     translation_config: TranslationConfig,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    audio_events_config: Option<AudioEventsConfig>,
 }
 
 #[derive(serde::Serialize, Debug)]
@@ -230,6 +265,7 @@ const DEFAULT_DIARIZATION: SpeechmaticsTranscriberDiarization =
 const DEFAULT_MAX_SPEAKERS: u32 = 50;
 const DEFAULT_REMOVE_DISFLUENCIES: bool = false;
 const DEFAULT_GET_SPEAKERS_INTERVAL: u32 = 0;
+const DEFAULT_AUDIO_EVENT_TYPES: Vec<SpeechmaticsAudioEventType> = vec![];
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -246,6 +282,7 @@ struct Settings {
     mask_profanities: bool,
     remove_disfluencies: bool,
     get_speakers_interval: u32,
+    audio_event_types: Vec<SpeechmaticsAudioEventType>,
 }
 
 impl Default for Settings {
@@ -264,6 +301,7 @@ impl Default for Settings {
             mask_profanities: DEFAULT_MASK_PROFANITIES,
             remove_disfluencies: DEFAULT_REMOVE_DISFLUENCIES,
             get_speakers_interval: DEFAULT_GET_SPEAKERS_INTERVAL,
+            audio_event_types: DEFAULT_AUDIO_EVENT_TYPES,
         }
     }
 }
@@ -1312,6 +1350,62 @@ impl Transcriber {
                             gst::message::Element::builder(s).src(&*self.obj()).build(),
                         );
                     }
+                    "AudioEventStarted" => {
+                        let audio_event_started: AudioEventStarted = serde_json::from_value(json)
+                            .map_err(|err| {
+                            gst::error_msg!(
+                                gst::StreamError::Failed,
+                                ["Unexpected message: {} ({})", text, err]
+                            )
+                        })?;
+
+                        let start_time = gst::ClockTime::from_nseconds(
+                            (audio_event_started.event.start_time as f64 * 1_000_000_000.0) as u64,
+                        ) + first_pts;
+
+                        let event = gst::event::CustomDownstream::builder(
+                            gst::Structure::builder("speechmatics/audio-event-started")
+                                .field("pts", start_time)
+                                .field("type", audio_event_started.event.type_)
+                                .build(),
+                        )
+                        .build();
+
+                        for srcpad in &self.state.lock().unwrap().srcpads {
+                            if let Some(ref mut sender) = srcpad.imp().state.lock().unwrap().sender
+                            {
+                                let _ = sender.send(TranscriberOutput::Event(event.clone()));
+                            }
+                        }
+                    }
+                    "AudioEventEnded" => {
+                        let audio_event_ended: AudioEventEnded = serde_json::from_value(json)
+                            .map_err(|err| {
+                                gst::error_msg!(
+                                    gst::StreamError::Failed,
+                                    ["Unexpected message: {} ({})", text, err]
+                                )
+                            })?;
+
+                        let end_time = gst::ClockTime::from_nseconds(
+                            (audio_event_ended.event.end_time as f64 * 1_000_000_000.0) as u64,
+                        ) + first_pts;
+
+                        let event = gst::event::CustomDownstream::builder(
+                            gst::Structure::builder("speechmatics/audio-event-ended")
+                                .field("pts", end_time)
+                                .field("type", audio_event_ended.event.type_)
+                                .build(),
+                        )
+                        .build();
+
+                        for srcpad in &self.state.lock().unwrap().srcpads {
+                            if let Some(ref mut sender) = srcpad.imp().state.lock().unwrap().sender
+                            {
+                                let _ = sender.send(TranscriberOutput::Event(event.clone()));
+                            }
+                        }
+                    }
                     _ => (),
                 }
 
@@ -1485,6 +1579,17 @@ impl Transcriber {
                 translation_config: TranslationConfig {
                     target_languages: translation_languages,
                     enable_partials: false,
+                },
+                audio_events_config: if settings.audio_event_types.is_empty() {
+                    None
+                } else {
+                    Some(AudioEventsConfig {
+                        types: settings
+                            .audio_event_types
+                            .iter()
+                            .map(|x| (*x).into())
+                            .collect(),
+                    })
                 },
             };
 
@@ -1913,6 +2018,17 @@ impl ObjectImpl for Transcriber {
                     )
                     .mutable_ready()
                     .build(),
+                gst::ParamSpecArray::builder("audio-event-types")
+                    .element_spec(
+                        &glib::ParamSpecEnum::builder_with_default("audio-event-type", SpeechmaticsAudioEventType::Laughter)
+                        .nick("Audio Event Type")
+                        .blurb("Audio Event Type")
+                        .build(),
+                    )
+                    .nick("Audio Event Types")
+                    .blurb("Audio Event Types")
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -2100,6 +2216,17 @@ impl ObjectImpl for Transcriber {
                     }
                 }
             }
+            "audio-event-types" => {
+                self.settings.lock().unwrap().audio_event_types = value
+                    .get::<gst::Array>()
+                    .expect("type checked upstream")
+                    .iter()
+                    .map(|v| {
+                        v.get::<SpeechmaticsAudioEventType>()
+                            .expect("type checked upstream")
+                    })
+                    .collect::<Vec<_>>();
+            }
             _ => unimplemented!(),
         }
     }
@@ -2194,6 +2321,15 @@ impl ObjectImpl for Transcriber {
                 }
                 gst::Array::new(labeled_speakers).to_value()
             }
+            "audio-event-types" => self
+                .settings
+                .lock()
+                .unwrap()
+                .audio_event_types
+                .iter()
+                .map(|x| x.to_send_value())
+                .collect::<gst::Array>()
+                .to_value(),
             _ => unimplemented!(),
         }
     }
