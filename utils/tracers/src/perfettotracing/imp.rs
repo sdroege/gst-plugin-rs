@@ -58,16 +58,7 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, glib::Enum)]
-#[enum_type(name = "GstPerfettoTracerBackend")]
-#[repr(i32)]
-pub enum PerfettoBackend {
-    #[default]
-    #[enum_value(name = "File: Write to a .pftrace file", nick = "file")]
-    File = 0,
-    #[enum_value(name = "System: Connect to traced daemon", nick = "system")]
-    System = 1,
-}
+use super::PerfettoBackend;
 
 enum LayerType {
     Native(NativeLayer<NonBlocking>),
@@ -75,6 +66,21 @@ enum LayerType {
 }
 
 const FLUSH_TIMEOUT: Duration = Duration::from_secs(5);
+
+impl Drop for LayerType {
+    fn drop(&mut self) {
+        match self {
+            LayerType::Native(l) => {
+                let _ = l.flush(FLUSH_TIMEOUT, FLUSH_TIMEOUT);
+                let _ = l.stop();
+            }
+            LayerType::Sdk(l) => {
+                let _ = l.flush(FLUSH_TIMEOUT);
+                let _ = l.stop();
+            }
+        }
+    }
+}
 
 #[derive(Default)]
 struct State {
@@ -178,23 +184,3 @@ impl TracerImpl for PerfettoTracer {
     const USE_STRUCTURE_PARAMS: bool = true;
 }
 impl TracingTracerImpl for PerfettoTracer {}
-
-impl Drop for PerfettoTracer {
-    fn drop(&mut self) {
-        if let Ok(mut state) = self.state.lock() {
-            if let Some(layer) = state.layer.take() {
-                match layer {
-                    LayerType::Native(l) => {
-                        let _ = l.flush(FLUSH_TIMEOUT, FLUSH_TIMEOUT);
-                        let _ = l.stop();
-                    }
-                    LayerType::Sdk(l) => {
-                        let _ = l.flush(FLUSH_TIMEOUT);
-                        let _ = l.stop();
-                    }
-                }
-            }
-            // Guard drops here, flushing remaining data
-        }
-    }
-}

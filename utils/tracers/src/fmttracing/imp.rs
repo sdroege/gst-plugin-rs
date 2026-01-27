@@ -26,7 +26,7 @@
  * GStreamer log level to integrate (same format as GST_DEBUG).
  */
 use gst::{glib, subclass::prelude::*};
-use gstreamer_tracing::tracer::{TracingTracer, TracingTracerImpl};
+use gst_tracing::tracer::{TracingTracer, TracingTracerImpl};
 use tracing::error;
 
 #[derive(Default)]

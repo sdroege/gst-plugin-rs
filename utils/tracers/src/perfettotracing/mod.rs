@@ -16,6 +16,23 @@ use gst_tracing::tracer::TracingTracer;
 
 mod imp;
 
+/// Backend for Perfetto tracing output.
+///
+/// Determines where trace data is written.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, glib::Enum)]
+#[enum_type(name = "GstPerfettoTracerBackend")]
+#[doc(alias = "GstPerfettoTracerBackend")]
+#[repr(i32)]
+pub enum PerfettoBackend {
+    /// Write to a `.pftrace` file in the current directory.
+    #[default]
+    #[enum_value(name = "File: Write to a .pftrace file", nick = "file")]
+    File = 0,
+    /// Connect to the system `traced` daemon for system-wide tracing.
+    #[enum_value(name = "System: Connect to traced daemon", nick = "system")]
+    System = 1,
+}
+
 glib::wrapper! {
     pub struct PerfettoTracer(ObjectSubclass<imp::PerfettoTracer>)
        @extends TracingTracer, gst::Tracer, gst::Object;

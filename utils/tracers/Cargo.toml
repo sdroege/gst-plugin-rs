@@ -27,7 +27,7 @@ url = "2"
 futures = "0.3"
 tracing = { version="0.1", optional = true}
 tracing-chrome = { version = "0.7", optional = true }
-tracing-subscriber = { version = "0.3", optional = true }
+tracing-subscriber = { version = "0.3", features = ["json"], optional = true }
 tracing-perfetto-sdk-layer = { version = "0.13", optional = true }
 tracing-perfetto-sdk-schema = { version = "0.13", optional = true }
 tracing-appender = { version = "0.2", optional = true }
@@ -44,7 +44,7 @@ path = "src/lib.rs"
 gst-plugin-version-helper.workspace = true
 
 [features]
-default = ["gstreamer-tracing", "tracing-chrome", "tracing-subscriber", "perfetto"]
+default = ["gst-tracing", "tracing-chrome", "tracing-subscriber"]
 static = []
 capi = []
 doc = ["gst/v1_18"]
