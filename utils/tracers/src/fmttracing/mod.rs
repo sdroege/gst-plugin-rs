@@ -17,6 +17,29 @@ use gst_tracing::tracer::TracingTracer;
 
 mod imp;
 
+/// Output format for the fmt tracer.
+///
+/// Determines how trace events are formatted.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, glib::Enum)]
+#[enum_type(name = "GstFmtTracerFormat")]
+#[doc(alias = "GstFmtTracerFormat")]
+#[repr(i32)]
+pub enum FmtFormat {
+    /// Full format with all details (default).
+    #[default]
+    #[enum_value(name = "Full: Complete event information", nick = "full")]
+    Full = 0,
+    /// Compact format on a single line.
+    #[enum_value(name = "Compact: Single-line output", nick = "compact")]
+    Compact = 1,
+    /// Pretty format with visual indentation.
+    #[enum_value(name = "Pretty: Visual indentation", nick = "pretty")]
+    Pretty = 2,
+    /// JSON format for machine parsing.
+    #[enum_value(name = "JSON: Machine-readable output", nick = "json")]
+    Json = 3,
+}
+
 glib::wrapper! {
     pub struct FmtTracer(ObjectSubclass<imp::FmtTracer>)
        @extends TracingTracer, gst::Tracer, gst::Object;

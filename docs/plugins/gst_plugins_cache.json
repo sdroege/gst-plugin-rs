@@ -15654,6 +15654,31 @@
         "filename": "gstrstracers",
         "license": "MPL",
         "other-types": {
+            "GstFmtTracerFormat": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Full: Complete event information",
+                        "name": "full",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Compact: Single-line output",
+                        "name": "compact",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Pretty: Visual indentation",
+                        "name": "pretty",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "JSON: Machine-readable output",
+                        "name": "json",
+                        "value": "3"
+                    }
+                ]
+            },
             "GstPcapWriterFakeProtocol": {
                 "kind": "enum",
                 "values": [
