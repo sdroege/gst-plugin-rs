@@ -46,5 +46,8 @@ glib::wrapper! {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "doc")]
+    FmtFormat::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+
     gst::Tracer::register(Some(plugin), "fmttracing", FmtTracer::static_type())
 }

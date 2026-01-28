@@ -39,5 +39,8 @@ glib::wrapper! {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "doc")]
+    PerfettoBackend::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+
     gst::Tracer::register(Some(plugin), "perfetto", PerfettoTracer::static_type())
 }

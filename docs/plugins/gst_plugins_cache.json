@@ -15694,6 +15694,21 @@
                     }
                 ]
             },
+            "GstPerfettoTracerBackend": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "File: Write to a .pftrace file",
+                        "name": "file",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "System: Connect to traced daemon",
+                        "name": "system",
+                        "value": "1"
+                    }
+                ]
+            },
             "GstPipelineSnapshotCleanupMode": {
                 "kind": "enum",
                 "values": [
@@ -15757,6 +15772,76 @@
                         ],
                         "return-type": "void",
                         "when": "last"
+                    }
+                }
+            },
+            "chrometracing": {
+                "hierarchy": [
+                    "GstChromeTracer",
+                    "GstRsTracingTracer",
+                    "GstTracer",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ]
+            },
+            "fmttracing": {
+                "hierarchy": [
+                    "GstFmtTracer",
+                    "GstRsTracingTracer",
+                    "GstTracer",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "properties": {
+                    "format": {
+                        "blurb": "Output format",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "full (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstFmtTracerFormat",
+                        "writable": true
+                    },
+                    "with-ansi": {
+                        "blurb": "Include ANSI color codes",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "with-target": {
+                        "blurb": "Include the target",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "with-time": {
+                        "blurb": "Include timestamps",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
                     }
                 }
             },
@@ -15873,6 +15958,30 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "gchararray",
+                        "writable": true
+                    }
+                }
+            },
+            "perfetto": {
+                "hierarchy": [
+                    "GstPerfettoTracer",
+                    "GstRsTracingTracer",
+                    "GstTracer",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "properties": {
+                    "backend": {
+                        "blurb": "The tracing backend to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "file (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstPerfettoTracerBackend",
                         "writable": true
                     }
                 }
@@ -16011,6 +16120,29 @@
                         ],
                         "return-type": "void",
                         "when": "last"
+                    }
+                }
+            },
+            "rusttracing": {
+                "hierarchy": [
+                    "GstRsTracingTracer",
+                    "GstTracer",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "properties": {
+                    "log-level": {
+                        "blurb": "GStreamer log level to integrate as tracing events",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
                     }
                 }
             }
