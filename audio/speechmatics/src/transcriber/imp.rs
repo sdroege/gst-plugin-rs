@@ -619,12 +619,7 @@ impl TranscriberSrcPad {
                             .seqnum(seqnum)
                             .build();
                         gst::log!(CAT, "Pushing gap:    {} -> {}", last_position, pts);
-                        if !self.obj().push_event(gap_event) {
-                            return Err(gst::error_msg!(
-                                gst::StreamError::Failed,
-                                ["failed to push gap"]
-                            ));
-                        }
+                        self.obj().push_event(gap_event);
                     }
 
                     let pts_end = if let Some(duration) = buf.duration() {
@@ -654,12 +649,7 @@ impl TranscriberSrcPad {
                             .seqnum(seqnum)
                             .build();
                         gst::log!(CAT, "Pushing gap:    {} -> {}", last_position, position);
-                        if !self.obj().push_event(gap_event) {
-                            return Err(gst::error_msg!(
-                                gst::StreamError::Failed,
-                                ["failed to push gap"]
-                            ));
-                        }
+                        self.obj().push_event(gap_event);
 
                         self.state
                             .lock()

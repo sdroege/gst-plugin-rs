@@ -178,12 +178,7 @@ impl TranscribeParse {
                         let gap_event = gst::event::Gap::builder(last_pts)
                             .duration(start_pts - last_pts)
                             .build();
-                        if !self.srcpad.push_event(gap_event) {
-                            return Err(error_msg!(
-                                gst::StreamError::Failed,
-                                ["Failed to push gap"]
-                            ));
-                        }
+                        self.srcpad.push_event(gap_event);
                     }
 
                     if !(item.alternatives.is_empty()) {
