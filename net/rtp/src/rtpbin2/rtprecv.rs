@@ -1442,6 +1442,10 @@ impl RtpRecv {
         self.handle_ssrc_collision(session, ssrc_collision)?;
         state = self.handle_push_jitterbuffer(state, id, items_to_pre_push, now)?;
         if split_bufferlist {
+            assert!(!list_mut.is_empty());
+
+            let previous_recv_src_pad = previous_recv_src_pad.unwrap();
+
             // this abomination is to work around passing state through handle_push_jitterbuffer
             // inside a closure
             let mut maybe_state = Some(state);
@@ -1453,7 +1457,7 @@ impl RtpRecv {
                     [HeldRecvItem::Buffer(HeldRecvBuffer {
                         hold_id: None,
                         buffer,
-                        recv_src_pad: previous_recv_src_pad.clone().unwrap(),
+                        recv_src_pad: previous_recv_src_pad.clone(),
                     })],
                     now,
                 ) {
