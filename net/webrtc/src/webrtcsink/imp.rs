@@ -21,6 +21,7 @@ use tokio::net::TcpListener;
 use futures::prelude::*;
 
 use anyhow::{Error, anyhow};
+use indexmap::IndexMap;
 use itertools::Itertools;
 use std::collections::HashMap;
 
@@ -260,8 +261,6 @@ struct InputStream {
     out_caps: Option<gst::Caps>,
     /// Pace input data
     clocksync: Option<gst::Element>,
-    /// The serial number picked for this stream
-    serial: u32,
     /// Whether the input stream is video or not
     is_video: bool,
     /// Whether initial discovery has started
@@ -385,7 +384,7 @@ struct State {
     codec_discovery_done: bool,
     audio_serial: u32,
     video_serial: u32,
-    streams: HashMap<String, InputStream>,
+    streams: IndexMap<String, InputStream>,
     discoveries: HashMap<String, Vec<DiscoveryInfo>>,
     signaller_signals: Option<SignallerSignals>,
     finalizing_sessions: Arc<(Mutex<HashMap<String, Session>>, Condvar)>,
@@ -587,7 +586,7 @@ impl Default for State {
             codec_discovery_done: false,
             audio_serial: 0,
             video_serial: 0,
-            streams: HashMap::new(),
+            streams: IndexMap::new(),
             discoveries: HashMap::new(),
             signaller_signals: Default::default(),
             finalizing_sessions: Arc::new((Mutex::new(HashMap::new()), Condvar::new())),
@@ -3513,8 +3512,6 @@ impl BaseWebRTCSink {
 
         let mut streams: Vec<InputStream> = state.streams.values().cloned().collect();
 
-        streams.sort_by_key(|s| s.serial);
-
         RUNTIME.spawn(glib::clone!(
             #[to_owned(rename_to = this)]
             self,
@@ -5691,17 +5688,13 @@ impl ElementImpl for BaseWebRTCSink {
 
         let mut state = self.state.lock().unwrap();
 
-        let serial;
-
         let (name, is_video) = if templ.name().starts_with("video_") {
             let name = format!("video_{}", state.video_serial);
-            serial = state.video_serial;
             state.video_serial += 1;
 
             (name, true)
         } else {
             let name = format!("audio_{}", state.audio_serial);
-            serial = state.audio_serial;
             state.audio_serial += 1;
             (name, false)
         };
@@ -5735,7 +5728,6 @@ impl ElementImpl for BaseWebRTCSink {
             out_caps: None,
             clocksync: None,
             is_video,
-            serial,
             initial_discovery_started: false,
         };
 
@@ -5762,7 +5754,7 @@ impl ElementImpl for BaseWebRTCSink {
 
         gst::debug!(CAT, "releasing pad {}", pad_name);
 
-        let Some(stream) = state.streams.remove(&pad_name) else {
+        let Some(stream) = state.streams.shift_remove(&pad_name) else {
             gst::error!(CAT, "no such stream: {}", pad_name);
             return;
         };
