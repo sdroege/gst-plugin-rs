@@ -603,7 +603,6 @@ impl Signaller {
                 }
                 _ => return,
             }
-            return;
         }
 
         let mut connection = self.connection.lock().unwrap();
