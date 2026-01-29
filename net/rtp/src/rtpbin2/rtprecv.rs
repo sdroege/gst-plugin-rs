@@ -1467,7 +1467,7 @@ impl RtpRecv {
             });
             state = maybe_state.unwrap();
             ret?;
-        } else {
+        } else if !list.is_empty() {
             state = self.handle_push_jitterbuffer(
                 state,
                 id,
