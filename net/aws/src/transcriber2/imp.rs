@@ -762,18 +762,6 @@ impl Transcriber {
             state.result_rx = Some(result_rx);
             state.client = Some(client);
 
-            gst::info!(CAT, imp = self, "establishing connection");
-
-            let mut output = RUNTIME
-                .block_on(async move { builder.audio_stream(chunk_stream.into()).send().await })
-                .map_err(|err| {
-                    let err = format!("Transcribe ws init error: {err}: {} ({err:?})", err.meta());
-                    gst::error!(CAT, imp = self, "{err}");
-                    gst::error_msg!(gst::LibraryError::Init, ["{err}"])
-                })?;
-
-            gst::info!(CAT, imp = self, "connection established!");
-
             if let Err(err) = self.start_srcpad_task() {
                 gst::error!(CAT, imp = self, "Failed to start srcpad task: {}", err);
                 return Err(gst::error_msg!(
@@ -784,6 +772,28 @@ impl Transcriber {
 
             let this_weak = self.downgrade();
             state.receive_handle = Some(RUNTIME.spawn(async move {
+                if let Some(this) = this_weak.upgrade() {
+                    gst::info!(CAT, imp = this, "establishing connection");
+                }
+
+                let mut output = match builder.audio_stream(chunk_stream.into()).send().await {
+                    Ok(output) => output,
+                    Err(err) => {
+                        if let Some(this) = this_weak.upgrade() {
+                            gst::error!(CAT, imp = this, "{err}");
+                            this.post_error_message(gst::error_msg!(
+                                gst::LibraryError::Failed,
+                                ["{err}"]
+                            ));
+                        }
+                        return;
+                    }
+                };
+
+                if let Some(this) = this_weak.upgrade() {
+                    gst::info!(CAT, imp = this, "connection established");
+                }
+
                 loop {
                     let event = match output.transcript_result_stream.recv().await {
                         Ok(event) => event,
