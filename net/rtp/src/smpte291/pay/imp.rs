@@ -97,7 +97,7 @@ impl ElementImpl for RtpSmpte291Pay {
                 &gst::Caps::builder_full()
                     .structure(
                         gst::Structure::builder("application/x-rtp")
-                            .field("media", "application")
+                            .field("media", "video")
                             .field("clock-rate", 90000i32)
                             .field("encoding-name", "smpte291")
                             .build(),
@@ -126,7 +126,7 @@ impl RtpBasePay2Impl for RtpSmpte291Pay {
 
     fn set_sink_caps(&self, _caps: &gst::Caps) -> bool {
         let src_caps = gst::Caps::builder("application/x-rtp")
-            .field("media", "application")
+            .field("media", "video")
             .field("clock-rate", 90000i32)
             .field("encoding-name", "smpte291")
             .build();
