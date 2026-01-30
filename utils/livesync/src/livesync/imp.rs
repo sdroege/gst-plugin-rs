@@ -58,6 +58,12 @@ enum Item {
     Query(std::ptr::NonNull<gst::QueryRef>, mpsc::SyncSender<bool>),
 }
 
+impl Item {
+    fn is_buffer(&self) -> bool {
+        matches!(*self, Item::Buffer(_, _, _))
+    }
+}
+
 // SAFETY: Need to be able to pass *mut gst::QueryRef
 unsafe impl Send for Item {}
 
@@ -1201,11 +1207,12 @@ impl LiveSync {
         }
         state.srcresult?;
 
-        // Synchronize to the clock if requested to do so, or when the queue is currently empty
+        // Synchronize buffers to the clock if requested to do so,
+        // or when the queue is currently empty
         // and we might have to introduce a gap buffer.
-        if let Some(last_rt_range) = (state.sync || state.queue.is_empty())
-            .then_some(state.out_last_rt_range)
-            .flatten()
+        // But don't delay pushing events & queries.
+        if (state.sync || state.queue.front().is_none_or(Item::is_buffer))
+            && let Some(last_rt_range) = state.out_last_rt_range
         {
             let sync_rt = last_rt_range.end;
 
