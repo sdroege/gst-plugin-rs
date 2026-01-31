@@ -515,107 +515,73 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
 
                 // Planar YUV 4:2:0
                 VideoFormat::I420 => {
-                    // With VideoFrame::planes_data_mut() we could get a mutable borrow to all
-                    // planes and do everything in one loop instead of having to go three times,
-                    // but at least the first attempt performed slightly worse than the separate
-                    // plane processing, so for now we stick to processing planes separately.
-
                     use itertools::izip;
 
                     const PGROUP_SIZE_I420: usize = 6;
 
-                    // Y plane
-                    {
-                        let y_data = vframe.plane_data_mut(0).unwrap();
-                        let y_lines = y_data.chunks_exact_mut(2 * stride).nth(y / 2).unwrap();
-                        let (y_line1, y_line2) = y_lines.split_at_mut(stride);
-                        let y1_pixels = &mut y_line1[x..][..n_pixels];
-                        let y2_pixels = &mut y_line2[x..][..n_pixels];
+                    let u_stride = vframe.plane_stride()[1] as usize;
+                    let v_stride = vframe.plane_stride()[2] as usize;
 
-                        for (y1, y2, src) in izip!(
-                            y1_pixels.chunks_exact_mut(2),
-                            y2_pixels.chunks_exact_mut(2),
-                            chunk_data.chunks_exact(PGROUP_SIZE_I420)
-                        ) {
-                            y1[0] = src[0];
-                            y1[1] = src[1];
-                            y2[0] = src[2];
-                            y2[1] = src[3];
-                        }
-                    }
+                    let [y_data, u_data, v_data, _] = vframe.planes_data_mut();
+                    let y_lines = y_data.chunks_exact_mut(2 * stride).nth(y / 2).unwrap();
+                    let (y_line1, y_line2) = y_lines.split_at_mut(stride);
+                    let y1_pixels = &mut y_line1[x..][..n_pixels];
+                    let y2_pixels = &mut y_line2[x..][..n_pixels];
 
-                    // U plane
-                    {
-                        let u_stride = vframe.plane_stride()[1] as usize;
-                        let u_data = vframe.plane_data_mut(1).unwrap();
-                        let u_line = u_data.chunks_exact_mut(u_stride).nth(y / 2).unwrap();
-                        let u_pixels = &mut u_line[x / 2..][..n_pixels / 2];
-                        for (u, src) in izip!(u_pixels, chunk_data.chunks_exact(PGROUP_SIZE_I420)) {
-                            *u = src[4];
-                        }
-                    }
+                    let u_line = u_data.chunks_exact_mut(u_stride).nth(y / 2).unwrap();
+                    let u_pixels = &mut u_line[x / 2..][..n_pixels / 2];
 
-                    // V plane
-                    {
-                        let v_stride = vframe.plane_stride()[2] as usize;
-                        let v_data = vframe.plane_data_mut(2).unwrap();
-                        let v_line = v_data.chunks_exact_mut(v_stride).nth(y / 2).unwrap();
-                        let v_pixels = &mut v_line[x / 2..][..n_pixels / 2];
-                        for (v, src) in izip!(v_pixels, chunk_data.chunks_exact(PGROUP_SIZE_I420)) {
-                            *v = src[5];
-                        }
+                    let v_line = v_data.chunks_exact_mut(v_stride).nth(y / 2).unwrap();
+                    let v_pixels = &mut v_line[x / 2..][..n_pixels / 2];
+
+                    for (y1, y2, u, v, src) in izip!(
+                        y1_pixels.chunks_exact_mut(2),
+                        y2_pixels.chunks_exact_mut(2),
+                        u_pixels,
+                        v_pixels,
+                        chunk_data.chunks_exact(PGROUP_SIZE_I420)
+                    ) {
+                        y1[0] = src[0];
+                        y1[1] = src[1];
+                        y2[0] = src[2];
+                        y2[1] = src[3];
+                        *u = src[4];
+                        *v = src[5];
                     }
                 }
 
                 // Planar YUV 4:1:1
                 // Samples are packed in order Cb0-Y0-Y1-Cr0-Y2-Y3
                 VideoFormat::Y41b => {
-                    // With VideoFrame::planes_data_mut() we could get a mutable borrow to all
-                    // planes and do everything in one loop instead of having to go three times,
-                    // but at least the first attempt performed slightly worse than the separate
-                    // plane processing, so for now we stick to processing planes separately.
-
                     use itertools::izip;
 
                     const PGROUP_SIZE_Y41B: usize = 6;
 
-                    // Y plane
-                    {
-                        let y_data = vframe.plane_data_mut(0).unwrap();
-                        let y_line = y_data.chunks_exact_mut(stride).nth(y).unwrap();
-                        let y_pixels = &mut y_line[x..][..n_pixels];
+                    let u_stride = vframe.plane_stride()[1] as usize;
+                    let v_stride = vframe.plane_stride()[2] as usize;
+                    let [y_data, u_data, v_data, _] = vframe.planes_data_mut();
 
-                        for (y, src) in izip!(
-                            y_pixels.chunks_exact_mut(4),
-                            chunk_data.chunks_exact(PGROUP_SIZE_Y41B)
-                        ) {
-                            y[0] = src[1];
-                            y[1] = src[2];
-                            y[2] = src[4];
-                            y[3] = src[5];
-                        }
-                    }
+                    let y_line = y_data.chunks_exact_mut(stride).nth(y).unwrap();
+                    let y_pixels = &mut y_line[x..][..n_pixels];
 
-                    // U plane
-                    {
-                        let u_stride = vframe.plane_stride()[1] as usize;
-                        let u_data = vframe.plane_data_mut(1).unwrap();
-                        let u_line = u_data.chunks_exact_mut(u_stride).nth(y).unwrap();
-                        let u_pixels = &mut u_line[x / 4..][..n_pixels / 4];
-                        for (u, src) in izip!(u_pixels, chunk_data.chunks_exact(PGROUP_SIZE_Y41B)) {
-                            *u = src[0];
-                        }
-                    }
+                    let u_line = u_data.chunks_exact_mut(u_stride).nth(y).unwrap();
+                    let u_pixels = &mut u_line[x / 4..][..n_pixels / 4];
 
-                    // V plane
-                    {
-                        let v_stride = vframe.plane_stride()[2] as usize;
-                        let v_data = vframe.plane_data_mut(2).unwrap();
-                        let v_line = v_data.chunks_exact_mut(v_stride).nth(y).unwrap();
-                        let v_pixels = &mut v_line[x / 4..][..n_pixels / 4];
-                        for (v, src) in izip!(v_pixels, chunk_data.chunks_exact(PGROUP_SIZE_Y41B)) {
-                            *v = src[3];
-                        }
+                    let v_line = v_data.chunks_exact_mut(v_stride).nth(y).unwrap();
+                    let v_pixels = &mut v_line[x / 4..][..n_pixels / 4];
+
+                    for (y, u, v, src) in izip!(
+                        y_pixels.chunks_exact_mut(4),
+                        u_pixels,
+                        v_pixels,
+                        chunk_data.chunks_exact(PGROUP_SIZE_Y41B)
+                    ) {
+                        *u = src[0];
+                        y[0] = src[1];
+                        y[1] = src[2];
+                        *v = src[3];
+                        y[2] = src[4];
+                        y[3] = src[5];
                     }
                 }
 
