@@ -1244,6 +1244,11 @@ impl RtpRecv {
                                 }
 
                                 let res = buffer.recv_src_pad.pad.push(buffer.buffer);
+                                gst::trace!(
+                                    CAT,
+                                    obj = buffer.recv_src_pad.pad,
+                                    "Pushed buffer, flow ret {res:?}"
+                                );
                                 let _ = flow_combiner
                                     .lock()
                                     .unwrap()
@@ -1289,6 +1294,10 @@ impl RtpRecv {
 
                     let mut jb_store = list.recv_src_pad.jitter_buffer_store.lock().unwrap();
 
+                    // Collect all buffers with the same PTS in a new list to push them
+                    // all downstream in one go.
+                    let mut new_list = None;
+
                     let buf_list = list.list.make_mut();
                     for mut buffer in buf_list.drain(..) {
                         let mapped = buffer.map_readable().map_err(|e| {
@@ -1322,21 +1331,95 @@ impl RtpRecv {
                                 return Err(gst::FlowError::Flushing);
                             }
                             jitterbuffer::QueueResult::Forward { id: _, discont } => {
-                                // TODO: group consecutive buffers and push them as a list
-                                // See: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/merge_requests/2346#note_2989287
-
                                 drop(mapped);
 
+                                if discont {
+                                    let buffer_mut = buffer.make_mut();
+                                    buffer_mut.set_flags(gst::BufferFlags::DISCONT);
+                                }
+
                                 if let Some(session) = state.session_by_id(id) {
+                                    match new_list {
+                                        None => {
+                                            let new_pts = buffer.pts();
+                                            let mut list = gst::BufferList::new();
+                                            let list_ref = list.get_mut().unwrap();
+                                            list_ref.add(buffer);
+                                            new_list = Some((new_pts, list));
+                                        }
+                                        Some((pts, ref mut list)) if pts == buffer.pts() => {
+                                            let list_ref = list.get_mut().unwrap();
+                                            list_ref.add(buffer);
+                                        }
+                                        Some((_pts, old_list)) => {
+                                            let flow_combiner = session.recv_flow_combiner.clone();
+                                            drop(state);
+
+                                            let res = if old_list.len() == 1 {
+                                                let buffer = old_list.get_owned(0).unwrap();
+                                                drop(old_list);
+                                                let res = list.recv_src_pad.pad.push(buffer);
+                                                gst::trace!(
+                                                    CAT,
+                                                    obj = list.recv_src_pad.pad,
+                                                    "Pushed buffer, flow ret {res:?}"
+                                                );
+                                                res
+                                            } else {
+                                                let res = list.recv_src_pad.pad.push_list(old_list);
+                                                gst::trace!(
+                                                    CAT,
+                                                    obj = list.recv_src_pad.pad,
+                                                    "Pushed buffer list, flow ret {res:?}"
+                                                );
+                                                res
+                                            };
+                                            let _ = flow_combiner
+                                                .lock()
+                                                .unwrap()
+                                                .update_pad_flow(&list.recv_src_pad.pad, res);
+                                            // TODO: store flow, return only on session pads?
+
+                                            state = self.state.lock().unwrap();
+
+                                            let new_pts = buffer.pts();
+                                            let mut list = gst::BufferList::new();
+                                            let list_ref = list.get_mut().unwrap();
+                                            list_ref.add(buffer);
+                                            new_list = Some((new_pts, list));
+                                        }
+                                    }
+                                }
+                            }
+                            jitterbuffer::QueueResult::Queued(id) => {
+                                drop(mapped);
+
+                                // Forward any pending buffers now that we need to start queueing
+                                if let Some(((_pts, new_list), session)) =
+                                    Option::zip(new_list.take(), state.session_by_id(id))
+                                {
                                     let flow_combiner = session.recv_flow_combiner.clone();
                                     drop(state);
 
-                                    if discont {
-                                        let buffer_mut = buffer.make_mut();
-                                        buffer_mut.set_flags(gst::BufferFlags::DISCONT);
-                                    }
-
-                                    let res = list.recv_src_pad.pad.push(buffer);
+                                    let res = if new_list.len() == 1 {
+                                        let buffer = new_list.get_owned(0).unwrap();
+                                        drop(new_list);
+                                        let res = list.recv_src_pad.pad.push(buffer);
+                                        gst::trace!(
+                                            CAT,
+                                            obj = list.recv_src_pad.pad,
+                                            "Pushed buffer, flow ret {res:?}"
+                                        );
+                                        res
+                                    } else {
+                                        let res = list.recv_src_pad.pad.push_list(new_list);
+                                        gst::trace!(
+                                            CAT,
+                                            obj = list.recv_src_pad.pad,
+                                            "Pushed buffer list, flow ret {res:?}"
+                                        );
+                                        res
+                                    };
                                     let _ = flow_combiner
                                         .lock()
                                         .unwrap()
@@ -1345,9 +1428,6 @@ impl RtpRecv {
 
                                     state = self.state.lock().unwrap();
                                 }
-                            }
-                            jitterbuffer::QueueResult::Queued(id) => {
-                                drop(mapped);
 
                                 jb_store.store.insert(id, JitterBufferItem::Packet(buffer));
 
@@ -1370,6 +1450,41 @@ impl RtpRecv {
                                 );
                             }
                         }
+                    }
+
+                    // Finally forward any buffers that are still left
+                    if let Some(((_pts, new_list), session)) =
+                        Option::zip(new_list, state.session_by_id(id))
+                    {
+                        let flow_combiner = session.recv_flow_combiner.clone();
+                        drop(state);
+
+                        let res = if new_list.len() == 1 {
+                            let buffer = new_list.get_owned(0).unwrap();
+                            drop(new_list);
+                            let res = list.recv_src_pad.pad.push(buffer);
+                            gst::trace!(
+                                CAT,
+                                obj = list.recv_src_pad.pad,
+                                "Pushed buffer, flow ret {res:?}"
+                            );
+                            res
+                        } else {
+                            let res = list.recv_src_pad.pad.push_list(new_list);
+                            gst::trace!(
+                                CAT,
+                                obj = list.recv_src_pad.pad,
+                                "Pushed buffer list, flow ret {res:?}"
+                            );
+                            res
+                        };
+                        let _ = flow_combiner
+                            .lock()
+                            .unwrap()
+                            .update_pad_flow(&list.recv_src_pad.pad, res);
+                        // TODO: store flow, return only on session pads?
+
+                        state = self.state.lock().unwrap();
                     }
                 }
             }
