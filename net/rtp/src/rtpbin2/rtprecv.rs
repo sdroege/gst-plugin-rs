@@ -1303,7 +1303,7 @@ impl RtpRecv {
                                     imp = self,
                                     "Failed to parse input as valid rtp packet: {e:?}"
                                 );
-                                return Ok(state);
+                                continue;
                             }
                         };
 
