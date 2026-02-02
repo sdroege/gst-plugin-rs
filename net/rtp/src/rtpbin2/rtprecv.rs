@@ -1318,6 +1318,41 @@ impl RtpRecv {
                     // all downstream in one go.
                     let mut new_list = None;
 
+                    // Small internal helper function for pushing a buffer list as a single buffer
+                    // if there's only one buffer, or as a full list otherwise, and updating the
+                    // flow combiner accordingly.
+                    fn push_list(
+                        flow_combiner: Arc<Mutex<gst_base::UniqueFlowCombiner>>,
+                        recv_src_pad: &RtpRecvSrcPad,
+                        buf_list: gst::BufferList,
+                    ) -> Result<(), gst::FlowError> {
+                        let res = if buf_list.len() == 1 {
+                            let buffer = buf_list.get_owned(0).unwrap();
+                            drop(buf_list);
+                            let res = recv_src_pad.pad.push(buffer);
+                            gst::trace!(
+                                CAT,
+                                obj = recv_src_pad.pad,
+                                "Pushed buffer, flow ret {res:?}"
+                            );
+                            res
+                        } else {
+                            let res = recv_src_pad.pad.push_list(buf_list);
+                            gst::trace!(
+                                CAT,
+                                obj = recv_src_pad.pad,
+                                "Pushed buffer list, flow ret {res:?}"
+                            );
+                            res
+                        };
+                        flow_combiner
+                            .lock()
+                            .unwrap()
+                            .update_pad_flow(&recv_src_pad.pad, res)?;
+
+                        Ok(())
+                    }
+
                     let buf_list = list.list.make_mut();
                     for mut buffer in buf_list.drain(..) {
                         let mapped = buffer.map_readable().map_err(|e| {
@@ -1375,29 +1410,7 @@ impl RtpRecv {
                                             let flow_combiner = session.recv_flow_combiner.clone();
                                             drop(state);
 
-                                            let res = if old_list.len() == 1 {
-                                                let buffer = old_list.get_owned(0).unwrap();
-                                                drop(old_list);
-                                                let res = list.recv_src_pad.pad.push(buffer);
-                                                gst::trace!(
-                                                    CAT,
-                                                    obj = list.recv_src_pad.pad,
-                                                    "Pushed buffer, flow ret {res:?}"
-                                                );
-                                                res
-                                            } else {
-                                                let res = list.recv_src_pad.pad.push_list(old_list);
-                                                gst::trace!(
-                                                    CAT,
-                                                    obj = list.recv_src_pad.pad,
-                                                    "Pushed buffer list, flow ret {res:?}"
-                                                );
-                                                res
-                                            };
-                                            flow_combiner
-                                                .lock()
-                                                .unwrap()
-                                                .update_pad_flow(&list.recv_src_pad.pad, res)?;
+                                            push_list(flow_combiner, &list.recv_src_pad, old_list)?;
 
                                             state = self.state.lock().unwrap();
 
@@ -1420,29 +1433,7 @@ impl RtpRecv {
                                     let flow_combiner = session.recv_flow_combiner.clone();
                                     drop(state);
 
-                                    let res = if new_list.len() == 1 {
-                                        let buffer = new_list.get_owned(0).unwrap();
-                                        drop(new_list);
-                                        let res = list.recv_src_pad.pad.push(buffer);
-                                        gst::trace!(
-                                            CAT,
-                                            obj = list.recv_src_pad.pad,
-                                            "Pushed buffer, flow ret {res:?}"
-                                        );
-                                        res
-                                    } else {
-                                        let res = list.recv_src_pad.pad.push_list(new_list);
-                                        gst::trace!(
-                                            CAT,
-                                            obj = list.recv_src_pad.pad,
-                                            "Pushed buffer list, flow ret {res:?}"
-                                        );
-                                        res
-                                    };
-                                    flow_combiner
-                                        .lock()
-                                        .unwrap()
-                                        .update_pad_flow(&list.recv_src_pad.pad, res)?;
+                                    push_list(flow_combiner, &list.recv_src_pad, new_list)?;
 
                                     state = self.state.lock().unwrap();
                                 }
@@ -1477,29 +1468,7 @@ impl RtpRecv {
                         let flow_combiner = session.recv_flow_combiner.clone();
                         drop(state);
 
-                        let res = if new_list.len() == 1 {
-                            let buffer = new_list.get_owned(0).unwrap();
-                            drop(new_list);
-                            let res = list.recv_src_pad.pad.push(buffer);
-                            gst::trace!(
-                                CAT,
-                                obj = list.recv_src_pad.pad,
-                                "Pushed buffer, flow ret {res:?}"
-                            );
-                            res
-                        } else {
-                            let res = list.recv_src_pad.pad.push_list(new_list);
-                            gst::trace!(
-                                CAT,
-                                obj = list.recv_src_pad.pad,
-                                "Pushed buffer list, flow ret {res:?}"
-                            );
-                            res
-                        };
-                        flow_combiner
-                            .lock()
-                            .unwrap()
-                            .update_pad_flow(&list.recv_src_pad.pad, res)?;
+                        push_list(flow_combiner, &list.recv_src_pad, new_list)?;
 
                         state = self.state.lock().unwrap();
                     }
