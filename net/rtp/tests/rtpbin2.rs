@@ -562,6 +562,7 @@ fn test_receive_list_benchmark() {
 
             Ok(gst::FlowSuccess::Ok)
         })
+        .event_function(move |_pad, _parent, _event| true)
         .build();
     sinkpad.set_active(true).unwrap();
 
@@ -673,6 +674,7 @@ fn recv_release_sink_pad() {
         move |_elem, pad| {
             let other_pad = gst::Pad::builder(gst::PadDirection::Sink)
                 .chain_function(|_pad, _parent, _buffer| Ok(gst::FlowSuccess::Ok))
+                .event_function(move |_pad, _parent, _event| true)
                 .build();
             other_pad.set_active(true).unwrap();
             pad.link(&other_pad).unwrap();
