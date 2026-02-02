@@ -182,7 +182,7 @@ fn test_send_benchmark() {
     for i in 0..N_PACKETS {
         packets.push(
             PacketInfo {
-                seq_no: (i % u16::MAX as usize) as u16,
+                seq_no: (i & u16::MAX as usize) as u16,
                 rtp_ts: i as u32,
                 payload_len: 8,
             }
@@ -204,7 +204,7 @@ fn test_send_benchmark() {
         let buffer = h.pull().unwrap();
         let mapped = buffer.map_readable().unwrap();
         let rtp = rtp_types::RtpPacket::parse(&mapped).unwrap();
-        assert_eq!(rtp.sequence_number(), (i % u16::MAX as usize) as u16);
+        assert_eq!(rtp.sequence_number(), (i & u16::MAX as usize) as u16);
     }
 
     let end = clock.time();
@@ -230,7 +230,7 @@ fn test_send_list_benchmark() {
     for i in 0..N_PACKETS {
         list_mut.add(
             PacketInfo {
-                seq_no: (i % u16::MAX as usize) as u16,
+                seq_no: (i & u16::MAX as usize) as u16,
                 rtp_ts: i as u32,
                 payload_len: 8,
             }
@@ -257,7 +257,7 @@ fn test_send_list_benchmark() {
         let buffer = h.pull().unwrap();
         let mapped = buffer.map_readable().unwrap();
         let rtp = rtp_types::RtpPacket::parse(&mapped).unwrap();
-        assert_eq!(rtp.sequence_number(), (i % u16::MAX as usize) as u16);
+        assert_eq!(rtp.sequence_number(), (i & u16::MAX as usize) as u16);
     }
 
     let end = clock.time();
@@ -484,7 +484,7 @@ fn test_receive_benchmark() {
     for i in 0..N_PACKETS {
         packets.push(
             PacketInfo {
-                seq_no: (i % u16::MAX as usize) as u16,
+                seq_no: (i & u16::MAX as usize) as u16,
                 rtp_ts: i as u32,
                 payload_len: 8,
             }
@@ -516,7 +516,7 @@ fn test_receive_benchmark() {
         let buffer = inner.pull().unwrap();
         let mapped = buffer.map_readable().unwrap();
         let rtp = rtp_types::RtpPacket::parse(&mapped).unwrap();
-        assert_eq!(rtp.sequence_number(), (i % u16::MAX as usize) as u16);
+        assert_eq!(rtp.sequence_number(), (i & u16::MAX as usize) as u16);
     }
 
     let end = clock.time();
@@ -587,7 +587,7 @@ fn test_receive_list_benchmark() {
         for i in 0..N_PACKETS {
             list_mut.add(
                 PacketInfo {
-                    seq_no: ((p * N_PACKETS + i) % u16::MAX as usize) as u16,
+                    seq_no: ((p * N_PACKETS + i) & u16::MAX as usize) as u16,
                     rtp_ts: (p * N_PACKETS + i) as u32,
                     payload_len: 8,
                 }
@@ -614,7 +614,7 @@ fn test_receive_list_benchmark() {
                 list.foreach(|buffer, _buf_idx| {
                     let mapped = buffer.map_readable().unwrap();
                     let rtp = rtp_types::RtpPacket::parse(&mapped).unwrap();
-                    assert_eq!(rtp.sequence_number(), (idx % u16::MAX as usize) as u16);
+                    assert_eq!(rtp.sequence_number(), (idx & u16::MAX as usize) as u16);
                     idx += 1;
                     std::ops::ControlFlow::Continue(())
                 });
@@ -622,7 +622,7 @@ fn test_receive_list_benchmark() {
             BufferOrList::Buffer(buffer) => {
                 let mapped = buffer.map_readable().unwrap();
                 let rtp = rtp_types::RtpPacket::parse(&mapped).unwrap();
-                assert_eq!(rtp.sequence_number(), (idx % u16::MAX as usize) as u16);
+                assert_eq!(rtp.sequence_number(), (idx & u16::MAX as usize) as u16);
                 idx += 1;
             }
         }
