@@ -445,6 +445,8 @@ impl RecvSession {
     fn activate_recv_src_pad(&mut self, pad: &gst::Pad) {
         gst::debug!(CAT, obj = pad, "Activating rtp recv src pad");
 
+        self.recv_flow_combiner.lock().unwrap().reset();
+
         let recv_pad = self
             .rtp_recv_srcpads
             .iter_mut()
@@ -478,6 +480,12 @@ impl RecvSession {
             .unwrap()
             .jitterbuffer
             .set_flushing(true);
+
+        let _ = self
+            .recv_flow_combiner
+            .lock()
+            .unwrap()
+            .update_flow(Err(gst::FlowError::Flushing));
 
         self.rtp_task_cmd_tx
             .unbounded_send(RecvSessionSrcTaskCommand::RemoveRecvSrcPad(
@@ -724,24 +732,37 @@ impl RecvSessionSrcTask {
         )>,
     ) -> ControlFlow<Self, (Self, JitterBufferStreams)> {
         loop {
+            // If there was a flow error pushing buffers downstream then just discard
+            // all future buffers but make sure to still handle any pending events
+            // and queries.
+            let mut combined_flow = Ok(gst::FlowSuccess::Ok);
+
             for (pad, _semaphore_permit, items) in all_pad_items.drain(..) {
                 for item in items {
                     gst::log!(CAT, obj = pad, "Pushing item {item:?}");
 
                     match item {
                         JitterBufferItem::PacketList(list) => {
-                            let flow = pad.push_list(list);
-                            gst::trace!(CAT, obj = pad, "Pushed buffer list, flow ret {flow:?}");
-                            let mut recv_flow_combiner = self.recv_flow_combiner.lock().unwrap();
-                            let _combined_flow = recv_flow_combiner.update_pad_flow(&pad, flow);
-                            // TODO: store flow, return only on session pads?
+                            if combined_flow.is_ok() {
+                                let flow = pad.push_list(list);
+                                gst::trace!(
+                                    CAT,
+                                    obj = pad,
+                                    "Pushed buffer list, flow ret {flow:?}"
+                                );
+                                let mut recv_flow_combiner =
+                                    self.recv_flow_combiner.lock().unwrap();
+                                combined_flow = recv_flow_combiner.update_pad_flow(&pad, flow);
+                            }
                         }
                         JitterBufferItem::Packet(buffer) => {
-                            let flow = pad.push(buffer);
-                            gst::trace!(CAT, obj = pad, "Pushed buffer, flow ret {flow:?}");
-                            let mut recv_flow_combiner = self.recv_flow_combiner.lock().unwrap();
-                            let _combined_flow = recv_flow_combiner.update_pad_flow(&pad, flow);
-                            // TODO: store flow, return only on session pads?
+                            if combined_flow.is_ok() {
+                                let flow = pad.push(buffer);
+                                gst::trace!(CAT, obj = pad, "Pushed buffer, flow ret {flow:?}");
+                                let mut recv_flow_combiner =
+                                    self.recv_flow_combiner.lock().unwrap();
+                                combined_flow = recv_flow_combiner.update_pad_flow(&pad, flow);
+                            }
                         }
                         JitterBufferItem::Event(event) => {
                             let res = pad.push_event(event);
@@ -1229,7 +1250,7 @@ impl RtpRecv {
                     );
                     match ret {
                         jitterbuffer::QueueResult::Flushing => {
-                            // TODO: return flushing result upstream
+                            return Err(gst::FlowError::Flushing);
                         }
                         jitterbuffer::QueueResult::Forward { id: _, discont } => {
                             drop(mapped);
@@ -1249,11 +1270,10 @@ impl RtpRecv {
                                     obj = buffer.recv_src_pad.pad,
                                     "Pushed buffer, flow ret {res:?}"
                                 );
-                                let _ = flow_combiner
+                                flow_combiner
                                     .lock()
                                     .unwrap()
-                                    .update_pad_flow(&buffer.recv_src_pad.pad, res);
-                                // TODO: store flow, return only on session pads?
+                                    .update_pad_flow(&buffer.recv_src_pad.pad, res)?;
 
                                 state = self.state.lock().unwrap();
                             }
@@ -1374,11 +1394,10 @@ impl RtpRecv {
                                                 );
                                                 res
                                             };
-                                            let _ = flow_combiner
+                                            flow_combiner
                                                 .lock()
                                                 .unwrap()
-                                                .update_pad_flow(&list.recv_src_pad.pad, res);
-                                            // TODO: store flow, return only on session pads?
+                                                .update_pad_flow(&list.recv_src_pad.pad, res)?;
 
                                             state = self.state.lock().unwrap();
 
@@ -1420,11 +1439,10 @@ impl RtpRecv {
                                         );
                                         res
                                     };
-                                    let _ = flow_combiner
+                                    flow_combiner
                                         .lock()
                                         .unwrap()
-                                        .update_pad_flow(&list.recv_src_pad.pad, res);
-                                    // TODO: store flow, return only on session pads?
+                                        .update_pad_flow(&list.recv_src_pad.pad, res)?;
 
                                     state = self.state.lock().unwrap();
                                 }
@@ -1478,11 +1496,10 @@ impl RtpRecv {
                             );
                             res
                         };
-                        let _ = flow_combiner
+                        flow_combiner
                             .lock()
                             .unwrap()
-                            .update_pad_flow(&list.recv_src_pad.pad, res);
-                        // TODO: store flow, return only on session pads?
+                            .update_pad_flow(&list.recv_src_pad.pad, res)?;
 
                         state = self.state.lock().unwrap();
                     }
@@ -1503,6 +1520,13 @@ impl RtpRecv {
         let Some(session) = state.mut_session_by_id(id) else {
             return Err(gst::FlowError::Error);
         };
+
+        // Return last error without further processing
+        session
+            .recv_flow_combiner
+            .lock()
+            .unwrap()
+            .update_flow(Ok(gst::FlowSuccess::Ok))?;
 
         let now = Instant::now();
         let mut ssrc_collision: smallvec::SmallVec<[u32; 4]> = Default::default();
@@ -1622,6 +1646,13 @@ impl RtpRecv {
         let Some(session) = state.mut_session_by_id(id) else {
             return Err(gst::FlowError::Error);
         };
+
+        // Return last error without further processing
+        session
+            .recv_flow_combiner
+            .lock()
+            .unwrap()
+            .update_flow(Ok(gst::FlowSuccess::Ok))?;
 
         let now = Instant::now();
         let mut items_to_pre_push: smallvec::SmallVec<[HeldRecvItem; 4]> = Default::default();
