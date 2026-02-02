@@ -1179,7 +1179,7 @@ impl RtpRecv {
                     self.obj().add_pad(&pad.pad).unwrap();
                     state = self.state.lock().unwrap();
                 }
-                HeldRecvItem::Buffer(buffer) => {
+                HeldRecvItem::Buffer(mut buffer) => {
                     let mapped = buffer.buffer.map_readable().map_err(|e| {
                         gst::error!(CAT, imp = self, "Failed to map input buffer {e:?}");
                         gst::FlowError::Error
@@ -1231,12 +1231,17 @@ impl RtpRecv {
                         jitterbuffer::QueueResult::Flushing => {
                             // TODO: return flushing result upstream
                         }
-                        jitterbuffer::QueueResult::Forward(_) => {
+                        jitterbuffer::QueueResult::Forward { id: _, discont } => {
                             drop(mapped);
 
                             if let Some(session) = state.session_by_id(id) {
                                 let flow_combiner = session.recv_flow_combiner.clone();
                                 drop(state);
+
+                                if discont {
+                                    let buffer_mut = buffer.buffer.make_mut();
+                                    buffer_mut.set_flags(gst::BufferFlags::DISCONT);
+                                }
 
                                 let res = buffer.recv_src_pad.pad.push(buffer.buffer);
                                 let _ = flow_combiner
@@ -1285,7 +1290,7 @@ impl RtpRecv {
                     let mut jb_store = list.recv_src_pad.jitter_buffer_store.lock().unwrap();
 
                     let buf_list = list.list.make_mut();
-                    for buffer in buf_list.drain(..) {
+                    for mut buffer in buf_list.drain(..) {
                         let mapped = buffer.map_readable().map_err(|e| {
                             gst::error!(CAT, imp = self, "Failed to map input buffer {e:?}");
                             gst::FlowError::Error
@@ -1316,7 +1321,7 @@ impl RtpRecv {
                             jitterbuffer::QueueResult::Flushing => {
                                 return Err(gst::FlowError::Flushing);
                             }
-                            jitterbuffer::QueueResult::Forward(_) => {
+                            jitterbuffer::QueueResult::Forward { id: _, discont } => {
                                 // TODO: group consecutive buffers and push them as a list
                                 // See: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/merge_requests/2346#note_2989287
 
@@ -1325,6 +1330,11 @@ impl RtpRecv {
                                 if let Some(session) = state.session_by_id(id) {
                                     let flow_combiner = session.recv_flow_combiner.clone();
                                     drop(state);
+
+                                    if discont {
+                                        let buffer_mut = buffer.make_mut();
+                                        buffer_mut.set_flags(gst::BufferFlags::DISCONT);
+                                    }
 
                                     let res = list.recv_src_pad.pad.push(buffer);
                                     let _ = flow_combiner
@@ -1706,7 +1716,7 @@ impl RtpRecv {
                     let mut jb_store = recv_src_pad.jitter_buffer_store.lock().unwrap();
 
                     match jb_store.jitterbuffer.queue_serialized_item() {
-                        jitterbuffer::QueueResult::Forward(id) => {
+                        jitterbuffer::QueueResult::Forward { id, discont: _ } => {
                             // SAFETY: the `query` `ptr::NonNull` was built above from
                             //         the `query` argument with type `&ref mut gst::QueryRef`.
                             let query = unsafe { query.as_mut() };
@@ -1795,7 +1805,7 @@ impl RtpRecv {
             let mut jb_store = recv_src_pad.jitter_buffer_store.lock().unwrap();
 
             match jb_store.jitterbuffer.queue_serialized_item() {
-                jitterbuffer::QueueResult::Forward(id) => {
+                jitterbuffer::QueueResult::Forward { id, discont: _ } => {
                     gst::trace!(CAT, obj = recv_src_pad.pad, "Forwarding {id}: {event:?}");
 
                     if !recv_src_pad.pad.push_event(event.clone()) {
@@ -2593,7 +2603,10 @@ mod tests {
 
         assert_eq!(
             jb_store.jitterbuffer.queue_serialized_item(),
-            QueueResult::Forward(0)
+            QueueResult::Forward {
+                id: 0,
+                discont: false
+            }
         );
         assert!(
             rspad.pad.push_event(
@@ -2606,7 +2619,10 @@ mod tests {
         );
         assert_eq!(
             jb_store.jitterbuffer.queue_serialized_item(),
-            QueueResult::Forward(1)
+            QueueResult::Forward {
+                id: 1,
+                discont: false
+            }
         );
         assert!(
             rspad

@@ -54,7 +54,7 @@ pub enum PollResult {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum QueueResult {
-    Forward(usize),
+    Forward { id: usize, discont: bool },
     Queued(usize),
     Late,
     Duplicate,
@@ -111,7 +111,7 @@ impl JitterBuffer {
                 num_pushed: 0,
             },
             flushing: true,
-            can_forward_packets_when_empty: false,
+            can_forward_packets_when_empty: latency.is_zero(),
         }
     }
 
@@ -119,7 +119,7 @@ impl JitterBuffer {
         if self.items.is_empty() {
             let id = self.packet_counter;
             self.packet_counter += 1;
-            return QueueResult::Forward(id);
+            return QueueResult::Forward { id, discont: false };
         }
 
         let id = self.packet_counter;
@@ -139,7 +139,7 @@ impl JitterBuffer {
         trace!("Flush changed from {} to {flushing}", self.flushing);
         self.flushing = flushing;
         self.last_output_seqnum = None;
-        self.can_forward_packets_when_empty = false;
+        self.can_forward_packets_when_empty = self.latency.is_zero();
     }
 
     pub fn queue_packet(&mut self, rtp: &RtpPacket, mut pts: u64, now: Instant) -> QueueResult {
@@ -170,7 +170,7 @@ impl JitterBuffer {
 
         if self.seqnums.contains(&seqnum) {
             trace!(
-                "Duplicated packet {} (extended {})",
+                "Duplicated packet seqnum {} (extended {})",
                 rtp.sequence_number(),
                 seqnum,
             );
@@ -184,9 +184,10 @@ impl JitterBuffer {
             && last_output_seqnum >= seqnum
         {
             debug!(
-                "Late packet {} (extended {})",
+                "Late packet seqnum {} (extended {}), last output seqnum {}",
                 rtp.sequence_number(),
-                seqnum
+                seqnum,
+                last_output_seqnum
             );
             self.stats.num_late += 1;
             return QueueResult::Late;
@@ -195,17 +196,41 @@ impl JitterBuffer {
         if self.items.is_empty()
             // can forward after the first packet's deadline has been reached
             && self.can_forward_packets_when_empty
-            && self
+        {
+            if self
                 .last_output_seqnum
                 .is_some_and(|last_output_seqnum| seqnum == last_output_seqnum.wrapping_add(1))
-        {
-            // No packets enqueued & seqnum is in order => can forward it immediately
-            self.last_output_seqnum = Some(seqnum);
-            let id = self.packet_counter;
-            self.packet_counter += 1;
-            self.stats.num_pushed += 1;
+            {
+                // No packets enqueued & seqnum is in order => can forward it immediately
+                self.last_output_seqnum = Some(seqnum);
+                let id = self.packet_counter;
+                self.packet_counter += 1;
+                self.stats.num_pushed += 1;
 
-            return QueueResult::Forward(id);
+                return QueueResult::Forward { id, discont: false };
+            } else if self.latency.is_zero() {
+                // No packets enqueued & seqnum is *not* in order or first packet but latency is 0
+                //   => can forward it immediately
+
+                if let Some(last_output_seq_ext) = self.last_output_seqnum {
+                    let gap = seqnum - last_output_seq_ext;
+
+                    assert!(gap != 1);
+                    debug!(
+                        "Packets before seqnum {} (extended {}) considered lost",
+                        rtp.sequence_number(),
+                        seqnum
+                    );
+                    self.stats.num_lost += gap - 1;
+                }
+
+                self.last_output_seqnum = Some(seqnum);
+                let id = self.packet_counter;
+                self.packet_counter += 1;
+                self.stats.num_pushed += 1;
+
+                return QueueResult::Forward { id, discont: true };
+            }
         }
 
         // TODO: if the segnum base is known (i.e. first seqnum in RTSP)
@@ -223,7 +248,10 @@ impl JitterBuffer {
             unreachable!()
         }
 
-        trace!("Queued RTP packet with ts {pts}, assigned ID {id}");
+        trace!(
+            "Queued RTP packet with ts {pts}, seqnum {} (extended {seqnum}), assigned ID {id}",
+            rtp.sequence_number()
+        );
 
         QueueResult::Queued(id)
     }
@@ -264,19 +292,34 @@ impl JitterBuffer {
         let deadline = Duration::from_nanos(ts) + self.latency;
 
         trace!(
-            "Considering packet {} with ts {ts}, deadline is {deadline:?}",
-            item.id
+            "Considering packet ID {} (seqnum {}, extended {}) with ts {ts}, deadline is {deadline:?}",
+            item.id,
+            item.seqnum & 0xffff,
+            item.seqnum
         );
 
         if deadline <= duration_since_base_instant {
-            debug!("Packet with id {} is ready", item.id);
+            debug!(
+                "Packet with id {} (seqnum {}, extended {}) is ready",
+                item.id,
+                item.seqnum & 0xffff,
+                item.seqnum
+            );
 
             let discont = match self.last_output_seqnum {
                 None => true,
                 Some(last_output_seq_ext) => {
                     let gap = item.seqnum - last_output_seq_ext;
 
-                    self.stats.num_lost += gap - 1;
+                    if gap != 1 {
+                        debug!(
+                            "Packets before ID {} (seqnum {}, extended {}) considered lost",
+                            item.id,
+                            item.seqnum & 0xffff,
+                            item.seqnum
+                        );
+                        self.stats.num_lost += gap - 1;
+                    }
 
                     gap != 1
                 }
@@ -294,7 +337,12 @@ impl JitterBuffer {
                 discont,
             }
         } else {
-            trace!("Packet with id {} is not ready", item.id);
+            trace!(
+                "Packet ID {} (seqnum {}, extended {}) is not ready",
+                item.id,
+                item.seqnum & 0xffff,
+                item.seqnum
+            );
             PollResult::Timeout(base_instant + deadline)
         }
     }
@@ -329,11 +377,12 @@ mod tests {
 
         let now = Instant::now();
 
-        let QueueResult::Queued(id) = jb.queue_packet(&packet, 0, now) else {
+        let QueueResult::Forward { id, discont } = jb.queue_packet(&packet, 0, now) else {
             unreachable!()
         };
 
-        assert_eq!(jb.poll(now), PollResult::Forward { id, discont: true });
+        assert_eq!(id, 0);
+        assert!(discont);
     }
 
     #[test]
@@ -378,30 +427,23 @@ mod tests {
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
 
-        let QueueResult::Queued(id_first) = jb.queue_packet(&packet, 0, now) else {
+        let QueueResult::Forward {
+            id: _,
+            discont: true,
+        } = jb.queue_packet(&packet, 0, now)
+        else {
             unreachable!()
         };
 
         let rtp_data = generate_rtp_packet(0x12345678, 1, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id_second) = jb.queue_packet(&packet, 0, now) else {
+        let QueueResult::Forward {
+            id: _,
+            discont: false,
+        } = jb.queue_packet(&packet, 0, now)
+        else {
             unreachable!()
         };
-
-        assert_eq!(
-            jb.poll(now),
-            PollResult::Forward {
-                id: id_first,
-                discont: true
-            }
-        );
-        assert_eq!(
-            jb.poll(now),
-            PollResult::Forward {
-                id: id_second,
-                discont: false
-            }
-        );
     }
 
     #[test]
@@ -413,30 +455,23 @@ mod tests {
 
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id_first) = jb.queue_packet(&packet, 0, now) else {
+        let QueueResult::Forward {
+            id: _,
+            discont: true,
+        } = jb.queue_packet(&packet, 0, now)
+        else {
             unreachable!()
         };
 
         let rtp_data = generate_rtp_packet(0x12345678, 2, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id_second) = jb.queue_packet(&packet, 0, now) else {
+        let QueueResult::Forward {
+            id: _,
+            discont: true,
+        } = jb.queue_packet(&packet, 0, now)
+        else {
             unreachable!()
         };
-
-        assert_eq!(
-            jb.poll(now),
-            PollResult::Forward {
-                id: id_first,
-                discont: true
-            }
-        );
-        assert_eq!(
-            jb.poll(now),
-            PollResult::Forward {
-                id: id_second,
-                discont: true
-            }
-        );
     }
 
     #[test]
@@ -448,11 +483,13 @@ mod tests {
 
         let rtp_data = generate_rtp_packet(0x12345678, 1, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id) = jb.queue_packet(&packet, 0, now) else {
+        let QueueResult::Forward {
+            id: _,
+            discont: true,
+        } = jb.queue_packet(&packet, 0, now)
+        else {
             unreachable!()
         };
-
-        assert_eq!(jb.poll(now), PollResult::Forward { id, discont: true });
 
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
@@ -466,11 +503,13 @@ mod tests {
         // We do accept future sequence numbers up to a distance of at least i16::MAX
         let rtp_data = generate_rtp_packet(0x12345678, i16::MAX as u16 + 1, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id) = jb.queue_packet(&packet, 0, now) else {
+        let QueueResult::Forward {
+            id: _,
+            discont: true,
+        } = jb.queue_packet(&packet, 0, now)
+        else {
             unreachable!()
         };
-
-        assert_eq!(jb.poll(now), PollResult::Forward { id, discont: true });
 
         // But no further
         let rtp_data = generate_rtp_packet(0x12345678, 2, 0, 4);
@@ -606,7 +645,7 @@ mod tests {
 
     #[test]
     fn serialized_items() {
-        let mut jb = JitterBuffer::new(Duration::from_secs(0));
+        let mut jb = JitterBuffer::new(Duration::from_secs(1));
         jb.set_flushing(false);
 
         let now = Instant::now();
@@ -614,10 +653,15 @@ mod tests {
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
 
-        let QueueResult::Forward(id_first_serialized_item) = jb.queue_serialized_item() else {
+        let QueueResult::Forward {
+            id: id_first_serialized_item,
+            discont: discont_first_serialized_item,
+        } = jb.queue_serialized_item()
+        else {
             unreachable!()
         };
         assert_eq!(id_first_serialized_item, 0);
+        assert!(!discont_first_serialized_item);
 
         // query has been forwarded immediately
         assert_eq!(jb.poll(now), PollResult::Empty);
@@ -632,7 +676,7 @@ mod tests {
         assert_eq!(id_second_serialized_item, id_first_packet + 1);
 
         assert_eq!(
-            jb.poll(now),
+            jb.poll(now + Duration::from_secs(1)),
             PollResult::Forward {
                 id: id_first_packet,
                 discont: true
@@ -640,7 +684,7 @@ mod tests {
         );
 
         assert_eq!(
-            jb.poll(now),
+            jb.poll(now + Duration::from_secs(1)),
             PollResult::Forward {
                 id: id_second_serialized_item,
                 discont: false
@@ -649,16 +693,21 @@ mod tests {
 
         let rtp_data = generate_rtp_packet(0x12345678, 1, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Forward(id_second_packet) = jb.queue_packet(&packet, 0, now) else {
+        let QueueResult::Forward {
+            id: id_second_packet,
+            discont: discont_second_packet,
+        } = jb.queue_packet(&packet, 0, now)
+        else {
             unreachable!()
         };
         assert_eq!(id_second_packet, id_second_serialized_item + 1);
+        assert!(!discont_second_packet);
         assert_eq!(jb.poll(now), PollResult::Empty);
     }
 
     #[test]
     fn flushing_queue() {
-        let mut jb = JitterBuffer::new(Duration::from_secs(0));
+        let mut jb = JitterBuffer::new(Duration::from_secs(1));
         jb.set_flushing(false);
 
         let now = Instant::now();
@@ -666,7 +715,7 @@ mod tests {
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
 
-        let QueueResult::Forward(_id_first_serialized_item) = jb.queue_serialized_item() else {
+        let QueueResult::Forward { .. } = jb.queue_serialized_item() else {
             unreachable!()
         };
 
