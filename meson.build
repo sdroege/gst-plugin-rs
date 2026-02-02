@@ -195,6 +195,7 @@ plugins = {
     'extra-deps': {'libvvdec': ['>= 3.0']}
   },
   'webp': {}, # webp has external dependencies, see below
+  'whisper': {'library': 'libgstwhisper'},
 }
 
 # Convert auto options to use auto_plugin_features for plugin-related options

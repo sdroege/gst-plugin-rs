@@ -31,10 +31,13 @@ function Run-Tests {
     )
     $local_exclude = $exclude_crates;
 
-    # In this case the plugin will pull x11/wayland features
-    # which will fail to build on windows.
     if (($Features -eq '--all-features') -or ($Features -eq '')) {
+        # In this case the plugin will pull x11/wayland features
+        # which will fail to build on windows.
         $local_exclude += @("--exclude", "gst-plugin-gtk4")
+        # In this case the plugin will try to build all its backends,
+        # which will fail
+        $local_exclude += @("--exclude", "gst-plugin-whisper")
     }
     if ($Features -eq '--no-default-features') {
         $local_exclude += @("--exclude", "gst-plugin-burn")

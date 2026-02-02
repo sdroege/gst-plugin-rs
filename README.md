@@ -128,6 +128,10 @@ You will find the following plugins in this repository:
 
     - `spotify`: A plugin to access content from [Spotify](https://www.spotify.com/) based on the [librespot](https://github.com/librespot-org/) library.
 
+    - `whisper`:
+
+      - `whispertranscriber`: Speech to text transcription using [whisper-cpp](github.com/ggml-org/whisper.cpp/)
+
   * `video`
     - `cdg`: A parser and renderer for [CD+G karaoke data](https://docs.rs/cdg/0.1.0/cdg/).
 

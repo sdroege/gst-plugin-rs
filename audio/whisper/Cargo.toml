@@ -1,0 +1,54 @@
+[package]
+name = "gst-plugin-whisper"
+version.workspace = true
+authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
+repository.workspace = true
+license = "MPL-2.0"
+description = "GStreamer Whisper plugin"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+gst = { workspace = true, features = ["v1_20"] }
+gst-base.workspace = true
+gst-audio = { workspace = true, features = ["v1_16"] }
+whisper-rs = { version = "0.15", features = [] }
+byte-slice-cast = "1.0"
+
+[lib]
+name = "gstwhisper"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper.workspace = true
+
+[features]
+default = []
+static = []
+capi = []
+doc = ["gst/v1_18"]
+
+# Re-export whisper-rs features
+coreml = ["whisper-rs/coreml"]
+cuda = ["whisper-rs/cuda"]
+hipblas = ["whisper-rs/hipblas"]
+openblas = ["whisper-rs/openblas"]
+metal = ["whisper-rs/metal"]
+vulkan = ["whisper-rs/vulkan"]
+openmp = ["whisper-rs/openmp"]
+intel-sycl = ["whisper-rs/intel-sycl"]
+
+[package.metadata.capi]
+min_version = "0.9.21"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+import_library = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gstreamer-audio-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

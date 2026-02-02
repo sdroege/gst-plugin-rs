@@ -14,6 +14,7 @@ option('elevenlabs', type: 'feature', value: 'auto', description: 'Build elevenl
 option('lewton', type: 'feature', value: 'auto', description: 'Build lewton plugin')
 option('spotify', type: 'feature', value: 'auto', description: 'Build spotify plugin')
 option('speechmatics', type: 'feature', value: 'auto', description: 'Build speechmatics plugin')
+option('whisper', type: 'feature', value: 'auto', description: 'Build whisper plugin')
 
 # generic
 option('file', type: 'feature', value: 'auto', description: 'Build file plugin')

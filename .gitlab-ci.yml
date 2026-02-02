@@ -399,7 +399,7 @@ coverage:
   script:
     - CARGO_FLAGS="-j${FDO_CI_CONCURRENT:-$(nproc)} --locked --color=always --all"
 
-    - cargo nextest run --profile=ci --no-tests=pass $CARGO_FLAGS --all-features --exclude gst-plugin-gtk4
+    - cargo nextest run --profile=ci --no-tests=pass $CARGO_FLAGS --all-features --exclude gst-plugin-gtk4 gst-plugin-whisper
 
     - new_report_dir="$CI_PROJECT_DIR/junit_reports"
     - mkdir -p "$new_report_dir"

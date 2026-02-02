@@ -20557,5 +20557,385 @@
         "source": "gst-plugin-webrtchttp",
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
+    "whisper": {
+        "description": "GStreamer Whisper plugin",
+        "elements": {
+            "whispertranscriber": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "Speech to Text filter, using Whisper",
+                "hierarchy": [
+                    "GstWhisperTranscriber",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Text/Audio/Filter",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-raw:\n           rate: 16000\n       channels: 1\n         layout: interleaved\n         format: F32LE\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "beam-search-size": {
+                        "blurb": "Set the beam_size value for sampling-strategy=beam-search",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5",
+                        "max": "2147483647",
+                        "min": "1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    },
+                    "chunk-duration": {
+                        "blurb": "The duration of chunks to accumulate for inference, in milliseconds. Will count towards total latency.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "4000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "debug-mode": {
+                        "blurb": "Enables debug mode, such as dumping the log mel spectrogram.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "detect-language": {
+                        "blurb": "Auto-detect the source language when translate is true",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "entropy-thold": {
+                        "blurb": "If the gzip compression ratio is higher than this value, treat the decoding as failed",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "2.4",
+                        "max": "3.40282e+38",
+                        "min": "-3.40282e+38",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gfloat",
+                        "writable": true
+                    },
+                    "gpu-device-id": {
+                        "blurb": "GPU device id",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "2147483647",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    },
+                    "greedy-best-of": {
+                        "blurb": "Set the best_of value for sampling-strategy=greedy",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5",
+                        "max": "2147483647",
+                        "min": "1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    },
+                    "language": {
+                        "blurb": "The source language to translate from when translate is true",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "latency": {
+                        "blurb": "The expected processing latency. Will count towards total latency.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "length-penalty": {
+                        "blurb": "optional token length penalty coefficient (alpha) as in https://arxiv.org/abs/1609.08144, uses simple length normalization by default",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "3.40282e+38",
+                        "min": "-3.40282e+38",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gfloat",
+                        "writable": true
+                    },
+                    "live-edge-offset": {
+                        "blurb": "The element will feed in the previous chunk when running inference, and output tokens that are contained within a sliding window that may overlap both chunks. This controls the duration (in milliseconds) of the overlap, and will leave time for tokens near the end of the current chunk to stabilize. Will count towards total latency.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "logprob-thold": {
+                        "blurb": "if the average log probability is lower than this value, treat the decoding as failed",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "3.40282e+38",
+                        "min": "-3.40282e+38",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gfloat",
+                        "writable": true
+                    },
+                    "model-path": {
+                        "blurb": "Path to ggml-formatted whisper model (https://github.com/ggml-org/whisper.cpp?tab=readme-ov-file#ggml-format)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "model-preset": {
+                        "blurb": "Defines how DTW token-level timestamps are gathered, MUST MATCH THE SPECIFIED MODEL",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "tiny (1)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstWhisperTranscriberModelPreset",
+                        "writable": true
+                    },
+                    "n-threads": {
+                        "blurb": "Set the number of threads to use for decoding.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1",
+                        "max": "2147483647",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    },
+                    "sampling-strategy": {
+                        "blurb": "The sampling strategy to use to pick tokens from a list of likely possibilities",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "greedy (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstWhisperTranscriberSamplingStrategy",
+                        "writable": true
+                    },
+                    "suppress-blank": {
+                        "blurb": "This will suppress blank outputs",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "suppress-nst": {
+                        "blurb": "This will suppress non-speech tokens",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "translate": {
+                        "blurb": "Whether to translate to English for multilingual models",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "use-gpu": {
+                        "blurb": "Use GPU if available.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstwhisper",
+        "license": "MPL",
+        "other-types": {
+            "GstWhisperTranscriberModelPreset": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "TinyEn",
+                        "name": "tiny-en",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Tiny",
+                        "name": "tiny",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "BaseEn",
+                        "name": "base-en",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "Base",
+                        "name": "base",
+                        "value": "3"
+                    },
+                    {
+                        "desc": "SmallEn",
+                        "name": "small-en",
+                        "value": "4"
+                    },
+                    {
+                        "desc": "Small",
+                        "name": "small",
+                        "value": "5"
+                    },
+                    {
+                        "desc": "MediumEn",
+                        "name": "medium-en",
+                        "value": "6"
+                    },
+                    {
+                        "desc": "Medium",
+                        "name": "medium",
+                        "value": "7"
+                    },
+                    {
+                        "desc": "LargeV1",
+                        "name": "large-v1",
+                        "value": "8"
+                    },
+                    {
+                        "desc": "LargeV2",
+                        "name": "large-v2",
+                        "value": "9"
+                    },
+                    {
+                        "desc": "LargeV3",
+                        "name": "large-v3",
+                        "value": "10"
+                    },
+                    {
+                        "desc": "LargeV3Turbo",
+                        "name": "large-v3-turbo",
+                        "value": "11"
+                    }
+                ]
+            },
+            "GstWhisperTranscriberSamplingStrategy": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Greedy",
+                        "name": "greedy",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "BeamSearch",
+                        "name": "beam-search",
+                        "value": "1"
+                    }
+                ]
+            }
+        },
+        "package": "gst-plugin-whisper",
+        "source": "gst-plugin-whisper",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     }
 }

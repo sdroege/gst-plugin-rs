@@ -17,6 +17,7 @@ members = [
     "audio/lewton",
     "audio/speechmatics",
     "audio/spotify",
+    "audio/whisper",
 
     "generic/file",
     "generic/originalbuffer",
