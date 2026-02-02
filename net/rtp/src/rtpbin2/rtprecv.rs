@@ -453,12 +453,12 @@ impl RecvSession {
             .find(|recv| &recv.pad == pad)
             .unwrap();
 
-        recv_pad
-            .jitter_buffer_store
-            .lock()
-            .unwrap()
-            .jitterbuffer
-            .set_flushing(false);
+        let mut jb_store = recv_pad.jitter_buffer_store.lock().unwrap();
+        jb_store.jitterbuffer.set_flushing(false);
+        if let Some(waker) = jb_store.waker.take() {
+            waker.wake()
+        }
+        drop(jb_store);
 
         self.rtp_task_cmd_tx
             .unbounded_send(RecvSessionSrcTaskCommand::AddRecvSrcPad(recv_pad.clone()))
@@ -474,12 +474,12 @@ impl RecvSession {
             .find(|recv| &recv.pad == pad)
             .unwrap();
 
-        recv_pad
-            .jitter_buffer_store
-            .lock()
-            .unwrap()
-            .jitterbuffer
-            .set_flushing(true);
+        let mut jb_store = recv_pad.jitter_buffer_store.lock().unwrap();
+        jb_store.jitterbuffer.set_flushing(true);
+        if let Some(waker) = jb_store.waker.take() {
+            waker.wake()
+        }
+        drop(jb_store);
 
         let _ = self
             .recv_flow_combiner
