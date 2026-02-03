@@ -975,6 +975,8 @@ impl LiveSync {
                         imp = self,
                         "Correcting duration on audio buffer from {buf_duration} to {calc_duration}",
                     );
+
+                    buf_mut.set_duration(calc_duration);
                 }
             } else {
                 gst::debug!(
@@ -982,9 +984,9 @@ impl LiveSync {
                     imp = self,
                     "Patching incoming buffer with duration {calc_duration}"
                 );
-            }
 
-            buf_mut.set_duration(calc_duration);
+                buf_mut.set_duration(calc_duration);
+            }
         } else if buf_mut.duration().is_none() {
             let duration = state.in_duration.map_or(DEFAULT_DURATION, |dur| {
                 dur.clamp(MINIMUM_DURATION, MAXIMUM_DURATION)
