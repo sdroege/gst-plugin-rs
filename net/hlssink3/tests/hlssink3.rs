@@ -269,7 +269,7 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
 #EXT-X-VERSION:3
 #EXT-X-TARGETDURATION:2
 #EXT-X-MEDIA-SEQUENCE:4
-#EXTINF:1.999,
+#EXTINF:2,
 segment00003.ts
 #EXTINF:0.333,
 segment00004.ts
