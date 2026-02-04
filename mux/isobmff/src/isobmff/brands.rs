@@ -19,6 +19,7 @@ fn is_video_codec(name: &str) -> bool {
             | "video/x-av1"
             | "image/jpeg"
             | "video/x-raw"
+            | "video/x-bayer"
     )
 }
 
@@ -31,6 +32,7 @@ fn supports_mp4_brands(name: &str) -> bool {
             | "video/x-vp9"
             | "image/jpeg"
             | "video/x-raw"
+            | "video/x-bayer"
             | "audio/mpeg"
             | "audio/x-opus"
             | "audio/x-flac"

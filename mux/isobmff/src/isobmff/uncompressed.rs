@@ -1,6 +1,6 @@
 use crate::isobmff::boxes::write_box;
 use crate::isobmff::boxes::write_full_box;
-use anyhow::Error;
+use anyhow::{Error, anyhow};
 use gst_video::VideoFormat;
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
@@ -13,62 +13,256 @@ static CAT_23001: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
+pub(crate) enum UncompressedFormatInfo {
+    VideoInfo(gst_video::VideoInfo),
+    Bayer {
+        info: BayerInfo,
+        #[allow(dead_code)]
+        width: u32,
+        #[allow(dead_code)]
+        height: u32,
+        #[allow(dead_code)]
+        framerate: gst::Fraction,
+    },
+}
+
+impl UncompressedFormatInfo {
+    pub fn from_caps(caps: &gst::Caps) -> Result<Self, Error> {
+        let s = caps.structure(0).ok_or_else(|| anyhow!("Empty caps"))?;
+        let media_type = s.name();
+
+        match media_type.as_str() {
+            "video/x-raw" => {
+                let video_info = gst_video::VideoInfo::from_caps(caps)
+                    .map_err(|_| anyhow!("Failed to parse video/x-raw caps"))?;
+                Ok(UncompressedFormatInfo::VideoInfo(video_info))
+            }
+            "video/x-bayer" => {
+                let format = s
+                    .get::<&str>("format")
+                    .map_err(|_| anyhow!("Missing format field in video/x-bayer caps"))?;
+                let info = BayerInfo::from_format_string(format)
+                    .ok_or_else(|| anyhow!("Unsupported Bayer format: {}", format))?;
+                let width = s
+                    .get::<i32>("width")
+                    .map_err(|_| anyhow!("Missing width field"))?;
+                let height = s
+                    .get::<i32>("height")
+                    .map_err(|_| anyhow!("Missing height field"))?;
+                let framerate = s
+                    .get::<gst::Fraction>("framerate")
+                    .map_err(|_| anyhow!("Missing framerate field"))?;
+
+                Ok(Self::Bayer {
+                    info,
+                    width: width as u32,
+                    height: height as u32,
+                    framerate,
+                })
+            }
+            _ => Err(anyhow!("Unsupported media type: {}", media_type)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BayerPattern {
+    Bggr,
+    Gbrg,
+    Grbg,
+    Rggb,
+}
+
+impl BayerPattern {
+    fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "bggr" => Some(Self::Bggr),
+            "gbrg" => Some(Self::Gbrg),
+            "grbg" => Some(Self::Grbg),
+            "rggb" => Some(Self::Rggb),
+            _ => None,
+        }
+    }
+
+    fn get_pattern_components(&self) -> [u32; 4] {
+        // Returns [top-left, top-right, bottom-left, bottom-right]
+        // Component indices: Red=4, Green=5, Blue=6
+        match self {
+            Self::Bggr => [6, 5, 5, 4], // Blue, Green, Green, Red
+            Self::Gbrg => [5, 6, 4, 5], // Green, Blue, Red, Green
+            Self::Grbg => [5, 4, 6, 5], // Green, Red, Blue, Green
+            Self::Rggb => [4, 5, 5, 6], // Red, Green, Green, Blue
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct BayerInfo {
+    pub(crate) pattern: BayerPattern,
+    pub(crate) bit_depth: u8,
+    pub(crate) is_little_endian: bool,
+}
+
+impl BayerInfo {
+    fn from_format_string(format: &str) -> Option<Self> {
+        // Parse format strings like "bggr", "bggr10le", "bggr12be", etc.
+        let format_lower = format.to_lowercase();
+
+        // Extract pattern (first 4 chars)
+        if format_lower.len() < 4 {
+            return None;
+        }
+
+        let (pattern_str, suffix) = format_lower.split_at(4);
+        let pattern = BayerPattern::from_str(pattern_str)?;
+
+        // Default is 8-bit if no suffix
+        if suffix.is_empty() {
+            return Some(Self {
+                pattern,
+                bit_depth: 8,
+                is_little_endian: false,
+            });
+        }
+
+        // Parse bit depth and endianness
+        let (num_str, is_little_endian) = if let Some(bits_str) = suffix.strip_suffix("le") {
+            (bits_str, true)
+        } else if let Some(bits_str) = suffix.strip_suffix("be") {
+            (bits_str, false)
+        } else {
+            return None;
+        };
+
+        // Parse bit depth
+        let bit_depth = num_str.parse::<u8>().ok()?;
+
+        Some(Self {
+            pattern,
+            bit_depth,
+            is_little_endian,
+        })
+    }
+}
+
+fn write_component_pattern_box(v: &mut Vec<u8>, pattern: BayerPattern) -> Result<(), Error> {
+    write_full_box(v, b"cpat", 0, 0, move |v| {
+        // pattern_width = 2
+        v.extend(2u16.to_be_bytes());
+        // pattern_height = 2
+        v.extend(2u16.to_be_bytes());
+
+        // Write 2x2 pattern
+        let components = pattern.get_pattern_components();
+        for component_index in components {
+            v.extend(component_index.to_be_bytes());
+            // component_gain = 1.0 (IEEE 754 binary32) - no white balance correction
+            v.extend(1.0f32.to_be_bytes());
+        }
+
+        Ok(())
+    })
+}
+
 pub(crate) fn write_uncompressed_sample_entries(
     v: &mut Vec<u8>,
-    video_info: gst_video::VideoInfo,
+    format_info: UncompressedFormatInfo,
 ) -> Result<(), Error> {
-    let profile = *get_profile_for_uncc_format(&video_info);
-    if matches!(
-        video_info.format(),
-        VideoFormat::Rgba | VideoFormat::Abgr | VideoFormat::Rgb
-    ) && (get_row_align_size_for_uncc_format(&video_info) == 0)
-    {
-        write_full_box(v, b"uncC", 1, 0, move |v| {
-            v.extend(profile);
-            Ok(())
-        })?;
-    } else {
-        let component_types = get_components_for_uncc_format(&video_info);
-        let num_components = component_types.len() as u32;
-        let mut uncc_component_bytes: Vec<u8> = Vec::new();
-        for i in 0..num_components {
-            uncc_component_bytes.extend((i as u16).to_be_bytes());
-            let component = component_types[i as usize];
-            uncc_component_bytes
-                .extend(get_bit_depth_for_uncc_format(&video_info, component).to_be_bytes());
-            uncc_component_bytes.extend((0_u8).to_be_bytes()); // component_format
-            uncc_component_bytes.extend((0_u8).to_be_bytes()); // component_align_size
-        }
-        write_box(v, b"cmpd", move |v| {
-            v.extend(num_components.to_be_bytes());
-            for c in component_types {
-                v.extend(c.to_be_bytes());
+    match format_info {
+        UncompressedFormatInfo::VideoInfo(video_info) => {
+            let profile = *get_profile_for_uncc_format(&video_info);
+            if matches!(
+                video_info.format(),
+                VideoFormat::Rgba | VideoFormat::Abgr | VideoFormat::Rgb
+            ) && (get_row_align_size_for_uncc_format(&video_info) == 0)
+            {
+                write_full_box(v, b"uncC", 1, 0, move |v| {
+                    v.extend(profile);
+                    Ok(())
+                })?;
+            } else {
+                let component_types = get_components_for_uncc_format(&video_info);
+                let num_components = component_types.len() as u32;
+                let mut uncc_component_bytes: Vec<u8> = Vec::new();
+                for i in 0..num_components {
+                    uncc_component_bytes.extend((i as u16).to_be_bytes());
+                    let component = component_types[i as usize];
+                    uncc_component_bytes.extend(
+                        get_bit_depth_for_uncc_format(&video_info, component).to_be_bytes(),
+                    );
+                    uncc_component_bytes.extend((0_u8).to_be_bytes()); // component_format
+                    uncc_component_bytes.extend((0_u8).to_be_bytes()); // component_align_size
+                }
+                write_box(v, b"cmpd", move |v| {
+                    v.extend(num_components.to_be_bytes());
+                    for c in component_types {
+                        v.extend(c.to_be_bytes());
+                    }
+                    Ok(())
+                })?;
+                write_full_box(v, b"uncC", 0, 0, move |v| {
+                    v.extend(profile);
+                    v.extend(num_components.to_be_bytes());
+                    v.extend(uncc_component_bytes);
+                    let sampling_type = get_sampling_type_for_uncc_format(&video_info);
+                    gst::debug!(CAT_23001, "sampling_type: {sampling_type:?}");
+                    v.extend(sampling_type.to_be_bytes());
+                    let interleave_type = get_interleave_type_for_uncc_format(&video_info);
+                    gst::debug!(CAT_23001, "interleave_type: {interleave_type:?}");
+                    v.extend(interleave_type.to_be_bytes());
+                    v.extend(get_block_size_for_uncc_format(&video_info).to_be_bytes());
+                    v.extend(get_flag_bits_for_uncc_format(&video_info).to_be_bytes());
+                    v.extend(get_pixel_size_for_uncc_format(&video_info).to_be_bytes());
+                    let row_align_size = get_row_align_size_for_uncc_format(&video_info);
+                    gst::debug!(CAT_23001, "row_align_size: {row_align_size:?}");
+                    v.extend(row_align_size.to_be_bytes());
+                    v.extend((0_u32).to_be_bytes()); // tile align size
+                    v.extend((0_u32).to_be_bytes()); // num tile columns minus 1
+                    v.extend((0_u32).to_be_bytes()); // num tile rows minus 1
+                    Ok(())
+                })?;
             }
             Ok(())
-        })?;
-        write_full_box(v, b"uncC", 0, 0, move |v| {
-            v.extend(profile);
-            v.extend(num_components.to_be_bytes());
-            v.extend(uncc_component_bytes);
-            let sampling_type = get_sampling_type_for_uncc_format(&video_info);
-            gst::debug!(CAT_23001, "sampling_type: {sampling_type:?}");
-            v.extend(sampling_type.to_be_bytes());
-            let interleave_type = get_interleave_type_for_uncc_format(&video_info);
-            gst::debug!(CAT_23001, "interleave_type: {interleave_type:?}");
-            v.extend(interleave_type.to_be_bytes());
-            v.extend(get_block_size_for_uncc_format(&video_info).to_be_bytes());
-            v.extend(get_flag_bits_for_uncc_format(&video_info).to_be_bytes());
-            v.extend(get_pixel_size_for_uncc_format(&video_info).to_be_bytes());
-            let row_align_size = get_row_align_size_for_uncc_format(&video_info);
-            gst::debug!(CAT_23001, "row_align_size: {row_align_size:?}");
-            v.extend(row_align_size.to_be_bytes());
-            v.extend((0_u32).to_be_bytes()); // tile align size
-            v.extend((0_u32).to_be_bytes()); // num tile columns minus 1
-            v.extend((0_u32).to_be_bytes()); // num tile rows minus 1
+        }
+        UncompressedFormatInfo::Bayer { info, .. } => {
+            write_component_pattern_box(v, info.pattern)?;
+
+            write_box(v, b"cmpd", move |v| {
+                v.extend(1u32.to_be_bytes()); // num_components = 1
+                v.extend(ComponentType::FilterArray.to_be_bytes());
+                Ok(())
+            })?;
+
+            write_full_box(v, b"uncC", 0, 0, move |v| {
+                v.extend([0u8, 0, 0, 0]); // profile = no predefined profile
+                v.extend(1u32.to_be_bytes()); // num_components = 1
+
+                // Component entry for FilterArray
+                v.extend(0u16.to_be_bytes()); // component_index = 0
+                v.extend((info.bit_depth - 1).to_be_bytes()); // bit_depth (stored as depth - 1)
+                v.extend(0u8.to_be_bytes()); // component_format = 0
+                v.extend(0u8.to_be_bytes()); // component_align_size = 0
+
+                v.extend(0u8.to_be_bytes()); // sampling_type = 0 (no subsampling)
+                v.extend(0u8.to_be_bytes()); // interleave_type = 0 (component/planar)
+
+                let block_size: u8 = if info.bit_depth > 8 { 2 } else { 0 };
+                v.extend(block_size.to_be_bytes());
+
+                let flag_bits: u8 = if info.is_little_endian { 0x80 } else { 0x00 };
+                v.extend(flag_bits.to_be_bytes());
+
+                v.extend(0u32.to_be_bytes()); // pixel_size = 0 (MUST be 0 for interleave_type = 0)
+                v.extend(4u32.to_be_bytes()); // row_align_size = 4 (GST_ROUND_UP_4)
+                v.extend(0u32.to_be_bytes()); // tile_align_size = 0
+                v.extend(0u32.to_be_bytes()); // num_tile_cols_minus_one = 0
+                v.extend(0u32.to_be_bytes()); // num_tile_rows_minus_one = 0
+                Ok(())
+            })?;
+
             Ok(())
-        })?;
+        }
     }
-    Ok(())
 }
 
 // See ISO/IEC 23001-17:2024 Table 1
@@ -83,21 +277,13 @@ enum ComponentType {
     Green,
     Blue,
     Alpha,
+    FilterArray = 11,
     // There are more here, but we don't support them yet
 }
 
 impl ComponentType {
     fn to_be_bytes(self) -> [u8; 2] {
-        match self {
-            Self::Monochrome => 0u16.to_be_bytes(),
-            Self::Luma => 1u16.to_be_bytes(),
-            Self::Cb => 2u16.to_be_bytes(),
-            Self::Cr => 3u16.to_be_bytes(),
-            Self::Red => 4u16.to_be_bytes(),
-            Self::Green => 5u16.to_be_bytes(),
-            Self::Blue => 6u16.to_be_bytes(),
-            Self::Alpha => 7u16.to_be_bytes(),
-        }
+        (self as u16).to_be_bytes()
     }
 }
 
@@ -418,6 +604,13 @@ fn get_block_size_for_uncc_format(video_info: &gst_video::VideoInfo) -> u8 {
     }
 }
 
+// Flag bits encoding (ISO/IEC 23001-17 Section 5.2.1.7):
+// Bit 7 (0x80): components_little_endian
+// Bit 6 (0x40): block_pad_lsb
+// Bit 5 (0x20): block_little_endian
+// Bit 4 (0x10): block_reversed
+// Bit 3 (0x08): pad_unknown
+// Bits 2-0: Reserved (must be 0)
 fn get_flag_bits_for_uncc_format(video_info: &gst_video::VideoInfo) -> u8 {
     match video_info.format() {
         VideoFormat::Iyu2
@@ -3115,5 +3308,221 @@ mod tests {
         }
 
         // TODO: NV12_16L32S (110) and after - requires gst-video 1.22
+    }
+
+    mod bayer_parsing {
+        use super::*;
+        use crate::isobmff::uncompressed::{BayerInfo, BayerPattern};
+
+        #[test]
+        fn parse_bggr_8bit() {
+            init();
+            let info = BayerInfo::from_format_string("bggr").unwrap();
+            assert_eq!(info.pattern, BayerPattern::Bggr);
+            assert_eq!(info.bit_depth, 8);
+            assert!(!info.is_little_endian);
+        }
+
+        #[test]
+        fn parse_gbrg_8bit() {
+            init();
+            let info = BayerInfo::from_format_string("gbrg").unwrap();
+            assert_eq!(info.pattern, BayerPattern::Gbrg);
+            assert_eq!(info.bit_depth, 8);
+            assert!(!info.is_little_endian);
+        }
+
+        #[test]
+        fn parse_grbg_8bit() {
+            init();
+            let info = BayerInfo::from_format_string("grbg").unwrap();
+            assert_eq!(info.pattern, BayerPattern::Grbg);
+            assert_eq!(info.bit_depth, 8);
+            assert!(!info.is_little_endian);
+        }
+
+        #[test]
+        fn parse_rggb_8bit() {
+            init();
+            let info = BayerInfo::from_format_string("rggb").unwrap();
+            assert_eq!(info.pattern, BayerPattern::Rggb);
+            assert_eq!(info.bit_depth, 8);
+            assert!(!info.is_little_endian);
+        }
+
+        #[test]
+        fn parse_bggr10le() {
+            init();
+            let info = BayerInfo::from_format_string("bggr10le").unwrap();
+            assert_eq!(info.pattern, BayerPattern::Bggr);
+            assert_eq!(info.bit_depth, 10);
+            assert!(info.is_little_endian);
+        }
+
+        #[test]
+        fn parse_bggr10be() {
+            init();
+            let info = BayerInfo::from_format_string("bggr10be").unwrap();
+            assert_eq!(info.pattern, BayerPattern::Bggr);
+            assert_eq!(info.bit_depth, 10);
+            assert!(!info.is_little_endian);
+        }
+
+        #[test]
+        fn parse_rggb12le() {
+            init();
+            let info = BayerInfo::from_format_string("rggb12le").unwrap();
+            assert_eq!(info.pattern, BayerPattern::Rggb);
+            assert_eq!(info.bit_depth, 12);
+            assert!(info.is_little_endian);
+        }
+
+        #[test]
+        fn parse_gbrg16be() {
+            init();
+            let info = BayerInfo::from_format_string("gbrg16be").unwrap();
+            assert_eq!(info.pattern, BayerPattern::Gbrg);
+            assert_eq!(info.bit_depth, 16);
+            assert!(!info.is_little_endian);
+        }
+
+        #[test]
+        fn parse_invalid_pattern() {
+            init();
+            assert!(BayerInfo::from_format_string("invalid").is_none());
+        }
+
+        #[test]
+        fn parse_too_short() {
+            init();
+            assert!(BayerInfo::from_format_string("bgg").is_none());
+        }
+
+        #[test]
+        fn parse_invalid_bit_depth() {
+            init();
+            assert!(BayerInfo::from_format_string("bggrXXle").is_none());
+        }
+    }
+
+    mod bayer_pattern {
+        use super::*;
+        use crate::isobmff::uncompressed::BayerPattern;
+
+        #[test]
+        fn pattern_bggr() {
+            init();
+            let components = BayerPattern::Bggr.get_pattern_components();
+            assert_eq!(components, [6, 5, 5, 4]); // Blue, Green, Green, Red
+        }
+
+        #[test]
+        fn pattern_gbrg() {
+            init();
+            let components = BayerPattern::Gbrg.get_pattern_components();
+            assert_eq!(components, [5, 6, 4, 5]); // Green, Blue, Red, Green
+        }
+
+        #[test]
+        fn pattern_grbg() {
+            init();
+            let components = BayerPattern::Grbg.get_pattern_components();
+            assert_eq!(components, [5, 4, 6, 5]); // Green, Red, Blue, Green
+        }
+
+        #[test]
+        fn pattern_rggb() {
+            init();
+            let components = BayerPattern::Rggb.get_pattern_components();
+            assert_eq!(components, [4, 5, 5, 6]); // Red, Green, Green, Blue
+        }
+    }
+
+    mod bayer_caps {
+        use super::*;
+        use crate::isobmff::uncompressed::{BayerPattern, UncompressedFormatInfo};
+
+        #[test]
+        fn from_caps_bayer_bggr() {
+            init();
+            let caps = gst::Caps::builder("video/x-bayer")
+                .field("format", "bggr")
+                .field("width", 640i32)
+                .field("height", 480i32)
+                .field("framerate", gst::Fraction::new(30, 1))
+                .build();
+
+            let format_info = UncompressedFormatInfo::from_caps(&caps).unwrap();
+            match format_info {
+                UncompressedFormatInfo::Bayer {
+                    info,
+                    width,
+                    height,
+                    framerate,
+                } => {
+                    assert_eq!(info.pattern, BayerPattern::Bggr);
+                    assert_eq!(info.bit_depth, 8);
+                    assert!(!info.is_little_endian);
+                    assert_eq!(width, 640);
+                    assert_eq!(height, 480);
+                    assert_eq!(framerate, gst::Fraction::new(30, 1));
+                }
+                _ => panic!("Expected Bayer format"),
+            }
+        }
+
+        #[test]
+        fn from_caps_bayer_rggb10le() {
+            init();
+            let caps = gst::Caps::builder("video/x-bayer")
+                .field("format", "rggb10le")
+                .field("width", 1920i32)
+                .field("height", 1080i32)
+                .field("framerate", gst::Fraction::new(60, 1))
+                .build();
+
+            let format_info = UncompressedFormatInfo::from_caps(&caps).unwrap();
+            match format_info {
+                UncompressedFormatInfo::Bayer {
+                    info,
+                    width,
+                    height,
+                    framerate,
+                } => {
+                    assert_eq!(info.pattern, BayerPattern::Rggb);
+                    assert_eq!(info.bit_depth, 10);
+                    assert!(info.is_little_endian);
+                    assert_eq!(width, 1920);
+                    assert_eq!(height, 1080);
+                    assert_eq!(framerate, gst::Fraction::new(60, 1));
+                }
+                _ => panic!("Expected Bayer format"),
+            }
+        }
+
+        #[test]
+        fn from_caps_bayer_missing_format() {
+            init();
+            let caps = gst::Caps::builder("video/x-bayer")
+                .field("width", 640i32)
+                .field("height", 480i32)
+                .field("framerate", gst::Fraction::new(30, 1))
+                .build();
+
+            assert!(UncompressedFormatInfo::from_caps(&caps).is_err());
+        }
+
+        #[test]
+        fn from_caps_bayer_invalid_format() {
+            init();
+            let caps = gst::Caps::builder("video/x-bayer")
+                .field("format", "invalid")
+                .field("width", 640i32)
+                .field("height", 480i32)
+                .field("framerate", gst::Fraction::new(30, 1))
+                .build();
+
+            assert!(UncompressedFormatInfo::from_caps(&caps).is_err());
+        }
     }
 }

@@ -165,7 +165,11 @@ fn write_moov(v: &mut Vec<u8>, cfg: &PresentationConfiguration) -> Result<(), Er
 
                     if matches!(
                         s.name().as_str(),
-                        "video/x-h264" | "video/x-h265" | "image/jpeg" | "video/x-raw"
+                        "video/x-h264"
+                            | "video/x-h265"
+                            | "image/jpeg"
+                            | "video/x-raw"
+                            | "video/x-bayer"
                     ) {
                         references.push(TrackReference {
                             reference_type: *b"cdsc",
@@ -259,7 +263,7 @@ fn write_minf(
 
     match s.name().as_str() {
         "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
-        | "image/jpeg" | "video/x-raw" => {
+        | "image/jpeg" | "video/x-raw" | "video/x-bayer" => {
             // Flags are always 1 for unspecified reasons
             write_full_box(v, b"vmhd", FULL_BOX_VERSION_0, 1, write_vmhd)?
         }
@@ -997,7 +1001,7 @@ fn write_hdlr_for_stream(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result
     let s = stream.caps().structure(0).unwrap();
     let (handler_type, name) = match s.name().as_str() {
         "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
-        | "image/jpeg" | "video/x-raw" => {
+        | "image/jpeg" | "video/x-raw" | "video/x-bayer" => {
             if stream.image_sequence {
                 // See ISO/IEC 23008-12:2022 Section 7.2.2
                 (b"pict", b"PictureHandler\0".as_slice())
@@ -1112,7 +1116,7 @@ fn write_tkhd(
     // Width/height
     match s.name().as_str() {
         "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
-        | "image/jpeg" | "video/x-raw" => {
+        | "image/jpeg" | "video/x-raw" | "video/x-bayer" => {
             let (width, height) = find_width_and_height(&stream.caps);
 
             v.extend((width << 16).to_be_bytes());
@@ -1370,7 +1374,7 @@ pub(crate) fn write_stsd(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result
     let s = stream.caps().structure(0).unwrap();
     match s.name().as_str() {
         "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
-        | "image/jpeg" | "video/x-raw" => write_visual_sample_entry(v, stream)?,
+        | "image/jpeg" | "video/x-raw" | "video/x-bayer" => write_visual_sample_entry(v, stream)?,
         "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
         | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" | "audio/x-raw" => {
             write_audio_sample_entry(v, stream)?
@@ -1437,7 +1441,7 @@ fn get_video_fourcc(s: &gst::StructureRef) -> Result<&[u8; 4], Error> {
         "video/x-vp8" => b"vp08",
         "video/x-vp9" => b"vp09",
         "video/x-av1" => b"av01",
-        "video/x-raw" => b"uncv",
+        "video/x-raw" | "video/x-bayer" => b"uncv",
         _ => unreachable!(),
     };
 
@@ -1498,7 +1502,7 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                     // https://github.com/webmproject/vp9-dash/blob/main/VPCodecISOMediaFileFormatBinding.md#semantics
                     *b"\x0aVPC Coding\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
                 }
-                "video/x-raw" => {
+                "video/x-raw" | "video/x-bayer" => {
                     // ISO/IEC 23001-17:2024 Section 4.2
                     [0u8; 32]
                 }
@@ -1729,9 +1733,13 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                 "image/jpeg" => {
                     // Nothing to do here
                 }
-                "video/x-raw" => {
-                    let video_info = gst_video::VideoInfo::from_caps(stream.caps()).unwrap();
-                    write_uncompressed_sample_entries(v, video_info)?
+                "video/x-raw" | "video/x-bayer" => {
+                    let format_info =
+                        crate::isobmff::uncompressed::UncompressedFormatInfo::from_caps(
+                            stream.caps(),
+                        )
+                        .map_err(|e| anyhow::anyhow!("Failed to parse caps: {}", e))?;
+                    write_uncompressed_sample_entries(v, format_info)?
                 }
                 _ => unreachable!(),
             }
@@ -1843,7 +1851,7 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                         })?;
                     }
                     // uncompressed
-                    "video/x-raw" => {
+                    "video/x-raw" | "video/x-bayer" => {
                         let all_ref_pics_intra = 1u32; // 0 = don't know, 1 = reference pictures are only intra
                         let intra_pred_used = 0u32; // 0 = no, 1 = yes, or maybe
                         let max_ref_per_pic = 0u32; // none
