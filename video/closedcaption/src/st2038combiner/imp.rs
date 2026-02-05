@@ -681,15 +681,20 @@ impl St2038Combiner {
             st2038_sinkpad.drop_buffer();
 
             state.last_st2038_ts = buffer.pts();
-            self.buffer_to_ancdata(&mut state.current_frame_st2038, buffer)?;
-
-            gst::debug!(
-                CAT,
-                imp = self,
-                "Collected {} ST-2038 buffer with PTS: {st2038_time:?} for current_video_running_time_end: {:?}",
-                state.current_frame_st2038.len(),
-                state.current_video_running_time_end
-            );
+            if self
+                .buffer_to_ancdata(&mut state.current_frame_st2038, buffer)
+                .is_err()
+            {
+                gst::warning!(CAT, imp = self, "Dropping invalid ST2038 packets");
+            } else {
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "Collected {} ST-2038 buffers with PTS: {st2038_time:?} for current_video_running_time_end: {:?}",
+                    state.current_frame_st2038.len(),
+                    state.current_video_running_time_end
+                );
+            }
         }
 
         gst::log!(
