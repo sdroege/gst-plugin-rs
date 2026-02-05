@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
+pub use async_tungstenite;
+
 use anyhow::Error;
-use async_tungstenite::tungstenite::{Message as WsMessage, Utf8Bytes};
+use async_tungstenite::tungstenite::{
+    Message as WsMessage, Utf8Bytes,
+    handshake::server::{Callback, NoCallback},
+};
 use futures::channel::mpsc;
 use futures::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -114,12 +119,16 @@ impl Server {
         }
     }
 
-    #[instrument(level = "debug", skip(self, stream))]
-    pub async fn accept_async<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
+    #[instrument(level = "debug", skip(self, stream, callback))]
+    pub async fn accept_hdr_async<
+        S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+        C: Callback + Unpin,
+    >(
         &mut self,
         stream: S,
+        callback: C,
     ) -> Result<String, ServerError> {
-        let ws = match async_tungstenite::tokio::accept_async(stream).await {
+        let ws = match async_tungstenite::tokio::accept_hdr_async(stream, callback).await {
             Ok(ws) => ws,
             Err(err) => {
                 warn!("Error during the websocket handshake: {}", err);
@@ -233,5 +242,13 @@ impl Server {
         );
 
         Ok(this_id)
+    }
+
+    #[instrument(level = "debug", skip(self, stream))]
+    pub async fn accept_async<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
+        &mut self,
+        stream: S,
+    ) -> Result<String, ServerError> {
+        self.accept_hdr_async(stream, NoCallback).await
     }
 }

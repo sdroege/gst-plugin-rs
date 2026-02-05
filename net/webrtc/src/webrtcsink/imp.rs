@@ -9,6 +9,9 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_plugin_webrtc_signalling::handlers::Handler;
+use gst_plugin_webrtc_signalling::server::async_tungstenite::tungstenite::handshake::server::{
+    Request, Response,
+};
 use gst_plugin_webrtc_signalling::server::{Server, ServerError};
 use gst_rtp::prelude::*;
 use gst_utils::StreamProducer;
@@ -16,6 +19,7 @@ use gst_video::subclass::prelude::*;
 use gst_video::{VideoInfo, VideoMultiviewMode};
 use gst_webrtc::{WebRTCDataChannel, WebRTCICETransportPolicy};
 
+use http::HeaderName;
 use tokio::net::TcpListener;
 
 use futures::prelude::*;
@@ -6039,6 +6043,7 @@ const DEFAULT_SIGNALLING_SERVER_HOST: &str = "0.0.0.0";
 const DEFAULT_SIGNALLING_SERVER_PORT: u16 = 8443;
 const DEFAULT_SIGNALLING_SERVER_CERT: Option<&str> = None;
 const DEFAULT_SIGNALLING_SERVER_KEY: Option<&str> = None;
+const DEFAULT_SIGNALLING_SERVER_HEADERS: Option<gst::Structure> = None;
 
 #[derive(Default)]
 pub struct WebRTCSinkState {
@@ -6052,6 +6057,7 @@ pub struct WebRTCSinkSettings {
     signalling_server_port: u16,
     signalling_server_cert: Option<String>,
     signalling_server_key: Option<String>,
+    signalling_server_headers: Option<gst::Structure>,
 }
 
 impl Default for WebRTCSinkSettings {
@@ -6062,6 +6068,7 @@ impl Default for WebRTCSinkSettings {
             signalling_server_port: DEFAULT_SIGNALLING_SERVER_PORT,
             signalling_server_cert: DEFAULT_SIGNALLING_SERVER_CERT.map(String::from),
             signalling_server_key: DEFAULT_SIGNALLING_SERVER_KEY.map(String::from),
+            signalling_server_headers: DEFAULT_SIGNALLING_SERVER_HEADERS,
         }
     }
 }
@@ -6119,7 +6126,33 @@ impl WebRTCSink {
 
         while let Ok((stream, address)) = listener.accept().await {
             let mut server_clone = server.clone();
+            let configured_headers = settings.signalling_server_headers.as_ref().cloned();
             gst::info!(CAT, "Accepting connection from {}", address);
+
+            let callback = |_req: &Request, mut response: Response| {
+                let headers = response.headers_mut();
+                if let Some(configured_headers) = configured_headers {
+                    for (key, value) in configured_headers.iter() {
+                        if let Ok(header_name) = HeaderName::from_bytes(key.as_bytes()) {
+                            if let Ok(Ok(value_str)) =
+                                value.transform::<String>().map(|v| v.get::<String>())
+                            {
+                                if let Ok(header_value) = value_str.parse() {
+                                    headers.append(header_name, header_value);
+                                } else {
+                                    gst::warning!(CAT, "failed to parse header value {value:?}");
+                                }
+                            } else {
+                                gst::warning!(CAT, "failed to parse header value {value:?}");
+                            }
+                        } else {
+                            gst::warning!(CAT, "failed to parse header name {key:?}");
+                        }
+                    }
+                }
+
+                Ok(response)
+            };
 
             match acceptor.clone() {
                 Some(acceptor) => {
@@ -6127,7 +6160,7 @@ impl WebRTCSink {
                         match tokio::time::timeout(TLS_HANDSHAKE_TIMEOUT, acceptor.accept(stream))
                             .await
                         {
-                            Ok(Ok(stream)) => server_clone.accept_async(stream).await,
+                            Ok(Ok(stream)) => server_clone.accept_hdr_async(stream, callback).await,
                             Ok(Err(err)) => {
                                 gst::warning!(
                                     CAT,
@@ -6150,7 +6183,9 @@ impl WebRTCSink {
                     });
                 }
                 _ => {
-                    RUNTIME.spawn(async move { server_clone.accept_async(stream).await });
+                    RUNTIME.spawn(
+                        async move { server_clone.accept_hdr_async(stream, callback).await },
+                    );
                 }
             }
         }
@@ -6319,6 +6354,18 @@ impl ObjectImpl for WebRTCSink {
                         The key should be formatted as PEM")
                     .default_value(DEFAULT_SIGNALLING_SERVER_KEY)
                     .build(),
+                /**
+                 * GstWebRTCSink:signalling-server-headers:
+                 *
+                 * HTTP headers sent during the connection handshake.
+                 *
+                 * Since: plugins-rs-0.15.0
+                 */
+                glib::ParamSpecBoxed::builder::<gst::Structure>("signalling-server-headers")
+                    .nick("Signalling Server headers")
+                    .blurb("HTTP headers sent during the connection handshake")
+                    .flags(glib::ParamFlags::READWRITE)
+                    .build(),
             ]
         });
 
@@ -6354,6 +6401,11 @@ impl ObjectImpl for WebRTCSink {
                     .get::<Option<String>>()
                     .expect("type checked upstream")
             }
+            "signalling-server-headers" => {
+                self.settings.lock().unwrap().signalling_server_headers = value
+                    .get::<Option<gst::Structure>>()
+                    .expect("type checked upstream")
+            }
             _ => unimplemented!(),
         }
     }
@@ -6379,6 +6431,10 @@ impl ObjectImpl for WebRTCSink {
             "signalling-server-key" => {
                 let settings = self.settings.lock().unwrap();
                 settings.signalling_server_key.to_value()
+            }
+            "signalling-server-headers" => {
+                let settings = self.settings.lock().unwrap();
+                settings.signalling_server_headers.to_value()
             }
             _ => unimplemented!(),
         }

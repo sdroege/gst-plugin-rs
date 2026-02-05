@@ -52,7 +52,7 @@ aws-smithy-http-client = { version = "1.1.1", default-features = false, features
 aws-smithy-types = { version = "1.0", optional = true }
 aws-sdk-kinesisvideo = { version =  "1.0", optional = true, default-features = false, features = ["rt-tokio", "rustls"] }
 aws-sdk-kinesisvideosignaling = { version = "1.0", optional = true, default-features = false, features = ["rt-tokio", "rustls"] }
-http = { version = "1.0", optional = true }
+http = { version = "1.0" }
 data-encoding = {version = "2.3.3", optional = true }
 url-escape = { version = "0.1.1", optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["charset", "http2", "system-proxy", "rustls-tls", "rustls-tls-native-roots"], optional = true }
@@ -95,9 +95,9 @@ doc = []
 
 aws = ["dep:aws-config", "dep:aws-types", "dep:aws-credential-types", "dep:aws-sigv4",
        "dep:aws-smithy-http", "dep:aws-smithy-types", "dep:aws-sdk-kinesisvideo",
-       "dep:aws-sdk-kinesisvideosignaling", "dep:data-encoding", "dep:http", "dep:url-escape", "dep:aws-smithy-http-client",
+       "dep:aws-sdk-kinesisvideosignaling", "dep:data-encoding", "dep:url-escape", "dep:aws-smithy-http-client",
        "dep:aws-sdk-sso", "dep:aws-sdk-sts"]
-janus = ["dep:http"]
+janus = []
 livekit = ["dep:livekit-protocol", "dep:livekit-api"]
 whip = ["dep:reqwest", "dep:warp", "dep:ctrlc"]
 web_server = ["dep:warp"]

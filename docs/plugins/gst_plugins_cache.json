@@ -15531,6 +15531,17 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "signalling-server-headers": {
+                        "blurb": "HTTP headers sent during the connection handshake",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": true
+                    },
                     "signalling-server-host": {
                         "blurb": "Address the signalling server should listen on",
                         "conditionally-available": false,
