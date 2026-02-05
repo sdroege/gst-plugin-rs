@@ -79,7 +79,7 @@ impl ElementImpl for St2038Combiner {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
             let sink_caps = gst::Caps::builder("meta/x-st-2038")
-                .field("alignment", "frame")
+                .field("alignment", gst::List::new(["packet", "line", "frame"]))
                 .build();
 
             let st2038_pad_template = gst::PadTemplate::with_gtype(
