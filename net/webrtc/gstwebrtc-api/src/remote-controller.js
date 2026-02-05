@@ -63,6 +63,26 @@ function getModifiers(event) {
     modifiers.push("shift-mask");
   }
 
+  if (event.buttons & 1) {
+    modifiers.push("button1-mask");
+  }
+
+  if (event.buttons & 2) {
+    modifiers.push("button2-mask");
+  }
+
+  if (event.buttons & 4) {
+    modifiers.push("button3-mask");
+  }
+
+  if (event.buttons & 8) {
+    modifiers.push("button4-mask");
+  }
+
+  if (event.buttons & 16) {
+    modifiers.push("button5-mask");
+  }
+
   return modifiers.join("+");
 }
 
