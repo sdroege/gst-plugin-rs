@@ -40,8 +40,6 @@ pub trait RtpBaseDepay2Ext: IsA<RtpBaseDepay2> + 'static {
     /// considered dropped afterwards.
     ///
     /// The next buffer that is finished will automatically get the `DISCONT` flag set.
-    // FIXME: Allow subclasses to drop explicit packet ranges while keeping older packets around to
-    // allow for continuing to reconstruct a frame despite broken packets in the middle.
     fn drop_packets(&self, ext_seqnum: impl RangeBounds<u64>) {
         self.upcast_ref::<RtpBaseDepay2>()
             .imp()
@@ -128,6 +126,13 @@ pub trait RtpBaseDepay2Impl: ElementImpl + ObjectSubclass<Type: IsA<RtpBaseDepay
     /// If more complex copying of metas is needed then [`RtpBaseDepay2Impl::transform_meta`] has
     /// to be implemented.
     const ALLOWED_META_TAGS: &'static [&'static str] = &[];
+
+    /// By default the base class considers every sequence number discontinuity an output
+    /// discontinuity, drains the subclass and resets some internal state.
+    ///
+    /// By setting this to `true` it becomes the subclass's responsibility to handle
+    /// sequence number discontinuities correctly.
+    const ALLOW_SEQNUM_DISCONTINUITIES: bool = false;
 
     /// Called when streaming starts (READY -> PAUSED state change)
     ///
@@ -325,6 +330,7 @@ pub struct Packet {
 
     discont: bool,
     ext_seqnum: u64,
+    expected_ext_seqnum: Option<u64>,
     ext_timestamp: u64,
     marker: bool,
     payload_range: Range<usize>,
@@ -333,6 +339,10 @@ pub struct Packet {
 impl Packet {
     pub fn ext_seqnum(&self) -> u64 {
         self.ext_seqnum
+    }
+
+    pub fn expected_ext_seqnum(&self) -> Option<u64> {
+        self.expected_ext_seqnum
     }
 
     pub fn ext_timestamp(&self) -> u64 {
@@ -430,6 +440,7 @@ pub struct Class {
     ),
 
     allowed_meta_tags: &'static [&'static str],
+    allow_seqnum_discontinuities: bool,
 }
 
 unsafe impl ClassStruct for Class {
@@ -506,6 +517,7 @@ unsafe impl<T: RtpBaseDepay2Impl> IsSubclassable<T> for RtpBaseDepay2 {
         };
 
         class.allowed_meta_tags = T::ALLOWED_META_TAGS;
+        class.allow_seqnum_discontinuities = T::ALLOW_SEQNUM_DISCONTINUITIES;
     }
 }
 

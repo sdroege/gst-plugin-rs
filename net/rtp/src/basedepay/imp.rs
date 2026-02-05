@@ -1278,9 +1278,10 @@ impl RtpBaseDepay2 {
             }
         };
 
-        // FIXME: Allow subclasses to decide not to flush on DISCONTs and handle the situation
-        // themselves, e.g. to be able to continue reconstructing frames despite missing data.
-        if buffer.buffer().flags().contains(gst::BufferFlags::DISCONT) {
+        let allow_seqnum_discontinuities = self.obj().class().as_ref().allow_seqnum_discontinuities;
+
+        let discont_buffer = buffer.buffer().flags().contains(gst::BufferFlags::DISCONT);
+        if !allow_seqnum_discontinuities && discont_buffer {
             gst::info!(CAT, imp = self, "Discont received");
             state.current_stream = None;
         }
@@ -1306,77 +1307,122 @@ impl RtpBaseDepay2 {
                     pt
                 );
                 state.current_stream = None;
-            } else {
-                let expected_seqnum = (current_stream.ext_seqnum + 1) & 0xffff;
-                if expected_seqnum != seqnum as u64 {
-                    gst::info!(
-                        CAT,
-                        imp = self,
-                        "Got seqnum {seqnum} but expected {expected_seqnum}"
-                    );
+            }
+        }
 
-                    let mut ext_seqnum = seqnum as u64 + (current_stream.ext_seqnum & !0xffff);
+        let mut expected_ext_seqnum = None;
+        if let Some(ref mut current_stream) = state.current_stream {
+            let expected_seqnum = (current_stream.ext_seqnum + 1) & 0xffff;
+            if expected_seqnum != seqnum as u64 {
+                gst::info!(
+                    CAT,
+                    imp = self,
+                    "Got seqnum {seqnum} but expected {expected_seqnum}"
+                );
 
-                    if ext_seqnum < current_stream.ext_seqnum {
-                        let diff = current_stream.ext_seqnum - ext_seqnum;
-                        if diff > 0x7fff {
-                            ext_seqnum += 1 << 16;
-                        }
-                    } else {
-                        let diff = ext_seqnum - current_stream.ext_seqnum;
-                        if diff > 0x7fff {
-                            ext_seqnum -= 1 << 16;
-                        }
+                let mut ext_seqnum = seqnum as u64 + (current_stream.ext_seqnum & !0xffff);
+
+                if ext_seqnum < current_stream.ext_seqnum {
+                    let diff = current_stream.ext_seqnum - ext_seqnum;
+                    if diff > 0x7fff {
+                        ext_seqnum += 1 << 16;
                     }
-                    let diff = if ext_seqnum > current_stream.ext_seqnum {
-                        (ext_seqnum - current_stream.ext_seqnum) as i32
-                    } else {
-                        -((current_stream.ext_seqnum - ext_seqnum) as i32)
-                    };
+                } else {
+                    let diff = ext_seqnum - current_stream.ext_seqnum;
+                    if diff > 0x7fff {
+                        ext_seqnum -= 1 << 16;
+                    }
+                }
+                let diff = if ext_seqnum > current_stream.ext_seqnum {
+                    (ext_seqnum - current_stream.ext_seqnum) as i32
+                } else {
+                    -((current_stream.ext_seqnum - ext_seqnum) as i32)
+                };
 
-                    if diff > 0 {
+                if diff > 0 {
+                    if !allow_seqnum_discontinuities {
                         gst::info!(CAT, imp = self, "{diff} missing packets or sender restart");
                         state.current_stream = None;
-                    } else if diff >= -(settings.max_reorder as i32) {
-                        gst::info!(CAT, imp = self, "Got old packet, dropping");
+                    } else {
+                        gst::debug!(CAT, imp = self, "{diff} missing packets or sender restart");
+                        expected_ext_seqnum = Some(current_stream.ext_seqnum + 1);
+                    }
+                } else if !allow_seqnum_discontinuities {
+                    if diff >= -(settings.max_reorder as i32) {
+                        gst::info!(
+                            CAT,
+                            imp = self,
+                            "Got old packet {diff} in the past, dropping"
+                        );
                         return Ok(gst::FlowSuccess::Ok);
                     } else {
                         gst::info!(CAT, imp = self, "Sender restart");
                         state.current_stream = None;
                     }
                 } else {
-                    // Calculate extended RTP time
-                    let ext_rtptime = {
-                        let mut ext_rtptime =
-                            rtptime as u64 + (current_stream.ext_rtptime & !0xffff_ffff);
-
-                        // Check for wraparound
-                        if ext_rtptime < current_stream.ext_rtptime {
-                            let diff = current_stream.ext_rtptime - ext_rtptime;
-                            if diff > 0x7fff_ffff {
-                                ext_rtptime += 1 << 32;
-                            }
-                        } else {
-                            let diff = ext_rtptime - current_stream.ext_rtptime;
-                            if diff > 0x7fff_ffff {
-                                ext_rtptime -= 1 << 32;
-                            }
-                        }
-
-                        ext_rtptime
-                    };
-
-                    current_stream.ext_seqnum += 1;
-                    current_stream.ext_rtptime = ext_rtptime;
-                    gst::trace!(
+                    gst::debug!(
                         CAT,
                         imp = self,
-                        "Handling packet with extended seqnum {} and extended RTP time {}",
-                        current_stream.ext_seqnum,
-                        current_stream.ext_rtptime,
+                        "Got old packet {diff} in the past, or sender restart"
                     );
+                    expected_ext_seqnum = Some(current_stream.ext_seqnum + 1);
+                }
+            } else {
+                expected_ext_seqnum = Some(current_stream.ext_seqnum + 1);
+            }
+        }
+
+        // If there was no discontinuity or the subclass handles it, update the stream state.
+        if let Some(ref mut current_stream) = state.current_stream {
+            // Calculate extended RTP time
+            let ext_rtptime = {
+                let mut ext_rtptime = rtptime as u64 + (current_stream.ext_rtptime & !0xffff_ffff);
+
+                // Check for wraparound
+                if ext_rtptime < current_stream.ext_rtptime {
+                    let diff = current_stream.ext_rtptime - ext_rtptime;
+                    if diff > 0x7fff_ffff {
+                        ext_rtptime += 1 << 32;
+                    }
+                } else {
+                    let diff = ext_rtptime - current_stream.ext_rtptime;
+                    if diff > 0x7fff_ffff {
+                        ext_rtptime -= 1 << 32;
+                    }
+                }
+
+                ext_rtptime
+            };
+
+            // Calculate extended sequence number
+            let mut ext_seqnum = seqnum as u64 + (current_stream.ext_seqnum & !0xffff);
+
+            if ext_seqnum < current_stream.ext_seqnum {
+                let diff = current_stream.ext_seqnum - ext_seqnum;
+                if diff > 0x7fff {
+                    ext_seqnum += 1 << 16;
+                }
+            } else {
+                let diff = ext_seqnum - current_stream.ext_seqnum;
+                if diff > 0x7fff {
+                    ext_seqnum -= 1 << 16;
                 }
             }
+
+            if ext_seqnum > current_stream.ext_seqnum {
+                current_stream.ext_seqnum += (ext_seqnum - current_stream.ext_seqnum) as u64;
+            } else {
+                current_stream.ext_seqnum -= (current_stream.ext_seqnum - ext_seqnum) as u64;
+            };
+
+            current_stream.ext_rtptime = ext_rtptime;
+            gst::trace!(
+                CAT,
+                imp = self,
+                "Handling packet with extended seqnum {} and extended RTP time {}",
+                current_stream.ext_seqnum,
+                current_stream.ext_rtptime,
+            );
         }
 
         // Drain if there was any discontinuity.
@@ -1474,8 +1520,9 @@ impl RtpBaseDepay2 {
             &obj,
             &super::Packet {
                 buffer,
-                discont,
+                discont: discont || discont_buffer,
                 ext_seqnum,
+                expected_ext_seqnum,
                 ext_timestamp: ext_rtptime,
                 marker,
                 payload_range,
