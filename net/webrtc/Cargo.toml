@@ -78,6 +78,7 @@ gst-plugin-rtp.workspace = true
 tokio = { version = "1", features = ["signal"] }
 clap = { version = "4", features = ["derive"] }
 regex = "1"
+serial_test = {version = "3.3.1", features = ["file_locks"]}
 
 [lib]
 name = "gstrswebrtc"
