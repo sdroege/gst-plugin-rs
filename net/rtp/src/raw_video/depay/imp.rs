@@ -194,6 +194,8 @@ impl ElementImpl for RtpRawVideoDepay {
 }
 
 impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
+    const ALLOW_SEQNUM_DISCONTINUITIES: bool = true;
+
     fn set_sink_caps(&self, caps: &gst::Caps) -> bool {
         let s = caps.structure(0).unwrap();
 
