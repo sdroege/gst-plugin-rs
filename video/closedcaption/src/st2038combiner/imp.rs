@@ -19,7 +19,6 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
-use gst_video::video_meta::AncillaryMeta;
 use std::sync::{LazyLock, Mutex, MutexGuard};
 
 const FALLBACK_FRAME_DURATION: gst::ClockTime = gst::ClockTime::from_mseconds(50);
@@ -505,17 +504,16 @@ impl AggregatorImpl for St2038Combiner {
 }
 
 impl St2038Combiner {
-    fn buffer_to_ancdata(&self, buffer: gst::Buffer) -> Result<Vec<AncData>, gst::FlowError> {
+    fn buffer_to_ancdata(
+        &self,
+        anc_data: &mut Vec<AncData>,
+        buffer: gst::Buffer,
+    ) -> Result<(), gst::FlowError> {
         let Ok(map) = buffer.map_readable() else {
             gst::error!(CAT, imp = self, "Failed to map buffer");
             return Err(gst::FlowError::Error);
         };
 
-        let anc_data_sz = buffer
-            .iter_meta::<AncillaryMeta>()
-            .map(|meta| 70 + meta.data().len() * 10 / 8 + 1)
-            .sum::<usize>();
-        let mut anc_data = Vec::with_capacity(anc_data_sz);
         let mut slice = map.as_slice();
 
         while !slice.is_empty() {
@@ -541,7 +539,7 @@ impl St2038Combiner {
             anc_data.push(anc);
         }
 
-        Ok(anc_data)
+        Ok(())
     }
 
     // Only if we collected all ST-2038 we replace the current video
@@ -680,9 +678,7 @@ impl St2038Combiner {
             st2038_sinkpad.drop_buffer();
 
             state.last_st2038_ts = buffer.pts();
-            state
-                .current_frame_st2038
-                .extend(self.buffer_to_ancdata(buffer)?);
+            self.buffer_to_ancdata(&mut state.current_frame_st2038, buffer)?;
 
             gst::debug!(
                 CAT,
