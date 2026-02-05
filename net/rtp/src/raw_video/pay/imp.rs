@@ -58,7 +58,7 @@ use atomic_refcell::AtomicRefCell;
 
 use gst::{glib, subclass::prelude::*};
 
-use std::sync::LazyLock;
+use std::{num::Wrapping, sync::LazyLock};
 
 use gst_video::{VideoColorimetry, VideoFormat, VideoFrame, VideoFrameExt, VideoInfo};
 
@@ -77,6 +77,7 @@ pub struct RtpRawVideoPay {
 struct State {
     video_info: Option<VideoInfo>,
     packing_template: Option<FramePackingTemplate>,
+    extended_seqnum: Wrapping<u32>,
 }
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
@@ -290,7 +291,12 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
         buffer: &gst::Buffer,
         id: u64,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let state = self.state.borrow();
+        let mut state = self.state.borrow_mut();
+
+        // Reset extended seqnum counter if the seqnum was reset
+        if state.extended_seqnum.0 & 0x0000_ffff != self.obj().next_seqnum() as u32 {
+            state.extended_seqnum.0 = self.obj().next_seqnum() as u32;
+        }
 
         let video_info = state.video_info.as_ref().unwrap();
 
@@ -304,7 +310,12 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
 
         let video_info = vframe.info();
 
-        let packing_template = state.packing_template.as_ref().unwrap();
+        let State {
+            packing_template,
+            extended_seqnum,
+            ..
+        } = &mut *state;
+        let packing_template = packing_template.as_ref().unwrap();
 
         // FIXME: v308 needs swizzling of the components
         // FIXME: I420 + Y41B need to be packed into a temp buffer
@@ -323,7 +334,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
         for (i, packet) in packing_template.packets.iter().enumerate() {
             let is_last = i == (n_packets - 1);
 
-            let hdr = packet.make_headers(field);
+            let hdr = packet.make_headers(field, extended_seqnum.0);
 
             let mut rtp_packet_builder = rtp_types::RtpPacketBuilder::new()
                 .marker_bit(is_last)
@@ -347,6 +358,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
             }
 
             self.obj().queue_packet(id.into(), rtp_packet_builder)?;
+            *extended_seqnum += 1;
         }
 
         Ok(gst::FlowSuccess::Ok)

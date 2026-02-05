@@ -43,6 +43,7 @@ impl Packet {
     pub fn make_headers(
         &self,
         field: u8,
+        extended_seqnum: u32,
     ) -> SmallVec<[u8; VRAW_EXT_SEQNUM_LEN + 4 * VRAW_CHUNK_HDR_LEN]> {
         let field_flag = if field == 1 { 0x8000 } else { 0x0000 };
 
@@ -52,7 +53,7 @@ impl Packet {
 
         let mut hdr_buf = smallvec::SmallVec::with_capacity(hdr_len);
 
-        hdr_buf.extend_from_slice(&[0u8, 0]); // extended sequence number (todo: should do something better here)
+        hdr_buf.extend_from_slice(&extended_seqnum.to_be_bytes()[..2]);
 
         for (i, chunk) in self.chunks.iter().enumerate() {
             let is_last = i == (n_chunks - 1);
