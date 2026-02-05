@@ -1032,6 +1032,7 @@ impl FMP4Mux {
                 "codec_data",
             ]
             .as_slice(),
+            "video/x-raw" | "video/x-bayer" => ["format", "width", "height"].as_slice(),
             "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
             | "audio/x-ac3" | "audio/x-eac3" | "audio/x-adpcm" | "audio/x-raw" => {
                 ["channels", "rate", "layout", "bitrate", "codec_data"].as_slice()
@@ -3718,6 +3719,7 @@ impl FMP4Mux {
                     delta_frames = DeltaFrames::PredictiveOnly;
                 }
                 "video/x-raw" => (),
+                "video/x-bayer" => (),
                 "image/jpeg" => (),
                 "audio/mpeg" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
@@ -5328,6 +5330,29 @@ impl ElementImpl for ISOFMP4Mux {
                         .field(
                             "height",
                             gst::IntRange::with_step(2, i32::MAX.prev_multiple_of(&2), 2),
+                        )
+                        .build(),
+                    gst::Structure::builder("video/x-bayer")
+                        .field(
+                            "format",
+                            gst::List::new([
+                                "bggr", "gbrg", "grbg", "rggb", "bggr10le", "bggr10be", "gbrg10le",
+                                "gbrg10be", "grbg10le", "grbg10be", "rggb10le", "rggb10be",
+                                "bggr12le", "bggr12be", "gbrg12le", "gbrg12be", "grbg12le",
+                                "grbg12be", "rggb12le", "rggb12be", "bggr14le", "bggr14be",
+                                "gbrg14le", "gbrg14be", "grbg14le", "grbg14be", "rggb14le",
+                                "rggb14be", "bggr16le", "bggr16be", "gbrg16le", "gbrg16be",
+                                "grbg16le", "grbg16be", "rggb16le", "rggb16be",
+                            ]),
+                        )
+                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
+                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
+                        .field(
+                            "framerate",
+                            gst::FractionRange::new(
+                                gst::Fraction::new(0, 1),
+                                gst::Fraction::new(i32::MAX, 1),
+                            ),
                         )
                         .build(),
                     gst::Structure::builder("audio/mpeg")
