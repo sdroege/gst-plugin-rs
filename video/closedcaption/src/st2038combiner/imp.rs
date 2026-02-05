@@ -706,6 +706,20 @@ impl St2038Combiner {
         let mut video_buf = state.current_video_buffer.take().unwrap();
 
         if !state.current_frame_st2038.is_empty() {
+            if CAT.above_threshold(gst::DebugLevel::Trace) {
+                for anc in &state.current_frame_st2038 {
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "Attaching ST-2038 for DID {:02X} SDID {:02X} line {} and horizontal offset {} with {} bytes",
+                        anc.header.did,
+                        anc.header.sdid,
+                        anc.header.line_number,
+                        anc.header.horizontal_offset,
+                        anc.header.data_count
+                    );
+                }
+            }
             add_ancillary_meta_to_buffer(video_buf.make_mut(), &state.current_frame_st2038);
             state.current_frame_st2038.clear();
         } else {
