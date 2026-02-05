@@ -1685,3 +1685,261 @@ fn encode_uncompressed_audio_f64() {
     test_encode_uncompressed_audio("F64LE", 48000, 8);
     test_roundtrip_uncompressed_audio("F64LE", 48000, 16);
 }
+
+fn test_bayer_roundtrip(bayer_format: &str) {
+    let Ok(pipeline) = gst::parse::launch(&format!(
+        "videotestsrc num-buffers=10 ! rgb2bayer ! video/x-bayer,format={bayer_format} ! mux. \
+         isomp4mux name=mux ! filesink name=sink"
+    )) else {
+        println!("could not build muxing pipeline");
+        return;
+    };
+    let pipeline = Pipeline(pipeline.downcast::<gst::Pipeline>().unwrap());
+
+    let dir = tempdir().unwrap();
+    let mut location = dir.path().to_owned();
+    location.push("test.mp4");
+
+    let sink = pipeline.by_name("sink").unwrap();
+    sink.set_property("location", location.to_str().expect("Unexpected filename"));
+    pipeline.into_completion();
+
+    // Now demux and decode
+    let Ok(pipeline) = gst::parse::launch(
+        "filesrc name=src ! qtdemux name=demux \
+         demux.video_0 ! queue ! bayer2rgb ! fakesink",
+    ) else {
+        panic!("could not build demuxing pipeline")
+    };
+    let pipeline = Pipeline(pipeline.downcast::<gst::Pipeline>().unwrap());
+    pipeline
+        .by_name("src")
+        .unwrap()
+        .set_property("location", location.display().to_string());
+    pipeline.into_completion();
+}
+
+// 8-bit formats (4 patterns)
+#[test]
+fn bayer_roundtrip_bggr() {
+    init();
+    test_bayer_roundtrip("bggr");
+}
+
+#[test]
+fn bayer_roundtrip_gbrg() {
+    init();
+    test_bayer_roundtrip("gbrg");
+}
+
+#[test]
+fn bayer_roundtrip_grbg() {
+    init();
+    test_bayer_roundtrip("grbg");
+}
+
+#[test]
+fn bayer_roundtrip_rggb() {
+    init();
+    test_bayer_roundtrip("rggb");
+}
+
+// 10-bit LE formats (4 patterns)
+#[test]
+fn bayer_roundtrip_bggr10le() {
+    init();
+    test_bayer_roundtrip("bggr10le");
+}
+
+#[test]
+fn bayer_roundtrip_gbrg10le() {
+    init();
+    test_bayer_roundtrip("gbrg10le");
+}
+
+#[test]
+fn bayer_roundtrip_grbg10le() {
+    init();
+    test_bayer_roundtrip("grbg10le");
+}
+
+#[test]
+fn bayer_roundtrip_rggb10le() {
+    init();
+    test_bayer_roundtrip("rggb10le");
+}
+
+// 10-bit BE formats (4 patterns)
+#[test]
+fn bayer_roundtrip_bggr10be() {
+    init();
+    test_bayer_roundtrip("bggr10be");
+}
+
+#[test]
+fn bayer_roundtrip_gbrg10be() {
+    init();
+    test_bayer_roundtrip("gbrg10be");
+}
+
+#[test]
+fn bayer_roundtrip_grbg10be() {
+    init();
+    test_bayer_roundtrip("grbg10be");
+}
+
+#[test]
+fn bayer_roundtrip_rggb10be() {
+    init();
+    test_bayer_roundtrip("rggb10be");
+}
+
+// 12-bit LE formats (4 patterns)
+#[test]
+fn bayer_roundtrip_bggr12le() {
+    init();
+    test_bayer_roundtrip("bggr12le");
+}
+
+#[test]
+fn bayer_roundtrip_gbrg12le() {
+    init();
+    test_bayer_roundtrip("gbrg12le");
+}
+
+#[test]
+fn bayer_roundtrip_grbg12le() {
+    init();
+    test_bayer_roundtrip("grbg12le");
+}
+
+#[test]
+fn bayer_roundtrip_rggb12le() {
+    init();
+    test_bayer_roundtrip("rggb12le");
+}
+
+// 12-bit BE formats (4 patterns)
+#[test]
+fn bayer_roundtrip_bggr12be() {
+    init();
+    test_bayer_roundtrip("bggr12be");
+}
+
+#[test]
+fn bayer_roundtrip_gbrg12be() {
+    init();
+    test_bayer_roundtrip("gbrg12be");
+}
+
+#[test]
+fn bayer_roundtrip_grbg12be() {
+    init();
+    test_bayer_roundtrip("grbg12be");
+}
+
+#[test]
+fn bayer_roundtrip_rggb12be() {
+    init();
+    test_bayer_roundtrip("rggb12be");
+}
+
+// 14-bit LE formats (4 patterns)
+#[test]
+fn bayer_roundtrip_bggr14le() {
+    init();
+    test_bayer_roundtrip("bggr14le");
+}
+
+#[test]
+fn bayer_roundtrip_gbrg14le() {
+    init();
+    test_bayer_roundtrip("gbrg14le");
+}
+
+#[test]
+fn bayer_roundtrip_grbg14le() {
+    init();
+    test_bayer_roundtrip("grbg14le");
+}
+
+#[test]
+fn bayer_roundtrip_rggb14le() {
+    init();
+    test_bayer_roundtrip("rggb14le");
+}
+
+// 14-bit BE formats (4 patterns)
+#[test]
+fn bayer_roundtrip_bggr14be() {
+    init();
+    test_bayer_roundtrip("bggr14be");
+}
+
+#[test]
+fn bayer_roundtrip_gbrg14be() {
+    init();
+    test_bayer_roundtrip("gbrg14be");
+}
+
+#[test]
+fn bayer_roundtrip_grbg14be() {
+    init();
+    test_bayer_roundtrip("grbg14be");
+}
+
+#[test]
+fn bayer_roundtrip_rggb14be() {
+    init();
+    test_bayer_roundtrip("rggb14be");
+}
+
+// 16-bit LE formats (4 patterns)
+#[test]
+fn bayer_roundtrip_bggr16le() {
+    init();
+    test_bayer_roundtrip("bggr16le");
+}
+
+#[test]
+fn bayer_roundtrip_gbrg16le() {
+    init();
+    test_bayer_roundtrip("gbrg16le");
+}
+
+#[test]
+fn bayer_roundtrip_grbg16le() {
+    init();
+    test_bayer_roundtrip("grbg16le");
+}
+
+#[test]
+fn bayer_roundtrip_rggb16le() {
+    init();
+    test_bayer_roundtrip("rggb16le");
+}
+
+// 16-bit BE formats (4 patterns)
+#[test]
+fn bayer_roundtrip_bggr16be() {
+    init();
+    test_bayer_roundtrip("bggr16be");
+}
+
+#[test]
+fn bayer_roundtrip_gbrg16be() {
+    init();
+    test_bayer_roundtrip("gbrg16be");
+}
+
+#[test]
+fn bayer_roundtrip_grbg16be() {
+    init();
+    test_bayer_roundtrip("grbg16be");
+}
+
+#[test]
+fn bayer_roundtrip_rggb16be() {
+    init();
+    test_bayer_roundtrip("rggb16be");
+}
