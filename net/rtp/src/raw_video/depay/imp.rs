@@ -602,7 +602,14 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
     }
 
     fn flush(&self) {
-        // Keep current frame around, or we'd clear it after every lost packet.
+        let mut state = self.state.borrow_mut();
+        let _ = state.output_frame.take();
+    }
+
+    fn drain(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let mut state = self.state.borrow_mut();
+        let _ = state.output_frame.take();
+        Ok(gst::FlowSuccess::Ok)
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
