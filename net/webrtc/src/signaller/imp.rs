@@ -258,6 +258,7 @@ impl Signaller {
 
     fn set_status(&self, meta: &Option<serde_json::Value>, peer_id: &str) {
         self.state.lock().unwrap().client_id = Some(peer_id.to_string());
+        self.obj().notify("client-id");
 
         let role = self.settings.lock().unwrap().role;
         self.send(p::IncomingMessage::SetPeerStatus(match role {
