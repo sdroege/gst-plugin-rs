@@ -54,12 +54,13 @@ use atomic_refcell::AtomicRefCell;
 
 use gst::{BufferPool, glib, prelude::*, subclass::prelude::*};
 
-use std::sync::LazyLock;
+use std::sync::{LazyLock, Mutex};
 
 use gst_video::{VideoColorimetry, VideoFormat, VideoFrame, VideoInfo, video_frame::*};
 
 use crate::basedepay::{PacketToBufferRelation, RtpBaseDepay2Ext};
 
+use crate::raw_video::depay::ConcealmentMethod;
 use crate::raw_video::pixel_group::PixelGroup;
 use crate::raw_video::vframe_utils;
 
@@ -70,14 +71,15 @@ pub(crate) const VRAW_CHUNK_HDR_LEN: usize = 6;
 #[derive(Default)]
 pub struct RtpRawVideoDepay {
     state: AtomicRefCell<State>,
+    settings: Mutex<Settings>,
 }
 
 #[derive(Debug)]
 struct OutputFrame {
     vframe: gst_video::VideoFrame<Writable>,
-    ext_timestamp: u64,
-    seq_start: u64,
-    seq_end: u64,
+    ext_timestamp: Option<u64>,
+    seq_start: Option<u64>,
+    seq_end: Option<u64>,
 }
 
 #[derive(Default)]
@@ -86,6 +88,11 @@ struct State {
     output_frame: Option<OutputFrame>,
     video_info: Option<VideoInfo>,
     pgroup: Option<PixelGroup>,
+}
+
+#[derive(Default)]
+struct Settings {
+    concealment_method: ConcealmentMethod,
 }
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
@@ -103,7 +110,37 @@ impl ObjectSubclass for RtpRawVideoDepay {
     type ParentType = crate::basedepay::RtpBaseDepay2;
 }
 
-impl ObjectImpl for RtpRawVideoDepay {}
+impl ObjectImpl for RtpRawVideoDepay {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
+            vec![
+                glib::ParamSpecEnum::builder::<ConcealmentMethod>("concealment-method")
+                    .nick("Concealment Method")
+                    .blurb("Concealment method used for packet loss")
+                    .mutable_ready()
+                    .build(),
+            ]
+        });
+
+        &PROPERTIES
+    }
+
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.name() {
+            "concealment-method" => self.settings.lock().unwrap().concealment_method.to_value(),
+            _ => unimplemented!(),
+        }
+    }
+
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        match pspec.name() {
+            "concealment-method" => {
+                self.settings.lock().unwrap().concealment_method = value.get().unwrap();
+            }
+            _ => unimplemented!(),
+        }
+    }
+}
 
 impl GstObjectImpl for RtpRawVideoDepay {}
 
@@ -323,7 +360,11 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
 
         // Push out frame if finished
         if let Some(output_frame) = state.output_frame.as_ref()
-            && output_frame.ext_timestamp != packet.ext_timestamp()
+            && output_frame
+                .ext_timestamp
+                .is_some_and(|output_frame_ext_timestamp| {
+                    output_frame_ext_timestamp != packet.ext_timestamp()
+                })
         {
             self.finish_current_frame(&mut state)?;
         }
@@ -331,6 +372,11 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
         let pgroup = state.pgroup.unwrap();
 
         let output_frame = if let Some(output_frame) = state.output_frame.as_mut() {
+            if output_frame.ext_timestamp.is_none() {
+                output_frame.ext_timestamp = Some(packet.ext_timestamp());
+                output_frame.seq_start = Some(packet.ext_seqnum());
+                output_frame.seq_end = Some(packet.ext_seqnum());
+            }
             output_frame
         } else {
             let pool = state.pool.as_ref().unwrap();
@@ -353,9 +399,9 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
 
             let new_output_frame = OutputFrame {
                 vframe,
-                ext_timestamp: packet.ext_timestamp(),
-                seq_start: packet.ext_seqnum(),
-                seq_end: packet.ext_seqnum(),
+                ext_timestamp: Some(packet.ext_timestamp()),
+                seq_start: Some(packet.ext_seqnum()),
+                seq_end: Some(packet.ext_seqnum()),
             };
 
             gst::debug!(CAT, imp = self, "New output frame: {new_output_frame:?}");
@@ -364,7 +410,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
             state.output_frame.as_mut().unwrap()
         };
 
-        output_frame.seq_end = packet.ext_seqnum();
+        output_frame.seq_end = Some(packet.ext_seqnum());
 
         let payload = packet.payload();
 
@@ -633,12 +679,43 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
 
 impl RtpRawVideoDepay {
     fn finish_current_frame(&self, state: &mut State) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let output_frame = state.output_frame.take().unwrap();
+        let Some(output_frame) = state
+            .output_frame
+            .take_if(|frame| frame.ext_timestamp.is_some())
+        else {
+            return Ok(gst::FlowSuccess::Ok);
+        };
+
+        if self.settings.lock().unwrap().concealment_method == ConcealmentMethod::LastFrame {
+            let pool = state.pool.as_ref().unwrap();
+
+            let buf = pool.acquire_buffer(None)?;
+            let mut vframe =
+                VideoFrame::from_buffer_writable(buf, state.video_info.as_ref().unwrap()).map_err(
+                    |_| {
+                        gst::error!(CAT, imp = self, "Failed to map video buffer for writing");
+                        gst::FlowError::Error
+                    },
+                )?;
+
+            if output_frame.vframe.copy(&mut vframe).is_ok() {
+                state.output_frame = Some(OutputFrame {
+                    vframe,
+                    ext_timestamp: None,
+                    seq_start: None,
+                    seq_end: None,
+                });
+            } else {
+                gst::warning!(CAT, imp = self, "Failed to copy current output frame");
+            }
+        }
 
         gst::trace!(CAT, imp = self, "Outputting frame {output_frame:?} ..");
 
         self.obj().queue_buffer(
-            PacketToBufferRelation::Seqnums(output_frame.seq_start..=output_frame.seq_end),
+            PacketToBufferRelation::Seqnums(
+                output_frame.seq_start.unwrap()..=output_frame.seq_end.unwrap(),
+            ),
             output_frame.vframe.into_buffer(),
         )
     }

@@ -14658,6 +14658,20 @@
                         "presence": "always"
                     }
                 },
+                "properties": {
+                    "concealment-method": {
+                        "blurb": "Concealment method used for packet loss",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "last-frame (1)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRtpRawVideoDepay2ConcealmentMethod",
+                        "writable": true
+                    }
+                },
                 "rank": "marginal"
             },
             "rtpvrawpay2": {
@@ -15278,6 +15292,21 @@
                     "GObject"
                 ],
                 "kind": "object"
+            },
+            "GstRtpRawVideoDepay2ConcealmentMethod": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Black",
+                        "name": "black",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Last Frame",
+                        "name": "last-frame",
+                        "value": "1"
+                    }
+                ]
             },
             "GstRtpSendProfile": {
                 "kind": "enum",
