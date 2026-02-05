@@ -46,6 +46,7 @@ static = []
 capi = []
 doc = []
 v1_28 = ["gst/v1_28"]
+v1_30 = ["gst-pbutils/v1_30"]
 
 [package.metadata.capi]
 min_version = "0.9.21"
