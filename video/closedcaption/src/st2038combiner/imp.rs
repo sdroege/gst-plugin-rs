@@ -269,10 +269,16 @@ impl AggregatorImpl for St2038Combiner {
                 let running_time_end = video_buffer
                     .duration()
                     .or_else(|| {
-                        state.framerate.as_ref().and_then(|framerate| {
-                            gst::ClockTime::SECOND
-                                .mul_div_round(framerate.denom() as u64, framerate.numer() as u64)
-                        })
+                        state
+                            .framerate
+                            .as_ref()
+                            .filter(|framerate| framerate.numer() != 0)
+                            .and_then(|framerate| {
+                                gst::ClockTime::SECOND.mul_div_round(
+                                    framerate.denom() as u64,
+                                    framerate.numer() as u64,
+                                )
+                            })
                     })
                     .and_then(|duration| {
                         let end_time = video_start_pts + duration;
