@@ -56,7 +56,7 @@
  */
 use atomic_refcell::AtomicRefCell;
 
-use gst::{glib, subclass::prelude::*};
+use gst::{glib, prelude::*, subclass::prelude::*};
 
 use std::{num::Wrapping, sync::LazyLock};
 
@@ -137,10 +137,6 @@ impl ElementImpl for RtpRawVideoPay {
                         ]),
                     )
                     .field("depth", gst::List::new(["8", "10", "12", "16"]))
-                    .field(
-                        "colorimetry",
-                        gst::List::new(["BT601-5", "BT709-2", "SMPTE240M"]),
-                    )
                     .build(),
             )
             .unwrap();
@@ -217,21 +213,66 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
         // We always have the same depths for all components (we don't support 5:6:5 RGB yet)
         let depth = info.comp_depth(0);
 
-        // Should there be constants/defines for these in gst_video, to match GST_VIDEO_COLORIMETRY_*?
+        // Assume SDR transfer system characteristic unless overridden below
+        let mut tsc = "SDR";
+
+        // FIXME: Should there be constants/defines for these in gst_video, to match GST_VIDEO_COLORIMETRY_*?
         let colorimetry = if info.colorimetry() == VideoColorimetry::from_str("bt601").unwrap() {
-            "BT601-5"
+            "BT601"
         } else if info.colorimetry() == VideoColorimetry::from_str("bt709").unwrap() {
-            "BT709-2"
+            "BT709"
+        } else if info.colorimetry() == VideoColorimetry::from_str("bt2020").unwrap()
+            || info.colorimetry() == VideoColorimetry::from_str("bt2020-10").unwrap()
+        {
+            "BT2020"
+        } else if info.colorimetry() == VideoColorimetry::from_str("bt2100-pq").unwrap() {
+            tsc = "PQ";
+            "BT2100"
+        } else if info.colorimetry() == VideoColorimetry::from_str("bt2100-hlg").unwrap() {
+            tsc = "HLG";
+            "BT2100"
         } else if info.colorimetry() == VideoColorimetry::from_str("smpte240m").unwrap() {
             "SMPTE240M"
         } else {
-            gst::info!(
-                CAT,
-                imp = self,
-                "Mapping {:?} to SMPTE240M",
-                info.colorimetry()
-            );
-            "SMPTE240M"
+            gst::info!(CAT, imp = self, "Mapping {:?} to BT709", info.colorimetry());
+            "BT709"
+        };
+
+        let framerate = if info.fps().numer() == 0 {
+            None
+        } else if info.fps().denom() == 1 {
+            Some(info.fps().numer().to_string())
+        } else {
+            Some(format!("{}/{}", info.fps().numer(), info.fps().denom()))
+        };
+
+        let chroma_position = if ["YCbCr-4:2:2", "YCbCr-4:2:0", "YCbCr-4:1:1"].contains(&sampling) {
+            if info
+                .chroma_site()
+                .contains(gst_video::VideoChromaSite::COSITED)
+            {
+                Some("0")
+            } else if info
+                .chroma_site()
+                .contains(gst_video::VideoChromaSite::H_COSITED)
+            {
+                Some("3")
+            } else if info
+                .chroma_site()
+                .contains(gst_video::VideoChromaSite::V_COSITED)
+            {
+                Some("1")
+            } else if info
+                .chroma_site()
+                .contains(gst_video::VideoChromaSite::NONE)
+            {
+                Some("4")
+            } else {
+                None
+            }
+        } else {
+            // Chroma-siting only makes sense for sub-sampled YUV
+            None
         };
 
         let mut src_caps = gst::Caps::builder("application/x-rtp")
@@ -242,13 +283,49 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
             .field("width", format!("{}", info.width()))
             .field("height", format!("{}", info.height()))
             .field("depth", format!("{depth}"))
-            .field("colorimetry", colorimetry);
+            .field("colorimetry", colorimetry)
+            .field("tsc", tsc)
+            .field_if("interlace", "true", info.is_interlaced())
+            .field_if_some("exactframerate", framerate)
+            .field_if_some("chroma-position", chroma_position)
+            .build();
 
-        if info.is_interlaced() {
-            src_caps = src_caps.field("interlace", "true");
+        // Special handling for BT601-5 vs. BT601 and BT709-2 vs. BT709. The dash-less versions
+        // are used by ST2110-20. We prefer the ST2110-20 values.
+        if ["BT601", "BT709"].contains(&colorimetry) {
+            let obj = self.obj();
+            let src_pad = obj.src_pad();
+
+            let mut filter_caps = src_caps.copy();
+            {
+                let filter_caps = filter_caps.get_mut().unwrap();
+
+                filter_caps.set(
+                    "colorimetry",
+                    if colorimetry == "BT601" {
+                        gst::List::new(["BT601", "BT601-5"])
+                    } else {
+                        gst::List::new(["BT709", "BT709-2"])
+                    },
+                );
+            }
+
+            let mut downstream_caps = src_pad.peer_query_caps(Some(&filter_caps));
+            downstream_caps.fixate();
+            let negotiated_colorimetry = downstream_caps
+                .structure(0)
+                .and_then(|s| s.get::<&str>("colorimetry").ok());
+
+            if colorimetry == "BT601" && negotiated_colorimetry == Some("BT601-5") {
+                let src_caps = src_caps.get_mut().unwrap();
+                src_caps.set("colorimetry", "BT601-5");
+            } else if negotiated_colorimetry == Some("BT709-2") {
+                let src_caps = src_caps.get_mut().unwrap();
+                src_caps.set("colorimetry", "BT709-2");
+            }
         }
 
-        self.obj().set_src_caps(&src_caps.build());
+        self.obj().set_src_caps(&src_caps);
 
         let y_inc = if info.is_interlaced() {
             y_inc * 2

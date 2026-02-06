@@ -281,18 +281,54 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
             return false;
         }
 
-        let colorimetry =
-            s.get::<&str>("colorimetry")
-                .ok()
-                .and_then(|colorimetry| match colorimetry {
-                    "BT601-5" => VideoColorimetry::from_str("bt601").ok(),
-                    "BT709-2" => VideoColorimetry::from_str("bt709").ok(),
-                    "SMPTE240M" => VideoColorimetry::from_str("smpte240m").ok(),
-                    colorimetry => {
-                        gst::warning!(CAT, imp = self, "Unexpected colorimetry {colorimetry}");
-                        VideoColorimetry::from_str(&colorimetry.to_lowercase()).ok()
+        let colorimetry = s.get::<&str>("colorimetry").ok().and_then(
+            |colorimetry| match colorimetry {
+                "BT601-5" | "BT601" => VideoColorimetry::from_str("bt601").ok(),
+                "BT709-2" | "BT709" => VideoColorimetry::from_str("bt709").ok(),
+                "BT2020" => {
+                    if depth >= 10 {
+                        VideoColorimetry::from_str("bt2020-10").ok()
+                    } else {
+                        VideoColorimetry::from_str("bt2020").ok()
                     }
-                });
+                }
+                "BT2100" => {
+                    let tsc = s.get::<&str>("tsc").ok();
+                    match tsc {
+                        Some("PQ") => VideoColorimetry::from_str("bt2100-pq").ok(),
+                        Some("HLG") => VideoColorimetry::from_str("bt2100-hlg").ok(),
+                        Some(tsc) => {
+                            gst::warning!(
+                                CAT,
+                                imp = self,
+                                "Unsupported BT2100 transfer characteristic system {tsc}, assuming PQ"
+                            );
+                            VideoColorimetry::from_str("bt2100-pg").ok()
+                        }
+                        _ => {
+                            gst::warning!(
+                                CAT,
+                                imp = self,
+                                "Unspecified BT2100 transfer characteristic system, assuming PQ"
+                            );
+                            VideoColorimetry::from_str("bt2100-pg").ok()
+                        }
+                    }
+                }
+                "SMPTE240M" => VideoColorimetry::from_str("smpte240m").ok(),
+                "UNSPECIFIED" => {
+                    None
+                }
+                "ST2065-1" | "ST2065-3" | "XYZ" => {
+                    gst::warning!(CAT, imp = self, "Unsupported colorimetry {colorimetry}");
+                    None
+                }
+                colorimetry => {
+                    gst::warning!(CAT, imp = self, "Unexpected colorimetry {colorimetry}");
+                    VideoColorimetry::from_str(&colorimetry.to_lowercase()).ok()
+                }
+            },
+        );
 
         let fmt = match (sampling, depth) {
             // Todo: could also support some of the 5/6-bit depth RGB variations from RFC-4421
@@ -319,13 +355,80 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
             }
         };
 
-        let mut video_info = VideoInfo::builder(fmt, width, height);
+        let framerate = s.get::<&str>("exactframerate").ok().and_then(|framerate| {
+            if let Some((fps_n, fps_d)) = framerate.split_once('/').and_then(|(fps_n, fps_d)| {
+                Option::zip(fps_n.parse::<i32>().ok(), fps_d.parse::<i32>().ok())
+            }) {
+                Some(gst::Fraction::new(fps_n, fps_d))
+            } else if let Ok(fps_n) = framerate.parse::<i32>() {
+                Some(gst::Fraction::new(fps_n, 1))
+            } else {
+                gst::warning!(CAT, imp = self, "Unsupported framerate {framerate}");
+                None
+            }
+        });
 
-        if let Some(colorimetry) = colorimetry.as_ref() {
-            video_info = video_info.colorimetry(colorimetry);
-        }
+        let chroma_site = if ["YCbCr-4:2:2", "YCbCr-4:2:0", "YCbCr-4:1:1"].contains(&sampling) {
+            // RFC 4175 defines that 0 (COSITED) is the default and ST2110-20 defines
+            // that it depends on the signal standard / colorimetry. BT601, BT709, BT2020,
+            // and BT2110 all define co-siting so we use that as default in all cases.
+            let chroma_position = s
+                .get::<&str>("chroma-position")
+                .ok()
+                .and_then(|chroma_position| {
+                    if let Some((cb, cr)) = chroma_position.split_once(',').and_then(|(cb, cr)| {
+                        Option::zip(cb.parse::<i32>().ok(), cr.parse::<i32>().ok())
+                    }) {
+                        Some((cb, cr))
+                    } else if let Ok(chroma_position) = chroma_position.parse::<i32>() {
+                        Some((chroma_position, chroma_position))
+                    } else {
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Unsupported chroma-position {chroma_position}"
+                        );
 
-        let video_info = video_info.build().unwrap();
+                        None
+                    }
+                })
+                .unwrap_or((0, 0));
+
+            if chroma_position.0 != chroma_position.1 {
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Only same chroma-siting for U and V are supported but got {},{}",
+                    chroma_position.0,
+                    chroma_position.1
+                );
+            }
+
+            match chroma_position.0 {
+                0 => Some(gst_video::VideoChromaSite::COSITED),
+                1 => Some(gst_video::VideoChromaSite::V_COSITED),
+                3 => Some(gst_video::VideoChromaSite::H_COSITED),
+                4 => Some(gst_video::VideoChromaSite::NONE),
+                v => {
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Unsupported chroma siting {v}, assuming co-sited"
+                    );
+                    Some(gst_video::VideoChromaSite::COSITED)
+                }
+            }
+        } else {
+            // Chroma-siting only makes sense for sub-sampled YUV
+            None
+        };
+
+        let video_info = VideoInfo::builder(fmt, width, height)
+            .colorimetry_if_some(colorimetry.as_ref())
+            .fps_if_some(framerate)
+            .chroma_site_if_some(chroma_site)
+            .build()
+            .unwrap();
 
         let output_caps = video_info.to_caps().unwrap();
 
