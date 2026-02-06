@@ -814,7 +814,7 @@ impl Transcriber {
 
         gst::info!(CAT, "all source pads joined");
 
-        Ok(self.disconnect(state))
+        Ok(self.disconnect(state, true))
     }
 
     fn src_activatemode(
@@ -872,7 +872,7 @@ impl Transcriber {
 
                 let mut ret = gst::Pad::event_default(pad, Some(&*self.obj()), event);
 
-                drop(self.disconnect(self.state.lock().unwrap()));
+                drop(self.disconnect(self.state.lock().unwrap(), false));
 
                 let state = self.state.lock().unwrap();
                 for srcpad in &state.srcpads {
@@ -888,6 +888,8 @@ impl Transcriber {
             }
             gst::EventView::FlushStop(_) => {
                 gst::info!(CAT, imp = self, "Received flush stop, restarting task");
+
+                let _lock = self.sinkpad.stream_lock();
 
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
@@ -1767,7 +1769,11 @@ impl Transcriber {
         Ok(())
     }
 
-    fn disconnect<'a>(&'a self, mut state: MutexGuard<'a, State>) -> MutexGuard<'a, State> {
+    fn disconnect<'a>(
+        &'a self,
+        mut state: MutexGuard<'a, State>,
+        take_stream_lock: bool,
+    ) -> MutexGuard<'a, State> {
         gst::info!(CAT, imp = self, "Unpreparing");
 
         if let Some(abort_handle) = state.recv_abort_handle.take() {
@@ -1784,7 +1790,9 @@ impl Transcriber {
 
         self.state_cond.notify_one();
 
-        let _lock = self.sinkpad.stream_lock();
+        if take_stream_lock {
+            let _lock = self.sinkpad.stream_lock();
+        }
 
         if let Some(mut ws_sink) = self.ws_sink.borrow_mut().take() {
             RUNTIME.block_on(async {
@@ -2447,7 +2455,7 @@ impl ElementImpl for Transcriber {
         gst::info!(CAT, imp = self, "Changing state {:?}", transition);
 
         if transition == gst::StateChange::PausedToReady {
-            drop(self.disconnect(self.state.lock().unwrap()));
+            drop(self.disconnect(self.state.lock().unwrap(), true));
         }
 
         self.parent_change_state(transition)

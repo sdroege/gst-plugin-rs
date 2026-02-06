@@ -224,7 +224,7 @@ impl Demucs {
                 } else {
                     gst::debug!(CAT, imp = self, "Failed to drain");
                     // On error just shut down and forward EOS immediately
-                    state = self.deinit_demucs(state);
+                    state = self.deinit_demucs(state, true);
 
                     // Stop pad tasks now so we can forward EOS safely from here
                     let srcpads = state.srcpads.clone();
@@ -242,13 +242,15 @@ impl Demucs {
                 let mut state = self.state.lock().unwrap();
                 state.last_flow = Err(gst::FlowError::Flushing);
 
-                state = self.deinit_demucs(state);
+                state = self.deinit_demucs(state, false);
                 drop(state);
 
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             gst::EventView::FlushStop(_) => {
                 gst::info!(CAT, imp = self, "Received flush stop, resetting state");
+
+                let _ = self.sinkpad.stream_lock();
 
                 let mut state = self.state.lock().unwrap();
                 state.flow_combiner.reset();
@@ -1116,7 +1118,7 @@ impl Demucs {
             state = self.state.lock().unwrap();
         }
 
-        state = self.deinit_demucs(state);
+        state = self.deinit_demucs(state, true);
 
         if !pads_stopped {
             drop(state);
@@ -1134,7 +1136,11 @@ impl Demucs {
     }
 
     #[allow(dropping_copy_types)]
-    fn deinit_demucs<'a>(&'a self, mut state: MutexGuard<'a, State>) -> MutexGuard<'a, State> {
+    fn deinit_demucs<'a>(
+        &'a self,
+        mut state: MutexGuard<'a, State>,
+        take_stream_lock: bool,
+    ) -> MutexGuard<'a, State> {
         gst::info!(CAT, imp = self, "Deinitializing");
 
         self.state_cond.notify_one();
@@ -1204,7 +1210,9 @@ impl Demucs {
         state.initialized = false;
         drop(state);
 
-        let _ = self.sinkpad.stream_lock();
+        if take_stream_lock {
+            let _ = self.sinkpad.stream_lock();
+        }
 
         drop(inprocess_drop);
         drop(websocket_drop);
@@ -1558,7 +1566,7 @@ impl ElementImpl for Demucs {
             gst::StateChange::PausedToReady => {
                 let mut state = self.state.lock().unwrap();
                 state.last_flow = Err(gst::FlowError::Flushing);
-                state = self.deinit_demucs(state);
+                state = self.deinit_demucs(state, true);
                 drop(state);
             }
             _ => (),
