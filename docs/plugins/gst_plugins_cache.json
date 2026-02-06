@@ -3219,7 +3219,7 @@
                         "writable": true
                     },
                     "url": {
-                        "blurb": "URL for the demucs service, NULL runs it locally",
+                        "blurb": "WebSocket URL for the demucs service, NULL runs it locally",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,

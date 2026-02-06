@@ -1391,7 +1391,7 @@ impl ObjectImpl for Demucs {
             vec![
                 glib::ParamSpecString::builder("url")
                     .nick("URL")
-                    .blurb("URL for the demucs service, NULL runs it locally")
+                    .blurb("WebSocket URL for the demucs service, NULL runs it locally")
                     .default_value(Settings::default().url.as_ref().map(|url| url.as_str()))
                     .build(),
                 glib::ParamSpecUInt64::builder("chunk-duration")
