@@ -78,7 +78,7 @@ impl ElementImpl for RtpSmpte291Depay {
                         gst::Structure::builder("application/x-rtp")
                             .field("media", "video")
                             .field("clock-rate", 90_000i32)
-                            .field("encoding-name", "smpte291")
+                            .field("encoding-name", "SMPTE291")
                             .build(),
                     )
                     .build(),

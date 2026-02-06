@@ -12396,7 +12396,7 @@
                 "klass": "Codec/Depayloader/Network/RTP",
                 "pad-templates": {
                     "sink": {
-                        "caps": "application/x-rtp:\n          media: video\n     clock-rate: 90000\n  encoding-name: smpte291\n",
+                        "caps": "application/x-rtp:\n          media: video\n     clock-rate: 90000\n  encoding-name: SMPTE291\n",
                         "direction": "sink",
                         "presence": "always"
                     },
@@ -12427,7 +12427,7 @@
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "application/x-rtp:\n          media: video\n     clock-rate: 90000\n  encoding-name: smpte291\n",
+                        "caps": "application/x-rtp:\n          media: video\n     clock-rate: 90000\n  encoding-name: SMPTE291\n",
                         "direction": "src",
                         "presence": "always"
                     }

@@ -99,7 +99,7 @@ impl ElementImpl for RtpSmpte291Pay {
                         gst::Structure::builder("application/x-rtp")
                             .field("media", "video")
                             .field("clock-rate", 90000i32)
-                            .field("encoding-name", "smpte291")
+                            .field("encoding-name", "SMPTE291")
                             .build(),
                     )
                     .build(),
@@ -128,7 +128,7 @@ impl RtpBasePay2Impl for RtpSmpte291Pay {
         let src_caps = gst::Caps::builder("application/x-rtp")
             .field("media", "video")
             .field("clock-rate", 90000i32)
-            .field("encoding-name", "smpte291")
+            .field("encoding-name", "SMPTE291")
             .build();
 
         self.obj().set_src_caps(&src_caps);
