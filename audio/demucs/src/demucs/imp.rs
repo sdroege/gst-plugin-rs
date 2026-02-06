@@ -498,7 +498,11 @@ impl Demucs {
             }
             #[cfg(not(feature = "websocket"))]
             {
-                gst::error!(CAT, imp = self, "URL {url} set but no websocket support");
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "URL {url} set but no websocket support. Try building with `websocket` feature enabled."
+                );
                 return (
                     state,
                     Err(gst::error_msg!(
@@ -1378,6 +1382,16 @@ impl ObjectSubclass for Demucs {
     }
 }
 
+/**
+ * GstDemucs:url:
+ *
+ * WebSocket URL for the demucs service.
+ * Requires the plugin to be built with the `websocket` feature.
+ *
+ * If set to NULL, the element runs demucs locally.
+ *
+ * Since: plugins-rs-0.15.0
+ */
 impl ObjectImpl for Demucs {
     fn constructed(&self) {
         self.parent_constructed();
