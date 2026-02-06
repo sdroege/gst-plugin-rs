@@ -30,7 +30,7 @@ You will find the following plugins in this repository:
     - `file`: A Rust implementation of the standard `filesrc` and `filesink` elements
 
     - `compress`: General purpose lossless compression plugin.
-    
+
       - flate: compress and decompress data using zlib and deflate
 
     - `gopbuffer`: Stores a minimum duration of data delimited by discrete GOPs (Group of Picture).
@@ -255,6 +255,8 @@ You will find the following plugins in this repository:
       - `onvifmeta2relationmeta`: Convert ONVIF metadata to relation metas
 
       - `relationmeta2onvifmeta`: Convert relation metadata to ONVIF metas
+
+      - `handdetectiontensordec`: Tensor decoder for hand detection tensors.
 
       - `yoloxtensordec`: Tensor decoder for YOLOX tensors.
 
