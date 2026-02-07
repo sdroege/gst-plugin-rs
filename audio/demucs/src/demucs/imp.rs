@@ -23,9 +23,27 @@
  * The service can be run with [uv] in a virtualenv via `uv run service/main.py`. See `uv run
  * service/main.py --help` for more configuration options.
  *
+ * ### Selecting a specific Python version (inprocess feature)
+ *
+ * When built with the `inprocess` feature, the plugin embeds the Python interpreter directly.
+ * The Python version is determined at compile time by [pyo3]. To select a specific version, set
+ * the `PYO3_PYTHON` environment variable when building:
+ *
+ * |[
+ * PYO3_PYTHON=python3.13 cargo build --features inprocess
+ * ]|
+ *
+ * At runtime, if the Python packages (such as `torch` and `demucs`) are installed in a
+ * non-default location, set `PYTHONPATH` to the `site-packages` directory containing them:
+ *
+ * |[
+ * PYTHONPATH=/path/to/python3.13/site-packages gst-launch-1.0 ...
+ * ]|
+ *
  * [demucs]: https://github.com/adefossez/demucs
  * [pip-demucs]: https://pypi.org/project/demucs/
  * [uv]: https://docs.astral.sh/uv/
+ * [pyo3]: https://pyo3.rs/
  *
  * ## Example pipeline outputting only vocals
  *
