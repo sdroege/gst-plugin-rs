@@ -292,13 +292,15 @@ class Session:
             mean = ref.mean()
 
             in_ -= mean
-            in_ /= std
+            if std > np.finfo(float).eps:
+                in_ /= std
 
             chunk = th.tensor(in_).to(DEVICE)
             with th.no_grad():
                 out = self.model(chunk)
 
-            out *= std
+            if std > np.finfo(float).eps:
+                out *= std
             out += mean
 
             with self.pending_chunks_lock:
