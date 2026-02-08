@@ -709,6 +709,12 @@ impl St2038Combiner {
         let mut video_buf = state.current_video_buffer.take().unwrap();
 
         if !state.current_frame_st2038.is_empty() {
+            // Sort by line and then horizontal offset. While this is not strictly required
+            // for the ancillary meta, it keeps the output in a nicer order.
+            state
+                .current_frame_st2038
+                .sort_by_key(|anc| (anc.header.line_number, anc.header.horizontal_offset));
+
             if CAT.above_threshold(gst::DebugLevel::Trace) {
                 for anc in &state.current_frame_st2038 {
                     gst::trace!(
