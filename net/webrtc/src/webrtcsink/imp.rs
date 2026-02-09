@@ -935,6 +935,8 @@ struct PayloadChainBuilder {
     codec: Codec,
     /// Filter element between the encoder and the payloader.
     encoded_filter: Option<gst::Element>,
+    /// Name of the media stream
+    stream_name: Option<String>,
 }
 
 impl PayloadChainBuilder {
@@ -949,7 +951,13 @@ impl PayloadChainBuilder {
             output_caps: output_caps.clone(),
             codec: codec.clone(),
             encoded_filter,
+            stream_name: None,
         }
+    }
+
+    fn stream_name(mut self, name: &str) -> Self {
+        self.stream_name = Some(name.to_string());
+        self
     }
 
     fn build(self, pipeline: &gst::Pipeline, src: &gst::Element) -> Result<PayloadChain, Error> {
@@ -1015,12 +1023,17 @@ impl PayloadChainBuilder {
             elements.push(parser);
         }
 
+        let with_stream_name = |name: &str| match &self.stream_name {
+            Some(stream_name) => format!("{}-{}", name, stream_name),
+            None => name.to_string(),
+        };
+
         // Only force the profile when output caps were not specified, either
         // through input caps or because we are answering an offer
         let force_profile = self.output_caps.is_any() && needs_encoding;
         elements.push(
             gst::ElementFactory::make("capsfilter")
-                .name("codec-parser-caps")
+                .name(with_stream_name("codec-parser-caps"))
                 .property("caps", self.codec.parser_caps(force_profile))
                 .build()
                 .with_context(|| "Failed to make element capsfilter")?,
@@ -1031,7 +1044,7 @@ impl PayloadChainBuilder {
         }
 
         let enc_filter = gst::ElementFactory::make("capsfilter")
-            .name("webrtc-enc-filter")
+            .name(with_stream_name("webrtc-enc-filter"))
             .build()
             .with_context(|| "Failed to make webrtc encoder capsfilter")?;
         elements.push(enc_filter.clone());
@@ -1045,14 +1058,14 @@ impl PayloadChainBuilder {
 
         elements.push(
             gst::ElementFactory::make("capsfilter")
-                .name("payload-chain-output-caps")
+                .name(with_stream_name("payload-chain-output-caps"))
                 .property("caps", self.output_caps)
                 .build()
                 .with_context(|| "Failed to make payloader")?,
         );
 
         let pay_filter = gst::ElementFactory::make("capsfilter")
-            .name("webrtc-pay-filter")
+            .name(with_stream_name("webrtc-pay-filter"))
             .build()
             .with_context(|| "Failed to make webrtc payloader capsfilter")?;
         elements.push(pay_filter.clone());
@@ -3849,6 +3862,7 @@ impl BaseWebRTCSink {
                 &[&Some(peer_id), &stream_name, &codec.caps],
             ),
         )
+        .stream_name(stream_name)
         .build(pipeline, &appsrc)?;
 
         if let Some(ref enc) = encoding_chain.encoder {
