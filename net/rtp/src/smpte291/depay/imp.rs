@@ -121,7 +121,8 @@ impl RtpBaseDepay2Impl for RtpSmpte291Depay {
         let marker_bit = packet.marker_bit();
         let payload = packet.payload();
 
-        let inner = || -> Result<(), anyhow::Error> {
+        let mut had_packet = false;
+        let mut inner = || -> Result<(), anyhow::Error> {
             use anyhow::Context;
             use bitstream_io::{BigEndian, BitRead, BitReader, BitWrite, BitWriter};
             use std::io::Cursor;
@@ -197,13 +198,21 @@ impl RtpBaseDepay2Impl for RtpSmpte291Depay {
                     buffer.set_flags(gst::BufferFlags::MARKER);
                 }
 
+                had_packet = true;
                 self.obj().queue_buffer(ext_seqnum.into(), buffer)?;
             }
 
             Ok(())
         };
 
-        match inner() {
+        let res = inner();
+
+        // Drop the current RTP packet if there was not a single ancillary packet inside it
+        if !had_packet {
+            self.obj().drop_packet(packet);
+        }
+
+        match res {
             Ok(_) => Ok(gst::FlowSuccess::Ok),
             Err(err) => {
                 if let Some(res) = err.downcast_ref::<gst::FlowError>() {
