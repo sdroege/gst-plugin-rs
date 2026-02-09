@@ -145,8 +145,6 @@ meson shared:
   variables:
     CI_ARTIFACTS_URL: "${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/raw/"
   script:
-    # Remove cmake because the meson cmake dependency resolver is broken
-    - apt purge cmake -y
     - meson build --default-library=both --prefix=$(pwd)/install --fatal-meson-warnings
     - ninja -C build install
     - ./ci/check-installed.py install
@@ -164,8 +162,6 @@ meson static:
   extends: .meson
   needs: [ "trigger" ]
   script:
-    # Remove cmake because the meson cmake dependency resolver is broken
-    - apt purge cmake -y
     - meson build --default-library=static --prefix=$(pwd)/install -Dsodium-source=built-in
     - ninja -C build install
     - ./ci/generate-static-test.py test-static-link-all
