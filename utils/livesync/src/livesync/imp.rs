@@ -834,31 +834,42 @@ impl LiveSync {
                 };
 
                 let mut state = self.state.lock();
-                let latency = state.latency;
 
-                let (live, min, max) = q.result();
+                let (live, up_min, up_max) = q.result();
 
                 gst::debug!(
                     CAT,
-                    imp = self,
-                    "Upstream latency query response: live {} min {} max {}",
-                    live,
-                    min,
+                    obj = pad,
+                    "Upstream latency query response: live {live} min {up_min} max {}",
+                    up_max.display()
+                );
+
+                // Note: `Pad::query_default` ignores latency query result for non-live upstream
+                //       so we don't need to do it ourselves.
+
+                if state.sync && up_max.opt_lt(up_min).unwrap_or(false) {
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Problematic latency detected upstream of livesync sync=true: \
+                        max {} < min {up_min}. Add queues or other buffering elements.",
+                        up_max.display()
+                    );
+                }
+
+                let min = up_min + state.latency;
+                let max = up_max.opt_add(state.latency);
+
+                gst::debug!(
+                    CAT,
+                    obj = pad,
+                    "Reporting latency: live {live} min {min} max {}",
                     max.display()
                 );
 
-                q.set(true, min + latency, max.map(|max| max + latency));
+                q.set(true, min, max);
 
-                gst::debug!(
-                    CAT,
-                    imp = self,
-                    "Reporting latency: live {} min {} max {}",
-                    live,
-                    min + latency,
-                    max.map(|max| max + latency).display()
-                );
-
-                state.upstream_latency = Some(min);
+                state.upstream_latency = Some(up_min);
                 true
             }
 
@@ -868,7 +879,7 @@ impl LiveSync {
 
     fn sink_chain(
         &self,
-        _pad: &gst::Pad,
+        pad: &gst::Pad,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::trace!(CAT, imp = self, "Incoming {:?}", buffer);
@@ -881,25 +892,39 @@ impl LiveSync {
         }
 
         if state.upstream_latency.is_none() {
-            gst::debug!(CAT, imp = self, "Have no upstream latency yet, querying");
+            gst::debug!(CAT, obj = pad, "Have no upstream latency yet, querying");
+
             let mut q = gst::query::Latency::new();
-            if MutexGuard::unlocked(&mut state, || self.sinkpad.peer_query(&mut q)) {
-                let (live, min, max) = q.result();
+            if MutexGuard::unlocked(&mut state, || pad.peer_query(&mut q)) {
+                let (live, mut min, max) = q.result();
 
                 gst::debug!(
                     CAT,
-                    imp = self,
-                    "Latency query response: live {} min {} max {}",
-                    live,
-                    min,
+                    obj = pad,
+                    "Latency query response: live {live} min {min} max {}",
                     max.display()
                 );
+
+                if !live {
+                    gst::debug!(CAT, obj = pad, "Ignoring non-live upstream latency");
+                    min = gst::ClockTime::ZERO;
+                    // we're not using it now, but if we did, we would also need:
+                    // max = gst::ClockTime::NONE;
+                } else if state.sync && max.opt_lt(min).unwrap_or(false) {
+                    gst::warning!(
+                        CAT,
+                        obj = pad,
+                        "Problematic latency detected upstream of livesync sync=true: \
+                        max {} < min {min}. Add queues or other buffering elements.",
+                        max.display()
+                    );
+                }
 
                 state.upstream_latency = Some(min);
             } else {
                 gst::warning!(
                     CAT,
-                    imp = self,
+                    obj = pad,
                     "Can't query upstream latency -- assuming zero"
                 );
                 state.upstream_latency = Some(gst::ClockTime::ZERO);
