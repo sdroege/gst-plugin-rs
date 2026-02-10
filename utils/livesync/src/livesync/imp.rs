@@ -52,7 +52,7 @@ enum BufferLateness {
 
 #[derive(Debug)]
 enum Item {
-    Buffer(gst::Buffer, Option<Timestamps>, BufferLateness),
+    Buffer(gst::Buffer, Option<RunningTimeRange>, BufferLateness),
     Event(gst::Event),
     // SAFETY: Item needs to wait until the query and the receiver has returned
     Query(std::ptr::NonNull<gst::QueryRef>, mpsc::SyncSender<bool>),
@@ -62,7 +62,7 @@ enum Item {
 unsafe impl Send for Item {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Timestamps {
+struct RunningTimeRange {
     start: gst::ClockTime,
     end: gst::ClockTime,
 }
@@ -140,11 +140,11 @@ struct State {
     /// Whether our last output buffer was a duplicate
     out_buffer_duplicate: bool,
 
-    /// Running timestamp of our sinkpad
-    in_timestamp: Option<Timestamps>,
+    /// Running time of our sinkpad
+    in_last_rt_range: Option<RunningTimeRange>,
 
-    /// Running timestamp of our srcpad
-    out_timestamp: Option<Timestamps>,
+    /// Running time of our srcpad
+    out_last_rt_range: Option<RunningTimeRange>,
 
     /// See `PROP_SILENT`
     silent: bool,
@@ -205,8 +205,8 @@ impl Default for State {
             queue: VecDeque::with_capacity(32),
             out_buffer: None,
             out_buffer_duplicate: false,
-            in_timestamp: None,
-            out_timestamp: None,
+            in_last_rt_range: None,
+            out_last_rt_range: None,
             silent: DEFAULT_SILENT,
             num_in: 0,
             num_drop: 0,
@@ -517,11 +517,11 @@ impl ElementImpl for LiveSync {
 
 impl State {
     /// Calculate the running time the buffer covers, including latency
-    fn ts_range(
+    fn running_time_range(
         &self,
         buf: &gst::BufferRef,
         segment: &gst::FormattedSegment<gst::ClockTime>,
-    ) -> Option<Timestamps> {
+    ) -> Option<RunningTimeRange> {
         let mut timestamp_start = buf.pts()?;
 
         if !self.single_segment {
@@ -533,7 +533,7 @@ impl State {
             timestamp_start += self.upstream_latency.unwrap();
         }
 
-        Some(Timestamps {
+        Some(RunningTimeRange {
             start: timestamp_start,
             end: timestamp_start + buf.duration().unwrap(),
         })
@@ -545,7 +545,7 @@ impl State {
 
     fn queue_filled(&self) -> bool {
         let first_ts = self.queue.iter().find_map(|item| match item {
-            Item::Buffer(_, Some(Timestamps { start, .. }), _) => Some(*start),
+            Item::Buffer(_, Some(RunningTimeRange { start, .. }), _) => Some(*start),
             _ => None,
         });
         let Some(first_ts) = first_ts else {
@@ -557,7 +557,7 @@ impl State {
             .iter()
             .rev()
             .find_map(|item| match item {
-                Item::Buffer(_, Some(Timestamps { start, .. }), _) => Some(*start),
+                Item::Buffer(_, Some(RunningTimeRange { start, .. }), _) => Some(*start),
                 _ => None,
             })
             .unwrap();
@@ -630,7 +630,7 @@ impl LiveSync {
         state.in_caps = None;
         state.in_audio_info = None;
         state.in_duration = None;
-        state.in_timestamp = None;
+        state.in_last_rt_range = None;
     }
 
     fn src_reset(&self, state: &mut State) {
@@ -641,7 +641,7 @@ impl LiveSync {
         state.out_duration = None;
         state.out_buffer = None;
         state.out_buffer_duplicate = false;
-        state.out_timestamp = None;
+        state.out_last_rt_range = None;
     }
 
     fn sink_event(&self, pad: &gst::Pad, mut event: gst::Event) -> bool {
@@ -1015,8 +1015,8 @@ impl LiveSync {
             buf_mut.set_pts(pts.map(|t| t + state.latency));
         }
 
-        let timestamp = state.ts_range(buf_mut, segment);
-        let lateness = self.buffer_is_backwards(&state, timestamp);
+        let rt_range = state.running_time_range(buf_mut, segment);
+        let lateness = self.buffer_is_backwards(&state, rt_range);
 
         if lateness == BufferLateness::LateUnderThreshold {
             gst::debug!(CAT, imp = self, "Discarding late {buf_mut:?}");
@@ -1034,8 +1034,8 @@ impl LiveSync {
         gst::trace!(CAT, imp = self, "Queueing {buffer:?} ({lateness:?})");
         state
             .queue
-            .push_back(Item::Buffer(buffer, timestamp, lateness));
-        state.in_timestamp = timestamp;
+            .push_back(Item::Buffer(buffer, rt_range, lateness));
+        state.in_last_rt_range = rt_range;
         self.cond.notify_all();
 
         // If we're not strictly syncing to the clock but output buffers as soon as they arrive
@@ -1106,11 +1106,11 @@ impl LiveSync {
 
         // Synchronize to the clock if requested to do so, or when the queue is currently empty
         // and we might have to introduce a gap buffer.
-        if let Some(out_timestamp) = (state.sync || state.queue.is_empty())
-            .then_some(state.out_timestamp)
+        if let Some(last_rt_range) = (state.sync || state.queue.is_empty())
+            .then_some(state.out_last_rt_range)
             .flatten()
         {
-            let sync_ts = out_timestamp.end;
+            let sync_rt = last_rt_range.end;
 
             let element = self.obj();
 
@@ -1124,7 +1124,7 @@ impl LiveSync {
                 gst::FlowError::Flushing
             })?;
 
-            let clock_id = clock.new_single_shot_id(base_time + sync_ts);
+            let clock_id = clock.new_single_shot_id(base_time + sync_rt);
             state.clock_id = Some(clock_id.clone());
 
             gst::trace!(
@@ -1153,25 +1153,28 @@ impl LiveSync {
         let in_buffer = match in_item {
             None => None,
 
-            Some(Item::Buffer(buffer, timestamp, lateness)) => {
-                // Synchronize on the first buffer with timestamps to not output it too early
-                if let Some(Timestamps { start, .. }) =
-                    state.out_timestamp.is_none().then_some(timestamp).flatten()
+            Some(Item::Buffer(buffer, rt_range, lateness)) => {
+                // Synchronize on the first buffer with its start running time
+                if let Some(RunningTimeRange { start, .. }) = state
+                    .out_last_rt_range
+                    .is_none()
+                    .then_some(rt_range)
+                    .flatten()
                 {
-                    state.out_timestamp = Some(Timestamps { start, end: start });
+                    state.out_last_rt_range = Some(RunningTimeRange { start, end: start });
                     state
                         .queue
-                        .push_front(Item::Buffer(buffer, timestamp, lateness));
+                        .push_front(Item::Buffer(buffer, rt_range, lateness));
                     return Ok(gst::FlowSuccess::Ok);
-                } else if self.buffer_is_early(&state, timestamp) {
+                } else if self.buffer_is_early(&state, rt_range) {
                     // Try this buffer again on the next iteration
                     state
                         .queue
-                        .push_front(Item::Buffer(buffer, timestamp, lateness));
+                        .push_front(Item::Buffer(buffer, rt_range, lateness));
                     None
                 } else {
                     self.cond.notify_all();
-                    Some((buffer, timestamp, lateness))
+                    Some((buffer, rt_range, lateness))
                 }
             }
 
@@ -1189,7 +1192,7 @@ impl LiveSync {
                     gst::EventView::Eos(_) => {
                         state.out_buffer = None;
                         state.out_buffer_duplicate = false;
-                        state.out_timestamp = None;
+                        state.out_last_rt_range = None;
                         state.srcresult = Err(gst::FlowError::Eos);
                     }
 
@@ -1230,7 +1233,7 @@ impl LiveSync {
         let mut notify_drop = false;
 
         match in_buffer {
-            Some((mut buffer, timestamp, BufferLateness::OnTime)) => {
+            Some((mut buffer, rt_range, BufferLateness::OnTime)) => {
                 state.num_in += 1;
 
                 if state.out_buffer.is_none() || state.out_buffer_duplicate {
@@ -1240,13 +1243,13 @@ impl LiveSync {
 
                 state.out_buffer = Some(buffer);
                 state.out_buffer_duplicate = false;
-                state.out_timestamp = timestamp;
+                state.out_last_rt_range = rt_range;
 
                 caps = state.pending_caps.take();
                 segment = state.pending_segment.take();
             }
 
-            Some((buffer, _timestamp, BufferLateness::LateOverThreshold))
+            Some((buffer, _rt_range, BufferLateness::LateOverThreshold))
                 if !state.pending_events() =>
             {
                 gst::debug!(CAT, imp = self, "Accepting late {buffer:?}");
@@ -1256,7 +1259,7 @@ impl LiveSync {
                 notify_dup = !state.silent;
             }
 
-            Some((buffer, _timestamp, BufferLateness::LateOverThreshold)) => {
+            Some((buffer, _rt_range, BufferLateness::LateOverThreshold)) => {
                 // Cannot accept late-over-threshold buffers while we have pending events
                 gst::debug!(CAT, imp = self, "Discarding late {buffer:?}");
                 state.num_drop += 1;
@@ -1279,7 +1282,7 @@ impl LiveSync {
 
         let buffer = state.out_buffer.clone().unwrap();
         let sync_ts = state
-            .out_timestamp
+            .out_last_rt_range
             .map_or(gst::ClockTime::ZERO, |t| t.start);
 
         if let Some(caps) = caps {
@@ -1339,25 +1342,29 @@ impl LiveSync {
         self.srcpad.push(buffer)
     }
 
-    fn buffer_is_backwards(&self, state: &State, timestamp: Option<Timestamps>) -> BufferLateness {
-        let Some(timestamp) = timestamp else {
+    fn buffer_is_backwards(
+        &self,
+        state: &State,
+        rt_range: Option<RunningTimeRange>,
+    ) -> BufferLateness {
+        let Some(rt_range) = rt_range else {
             return BufferLateness::OnTime;
         };
 
-        let Some(out_timestamp) = state.out_timestamp else {
+        let Some(out_last_rt_range) = state.out_last_rt_range else {
             return BufferLateness::OnTime;
         };
 
-        if timestamp.end > out_timestamp.end {
+        if rt_range.end > out_last_rt_range.end {
             return BufferLateness::OnTime;
         }
 
         gst::debug!(
             CAT,
             imp = self,
-            "Timestamp regresses: buffer ends at {}, expected {}",
-            timestamp.end,
-            out_timestamp.end,
+            "Running time regresses: buffer ends at {}, expected {}",
+            rt_range.end,
+            out_last_rt_range.end,
         );
 
         let late_threshold = match state.late_threshold {
@@ -1366,27 +1373,27 @@ impl LiveSync {
             None => return BufferLateness::LateUnderThreshold,
         };
 
-        let Some(in_timestamp) = state.in_timestamp else {
+        let Some(in_last_rt_range) = state.in_last_rt_range else {
             return BufferLateness::LateUnderThreshold;
         };
 
-        if timestamp.start > in_timestamp.end + late_threshold {
+        if rt_range.start > in_last_rt_range.end + late_threshold {
             BufferLateness::LateOverThreshold
         } else {
             BufferLateness::LateUnderThreshold
         }
     }
 
-    fn buffer_is_early(&self, state: &State, timestamp: Option<Timestamps>) -> bool {
-        let Some(timestamp) = timestamp else {
+    fn buffer_is_early(&self, state: &State, rt_range: Option<RunningTimeRange>) -> bool {
+        let Some(rt_range) = rt_range else {
             return false;
         };
 
-        let Some(out_timestamp) = state.out_timestamp else {
+        let Some(out_last_rt_range) = state.out_last_rt_range else {
             return false;
         };
 
-        // When out_timestamp is set, we also have an out_buffer unless it is the first buffer
+        // When out_last_rt_range is set, we also have an out_buffer unless it is the first buffer
         if state.out_buffer.is_none() {
             return false;
         }
@@ -1396,7 +1403,7 @@ impl LiveSync {
             dur.clamp(MINIMUM_DURATION, MAXIMUM_DURATION)
         });
 
-        if timestamp.start < out_timestamp.end + slack {
+        if rt_range.start < out_last_rt_range.end + slack {
             return false;
         }
 
@@ -1406,9 +1413,9 @@ impl LiveSync {
         gst::debug!(
             CAT,
             imp = self,
-            "Timestamp is too early: buffer starts at {}, expected {}",
-            timestamp.start,
-            out_timestamp.end,
+            "Running time is too early: buffer starts at {}, expected {}",
+            rt_range.start,
+            out_last_rt_range.end,
         );
 
         true
@@ -1429,7 +1436,7 @@ impl LiveSync {
     }
 
     /// Patches the output buffer for repeating, setting out_buffer, out_buffer_duplicate and
-    /// out_timestamp
+    /// out_last_rt_range
     fn patch_output_buffer(
         &self,
         state: &mut State,
@@ -1500,7 +1507,7 @@ impl LiveSync {
         buffer.unset_flags(gst::BufferFlags::DISCONT);
 
         state.out_buffer_duplicate = true;
-        state.out_timestamp = state.ts_range(
+        state.out_last_rt_range = state.running_time_range(
             state.out_buffer.as_ref().unwrap(),
             state.out_segment.as_ref().unwrap(),
         );
