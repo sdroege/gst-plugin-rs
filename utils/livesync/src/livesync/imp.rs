@@ -562,6 +562,15 @@ impl State {
 
         Some(last_ts.saturating_sub(first_ts))
     }
+
+    fn stream_enqueued(&self) -> bool {
+        self.queue.iter().any(|item| {
+            let Item::Event(evt) = item else {
+                return false;
+            };
+            evt.type_() == gst::EventType::StreamStart || evt.type_() == gst::EventType::Segment
+        })
+    }
 }
 
 impl LiveSync {
@@ -992,9 +1001,18 @@ impl LiveSync {
             }
         }
 
-        state.srcresult.inspect_err(|err| {
-            gst::debug!(CAT, obj = pad, "Refusing buffer due to {err:?} {buffer:?}");
-        })?;
+        if let Err(err) = state.srcresult {
+            if err == gst::FlowError::Eos && state.pending_events() || state.stream_enqueued() {
+                gst::log!(
+                    CAT,
+                    obj = pad,
+                    "Accepting buffer in presence of {err:?} because a new stream is pending {buffer:?}",
+                );
+            } else {
+                gst::debug!(CAT, obj = pad, "Refusing buffer due to {err:?} {buffer:?}");
+                return Err(err);
+            }
+        }
 
         let buf_mut = buffer.make_mut();
 
