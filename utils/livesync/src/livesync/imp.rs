@@ -622,24 +622,32 @@ impl LiveSync {
         self.cond.notify_all();
     }
 
-    fn sink_reset(&self, state: &mut State) {
+    fn sink_flush(&self, state: &mut State) {
         state.eos = false;
         state.in_segment = None;
-        state.in_caps = None;
-        state.in_audio_info = None;
-        state.in_duration = None;
         state.in_last_rt_range = None;
     }
 
-    fn src_reset(&self, state: &mut State) {
+    fn sink_reset(&self, state: &mut State) {
+        self.sink_flush(state);
+        state.in_caps = None;
+        state.in_audio_info = None;
+        state.in_duration = None;
+    }
+
+    fn src_flush(&self, state: &mut State) {
         state.pending_segment = None;
         state.out_segment = None;
         state.pending_caps = None;
-        state.out_audio_info = None;
-        state.out_duration = None;
         state.out_buffer = None;
         state.out_buffer_duplicate = false;
         state.out_last_rt_range = None;
+    }
+
+    fn src_reset(&self, state: &mut State) {
+        self.src_flush(state);
+        state.out_audio_info = None;
+        state.out_duration = None;
     }
 
     fn sink_event(&self, pad: &gst::Pad, mut event: gst::Event) -> bool {
@@ -675,8 +683,8 @@ impl LiveSync {
                 let ret = self.srcpad.push_event(event);
 
                 let mut state = self.state.lock();
-                self.sink_reset(&mut state);
-                self.src_reset(&mut state);
+                self.sink_flush(&mut state);
+                self.src_flush(&mut state);
 
                 if let Err(e) = self.start_src_task(&mut state) {
                     gst::error!(CAT, obj = pad, "Failed to start task: {e}");
