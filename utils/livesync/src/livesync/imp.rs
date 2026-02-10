@@ -543,14 +543,12 @@ impl State {
         self.pending_caps.is_some() || self.pending_segment.is_some()
     }
 
-    fn queue_filled(&self) -> bool {
+    fn queue_size(&self) -> Option<gst::ClockTime> {
         let first_ts = self.queue.iter().find_map(|item| match item {
             Item::Buffer(_, Some(RunningTimeRange { start, .. }), _) => Some(*start),
             _ => None,
         });
-        let Some(first_ts) = first_ts else {
-            return false;
-        };
+        let first_ts = first_ts?;
 
         let last_ts = self
             .queue
@@ -562,7 +560,7 @@ impl State {
             })
             .unwrap();
 
-        last_ts.saturating_sub(first_ts) > self.latency
+        Some(last_ts.saturating_sub(first_ts))
     }
 }
 
@@ -645,6 +643,8 @@ impl LiveSync {
     }
 
     fn sink_event(&self, pad: &gst::Pad, mut event: gst::Event) -> bool {
+        gst::log!(CAT, obj = pad, "Incoming {event:?}");
+
         {
             let state = self.state.lock();
             if state.single_segment {
@@ -664,7 +664,7 @@ impl LiveSync {
                 self.set_flushing(&mut self.state.lock());
 
                 if let Err(e) = self.srcpad.pause_task() {
-                    gst::error!(CAT, imp = self, "Failed to pause task: {e}");
+                    gst::error!(CAT, obj = pad, "Failed to pause task: {e}");
                     return false;
                 }
 
@@ -679,7 +679,7 @@ impl LiveSync {
                 self.src_reset(&mut state);
 
                 if let Err(e) = self.start_src_task(&mut state) {
-                    gst::error!(CAT, imp = self, "Failed to start task: {e}");
+                    gst::error!(CAT, obj = pad, "Failed to start task: {e}");
                     return false;
                 }
 
@@ -692,7 +692,7 @@ impl LiveSync {
                 is_restart = true;
 
                 let Some(segment) = e.segment().downcast_ref() else {
-                    gst::error!(CAT, imp = self, "Got non-TIME segment");
+                    gst::error!(CAT, obj = pad, "Got non-TIME segment");
                     return false;
                 };
 
@@ -708,7 +708,7 @@ impl LiveSync {
                 let audio_info = match audio_info_from_caps(&caps) {
                     Ok(ai) => ai,
                     Err(e) => {
-                        gst::error!(CAT, imp = self, "Failed to parse audio caps: {e}");
+                        gst::error!(CAT, obj = pad, "Failed to parse audio caps: {e}");
                         return false;
                     }
                 };
@@ -722,7 +722,7 @@ impl LiveSync {
             }
 
             gst::EventView::Gap(_) => {
-                gst::debug!(CAT, imp = self, "Got gap event");
+                gst::debug!(CAT, obj = pad, "Got gap event");
                 return true;
             }
 
@@ -741,13 +741,13 @@ impl LiveSync {
             if state.srcresult == Err(gst::FlowError::Eos)
                 && let Err(e) = self.start_src_task(&mut state)
             {
-                gst::error!(CAT, imp = self, "Failed to start task: {e}");
+                gst::error!(CAT, obj = pad, "Failed to start task: {e}");
                 return false;
             }
         }
 
         if state.eos {
-            gst::trace!(CAT, imp = self, "Refusing event, we are EOS: {event:?}");
+            gst::trace!(CAT, obj = pad, "Refusing event, we are EOS: {event:?}");
             return false;
         }
 
@@ -766,7 +766,7 @@ impl LiveSync {
             return false;
         }
 
-        gst::trace!(CAT, imp = self, "Queueing {event:?}");
+        gst::trace!(CAT, obj = pad, "Queueing {event:?}");
         state.queue.push_back(Item::Event(event));
         self.cond.notify_all();
 
@@ -774,6 +774,8 @@ impl LiveSync {
     }
 
     fn src_event(&self, pad: &gst::Pad, mut event: gst::Event) -> bool {
+        gst::log!(CAT, obj = pad, "Incoming {event:?}");
+
         {
             let state = self.state.lock();
             if state.single_segment {
@@ -790,7 +792,7 @@ impl LiveSync {
                     if state.srcresult == Err(gst::FlowError::NotLinked)
                         && let Err(e) = self.start_src_task(&mut state)
                     {
-                        gst::error!(CAT, imp = self, "Failed to start task: {e}");
+                        gst::error!(CAT, obj = pad, "Failed to start task: {e}");
                     }
                 }
 
@@ -802,6 +804,8 @@ impl LiveSync {
     }
 
     fn sink_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
+        gst::log!(CAT, obj = pad, "Handling {query:?}");
+
         if query.is_serialized() {
             let (sender, receiver) = mpsc::sync_channel(1);
 
@@ -810,7 +814,7 @@ impl LiveSync {
                 return false;
             }
 
-            gst::trace!(CAT, imp = self, "Queueing {query:?}");
+            gst::trace!(CAT, obj = pad, "Queueing {query:?}");
             state
                 .queue
                 .push_back(Item::Query(std::ptr::NonNull::from(query), sender));
@@ -825,6 +829,8 @@ impl LiveSync {
     }
 
     fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
+        gst::log!(CAT, obj = pad, "Handling {query:?}");
+
         match query.view_mut() {
             gst::QueryViewMut::Latency(_) => {
                 if !gst::Pad::query_default(pad, Some(&*self.obj()), query) {
@@ -885,12 +891,14 @@ impl LiveSync {
         pad: &gst::Pad,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::trace!(CAT, imp = self, "Incoming {buffer:?}");
+        gst::trace!(CAT, obj = pad, "Incoming {buffer:?}");
+
+        let origin_ts = buffer.pts();
 
         let mut state = self.state.lock();
 
         if state.eos {
-            gst::debug!(CAT, imp = self, "Refusing buffer, we are EOS");
+            gst::debug!(CAT, obj = pad, "Refusing buffer, we are EOS {buffer:?}");
             return Err(gst::FlowError::Eos);
         }
 
@@ -934,15 +942,34 @@ impl LiveSync {
             }
         }
 
-        while state.srcresult.is_ok() && state.queue_filled() {
-            self.cond.wait(&mut state);
+        while state.srcresult.is_ok()
+            && let Some(queue_size) = state.queue_size()
+        {
+            if queue_size > state.latency {
+                gst::trace!(
+                    CAT,
+                    obj = pad,
+                    "Queue filled, waiting... size {queue_size}, latency {}",
+                    state.latency
+                );
+                self.cond.wait(&mut state);
+            } else {
+                break;
+            }
         }
-        state.srcresult?;
+
+        state.srcresult.inspect_err(|err| {
+            gst::debug!(CAT, obj = pad, "Refusing buffer due to {err:?} {buffer:?}");
+        })?;
 
         let buf_mut = buffer.make_mut();
 
         if buf_mut.pts().is_none() {
-            gst::warning!(CAT, imp = self, "Incoming buffer has no timestamps");
+            gst::warning!(
+                CAT,
+                obj = pad,
+                "Incoming buffer has no timestamps {buf_mut:?}",
+            );
         }
 
         if let Some(audio_info) = &state.in_audio_info {
@@ -952,7 +979,7 @@ impl LiveSync {
             else {
                 gst::error!(
                     CAT,
-                    imp = self,
+                    obj = pad,
                     "Failed to calculate duration of {buf_mut:?}",
                 );
                 return Err(gst::FlowError::Error);
@@ -972,8 +999,8 @@ impl LiveSync {
                 if diff > sample_duration {
                     gst::warning!(
                         CAT,
-                        imp = self,
-                        "Correcting duration on audio buffer from {buf_duration} to {calc_duration}",
+                        obj = pad,
+                        "Correcting duration on audio buffer from {buf_duration} to {calc_duration} {buf_mut:?}",
                     );
 
                     buf_mut.set_duration(calc_duration);
@@ -981,8 +1008,8 @@ impl LiveSync {
             } else {
                 gst::debug!(
                     CAT,
-                    imp = self,
-                    "Patching incoming buffer with duration {calc_duration}"
+                    obj = pad,
+                    "Patching incoming buffer with duration {calc_duration} {buf_mut:?}",
                 );
 
                 buf_mut.set_duration(calc_duration);
@@ -994,15 +1021,15 @@ impl LiveSync {
 
             gst::debug!(
                 CAT,
-                imp = self,
-                "Patching incoming buffer with duration {duration}"
+                obj = pad,
+                "Patching incoming buffer with duration {duration} {buf_mut:?}",
             );
             buf_mut.set_duration(duration);
         }
 
         // At this stage we should really really have a segment
         let segment = state.in_segment.as_ref().ok_or_else(|| {
-            gst::error!(CAT, imp = self, "Missing segment");
+            gst::error!(CAT, obj = pad, "Missing segment");
             gst::FlowError::Error
         })?;
 
@@ -1016,10 +1043,16 @@ impl LiveSync {
         }
 
         let rt_range = state.running_time_range(buf_mut, segment);
-        let lateness = self.buffer_is_backwards(&state, rt_range);
+        let lateness = self.buffer_is_backwards(&state, buf_mut, rt_range);
 
         if lateness == BufferLateness::LateUnderThreshold {
-            gst::debug!(CAT, imp = self, "Discarding late {buf_mut:?}");
+            gst::debug!(
+                CAT,
+                obj = pad,
+                "Discarding late buffer ts {:?}, {rt_range:?}, \
+                origin ts {origin_ts:?} {buf_mut:?}",
+                buf_mut.pts(),
+            );
             state.num_drop += 1;
             let notify_drop = !state.silent;
             drop(state);
@@ -1031,7 +1064,13 @@ impl LiveSync {
             return Ok(gst::FlowSuccess::Ok);
         }
 
-        gst::trace!(CAT, imp = self, "Queueing {buffer:?} ({lateness:?})");
+        gst::trace!(
+            CAT,
+            obj = pad,
+            "Queueing buffer ts {:?}, {rt_range:?}, \
+            origin ts {origin_ts:?} ({lateness:?}) {buffer:?}",
+            buffer.pts(),
+        );
         state
             .queue
             .push_back(Item::Buffer(buffer, rt_range, lateness));
@@ -1050,6 +1089,8 @@ impl LiveSync {
     }
 
     fn start_src_task(&self, state: &mut State) -> Result<(), glib::BoolError> {
+        gst::debug!(CAT, imp = self, "Starting loop");
+
         state.srcresult = Ok(gst::FlowSuccess::Ok);
 
         let imp = self.ref_counted();
@@ -1087,8 +1128,12 @@ impl LiveSync {
         // > let app know about us giving up if upstream is not expected to do so
         // > EOS is already taken care of elsewhere
         if eos && !matches!(err, gst::FlowError::Flushing | gst::FlowError::Eos) {
+            gst::warning!(
+                CAT,
+                imp = self,
+                "Loop returned {err} and we are not flushing & EOS hasn't been pushed"
+            );
             self.flow_error(err);
-            self.srcpad.push_event(gst::event::Eos::new());
         }
 
         gst::log!(CAT, imp = self, "Loop stopping");
@@ -1130,7 +1175,7 @@ impl LiveSync {
             gst::trace!(
                 CAT,
                 imp = self,
-                "Waiting for clock to reach {}",
+                "Waiting for clock to reach {} / running time {sync_rt}",
                 clock_id.time(),
             );
 
@@ -1162,12 +1207,23 @@ impl LiveSync {
                     .flatten()
                 {
                     state.out_last_rt_range = Some(RunningTimeRange { start, end: start });
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "Re-queueing first {buffer:?}, running time {start}"
+                    );
                     state
                         .queue
                         .push_front(Item::Buffer(buffer, rt_range, lateness));
+
                     return Ok(gst::FlowSuccess::Ok);
-                } else if self.buffer_is_early(&state, rt_range) {
-                    // Try this buffer again on the next iteration
+                } else if self.buffer_is_early(&state, &buffer, rt_range) {
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "Re-queueing early {buffer:?}, running time {}",
+                        rt_range.map(|rt_range| rt_range.start).display(),
+                    );
                     state
                         .queue
                         .push_front(Item::Buffer(buffer, rt_range, lateness));
@@ -1311,7 +1367,9 @@ impl LiveSync {
 
                 let event = gst::event::Segment::new(&segment);
                 MutexGuard::unlocked(&mut state, || self.srcpad.push_event(event));
-                state.srcresult?;
+                state.srcresult.inspect_err(|err| {
+                    gst::info!(CAT, imp = self, "Error pushing Segment event: {err:?}");
+                })?;
             } else if state.out_segment.is_none() {
                 // Create live segment
                 let mut live_segment = gst::FormattedSegment::<gst::ClockTime>::new();
@@ -1321,7 +1379,9 @@ impl LiveSync {
 
                 let event = gst::event::Segment::new(&live_segment);
                 MutexGuard::unlocked(&mut state, || self.srcpad.push_event(event));
-                state.srcresult?;
+                state.srcresult.inspect_err(|err| {
+                    gst::info!(CAT, imp = self, "Error pushing Segment event: {err:?}");
+                })?;
             }
 
             state.out_segment = Some(segment);
@@ -1339,12 +1399,15 @@ impl LiveSync {
         }
 
         gst::trace!(CAT, imp = self, "Pushing {buffer:?}");
-        self.srcpad.push(buffer)
+        self.srcpad.push(buffer).inspect_err(|err| {
+            gst::info!(CAT, imp = self, "Error pushing buffer: {err:?}");
+        })
     }
 
     fn buffer_is_backwards(
         &self,
         state: &State,
+        buf: &gst::BufferRef,
         rt_range: Option<RunningTimeRange>,
     ) -> BufferLateness {
         let Some(rt_range) = rt_range else {
@@ -1362,7 +1425,7 @@ impl LiveSync {
         gst::debug!(
             CAT,
             imp = self,
-            "Running time regresses: buffer ends at {}, expected {}",
+            "Running time regresses: buffer ends at rt {}, expected {}, {buf:?}",
             rt_range.end,
             out_last_rt_range.end,
         );
@@ -1384,7 +1447,12 @@ impl LiveSync {
         }
     }
 
-    fn buffer_is_early(&self, state: &State, rt_range: Option<RunningTimeRange>) -> bool {
+    fn buffer_is_early(
+        &self,
+        state: &State,
+        buffer: &gst::Buffer,
+        rt_range: Option<RunningTimeRange>,
+    ) -> bool {
         let Some(rt_range) = rt_range else {
             return false;
         };
@@ -1413,7 +1481,7 @@ impl LiveSync {
         gst::debug!(
             CAT,
             imp = self,
-            "Running time is too early: buffer starts at {}, expected {}",
+            "Running time is too early: buffer starts at {}, expected {}, {buffer:?}",
             rt_range.start,
             out_last_rt_range.end,
         );
@@ -1449,11 +1517,23 @@ impl LiveSync {
         let pts = out_buffer.pts().map(|t| t + duration);
 
         if let Some(source) = source {
-            gst::debug!(CAT, imp = self, "Repeating {out_buffer:?} using {source:?}");
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Repeating buffer ts {:?}, dur {:?} using source {source:?}",
+                out_buffer.pts(),
+                out_buffer.duration(),
+            );
             *out_buffer = source;
             duplicate = false;
         } else {
-            gst::debug!(CAT, imp = self, "Repeating {out_buffer:?}");
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Repeating buffer ts {:?}, dur {:?}",
+                out_buffer.pts(),
+                out_buffer.duration(),
+            );
         }
 
         let buffer = out_buffer.make_mut();
