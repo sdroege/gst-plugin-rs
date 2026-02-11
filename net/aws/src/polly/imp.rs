@@ -255,15 +255,15 @@ impl Polly {
         let (client, in_format, out_segment) = {
             let state = self.state.lock().unwrap();
 
-            if state.client.is_none() {
+            let Some(client) = state.client.as_ref().cloned() else {
                 return Ok(None);
-            }
+            };
 
-            (
-                state.client.as_ref().expect("connected").clone(),
-                state.in_format.as_ref().expect("received caps").clone(),
-                state.out_segment.clone(),
-            )
+            let Some(in_format) = state.in_format.as_ref().cloned() else {
+                return Err(anyhow!("No caps received"));
+            };
+
+            (client, in_format, state.out_segment.clone())
         };
 
         let our_latency = self.settings.lock().unwrap().latency;
