@@ -105,13 +105,13 @@ struct State {
     clock_id: Option<gst::SingleShotClockId>,
 
     /// Segment of our sinkpad
-    in_segment: Option<gst::FormattedSegment<gst::ClockTime>>,
+    in_segment: Option<(gst::FormattedSegment<gst::ClockTime>, gst::Seqnum)>,
 
     /// Segment to be applied to the srcpad on the next queued buffer
-    pending_segment: Option<gst::FormattedSegment<gst::ClockTime>>,
+    pending_segment: Option<(gst::FormattedSegment<gst::ClockTime>, gst::Seqnum)>,
 
     /// Segment of our srcpad
-    out_segment: Option<gst::FormattedSegment<gst::ClockTime>>,
+    out_segment: Option<(gst::FormattedSegment<gst::ClockTime>, gst::Seqnum)>,
 
     /// Caps of our sinkpad
     in_caps: Option<gst::Caps>,
@@ -691,16 +691,42 @@ impl LiveSync {
             gst::EventView::Segment(e) => {
                 is_restart = true;
 
-                let Some(segment) = e.segment().downcast_ref() else {
+                let Some(evt_segment) = e.segment().downcast_ref() else {
                     gst::error!(CAT, obj = pad, "Got non-TIME segment");
                     return false;
                 };
+                let evt_seqnum = event.seqnum();
 
                 let mut state = self.state.lock();
-                state.in_segment = Some(segment.clone());
+                if let Some((in_segment, in_seqnum)) = state.in_segment.take()
+                    && in_seqnum != evt_seqnum
+                {
+                    gst::debug!(
+                        CAT,
+                        obj = pad,
+                        "Replacing previous Segment seqnum {in_seqnum:?} {in_segment:?} \
+                        with {evt_seqnum:?} {evt_segment:?}",
+                    );
+                }
+
+                state.in_segment = Some((evt_segment.clone(), evt_seqnum));
             }
 
-            gst::EventView::Eos(_) => is_eos = true,
+            gst::EventView::Eos(_) | gst::EventView::SegmentDone(_) => {
+                let evt_seqnum = event.seqnum();
+                let mut state = self.state.lock();
+                if let Some((_in_segment, in_seqnum)) = state.in_segment.take()
+                    && in_seqnum != evt_seqnum
+                {
+                    gst::debug!(
+                        CAT,
+                        obj = pad,
+                        "Received {:?} with {evt_seqnum:?}, expected {in_seqnum:?}",
+                        event.type_()
+                    );
+                }
+                is_eos = true;
+            }
 
             gst::EventView::Caps(c) => {
                 let caps = c.caps_owned();
@@ -1028,7 +1054,7 @@ impl LiveSync {
         }
 
         // At this stage we should really really have a segment
-        let segment = state.in_segment.as_ref().ok_or_else(|| {
+        let (segment, _seq_num) = state.in_segment.as_ref().ok_or_else(|| {
             gst::error!(CAT, obj = pad, "Missing segment");
             gst::FlowError::Error
         })?;
@@ -1241,15 +1267,39 @@ impl LiveSync {
                     gst::EventView::Segment(e) => {
                         let segment = e.segment().downcast_ref().unwrap();
                         gst::debug!(CAT, imp = self, "pending {segment:?}");
-                        state.pending_segment = Some(segment.clone());
+                        state.pending_segment = Some((segment.clone(), e.seqnum()));
                         push = false;
                     }
 
-                    gst::EventView::Eos(_) => {
+                    gst::EventView::Eos(_) | gst::EventView::SegmentDone(_) => {
                         state.out_buffer = None;
                         state.out_buffer_duplicate = false;
                         state.out_last_rt_range = None;
+
+                        self.cond.notify_all();
+
+                        gst::debug!(CAT, imp = self, "Upstream notified {:?}", event.type_());
                         state.srcresult = Err(gst::FlowError::Eos);
+
+                        if let Some((out_segment, out_seqnum)) = state.out_segment.as_ref() {
+                            let out_event = match event.type_() {
+                                gst::EventType::Eos => {
+                                    gst::event::Eos::builder().seqnum(*out_seqnum).build()
+                                }
+                                gst::EventType::SegmentDone => {
+                                    gst::event::SegmentDone::builder(out_segment.position())
+                                        .seqnum(*out_seqnum)
+                                        .build()
+                                }
+                                other => unreachable!("{other:?}"),
+                            };
+                            MutexGuard::unlocked(&mut state, || {
+                                gst::debug!(CAT, imp = self, "Pushing {out_event:?}");
+                                self.srcpad.push_event(out_event);
+                            });
+                        }
+
+                        return Err(gst::FlowError::Eos);
                     }
 
                     gst::EventView::Caps(e) => {
@@ -1352,7 +1402,7 @@ impl LiveSync {
             state.out_duration = duration_from_caps(&caps);
         }
 
-        if let Some(mut segment) = segment {
+        if let Some((mut segment, seqnum)) = segment {
             if !state.single_segment {
                 if let Some(stop) = segment.stop() {
                     gst::debug!(
@@ -1384,8 +1434,15 @@ impl LiveSync {
                 })?;
             }
 
-            state.out_segment = Some(segment);
+            state.out_segment = Some((segment, seqnum));
         }
+
+        state
+            .out_segment
+            .as_mut()
+            .expect("defined at this stage")
+            .0
+            .set_position(buffer.dts_or_pts().opt_add(buffer.duration()));
 
         state.num_out += 1;
         drop(state);
@@ -1587,10 +1644,9 @@ impl LiveSync {
         buffer.unset_flags(gst::BufferFlags::DISCONT);
 
         state.out_buffer_duplicate = true;
-        state.out_last_rt_range = state.running_time_range(
-            state.out_buffer.as_ref().unwrap(),
-            state.out_segment.as_ref().unwrap(),
-        );
+        let (out_segment, _seqnum) = state.out_segment.as_ref().unwrap();
+        state.out_last_rt_range =
+            state.running_time_range(state.out_buffer.as_ref().unwrap(), out_segment);
         state.num_duplicate += 1;
         Ok(())
     }
