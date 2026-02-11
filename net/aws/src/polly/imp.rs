@@ -82,6 +82,7 @@ struct State {
     upstream_latency: Option<(bool, gst::ClockTime, Option<gst::ClockTime>)>,
     #[cfg(feature = "signalsmith_stretch")]
     stretch: Option<Stretch>,
+    flushing: bool,
 }
 
 impl Default for State {
@@ -94,6 +95,7 @@ impl Default for State {
             upstream_latency: None,
             #[cfg(feature = "signalsmith_stretch")]
             stretch: None,
+            flushing: false,
         }
     }
 }
@@ -143,6 +145,12 @@ impl Polly {
                 gst::info!(CAT, imp = self, "Received flush start, disconnecting");
                 let ret = gst::Pad::event_default(pad, Some(&*self.obj()), event);
                 self.disconnect();
+                self.state.lock().unwrap().flushing = true;
+                ret
+            }
+            FlushStop(_) => {
+                let ret = gst::Pad::event_default(pad, Some(&*self.obj()), event);
+                self.state.lock().unwrap().flushing = false;
                 ret
             }
             Segment(e) => {
@@ -541,12 +549,16 @@ impl Polly {
             }
             Ok(res) => match res {
                 Err(e) => {
-                    gst::element_imp_error!(
-                        self,
-                        gst::StreamError::Failed,
-                        ["Failed sending data: {}", e]
-                    );
-                    Err(gst::FlowError::Error)
+                    if !self.state.lock().unwrap().flushing {
+                        gst::element_imp_error!(
+                            self,
+                            gst::StreamError::Failed,
+                            ["Failed sending data: {}", e]
+                        );
+                        Err(gst::FlowError::Error)
+                    } else {
+                        Err(gst::FlowError::Flushing)
+                    }
                 }
                 Ok(buf) => Ok(buf),
             },
