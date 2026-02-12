@@ -1044,7 +1044,7 @@ impl LiveSync {
             }
         }
 
-        let buf_mut = buffer.make_mut();
+        let mut buf_mut = buffer.make_mut();
 
         if buf_mut.pts().is_none() {
             gst::warning!(
@@ -1116,6 +1116,42 @@ impl LiveSync {
         })?;
 
         if state.single_segment {
+            // Clip buffer to fit the segment, if needed
+            if let Some(ref audio_info) = state.in_audio_info {
+                let Some(clipped_buffer) = gst_audio::audio_buffer_clip(
+                    buffer,
+                    segment.upcast_ref(),
+                    audio_info.rate(),
+                    audio_info.bpf(),
+                ) else {
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "Dropping incoming audio buffer out of segment"
+                    );
+                    return Ok(gst::FlowSuccess::Ok);
+                };
+                buffer = clipped_buffer;
+                buf_mut = buffer.make_mut();
+            } else {
+                let Some((clipped_start, clipped_stop)) =
+                    segment.clip(buf_mut.pts(), buf_mut.pts().opt_add(buf_mut.duration()))
+                else {
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "Dropping incoming buffer out of segment {buffer:?}"
+                    );
+                    return Ok(gst::FlowSuccess::Ok);
+                };
+
+                buf_mut.set_pts(clipped_start);
+                if segment.stop().is_some() {
+                    buf_mut
+                        .set_duration(clipped_stop.opt_checked_sub(clipped_start).ok().flatten());
+                }
+            }
+
             // Re-timestamp buffer so it can sync on the output segment
             // without changing start, stop & base
 
@@ -1128,19 +1164,13 @@ impl LiveSync {
                 (in_pts + duration, in_pts)
             };
 
-            let pts = segment
-                .to_running_time_full(in_start_pts)
-                .expect("in_pts & duration defined")
-                .positive()
-                .or_else(|| self.obj().current_running_time());
-            let pts_end = segment
-                .to_running_time_full(in_end_pts)
-                .expect("in_pts & duration defined")
-                .positive()
-                .or_else(|| self.obj().current_running_time());
+            // Buffer was clipped, so resulting pts & pts end
+            // are within segment start & stop boundaries
+            let pts = segment.to_running_time(in_start_pts).unwrap();
+            let pts_end = segment.to_running_time(in_end_pts).unwrap();
 
-            buf_mut.set_pts(pts.opt_add(state.latency));
-            buf_mut.set_duration(pts_end.opt_sub(pts).unwrap_or(duration));
+            buf_mut.set_pts(pts + state.latency);
+            buf_mut.set_duration(pts_end - pts);
         }
 
         let rt_range = state.running_time_range(buf_mut, segment);
@@ -1518,12 +1548,43 @@ impl LiveSync {
             }
         }
 
-        state
-            .out_segment
-            .as_mut()
-            .expect("defined at this stage")
-            .0
-            .set_position(buffer.pts().opt_add(buffer.duration()));
+        let non_single_segment_and_not_first =
+            !state.single_segment && state.out_last_rt_range.is_some();
+        let (out_segment, out_seqnum) = state.out_segment.as_mut().expect("defined at this stage");
+
+        if non_single_segment_and_not_first {
+            let ts = buffer.pts();
+            if out_segment
+                .clip(ts, ts.opt_add(buffer.duration()))
+                .is_none()
+            {
+                gst::debug!(CAT, imp = self, "Buffer out of segment {buffer:?}");
+
+                let out_event = if out_segment.flags().contains(gst::SegmentFlags::SEGMENT) {
+                    gst::event::SegmentDone::builder(out_segment.position())
+                        .seqnum(*out_seqnum)
+                        .build()
+                } else {
+                    gst::event::Eos::builder().seqnum(*out_seqnum).build()
+                };
+
+                state.out_buffer = None;
+                state.out_buffer_duplicate = false;
+                state.out_last_rt_range = None;
+
+                self.cond.notify_all();
+
+                state.srcresult = Err(gst::FlowError::Eos);
+
+                drop(state);
+                gst::debug!(CAT, imp = self, "Pushing {out_event:?}");
+                self.srcpad.push_event(out_event);
+
+                return Err(gst::FlowError::Eos);
+            }
+        }
+
+        out_segment.set_position(buffer.pts().opt_add(buffer.duration()));
 
         state.num_out += 1;
         drop(state);
@@ -1680,48 +1741,46 @@ impl LiveSync {
 
         let buffer = out_buffer.make_mut();
 
-        if !duplicate {
-            let duration_is_valid =
-                (MINIMUM_DURATION..=MAXIMUM_DURATION).contains(&buffer.duration().unwrap());
+        let duration_is_valid =
+            (MINIMUM_DURATION..=MAXIMUM_DURATION).contains(&buffer.duration().unwrap());
 
-            if state.out_duration.is_some() || !duration_is_valid {
-                // Resize the buffer if caps gave us a duration
-                // or the current duration is unreasonable
+        if state.out_duration.is_some() || !duration_is_valid {
+            // Resize the buffer if caps gave us a duration
+            // or the current duration is unreasonable
 
-                let duration = state.out_duration.map_or(DEFAULT_DURATION, |dur| {
-                    dur.clamp(MINIMUM_DURATION, MAXIMUM_DURATION)
-                });
-
-                if let Some(audio_info) = &state.out_audio_info {
-                    let Some(size) = audio_info
-                        .convert::<Option<gst::format::Bytes>>(duration)
-                        .flatten()
-                        .and_then(|bytes| usize::try_from(bytes).ok())
-                    else {
-                        gst::error!(CAT, imp = self, "Failed to calculate size of repeat buffer");
-                        return Err(gst::FlowError::Error);
-                    };
-
-                    buffer.replace_all_memory(gst::Memory::with_size(size));
-                }
-
-                buffer.set_duration(duration);
-                gst::debug!(
-                    CAT,
-                    imp = self,
-                    "Patched output buffer duration to {duration}"
-                );
-            }
+            let duration = state.out_duration.map_or(DEFAULT_DURATION, |dur| {
+                dur.clamp(MINIMUM_DURATION, MAXIMUM_DURATION)
+            });
 
             if let Some(audio_info) = &state.out_audio_info {
-                let mut map_info = buffer.map_writable().map_err(|e| {
-                    gst::error!(CAT, imp = self, "Failed to map buffer: {e}");
-                    gst::FlowError::Error
-                })?;
-                audio_info
-                    .format_info()
-                    .fill_silence(map_info.as_mut_slice());
+                let Some(size) = audio_info
+                    .convert::<Option<gst::format::Bytes>>(duration)
+                    .flatten()
+                    .and_then(|bytes| usize::try_from(bytes).ok())
+                else {
+                    gst::error!(CAT, imp = self, "Failed to calculate size of repeat buffer");
+                    return Err(gst::FlowError::Error);
+                };
+
+                buffer.replace_all_memory(gst::Memory::with_size(size));
             }
+
+            buffer.set_duration(duration);
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Patched output buffer duration to {duration}"
+            );
+        }
+
+        if !duplicate && let Some(audio_info) = &state.out_audio_info {
+            let mut map_info = buffer.map_writable().map_err(|e| {
+                gst::error!(CAT, imp = self, "Failed to map buffer: {e}");
+                gst::FlowError::Error
+            })?;
+            audio_info
+                .format_info()
+                .fill_silence(map_info.as_mut_slice());
         }
 
         buffer.set_pts(pts);
