@@ -36,6 +36,15 @@ pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
+/// Supported Bayer format strings for video/x-bayer caps
+pub(crate) const BAYER_FORMATS: &[&str] = &[
+    "bggr", "gbrg", "grbg", "rggb", "bggr10le", "bggr10be", "gbrg10le", "gbrg10be", "grbg10le",
+    "grbg10be", "rggb10le", "rggb10be", "bggr12le", "bggr12be", "gbrg12le", "gbrg12be", "grbg12le",
+    "grbg12be", "rggb12le", "rggb12be", "bggr14le", "bggr14be", "gbrg14le", "gbrg14be", "grbg14le",
+    "grbg14be", "rggb14le", "rggb14be", "bggr16le", "bggr16be", "gbrg16le", "gbrg16be", "grbg16le",
+    "grbg16be", "rggb16le", "rggb16be",
+];
+
 glib::wrapper! {
     pub(crate) struct FMP4MuxPad(ObjectSubclass<crate::isobmff::fmp4mux::imp::FMP4MuxPad>) @extends gst_base::AggregatorPad, gst::Pad, gst::Object;
 }

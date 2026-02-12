@@ -5333,18 +5333,7 @@ impl ElementImpl for ISOFMP4Mux {
                         )
                         .build(),
                     gst::Structure::builder("video/x-bayer")
-                        .field(
-                            "format",
-                            gst::List::new([
-                                "bggr", "gbrg", "grbg", "rggb", "bggr10le", "bggr10be", "gbrg10le",
-                                "gbrg10be", "grbg10le", "grbg10be", "rggb10le", "rggb10be",
-                                "bggr12le", "bggr12be", "gbrg12le", "gbrg12be", "grbg12le",
-                                "grbg12be", "rggb12le", "rggb12be", "bggr14le", "bggr14be",
-                                "gbrg14le", "gbrg14be", "grbg14le", "grbg14be", "rggb14le",
-                                "rggb14be", "bggr16le", "bggr16be", "gbrg16le", "gbrg16be",
-                                "grbg16le", "grbg16be", "rggb16le", "rggb16be",
-                            ]),
-                        )
+                        .field("format", gst::List::new(crate::isobmff::BAYER_FORMATS))
                         .field("width", gst::IntRange::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::new(1, u16::MAX as i32))
                         .field(
