@@ -6367,12 +6367,12 @@
                 "long-name": "Live Synchronizer",
                 "pad-templates": {
                     "sink": {
-                        "caps": "ANY",
+                        "caps": "audio/x-raw:\n\nvideo/x-raw(ANY):\n\nvideo/x-bayer(ANY):\nimage/jpeg:\nimage/png:\n",
                         "direction": "sink",
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "ANY",
+                        "caps": "audio/x-raw:\n\nvideo/x-raw(ANY):\n\nvideo/x-bayer(ANY):\nimage/jpeg:\nimage/png:\n",
                         "direction": "src",
                         "presence": "always"
                     }

@@ -21,7 +21,6 @@ fn init() {
 
 const DURATION: gst::ClockTime = gst::ClockTime::from_mseconds(100);
 const LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(200);
-const SEGMENT_OFFSET: gst::ClockTime = gst::ClockTime::from_seconds(60 * 60 * 1000);
 
 fn crank_pull(harness: &mut gst_check::Harness) -> gst::Buffer {
     harness.crank_single_clock_wait().unwrap();
@@ -56,7 +55,7 @@ fn assert_crank_pull(
     singlesegment: bool,
 ) {
     let pts = if singlesegment {
-        LATENCY + DURATION * sink_buffer_number + SEGMENT_OFFSET
+        LATENCY + DURATION * sink_buffer_number
     } else {
         DURATION * sink_buffer_number
     };

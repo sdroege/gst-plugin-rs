@@ -16,9 +16,6 @@ use parking_lot::{Condvar, Mutex, MutexGuard};
 use std::sync::LazyLock;
 use std::{collections::VecDeque, sync::mpsc};
 
-/// Offset for the segment in single-segment mode, to handle negative DTS
-const SEGMENT_OFFSET: gst::ClockTime = gst::ClockTime::from_seconds(60 * 60 * 1000);
-
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "livesync",
@@ -437,7 +434,14 @@ impl ElementImpl for LiveSync {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: LazyLock<[gst::PadTemplate; 2]> = LazyLock::new(|| {
-            let caps = gst::Caps::new_any();
+            // Accept raw or intra-only streams
+            let caps = gst::Caps::builder_full()
+                .structure(gst::Structure::new_empty("audio/x-raw"))
+                .structure_with_any_features(gst::Structure::new_empty("video/x-raw"))
+                .structure_with_any_features(gst::Structure::new_empty("video/x-bayer"))
+                .structure(gst::Structure::new_empty("image/jpeg"))
+                .structure(gst::Structure::new_empty("image/png"))
+                .build();
 
             [
                 gst::PadTemplate::new(
@@ -518,7 +522,7 @@ impl State {
         buf: &gst::BufferRef,
         segment: &gst::FormattedSegment<gst::ClockTime>,
     ) -> Option<Timestamps> {
-        let mut timestamp_start = buf.dts_or_pts()?;
+        let mut timestamp_start = buf.pts()?;
 
         if !self.single_segment {
             timestamp_start = segment
@@ -527,7 +531,6 @@ impl State {
             timestamp_start += self.latency + self.upstream_latency.unwrap();
         } else {
             timestamp_start += self.upstream_latency.unwrap();
-            timestamp_start = timestamp_start.saturating_sub(SEGMENT_OFFSET);
         }
 
         Some(Timestamps {
@@ -1002,21 +1005,11 @@ impl LiveSync {
         })?;
 
         if state.single_segment {
-            let dts = segment
-                .to_running_time_full(buf_mut.dts())
-                .map(|r| r + SEGMENT_OFFSET)
-                .and_then(|r| r.positive());
             let pts = segment
                 .to_running_time_full(buf_mut.pts())
-                .map(|r| r + SEGMENT_OFFSET)
                 .and_then(|r| r.positive())
-                .or_else(|| {
-                    self.obj()
-                        .current_running_time()
-                        .map(|r| r + SEGMENT_OFFSET)
-                });
+                .or_else(|| self.obj().current_running_time());
 
-            buf_mut.set_dts(dts.map(|t| t + state.latency));
             buf_mut.set_pts(pts.map(|t| t + state.latency));
         }
 
@@ -1317,10 +1310,7 @@ impl LiveSync {
             } else if state.out_segment.is_none() {
                 // Create live segment
                 let mut live_segment = gst::FormattedSegment::<gst::ClockTime>::new();
-                live_segment.set_start(sync_ts + SEGMENT_OFFSET);
-                live_segment.set_base(sync_ts);
-                live_segment.set_time(sync_ts);
-                live_segment.set_position(sync_ts + SEGMENT_OFFSET);
+                live_segment.set_position(sync_ts);
 
                 gst::debug!(CAT, imp = self, "Sending new segment: {live_segment:?}");
 
@@ -1447,7 +1437,6 @@ impl LiveSync {
         let mut duplicate = state.out_buffer_duplicate;
 
         let duration = out_buffer.duration().unwrap();
-        let dts = out_buffer.dts().map(|t| t + duration);
         let pts = out_buffer.pts().map(|t| t + duration);
 
         if let Some(source) = source {
@@ -1504,7 +1493,6 @@ impl LiveSync {
             }
         }
 
-        buffer.set_dts(dts);
         buffer.set_pts(pts);
         buffer.set_flags(gst::BufferFlags::GAP);
         buffer.unset_flags(gst::BufferFlags::DISCONT);
