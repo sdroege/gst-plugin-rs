@@ -7,6 +7,67 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+/**
+ * SECTION:element-livesync
+ * @see_also: identity
+ *
+ * Streams incoming buffers as if they were produced by a live source, filling
+ * the gaps with repeated frames or audio silence.
+ *
+ * Just like with `identity`:
+ *
+ * * `livesync` can operate in single-segment or non-single-segment mode.
+ * * `livesync` can synchronize outgoing buffers.
+ *
+ * ## Common behaviour
+ *
+ * * The last frame or audio silence is repeated when upstream fails to provide
+ *   a buffer that meets the expected deadline.
+ * * Late or early buffers are discarded.
+ * * The internal loop terminates on Flush, EOS or Segment Done.
+ *
+ * ## Single-segment mode
+ *
+ * In single-segment mode, an unlimited segment with rate 1.0 is pushed prior to
+ * pushing the first buffer and keeps being used as the output segment for
+ * subsequent buffers.
+ *
+ * * If a new segment is received, subsequent buffers timestamps are translated
+ *   so their running time on the src pad (single output segment) conforms to
+ *   the input segment's attributes.
+ *   Note: this means that the new segment base must properly reflect the running
+ *   time of its start attribute. One way to achieve this is by setting an offset
+ *   on the pad pushing the event.
+ * * Because the output segment is unlimited, input buffers are clipped according
+ *   to the input segment's boundaries.
+ * * The last frame or audio silence is repeated after clipping a buffer, until
+ *   the next in-bound buffer, segment, Flush or EOS.
+ * * The output segment rate and applied-rate are set to 1.0.
+ * * When the input segment rate != 1.0:
+ *   - buffer timestamps and duration on src pad are adjusted to match the expected
+ *     running time.
+ *   - For rate < 0.0, audio buffer samples are reversed. TBD: and resampled.
+ *
+ * ## Non-single-segment mode
+ *
+ * In non-single-segment mode, the output segment is the same as current input
+ * segment.
+ *
+ * * If a new segment is received, it will be pushed downstream prior to pushing
+ *   its first buffer.
+ * * Because the input segment is also pushed downstream, input buffers are NOT
+ *   clipped and timestamps, duration and samples are not modified wrt the
+ *   segment rate.
+ * * When the end of the segment is exceeded and upstream hasn't pushed EOS or
+ *   Segment Done, the appropriate event is pushed downstream and the internal
+ *   loop terminates.
+ *
+ * |[
+ * gst-launch-1.0 videotestsrc name=my-live-src ! livesync ! videorate skip-to-first=true ! videoconvert ! autovideosink
+ * ]| This will ensure that `my-live-src ` the output has a fixed and gapless framerate.
+ *
+ * Since: plugins-rs-0.9.0
+ */
 use gst::{
     glib::{self, translate::IntoGlib},
     prelude::*,
