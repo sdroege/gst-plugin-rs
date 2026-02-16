@@ -39,29 +39,35 @@ mod tests {
         buf
     }
 
-    async fn delete_object(region: String, bucket: &str, key: &str) {
-        let region_provider = aws_config::meta::region::RegionProviderChain::first_try(
-            aws_sdk_s3::config::Region::new(region),
-        )
-        .or_default_provider();
+    fn delete_object(region: String, bucket: &str, key: &str) {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let region_provider = aws_config::meta::region::RegionProviderChain::first_try(
+                    aws_sdk_s3::config::Region::new(region),
+                )
+                .or_default_provider();
 
-        let config = aws_config::defaults(*AWS_BEHAVIOR_VERSION)
-            .region(region_provider)
-            .load()
-            .await;
-        let client = aws_sdk_s3::Client::new(&config);
+                let config = aws_config::defaults(*AWS_BEHAVIOR_VERSION)
+                    .region(region_provider)
+                    .load()
+                    .await;
+                let client = aws_sdk_s3::Client::new(&config);
 
-        client
-            .delete_object()
-            .bucket(bucket)
-            .key(key)
-            .send()
-            .await
-            .unwrap();
+                client
+                    .delete_object()
+                    .bucket(bucket)
+                    .key(key)
+                    .send()
+                    .await
+                    .unwrap();
+            });
     }
 
     // Common helper
-    async fn do_s3_multipart_test(key_prefix: &str) {
+    fn do_s3_multipart_test(key_prefix: &str) {
         init();
 
         let region = std::env::var("AWS_REGION").unwrap_or_else(|_| DEFAULT_S3_REGION.to_string());
@@ -98,11 +104,11 @@ mod tests {
             buf.into_mapped_buffer_readable().unwrap().as_slice()
         );
 
-        delete_object(region.clone(), &bucket, &key).await;
+        delete_object(region.clone(), &bucket, &key);
     }
 
     // Common helper
-    async fn do_s3_putobject_test(
+    fn do_s3_putobject_test(
         key_prefix: &str,
         buffers: Option<u64>,
         bytes: Option<u64>,
@@ -175,71 +181,71 @@ mod tests {
             buf.into_mapped_buffer_readable().unwrap().as_slice()
         );
 
-        delete_object(region.clone(), &bucket, &key).await;
+        delete_object(region.clone(), &bucket, &key);
     }
 
     #[test_with::env(AWS_ACCESS_KEY_ID)]
     #[test_with::env(AWS_SECRET_ACCESS_KEY)]
-    #[tokio::test]
-    async fn test_s3_multipart_simple() {
-        do_s3_multipart_test("s3-test").await;
+    #[test]
+    fn test_s3_multipart_simple() {
+        do_s3_multipart_test("s3-test");
     }
 
     #[test_with::env(AWS_ACCESS_KEY_ID)]
     #[test_with::env(AWS_SECRET_ACCESS_KEY)]
-    #[tokio::test]
-    async fn test_s3_multipart_whitespace() {
-        do_s3_multipart_test("s3 test").await;
+    #[test]
+    fn test_s3_multipart_whitespace() {
+        do_s3_multipart_test("s3 test");
     }
 
     #[test_with::env(AWS_ACCESS_KEY_ID)]
     #[test_with::env(AWS_SECRET_ACCESS_KEY)]
-    #[tokio::test]
-    async fn test_s3_multipart_unicode() {
-        do_s3_multipart_test("s3 🧪 😱").await;
+    #[test]
+    fn test_s3_multipart_unicode() {
+        do_s3_multipart_test("s3 🧪 😱");
     }
 
     #[test_with::env(AWS_ACCESS_KEY_ID)]
     #[test_with::env(AWS_SECRET_ACCESS_KEY)]
-    #[tokio::test]
-    async fn test_s3_put_object_simple() {
-        do_s3_putobject_test("s3-put-object-test", None, None, None, true).await;
+    #[test]
+    fn test_s3_put_object_simple() {
+        do_s3_putobject_test("s3-put-object-test", None, None, None, true);
     }
 
     #[test_with::env(AWS_ACCESS_KEY_ID)]
     #[test_with::env(AWS_SECRET_ACCESS_KEY)]
-    #[tokio::test]
-    async fn test_s3_put_object_whitespace() {
-        do_s3_putobject_test("s3 put object test", None, None, None, true).await;
+    #[test]
+    fn test_s3_put_object_whitespace() {
+        do_s3_putobject_test("s3 put object test", None, None, None, true);
     }
 
     #[test_with::env(AWS_ACCESS_KEY_ID)]
     #[test_with::env(AWS_SECRET_ACCESS_KEY)]
-    #[tokio::test]
-    async fn test_s3_put_object_unicode() {
-        do_s3_putobject_test("s3 put object 🧪 😱", None, None, None, true).await;
+    #[test]
+    fn test_s3_put_object_unicode() {
+        do_s3_putobject_test("s3 put object 🧪 😱", None, None, None, true);
     }
 
     #[test_with::env(AWS_ACCESS_KEY_ID)]
     #[test_with::env(AWS_SECRET_ACCESS_KEY)]
-    #[tokio::test]
-    async fn test_s3_put_object_flush_buffers() {
+    #[test]
+    fn test_s3_put_object_flush_buffers() {
         // Awkward threshold as we push 5 buffers
-        do_s3_putobject_test("s3-put-object-test fbuf", Some(2), None, None, true).await;
+        do_s3_putobject_test("s3-put-object-test fbuf", Some(2), None, None, true);
     }
 
     #[test_with::env(AWS_ACCESS_KEY_ID)]
     #[test_with::env(AWS_SECRET_ACCESS_KEY)]
-    #[tokio::test]
-    async fn test_s3_put_object_flush_bytes() {
+    #[test]
+    fn test_s3_put_object_flush_bytes() {
         // Awkward threshold as we push 14 bytes per buffer
-        do_s3_putobject_test("s3-put-object-test fbytes", None, Some(30), None, true).await;
+        do_s3_putobject_test("s3-put-object-test fbytes", None, Some(30), None, true);
     }
 
     #[test_with::env(AWS_ACCESS_KEY_ID)]
     #[test_with::env(AWS_SECRET_ACCESS_KEY)]
-    #[tokio::test]
-    async fn test_s3_put_object_flush_time() {
+    #[test]
+    fn test_s3_put_object_flush_time() {
         do_s3_putobject_test(
             "s3-put-object-test ftime",
             None,
@@ -247,14 +253,13 @@ mod tests {
             // Awkward threshold as we push each buffer with 200ms
             Some(gst::ClockTime::from_mseconds(300)),
             true,
-        )
-        .await;
+        );
     }
 
     #[test_with::env(AWS_ACCESS_KEY_ID)]
     #[test_with::env(AWS_SECRET_ACCESS_KEY)]
-    #[tokio::test]
-    async fn test_s3_put_object_on_eos() {
+    #[test]
+    fn test_s3_put_object_on_eos() {
         // Disable all flush thresholds, so only EOS causes a flush
         do_s3_putobject_test(
             "s3-put-object-test eos",
@@ -262,14 +267,13 @@ mod tests {
             Some(0),
             Some(gst::ClockTime::from_nseconds(0)),
             true,
-        )
-        .await;
+        );
     }
 
     #[test_with::env(AWS_ACCESS_KEY_ID)]
     #[test_with::env(AWS_SECRET_ACCESS_KEY)]
-    #[tokio::test]
-    async fn test_s3_put_object_without_eos() {
+    #[test]
+    fn test_s3_put_object_without_eos() {
         // Disable all flush thresholds, skip EOS, and cause a flush on error
         do_s3_putobject_test(
             "s3-put-object-test !eos",
@@ -277,7 +281,6 @@ mod tests {
             Some(0),
             Some(gst::ClockTime::from_nseconds(0)),
             false,
-        )
-        .await;
+        );
     }
 }
