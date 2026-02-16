@@ -173,6 +173,7 @@ struct State {
     transcription_valve: gst::Element,
     audio_serial: u32,
     audio_sink_pads: HashMap<String, super::TranscriberSinkPad>,
+    transcriber_latency: gst::ClockTime,
 }
 
 struct Settings {
@@ -212,6 +213,8 @@ pub struct TranscriberBin {
     settings: Mutex<Settings>,
 }
 
+// Only called with element in NULL state, non-parented and not-linked,
+// but configured with the relevant latency properties
 fn query_latency(element: &gst::Element) -> Result<gst::ClockTime, Error> {
     let fakesrc = gst::ElementFactory::make("fakesrc")
         .property("is-live", true)
@@ -225,11 +228,16 @@ fn query_latency(element: &gst::Element) -> Result<gst::ClockTime, Error> {
 
     fakesrc.link(element)?;
 
+    // Ensure the element is internally linked (eg translationbin)
+    element.set_state(gst::State::Paused)?;
+
     let mut q = gst::query::Latency::new();
 
     let handled = srcpad.query(&mut q);
 
     fakesrc.unlink(element);
+
+    element.set_state(gst::State::Null)?;
 
     if !handled {
         return Err(anyhow!("impossible to query latency"));
@@ -562,6 +570,16 @@ impl TranscriberBin {
         ])?;
 
         if let Some(ref transcriber) = pad_state.transcriber {
+            // Ensure the default settings are forwarded to the transcriber already
+            self.configure_transcriber(transcriber);
+            let transcriber_latency = query_latency(transcriber)?;
+            gst::debug!(
+                CAT,
+                obj = transcriber,
+                "Linking new transcriber with latency {:?}",
+                transcriber_latency
+            );
+            state.transcriber_latency = transcriber_latency;
             pad_state.transcription_bin.add(transcriber)?;
         }
 
@@ -1112,7 +1130,7 @@ impl TranscriberBin {
      * be called in READY */
     fn relink_transcriber(
         &self,
-        state: &State,
+        state: &mut State,
         pad_state: &TranscriberSinkPadState,
         old_transcriber: Option<&gst::Element>,
     ) -> Result<(), Error> {
@@ -1133,7 +1151,15 @@ impl TranscriberBin {
         }
 
         if let Some(ref transcriber) = pad_state.transcriber {
-            gst::debug!(CAT, obj = transcriber, "Linking new transcriber");
+            let transcriber_latency = query_latency(transcriber)?;
+            state.transcriber_latency = transcriber_latency;
+            gst::debug!(
+                CAT,
+                obj = transcriber,
+                "Linking new transcriber with latency {}",
+                transcriber_latency
+            );
+
             pad_state.transcription_bin.add(transcriber)?;
             transcriber.sync_state_with_parent().unwrap();
             pad_state.transcriber_aconv.link(transcriber)?;
@@ -2261,9 +2287,9 @@ impl TranscriberBin {
 
     fn our_latency(&self, state: &State, settings: &Settings) -> gst::ClockTime {
         [
-            settings.latency + self.subtitle_latency(state),
-            settings.latency + self.synthesis_latency(state),
-            settings.latency
+            state.transcriber_latency + self.subtitle_latency(state),
+            state.transcriber_latency + self.synthesis_latency(state),
+            state.transcriber_latency
                 + settings.accumulate_time
                 + CEAX08MUX_LATENCY
                 + settings.translate_latency
@@ -2372,6 +2398,7 @@ impl TranscriberBin {
             transcription_valve,
             audio_serial: 0,
             audio_sink_pads,
+            transcriber_latency: gst::ClockTime::ZERO,
         })
     }
 
