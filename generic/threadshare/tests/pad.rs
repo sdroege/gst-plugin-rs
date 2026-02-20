@@ -114,7 +114,7 @@ mod imp_src {
     impl ElementSrcTestTask {
         fn flush(&mut self) {
             // Purge the channel
-            while let Ok(Some(_item)) = self.receiver.try_next() {}
+            while let Ok(_item) = self.receiver.try_recv() {}
         }
         async fn push_item(&self, item: Item) -> Result<gst::FlowSuccess, gst::FlowError> {
             gst::debug!(SRC_CAT, obj = self.element, "Handling {:?}", item);
@@ -793,7 +793,7 @@ fn nominal_scenario(
         .unwrap();
 
     // Nothing forwarded
-    receiver.try_next().unwrap_err();
+    receiver.try_recv().unwrap_err();
 
     // Switch back the Pad task to Started
     pipeline.set_state(gst::State::Playing).unwrap();
@@ -1013,7 +1013,7 @@ fn start_pause_start() {
     }
 
     // Nothing else forwarded
-    receiver.try_next().unwrap_err();
+    receiver.try_recv().unwrap_err();
 
     pipeline.set_state(gst::State::Null).unwrap();
 }

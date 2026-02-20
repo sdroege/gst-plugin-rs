@@ -1484,11 +1484,15 @@ impl TranslationPadTask {
             .as_mut()
             .expect("from_translation chan must be available in translation mode");
 
-        while let Ok(translation) = from_translate_rx.try_next() {
-            let Some(translation) = translation else {
-                const ERR: &str = "translation chan terminated";
-                gst::debug!(CAT, imp = self.pad, "{ERR}");
-                return Err(gst::error_msg!(gst::StreamError::Failed, ["{ERR}"]));
+        loop {
+            let translation = match from_translate_rx.try_recv() {
+                Ok(translation) => translation,
+                Err(mpsc::TryRecvError::Closed) => {
+                    const ERR: &str = "translation chan terminated";
+                    gst::debug!(CAT, imp = self.pad, "{ERR}");
+                    return Err(gst::error_msg!(gst::StreamError::Failed, ["{ERR}"]));
+                }
+                Err(mpsc::TryRecvError::Empty) => break,
             };
 
             if let Some(pts) = translation.items.first().map(|i| i.pts) {

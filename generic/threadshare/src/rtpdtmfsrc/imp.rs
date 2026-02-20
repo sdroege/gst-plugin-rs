@@ -585,7 +585,7 @@ impl RTPDTMFSrcTask {
 
             let _ = self.push_next_packet().await;
 
-            while let Ok(Some(dtmf_evt)) = self.dtmf_evt_rx.try_next() {
+            while let Ok(dtmf_evt) = self.dtmf_evt_rx.try_recv() {
                 let _ = self
                     .elem
                     .post_message(self.prepare_message(&dtmf_evt, DTMFEventStatus::Dropped));
