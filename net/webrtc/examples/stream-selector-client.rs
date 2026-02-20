@@ -5,7 +5,7 @@ use anyhow::Error;
 use clap::Parser;
 use gst::glib;
 use gst::prelude::*;
-use rand::Rng;
+use rand::prelude::*;
 
 #[derive(Parser, Debug)]
 #[clap(about, version, author)]

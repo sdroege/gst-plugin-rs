@@ -33,7 +33,7 @@ itertools = "0.14"
 
 [dev-dependencies]
 pretty_assertions = "1"
-rand = { version = "0.9", features = ["small_rng"] }
+rand = "0.10"
 gst-check.workspace = true
 clap = { version = "4", features = ["derive"] }
 glib = { workspace = true, features = ["v2_62"] }

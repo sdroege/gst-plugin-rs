@@ -44,7 +44,7 @@ signalsmith-stretch = { version = "0.1.2", optional = true }
 chrono = { version = "0.4", features = [ "alloc" ] }
 env_logger = "0.11"
 gst-check = { workspace = true, features = ["v1_18"] }
-rand = "0.9"
+rand = "0.10"
 test-with = { version = "0.15", default-features = false }
 
 [lib]
