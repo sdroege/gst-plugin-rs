@@ -5160,7 +5160,7 @@ dependencies = [
  "indexmap 2.13.0",
  "itertools 0.14.0",
  "livekit-api",
- "livekit-protocol 0.6.0",
+ "livekit-protocol",
  "parse_link_header",
  "rand 0.9.2",
  "regex",
@@ -6994,7 +6994,7 @@ dependencies = [
  "futures-util",
  "http 1.4.0",
  "jsonwebtoken",
- "livekit-protocol 0.7.1",
+ "livekit-protocol",
  "livekit-runtime",
  "log",
  "parking_lot",
@@ -7011,23 +7011,6 @@ dependencies = [
  "tokio-rustls 0.24.1",
  "tokio-tungstenite 0.20.1",
  "url",
-]
-
-[[package]]
-name = "livekit-protocol"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07b8d7580e14aa9039d6d1d13c06c894de7757b9a49c1aa7c188cabf461cf069"
-dependencies = [
- "futures-util",
- "livekit-runtime",
- "parking_lot",
- "pbjson",
- "pbjson-types",
- "prost",
- "serde",
- "thiserror 1.0.69",
- "tokio",
 ]
 
 [[package]]
