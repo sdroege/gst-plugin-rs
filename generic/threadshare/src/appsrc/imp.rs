@@ -155,7 +155,7 @@ impl AppSrcTask {
 impl AppSrcTask {
     fn flush(&mut self) {
         // Purge the channel
-        while let Ok(Some(_item)) = self.receiver.try_next() {}
+        while let Ok(_item) = self.receiver.try_recv() {}
     }
 
     async fn push_item(&mut self, item: StreamItem) -> Result<gst::FlowSuccess, gst::FlowError> {

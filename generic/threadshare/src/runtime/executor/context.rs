@@ -422,16 +422,16 @@ mod tests {
             add_sub_task(0).unwrap();
 
             // Check that it was not executed yet
-            receiver.try_next().unwrap_err();
+            receiver.try_recv().unwrap_err();
 
             // Drain it now and check that it was executed
             let drain_fut = Context::drain_sub_tasks();
             drain_fut.await.unwrap();
-            assert_eq!(receiver.try_next().unwrap(), Some(0));
+            assert_eq!(receiver.try_recv(), Ok(0));
 
             // Add another task and check that it's not executed yet
             add_sub_task(1).unwrap();
-            receiver.try_next().unwrap_err();
+            receiver.try_recv().unwrap_err();
 
             // Return the receiver
             receiver
@@ -440,8 +440,8 @@ mod tests {
         let mut receiver = futures::executor::block_on(join_handle).unwrap();
 
         // The last sub task should be simply dropped at this point
-        match receiver.try_next() {
-            Ok(None) | Err(_) => (),
+        match receiver.try_recv() {
+            Err(_) => (),
             other => panic!("Unexpected {other:?}"),
         }
     }
