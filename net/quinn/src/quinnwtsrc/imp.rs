@@ -328,7 +328,9 @@ impl ObjectImpl for QuinnWebTransportSrc {
             "stats" => {
                 let state = self.state.lock().unwrap();
                 match *state {
-                    State::Started(ref state) => get_stats(Some(state.session.stats())).to_value(),
+                    State::Started(ref state) => {
+                        get_stats(Some((**state.session).stats())).to_value()
+                    }
                     State::Stopped => get_stats(None).to_value(),
                 }
             }
