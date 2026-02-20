@@ -148,45 +148,45 @@ opt-level = 1
 lto = "off"
 
 [workspace.package]
-version = "0.15.0-alpha.2"
+version = "0.16.0-alpha"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 edition = "2024"
 rust-version = "1.92"
 
 [workspace.dependencies]
-glib = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "main", version = "0.22.0-alpha" }
-gio = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "main", version = "0.22.0-alpha" }
-cairo-rs = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "main", features=["use_glib"], version = "0.22.0-alpha" }
-pango = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "main", version = "0.22.0-alpha" }
-pangocairo = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "main", version = "0.22.0-alpha" }
-gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", branch = "main", features = ["v4_6"], version = "0.11.0-alpha" }
-gdk-wayland = { package = "gdk4-wayland", git = "https://github.com/gtk-rs/gtk4-rs", branch = "main", features = ["v4_4"], version = "0.11.0-alpha" }
-gdk-x11 = { package = "gdk4-x11", git = "https://github.com/gtk-rs/gtk4-rs", branch = "main", features = ["v4_4"], version = "0.11.0-alpha" }
-gdk-win32 = { package = "gdk4-win32", git = "https://github.com/gtk-rs/gtk4-rs", branch = "main", features = ["v4_4"], version = "0.11.0-alpha" }
-gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-allocators = { package = "gstreamer-allocators", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-analytics = { package = "gstreamer-analytics", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-gl-egl = { package = "gstreamer-gl-egl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-gl-wayland = { package = "gstreamer-gl-wayland", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-gl-x11 = { package = "gstreamer-gl-x11", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-net = { package = "gstreamer-net", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-pbutils = { package = "gstreamer-pbutils", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
+glib = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "main", version = "0.23.0-alpha" }
+gio = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "main", version = "0.23.0-alpha" }
+cairo-rs = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "main", features=["use_glib"], version = "0.23.0-alpha" }
+pango = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "main", version = "0.23.0-alpha" }
+pangocairo = { git = "https://github.com/gtk-rs/gtk-rs-core", branch = "main", version = "0.23.0-alpha" }
+gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs", branch = "main", features = ["v4_6"], version = "0.12.0-alpha" }
+gdk-wayland = { package = "gdk4-wayland", git = "https://github.com/gtk-rs/gtk4-rs", branch = "main", features = ["v4_4"], version = "0.12.0-alpha" }
+gdk-x11 = { package = "gdk4-x11", git = "https://github.com/gtk-rs/gtk4-rs", branch = "main", features = ["v4_4"], version = "0.12.0-alpha" }
+gdk-win32 = { package = "gdk4-win32", git = "https://github.com/gtk-rs/gtk4-rs", branch = "main", features = ["v4_4"], version = "0.12.0-alpha" }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-allocators = { package = "gstreamer-allocators", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-analytics = { package = "gstreamer-analytics", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-gl-egl = { package = "gstreamer-gl-egl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-gl-wayland = { package = "gstreamer-gl-wayland", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-gl-x11 = { package = "gstreamer-gl-x11", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-net = { package = "gstreamer-net", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-pbutils = { package = "gstreamer-pbutils", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
 gst-plugin-version-helper = { path="./version-helper", version = "0.8" }
-gst-rtp = { package = "gstreamer-rtp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-sdp = { package = "gstreamer-sdp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-tag = { package = "gstreamer-tag", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-utils = { package = "gstreamer-utils", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-validate = { package = "gstreamer-validate", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-webrtc = { package = "gstreamer-webrtc", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.25.0-alpha" }
-gst-plugin-webrtc-protocol = { path="net/webrtc/protocol", package = "gst-plugin-webrtc-signalling-protocol", version = "0.15.0-alpha" }
-gst-plugin-webrtc-signalling = { path="net/webrtc/signalling", package = "gst-plugin-webrtc-signalling", version = "0.15.0-alpha" }
-gst-plugin-isobmff = { path="mux/isobmff", version = "0.15.0-alpha" }
-gst-plugin-gtk4 = { path="video/gtk4", version = "0.15.0-alpha" }
-gst-plugin-rtp = { path="net/rtp", version = "0.15.0-alpha" }
-gst-plugin-hlssink3 = { path="net/hlssink3", version = "0.15.0-alpha" }
+gst-rtp = { package = "gstreamer-rtp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-sdp = { package = "gstreamer-sdp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-tag = { package = "gstreamer-tag", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-utils = { package = "gstreamer-utils", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-validate = { package = "gstreamer-validate", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-webrtc = { package = "gstreamer-webrtc", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-plugin-webrtc-protocol = { path="net/webrtc/protocol", package = "gst-plugin-webrtc-signalling-protocol", version = "0.16.0-alpha" }
+gst-plugin-webrtc-signalling = { path="net/webrtc/signalling", package = "gst-plugin-webrtc-signalling", version = "0.16.0-alpha" }
+gst-plugin-isobmff = { path="mux/isobmff", version = "0.16.0-alpha" }
+gst-plugin-gtk4 = { path="video/gtk4", version = "0.16.0-alpha" }
+gst-plugin-rtp = { path="net/rtp", version = "0.16.0-alpha" }
+gst-plugin-hlssink3 = { path="net/hlssink3", version = "0.16.0-alpha" }

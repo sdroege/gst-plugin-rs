@@ -1,7 +1,7 @@
 project('gst-plugins-rs',
         'rust',
         'c',
-        version: '0.15.0-alpha.2',
+        version: '0.16.0-alpha',
         meson_version : '>= 1.1')
 
 # dependencies.py needs a toml parsing module
