@@ -14,7 +14,7 @@ gst-base.workspace = true
 gst-audio.workspace = true
 gst-video.workspace = true
 parking_lot = "0.12"
-rand = "0.9"
+rand = "0.10"
 
 [dev-dependencies]
 gst-app.workspace = true

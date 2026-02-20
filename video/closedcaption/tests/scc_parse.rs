@@ -13,7 +13,7 @@ use gst::EventView;
 use gst::prelude::*;
 use gst_video::{ValidVideoTimeCode, VideoTimeCode};
 use pretty_assertions::assert_eq;
-use rand::{Rng, SeedableRng};
+use rand::prelude::*;
 use std::collections::VecDeque;
 use std::path::PathBuf;
 

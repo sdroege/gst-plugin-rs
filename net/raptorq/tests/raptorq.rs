@@ -11,7 +11,7 @@ use gst::prelude::*;
 use gst_rtp::RTPBuffer;
 use gst_rtp::rtp_buffer::*;
 
-use rand::Rng;
+use rand::prelude::*;
 
 #[must_use]
 struct RaptorqTest {

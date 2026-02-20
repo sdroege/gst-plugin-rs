@@ -200,7 +200,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpVp9Pay {
         let settings = self.settings.lock().unwrap().clone();
 
         let picture_id_offset = settings.picture_id_offset.unwrap_or_else(|| {
-            use rand::Rng as _;
+            use rand::prelude::*;
 
             let mut rng = rand::rng();
             rng.random::<u16>()
