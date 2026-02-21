@@ -5,6 +5,112 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.15.0] - 2026-02-21
+### Fixed
+- audiornnoise: Fix audio level value reporting.
+- awspolly: Fix overflow budget calculation.
+- awspolly: Fix various panics.
+- awstranslate/awstranscriber2: Post error messages on connection errors.
+- dav1ddec: Various fixes to allocation query handling.
+- elevenlabssynthesizer: Improve gap handling in non-clip overflow modes.
+- gifenc: Avoid unnecessary resets on flush/caps change.
+- gtk4paintablesink: Fix odd-size subsampling workaround.
+- isobmff: Fix writing of EAC3 stream metadata.
+- isobmff: Make TAI timestamp support spec compliant.
+- isobmff: Write more complete vpcC box for VP8/VP9.
+- isobmff: fmp4: Don't overlap durations on fragment header buffers.
+- ndisrc: Fix audio corruption related to stride padding.
+- quinn: Various bugfixes and improvements.
+- livesync: Various fixes related to reverse playback and segment handling.
+- rtp: basepay: Consider size of header extensions in maximum payload size
+  calculation.
+- rtprecv: Various bugfixes and performance improvements.
+- rtspsrc2: Fix `appsrc` max-time configuration.
+- sccparse: Handle streams with more than one byte tuple.
+- speech synthesizers: Various bugfixes and improvements.
+- speechmaticstranscriber: Fix handling of diarization=none.
+- st2038: Various fixes and support for more alignments.
+- threadshare: Some deadlock fixes.
+- transcriberbin: Fix latency reporting in various situations.
+- webrtcsink: Fix deadlock when recalculating latency.
+- webrtcsink: Fix deadlock between remote description and ICE handling.
+- webrtcsink: Handle NVIDIA encoder interfaces changes between versions / platforms.
+- webrtc: Only register data channels for internal use.
+- webrtc: Various minor fixes and improvements.
+
+- ... and many more fixes and minor improvements!
+
+### Added
+- analytics: Add YOLOX tensor decoder.
+- audiornnoise: Forward input metadata.
+- awss3: Support for S3-compatible URIs.
+- awstranscriber2: Add property for setting `show_speaker_labels`.
+- awstranslate: Expose property for turning brevity on.
+- burn: Add burn-based YOLOX inference element.
+- cea608: Non-relative positioning support.
+- cea708mux: Expose `discarded-services` property on sink pads.
+- debugseimetainserter: New plugin for testing SEI meta insertion.
+- deepgram: New speech-to-text transcription element.
+- demucs: Add audio source separation element based on demucs.
+- fallbacksrc: Support for encoded inputs.
+- gtk4paintablesink: Propose udmabuf allocator/pool if possible.
+- gtk4paintablesink: New property for configuration window-resize behaviour.
+- hlscmafsink: Support for I-frame-only playlists.
+- elevenlabs: New voice cloner element.
+- gif: New decoder element with support for animations and looping.
+- icecastsink: New icecast sink element.
+- inter: Various new properties to fine-tune behaviour.
+- isobmff: Implement `gst::ChildProxy` for accessing sinkpads.
+- isobmff: Support for raw audio (ISO 23003-5).
+- isobmff: Support for bayer video formats.
+- isobmff: Write (video) compressorname field.
+- isobmff: mp4mux: Add (limited) support for caps changes.
+- jsontovtt: Add property to enable per-cue line attributes.
+- mccparse: Add support for non-caption VANC data.
+- quinn: Support for QUIC/WebTransport connection/session sharing.
+- quinn: Improve TLS certificate configuration.
+- rtp: rtpmparobustdepay2: New depayloader.
+- rtp: smpte291: New payloader for SMPTE291 ancillary data.
+- speechmatics: Expose `mask-profanities` property.
+- speechmatics: Support for configuring audio events.
+- speechmatics: Add properties to control speaker identification.
+- s302mparse: New parser for S302M audio.
+- st2038: Add combiner/extractor elements for converting between ST2038
+  streams and `GstAncillaryMeta`.
+- speech synthesizers: New compression overflow mode.
+- textaccumulate: New element for accumulating text.
+- threadshare: ts-udpsink: Allow disabling IPv4 or IPv6 socket.
+- tttocea608: Expose `speaker-prefix` property.
+- validate: Add plugin with `check-last-frame-qrcode` validate action.
+- webrtc: Add WHEP client and server signallers and whepclientsrc /
+  whepserversink elements.
+- webrtcsink: Add support for VA encoders.
+- webrtcsink: Add support for renegotiation.
+- webrtcsink: Negotiate H264 profile / level correctly.
+- webrtcsink: Support for specifying customs HTTP headers to signalling
+  server.
+- webrtcsrc: Support forwarding encoded data.
+- webrtcsrc: Support request source pads.
+- whisper: New speech-to-text transcription element.
+
+### Changed
+- Updated to gtk-rs-core 0.22 APIs.
+- Updated with final GStreamer 1.28.0 APIs and upcoming 1.30 APIs.
+- Updated minimum supported Rust version to 1.92.
+
+- awspolly: Port improvements from elevenlabssynthesizer.
+- isobmff: fmp4 and mp4 plugins are merged into a single plugin.
+- gtk4: Require at least GStreamer 1.18 instead of 1.16.
+- mccparse: Outputs ST2038 now instead of CEA608/708.
+- quinn: Rename quinnwtserversink to quinnsink and quinwtclientsrc to
+  quinnsrc.
+- threadshare: Relicense to MPL-2.0.
+
+### Removed
+- aws: Legacy rusotos3src / rusotos3sink element factories are dropped now.
+- threadshare: ts-rtpjitterbuffer: All its use-cases are covered by `rtprecv`.
+- webrtchttp: Not removed yet but deprecated in favour of the webrtc plugin.
+
 ## [0.14.3] - 2025-10-31
 ### Fixed
 - fallbacksrc: Fix custom source re-use.
@@ -860,7 +966,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.3...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.15.0...HEAD
+[0.15.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.3...0.15.0
 [0.14.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.2...0.14.3
 [0.14.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.1...0.14.2
 [0.14.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.0...0.14.1
