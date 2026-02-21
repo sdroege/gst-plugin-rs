@@ -13,6 +13,8 @@ ignore = [
     # rustls-pemfile is no longer maintained and livekit / librespot
     # indirectly depend on it
     "RUSTSEC-2025-0134",
+    # bincode is no longer maintained and hyphenation depends on it
+    "RUSTSEC-2025-0141",
 ]
 
 [licenses]
@@ -32,6 +34,7 @@ allow = [
   "NCSA",
   "CDLA-Permissive-2.0",
   "CC0-1.0",
+  "Unlicense",
 ]
 confidence-threshold = 0.8
 
@@ -291,9 +294,6 @@ version = "1"
 [[bans.skip]]
 name = "spki"
 version = "0.6"
-[[bans.skip]]
-name = "lru"
-version = "0.12"
 
 # Various crates depend on thiserror 1
 [[bans.skip]]
@@ -316,14 +316,23 @@ version = "0.9"
 name = "rand_core"
 version = "0.6"
 [[bans.skip]]
+name = "rand_core"
+version = "0.9"
+[[bans.skip]]
 name = "rand_chacha"
 version = "0.3"
 [[bans.skip]]
 name = "rand"
 version = "0.8"
 [[bans.skip]]
+name = "rand"
+version = "0.9"
+[[bans.skip]]
 name = "getrandom"
 version = "0.2"
+[[bans.skip]]
+name = "getrandom"
+version = "0.3"
 
 # Various crates depend on old rustix / linux-raw-sys
 [[bans.skip]]
@@ -373,8 +382,13 @@ version = "0.13"
 name = "hashbrown"
 version = "0.15"
 [[bans.skip]]
-name = "prettyplease"
-version = "0.1"
+name = "convert_case"
+version = "0.8"
+
+# Various crates depend on an old version of cpufeatures
+[[bans.skip]]
+name = "cpufeatures"
+version = "0.3"
 
 # ash, bindgen and others depend on an old version of libloading
 [[bans.skip]]
@@ -405,6 +419,14 @@ version = "0.9"
 [[bans.skip]]
 name = "target-lexicon"
 version = "0.12"
+
+# librespot depends on old quick-xml and vergen
+[[bans.skip]]
+name = "quick-xml"
+version = "0.38"
+[[bans.skip]]
+name = "vergen-lib"
+version = "0.1.6"
 
 [sources]
 unknown-registry = "deny"
