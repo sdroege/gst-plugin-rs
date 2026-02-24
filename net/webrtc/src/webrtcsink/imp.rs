@@ -31,6 +31,7 @@ use std::collections::HashMap;
 
 use std::ops::DerefMut;
 use std::ops::Mul;
+use std::str::FromStr;
 use std::sync::{Arc, Condvar, LazyLock, Mutex, mpsc};
 
 use super::homegrown_cc::CongestionController;
@@ -879,6 +880,11 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property_from_str("preset-level", "UltraFastPreset");
                 add_nv4l2enc_force_keyunit_workaround(enc);
             }
+            "qtic2venc" => {
+                enc.set_property("target-bitrate", start_bitrate);
+                enc.set_property("idr-interval", 4294967295u32);
+                enc.set_property_from_str("control-rate", "constant");
+            }
             _ => (),
         }
     }
@@ -1013,6 +1019,37 @@ impl PayloadChainBuilder {
                     .codec
                     .build_encoder()
                     .expect("We should always have an encoder for negotiated codecs")?;
+
+                // Quirk: qtic2venc expects a video meta on non fd-backed buffers
+                if self
+                    .codec
+                    .encoder_name()
+                    .map(|e| e.as_str() == "qtic2venc")
+                    .unwrap_or(false)
+                {
+                    encoder.static_pad("sink").unwrap().add_probe(
+                        gst::PadProbeType::BUFFER,
+                        |pad, ref mut probe_info| {
+                            let caps = pad.current_caps().expect("caps received before buffer");
+                            let s = caps.structure(0).unwrap();
+                            if let Some(gst::PadProbeData::Buffer(ref mut buffer)) = probe_info.data
+                            {
+                                let _video_meta = gst_video::VideoMeta::add(
+                                    buffer.make_mut(),
+                                    gst_video::VideoFrameFlags::empty(),
+                                    gst_video::VideoFormat::from_str(
+                                        s.get("format").expect("complete video caps"),
+                                    )
+                                    .expect("valid video format"),
+                                    s.get::<i32>("width").expect("complete video caps") as u32,
+                                    s.get::<i32>("height").expect("complete video caps") as u32,
+                                );
+                            }
+                            gst::PadProbeReturn::Ok
+                        },
+                    );
+                }
+
                 elements.push(encoder.clone());
 
                 Some(encoder)
@@ -1171,6 +1208,7 @@ impl VideoEncoder {
                 | "vaapivp9enc"
                 | "qsvh264enc"
                 | "nvv4l2h264enc"
+                | "qtic2venc"
                 | "nvv4l2vp8enc"
                 | "nvv4l2vp9enc"
                 | "nvav1enc"
@@ -1203,6 +1241,7 @@ impl VideoEncoder {
             }
             "openh264enc" | "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "rav1enc"
             | "nvv4l2av1enc" => (self.element.property::<u32>("bitrate")) as i32,
+            "qtic2venc" => (self.element.property::<u32>("target-bitrate")) as i32,
             _ => return Err(WebRTCSinkError::BitrateNotSupported),
         };
 
@@ -1244,6 +1283,7 @@ impl VideoEncoder {
             "openh264enc" | "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "nvv4l2av1enc" => {
                 self.element.set_property("bitrate", bitrate as u32)
             }
+            "qtic2venc" => self.element.set_property("target-bitrate", bitrate as u32),
             "rav1enc" => self.element.set_property("bitrate", bitrate),
             _ => return Err(WebRTCSinkError::BitrateNotSupported),
         }

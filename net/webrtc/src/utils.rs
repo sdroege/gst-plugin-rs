@@ -725,6 +725,17 @@ impl Codec {
                     structure_builder.field("format", gst::List::new(["NV12", "YV12", "I420"]));
             }
 
+            if self
+                .encoder_name()
+                .map(|e| e.as_str() == "qtic2venc")
+                .unwrap_or(false)
+            {
+                // Quirk: qtic2venc advertises support for non NV12 formats, which
+                // end up being selected first, then fails with an "unrecovarable error".
+                // Typo not mine.
+                structure_builder = structure_builder.field("format", gst::List::new(["NV12"]));
+            }
+
             gst::Caps::builder_full_with_any_features()
                 .structure(structure_builder.build())
                 .build()
