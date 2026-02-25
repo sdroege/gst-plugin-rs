@@ -226,6 +226,9 @@ struct SourceBin {
 
     // Whole stream collection posted by source
     posted_streams: Option<gst::StreamCollection>,
+
+    // Source element of last StreamCollection message
+    collection_source: glib::WeakRef<gst::Element>,
 }
 
 struct State {
@@ -1255,6 +1258,7 @@ impl FallbackSrc {
             pending_restart_timeout: None,
             retry_timeout: None,
             posted_streams: None,
+            collection_source: glib::WeakRef::new(),
         }
     }
 
@@ -1328,6 +1332,7 @@ impl FallbackSrc {
             pending_restart_timeout: None,
             retry_timeout: None,
             posted_streams: None,
+            collection_source: glib::WeakRef::new(),
         })
     }
 
@@ -3032,7 +3037,7 @@ impl FallbackSrc {
             Some(state) => state,
         };
 
-        let src = match m.src() {
+        let src = match m.src().and_then(|s| s.downcast_ref::<gst::Element>()) {
             Some(src) => src,
             None => return,
         };
@@ -3050,17 +3055,21 @@ impl FallbackSrc {
         gst::debug!(
             CAT,
             imp = self,
-            "Got stream collection {:?} (fallback: {})",
+            "Got stream collection {:?} (fallback: {}) from {:?} ({})",
             collection.debug(),
             is_fallback,
+            src,
+            src.name(),
         );
 
         if is_fallback {
             if let Some(ref mut source) = state.fallback_source {
                 source.posted_streams = Some(collection.clone());
+                source.collection_source = src.downgrade();
             }
         } else {
             state.source.posted_streams = Some(collection.clone());
+            state.source.collection_source = src.downgrade();
         }
 
         // We're guaranteed to not remove any streams that are selected or persistent
@@ -3241,6 +3250,8 @@ impl FallbackSrc {
                         "Sending select-streams to {} failed, streams might be missing",
                         element.name()
                     );
+                } else {
+                    gst::debug!(CAT, imp = self, "Sent select-streams to {}", element.name());
                 }
             }
         }
@@ -3766,7 +3777,12 @@ impl FallbackSrc {
                 main_ids
             );
             let main_event = gst::event::SelectStreams::builder(main_ids).build();
-            events.push((state.source.source.clone(), main_event));
+            let collection_source = state
+                .source
+                .collection_source
+                .upgrade()
+                .unwrap_or(state.source.source.clone());
+            events.push((collection_source, main_event));
         }
 
         if let Some(ref source) = state.fallback_source {
@@ -3783,7 +3799,11 @@ impl FallbackSrc {
                     fallback_ids
                 );
                 let fallback_event = gst::event::SelectStreams::builder(fallback_ids).build();
-                events.push((source.source.clone(), fallback_event));
+                let collection_source = source
+                    .collection_source
+                    .upgrade()
+                    .unwrap_or(source.source.clone());
+                events.push((collection_source, fallback_event));
             }
         };
 
