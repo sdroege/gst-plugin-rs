@@ -1290,7 +1290,7 @@ impl VideoEncoder {
 
         let current_caps = self.filter.property::<gst::Caps>("caps");
 
-        let mitigation_mode_caps = element.emit_by_name::<gst::Caps>(
+        let mut mitigation_mode_caps = element.emit_by_name::<gst::Caps>(
             "configure-mitigation-caps",
             &[
                 &self.stream_name,
@@ -1299,7 +1299,8 @@ impl VideoEncoder {
                 &enabled_mitigation_modes,
             ],
         );
-        let mitigation_mode_caps_structure = mitigation_mode_caps.structure(0).unwrap().to_owned();
+        let mitigation_mode_caps_mut = mitigation_mode_caps.get_mut().unwrap();
+        let mitigation_mode_caps_structure = mitigation_mode_caps_mut.structure_mut(0).unwrap();
 
         self.mitigation_mode = WebRTCSinkMitigationMode::NONE;
 
@@ -1313,6 +1314,9 @@ impl VideoEncoder {
         {
             self.mitigation_mode |= WebRTCSinkMitigationMode::DOWNSAMPLED;
         }
+
+        // Preserve potential format quirks
+        Codec::apply_raw_filter_caps(&self.factory_name, mitigation_mode_caps_structure);
 
         if !mitigation_mode_caps.is_strictly_equal(&current_caps) {
             gst::log!(

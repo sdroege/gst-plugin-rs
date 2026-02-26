@@ -706,38 +706,34 @@ impl Codec {
             .map(|info| info.payloader.create().build().unwrap())
     }
 
+    pub fn apply_raw_filter_caps(encoder_name: &str, s: &mut gst::StructureRef) {
+        if encoder_name == "nvh264enc" {
+            // Quirk: nvh264enc can perform conversion from RGB formats, but
+            // doesn't advertise / negotiate colorimetry correctly, leading
+            // to incorrect color display in Chrome (but interestingly not in
+            // Firefox). In any case, restrict to exclude RGB formats altogether,
+            // and let videoconvert do the conversion properly if needed.
+            s.set("format", gst::List::new(["NV12", "YV12", "I420"]));
+        } else if encoder_name == "qtic2venc" {
+            // Quirk: qtic2venc advertises support for non NV12 formats, which
+            // end up being selected first, then fails with an "unrecovarable error".
+            // Typo not mine.
+            s.set("format", gst::List::new(["NV12"]));
+        }
+    }
+
     pub fn raw_converter_filter(&self) -> Result<gst::Element, Error> {
         let caps = if self.is_video() {
-            let mut structure_builder = gst::Structure::builder("video/x-raw")
-                .field("pixel-aspect-ratio", gst::Fraction::new(1, 1));
+            let mut s = gst::Structure::builder("video/x-raw")
+                .field("pixel-aspect-ratio", gst::Fraction::new(1, 1))
+                .build();
 
-            if self
-                .encoder_name()
-                .map(|e| e.as_str() == "nvh264enc")
-                .unwrap_or(false)
-            {
-                // Quirk: nvh264enc can perform conversion from RGB formats, but
-                // doesn't advertise / negotiate colorimetry correctly, leading
-                // to incorrect color display in Chrome (but interestingly not in
-                // Firefox). In any case, restrict to exclude RGB formats altogether,
-                // and let videoconvert do the conversion properly if needed.
-                structure_builder =
-                    structure_builder.field("format", gst::List::new(["NV12", "YV12", "I420"]));
-            }
-
-            if self
-                .encoder_name()
-                .map(|e| e.as_str() == "qtic2venc")
-                .unwrap_or(false)
-            {
-                // Quirk: qtic2venc advertises support for non NV12 formats, which
-                // end up being selected first, then fails with an "unrecovarable error".
-                // Typo not mine.
-                structure_builder = structure_builder.field("format", gst::List::new(["NV12"]));
+            if let Some(encoder_name) = self.encoder_name().map(|e| e.to_string()) {
+                Codec::apply_raw_filter_caps(&encoder_name, &mut s);
             }
 
             gst::Caps::builder_full_with_any_features()
-                .structure(structure_builder.build())
+                .structure(s)
                 .build()
         } else {
             gst::Caps::builder("audio/x-raw").build()
