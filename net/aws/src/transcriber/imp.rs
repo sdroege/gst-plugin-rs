@@ -1673,10 +1673,14 @@ impl TranslationPadTask {
             let _ = self.pad.obj().pause_task();
 
             gst::info!(CAT, imp = self.pad, "Sending eos");
-            return self
+            if !self
                 .pad
                 .obj()
-                .push_event(gst::event::Eos::builder().seqnum(self.seqnum).build());
+                .push_event(gst::event::Eos::builder().seqnum(self.seqnum).build())
+            {
+                gst::info!(CAT, imp = self.pad, "failed to push EOS");
+            }
+            return true;
         }
 
         /* next, push a gap if we're lagging behind the target position */
@@ -1771,9 +1775,7 @@ impl TranslationPadTask {
         for event in events.drain(..) {
             gst::info!(CAT, imp = self.pad, "Sending {event:?}");
             if !self.pad.obj().push_event(event) {
-                const ERR: &str = "Failed to send initial";
-                gst::error!(CAT, imp = self.pad, "{ERR}");
-                return Err(gst::error_msg!(gst::StreamError::Failed, ["{ERR}"]));
+                gst::info!(CAT, imp = self.pad, "Failed to send initial event");
             }
         }
 

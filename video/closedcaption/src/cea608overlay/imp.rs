@@ -150,10 +150,9 @@ impl Cea608Overlay {
             .set_channel(cea608_types::tables::Channel::ONE);
 
         if !self.srcpad.push_event(gst::event::Caps::new(&caps)) {
-            Err(gst::FlowError::NotNegotiated)
-        } else {
-            Ok(gst::FlowSuccess::Ok)
+            gst::info!(CAT, imp = self, "failed to push caps event");
         }
+        Ok(gst::FlowSuccess::Ok)
     }
 
     fn decode_cc_data(&self, state: &mut State, data: &[u8], pts: gst::ClockTime) {

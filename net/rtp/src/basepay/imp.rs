@@ -1342,13 +1342,13 @@ impl RtpBasePay2 {
         }
 
         gst::debug!(CAT, imp = self, "Forwarding event: {event:?}");
-        if self.src_pad.push_event(event) {
-            Ok(gst::FlowSuccess::Ok)
-        } else if self.src_pad.pad_flags().contains(gst::PadFlags::FLUSHING) {
-            Err(gst::FlowError::Flushing)
-        } else {
-            Err(gst::FlowError::Error)
+        if !self.src_pad.push_event(event)
+            && !self.src_pad.pad_flags().contains(gst::PadFlags::FLUSHING)
+        {
+            gst::info!(CAT, imp = self, "failed to push event");
         }
+
+        Ok(gst::FlowSuccess::Ok)
     }
 
     fn handle_ssrc_collision_event(&self, s: &gst::StructureRef) {

@@ -120,7 +120,7 @@ impl OnvifMetadataOverlay {
             let mut query = gst::query::Allocation::new(Some(&caps), false);
 
             if !self.srcpad.push_event(gst::event::Caps::new(&caps)) {
-                return Err(gst::FlowError::NotNegotiated);
+                gst::info!(CAT, imp = self, "Failed to push caps event");
             }
 
             if !self.srcpad.peer_query(&mut query)
@@ -142,10 +142,9 @@ impl OnvifMetadataOverlay {
             self.state.lock().unwrap().attach = false;
 
             if !self.srcpad.push_event(gst::event::Caps::new(&caps)) {
-                Err(gst::FlowError::NotNegotiated)
-            } else {
-                Ok(gst::FlowSuccess::Ok)
+                gst::info!(CAT, imp = self, "Failed to push caps event");
             }
+            Ok(gst::FlowSuccess::Ok)
         }
     }
 

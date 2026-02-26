@@ -410,8 +410,7 @@ impl InterSrcTask {
                 if imp.srcpad.push_event(evt.copy()).await {
                     gst::log!(CAT, imp = imp, "Pushed sticky event {evt:?}");
                 } else {
-                    gst::error!(CAT, imp = imp, "Failed to push sticky event {evt:?}");
-                    return Err(gst::FlowError::Error);
+                    gst::info!(CAT, imp = imp, "Failed to push sticky event {evt:?}");
                 }
             }
 

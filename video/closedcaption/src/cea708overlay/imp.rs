@@ -212,11 +212,10 @@ impl Cea708Overlay {
             .set_video_size(video_info.width(), video_info.height());
 
         if !self.srcpad.push_event(gst::event::Caps::new(&caps)) {
-            self.srcpad.mark_reconfigure();
-            Err(gst::FlowError::NotNegotiated)
-        } else {
-            Ok(gst::FlowSuccess::Ok)
+            gst::info!(CAT, imp = self, "failed to push caps event");
         }
+
+        Ok(gst::FlowSuccess::Ok)
     }
 
     fn have_cea608(

@@ -397,9 +397,10 @@ impl TranscriberSrcPad {
         if send_eos {
             let _ = self.pause_task();
 
-            return self
-                .obj()
+            self.obj()
                 .push_event(gst::event::Eos::builder().seqnum(seqnum).build());
+
+            return true;
         }
 
         for item in items.drain(..) {
@@ -1080,10 +1081,7 @@ impl Transcriber {
                     let sev = gst::event::StreamStart::builder("transcription")
                         .seqnum(e.seqnum())
                         .build();
-                    if !srcpad.push_event(sev) {
-                        gst::error!(CAT, obj = srcpad, "Failed to push stream start event");
-                        return false;
-                    }
+                    srcpad.push_event(sev);
 
                     let unsynced_pad = srcpad.imp().state.lock().unwrap().unsynced_pad.clone();
 
@@ -1091,10 +1089,7 @@ impl Transcriber {
                         let sev = gst::event::StreamStart::builder("unsynced-transcription")
                             .seqnum(e.seqnum())
                             .build();
-                        if !pad.push_event(sev) {
-                            gst::error!(CAT, obj = pad, "Failed to push stream start event");
-                            return false;
-                        }
+                        pad.push_event(sev);
                     }
 
                     if let Err(err) = srcpad.imp().start_task() {

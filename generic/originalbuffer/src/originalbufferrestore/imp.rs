@@ -251,7 +251,7 @@ impl OriginalBufferRestore {
         let meta_caps = &mut state.meta_caps;
         if &meta_caps.caps != ometa.caps() {
             if !self.src_pad.push_event(gst::event::Caps::new(ometa.caps())) {
-                return Err(gst::FlowError::NotNegotiated);
+                gst::info!(CAT, imp = self, "Failed to push caps event");
             }
             meta_caps.caps = ometa.caps().clone();
             meta_caps.vinfo = gst_video::VideoInfo::from_caps(&meta_caps.caps).ok();
