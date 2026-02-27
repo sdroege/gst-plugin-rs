@@ -157,7 +157,7 @@ impl ElementImpl for RtpRawVideoPay {
                         VideoFormat::V308,
                         VideoFormat::Uyvy,
                         VideoFormat::I420,
-                        //VideoFormat::Y41b, // TODO: needs rtp packet payloading with swizzling
+                        VideoFormat::Y41b,
                         VideoFormat::Uyvp,
                     ])
                     .height_range(1..=32767)
@@ -546,6 +546,62 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
                             dest_pgroup[3] = y2[1];
                             dest_pgroup[4] = *u;
                             dest_pgroup[5] = *v;
+                        }
+
+                        packed_len += length;
+                    }
+
+                    rtp_packet_builder = rtp_packet_builder.payload(&scratch_space[0..packed_len]);
+                }
+
+                // Planar YUV 4:1:1
+                // Samples are packed in order Cb0-Y0-Y1-Cr0-Y2-Y3
+                VideoFormat::Y41b => {
+                    use itertools::izip;
+
+                    let y_stride = vframe.plane_stride()[0] as usize;
+                    let u_stride = vframe.plane_stride()[1] as usize;
+                    let v_stride = vframe.plane_stride()[2] as usize;
+
+                    let [y_data, u_data, v_data, _] = vframe.planes_data();
+
+                    const PGROUP_SIZE_Y41B: usize = 6;
+                    const PGROUP_XINC_Y41B: usize = 4;
+
+                    let mut packed_len = 0;
+
+                    let scratch_space = &mut scratch_space_vec;
+
+                    let mut scratch_iter = scratch_space.chunks_exact_mut(PGROUP_SIZE_Y41B);
+
+                    for chunks in &packet.chunks {
+                        let y = chunks.y_off as usize;
+                        let x = chunks.x_off as usize;
+
+                        let length = chunks.length as usize;
+                        let n_pixels = (length / PGROUP_SIZE_Y41B) * PGROUP_XINC_Y41B;
+
+                        let y_line = y_data.chunks_exact(y_stride).nth(y).unwrap();
+                        let y_pixels = &y_line[x..][..n_pixels];
+
+                        let u_line = u_data.chunks_exact(u_stride).nth(y).unwrap();
+                        let u_pixels = &u_line[x / 4..][..n_pixels / 4];
+
+                        let v_line = v_data.chunks_exact(v_stride).nth(y).unwrap();
+                        let v_pixels = &v_line[x / 4..][..n_pixels / 4];
+
+                        for (y, u, v, dest_pgroup) in izip!(
+                            y_pixels.chunks_exact(4),
+                            u_pixels,
+                            v_pixels,
+                            scratch_iter.by_ref()
+                        ) {
+                            dest_pgroup[0] = *u;
+                            dest_pgroup[1] = y[0];
+                            dest_pgroup[2] = y[1];
+                            dest_pgroup[3] = *v;
+                            dest_pgroup[4] = y[2];
+                            dest_pgroup[5] = y[3];
                         }
 
                         packed_len += length;
