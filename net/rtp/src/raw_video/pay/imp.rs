@@ -1,6 +1,6 @@
 // GStreamer RTP Raw Video Payloader
 //
-// Copyright (C) 2023 Tim-Philipp Müller <tim centricular com>
+// Copyright (C) 2023-2026 Tim-Philipp Müller <tim centricular com>
 //
 // This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at
@@ -78,6 +78,8 @@ struct State {
     video_info: Option<VideoInfo>,
     packing_template: Option<FramePackingTemplate>,
     extended_seqnum: Wrapping<u32>,
+    // Temporary buffer that can be used for swizzling/packing pixels before payloading
+    scratch_space_vec: Vec<u8>,
 }
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
@@ -152,7 +154,7 @@ impl ElementImpl for RtpRawVideoPay {
                         VideoFormat::Rgba,
                         VideoFormat::Bgr,
                         VideoFormat::Bgra,
-                        // VideoFormat::v308, // TODO: needs rtp packet payloading with swizzling
+                        VideoFormat::V308,
                         VideoFormat::Uyvy,
                         //VideoFormat::I420, // TODO: needs rtp packet payloading with swizzling
                         //VideoFormat::Y41b, // TODO: needs rtp packet payloading with swizzling
@@ -390,19 +392,22 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
         let State {
             packing_template,
             extended_seqnum,
+            scratch_space_vec,
             ..
         } = &mut *state;
+
         let packing_template = packing_template.as_ref().unwrap();
 
-        // FIXME: v308 needs swizzling of the components
-        // FIXME: I420 + Y41B need to be packed into a temp buffer
-        if video_info.n_planes() != 1 {
-            todo!("more than 1 plane");
-        }
+        // Temporary buffer that can be used for swizzling/packing pixels before payloading
+        let mut scratch_space_vec = scratch_space_vec;
 
-        let data = vframe.plane_data(0).unwrap();
-        let stride = vframe.plane_stride()[0] as usize;
-        let pstride = vframe.comp_pstride(0) as usize;
+        // Only allocate heap memory if needed
+        let need_scratch_space =
+            video_info.n_planes() > 1 || video_info.format() == VideoFormat::V308;
+
+        if need_scratch_space {
+            scratch_space_vec.resize(packing_template.mtu, 0u8);
+        }
 
         let n_packets = packing_template.packets.len();
 
@@ -417,21 +422,78 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
                 .marker_bit(is_last)
                 .payload(hdr.as_slice());
 
-            for chunks in &packet.chunks {
-                let line_number = chunks.y_off as usize;
-                let pixel_offset = chunks.x_off as usize;
-                let length = chunks.length as usize;
+            match video_info.format() {
+                // Packed formats that can be payloaded directly as-is
+                VideoFormat::Rgb
+                | VideoFormat::Rgba
+                | VideoFormat::Bgr
+                | VideoFormat::Bgra
+                | VideoFormat::Uyvy => {
+                    let data = vframe.plane_data(0).unwrap();
+                    let stride = vframe.plane_stride()[0] as usize;
+                    let pstride = vframe.comp_pstride(0) as usize;
 
-                let line = data
-                    .chunks_exact(stride)
-                    .skip(field as usize)
-                    .nth(line_number)
-                    .unwrap();
+                    for chunks in &packet.chunks {
+                        let line_number = chunks.y_off as usize;
+                        let pixel_offset = chunks.x_off as usize;
 
-                let byte_offset = pixel_offset * pstride;
-                let pixels = &line[byte_offset..][..length];
+                        let length = chunks.length as usize;
 
-                rtp_packet_builder = rtp_packet_builder.payload(pixels);
+                        let line = data
+                            .chunks_exact(stride)
+                            .skip(field as usize)
+                            .nth(line_number)
+                            .unwrap();
+
+                        let byte_offset = pixel_offset * pstride;
+                        let pixels = &line[byte_offset..][..length];
+
+                        rtp_packet_builder = rtp_packet_builder.payload(pixels);
+                    }
+                }
+
+                // v308: Packed format, but components need to be swizzled for payloading
+                VideoFormat::V308 => {
+                    let data = vframe.plane_data(0).unwrap();
+                    let stride = vframe.plane_stride()[0] as usize;
+                    let pstride = vframe.comp_pstride(0) as usize;
+
+                    let mut packed_len = 0;
+
+                    let scratch_space = &mut scratch_space_vec;
+
+                    let mut scratch_iter = scratch_space.chunks_exact_mut(3);
+
+                    for chunks in &packet.chunks {
+                        let line_number = chunks.y_off as usize;
+                        let pixel_offset = chunks.x_off as usize;
+
+                        let length = chunks.length as usize;
+
+                        let line = data
+                            .chunks_exact(stride)
+                            .skip(field as usize)
+                            .nth(line_number)
+                            .unwrap();
+
+                        let byte_offset = pixel_offset * pstride;
+                        let pixels = &line[byte_offset..][..length];
+
+                        for (src_pixel, dest_pixel) in
+                            std::iter::zip(pixels.chunks_exact(3), &mut scratch_iter)
+                        {
+                            dest_pixel[0] = src_pixel[1]; // Cb
+                            dest_pixel[1] = src_pixel[0]; // Y
+                            dest_pixel[2] = src_pixel[2]; // Cr
+                        }
+
+                        packed_len += length;
+                    }
+
+                    rtp_packet_builder = rtp_packet_builder.payload(&scratch_space[0..packed_len]);
+                }
+
+                unexpected_fmt => todo!("Implement {unexpected_fmt:?}"),
             }
 
             self.obj().queue_packet(id.into(), rtp_packet_builder)?;
