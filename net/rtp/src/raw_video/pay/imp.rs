@@ -156,7 +156,7 @@ impl ElementImpl for RtpRawVideoPay {
                         VideoFormat::Bgra,
                         VideoFormat::V308,
                         VideoFormat::Uyvy,
-                        //VideoFormat::I420, // TODO: needs rtp packet payloading with swizzling
+                        VideoFormat::I420,
                         //VideoFormat::Y41b, // TODO: needs rtp packet payloading with swizzling
                         VideoFormat::Uyvp,
                     ])
@@ -493,6 +493,68 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
                     rtp_packet_builder = rtp_packet_builder.payload(&scratch_space[0..packed_len]);
                 }
 
+                // Planar YUV 4:2:0, needs to be packed for payloading
+                VideoFormat::I420 => {
+                    use itertools::izip;
+
+                    let y_stride = vframe.plane_stride()[0] as usize;
+                    let u_stride = vframe.plane_stride()[1] as usize;
+                    let v_stride = vframe.plane_stride()[2] as usize;
+
+                    let [y_data, u_data, v_data, _] = vframe.planes_data();
+
+                    const PGROUP_SIZE_I420: usize = 6;
+                    const PGROUP_XINC_I420: usize = 2;
+
+                    let mut packed_len = 0;
+
+                    let scratch_space = &mut scratch_space_vec;
+
+                    let mut scratch_iter = scratch_space.chunks_exact_mut(PGROUP_SIZE_I420);
+
+                    for chunks in &packet.chunks {
+                        let y = chunks.y_off as usize;
+                        let x = chunks.x_off as usize;
+
+                        let length = chunks.length as usize;
+                        let n_pixels = (length / PGROUP_SIZE_I420) * PGROUP_XINC_I420;
+
+                        // We iterate over the Y plane in steps of two lines (to match Cb/Cr subsampling)
+                        let y_lines = y_data.chunks_exact(2 * y_stride).nth(y / 2).unwrap();
+
+                        let (y_line1, y_line2) = y_lines.split_at(y_stride);
+
+                        let y1_pixels = &y_line1[x..][..n_pixels];
+                        let y2_pixels = &y_line2[x..][..n_pixels];
+
+                        let u_line = u_data.chunks_exact(u_stride).nth(y / 2).unwrap();
+                        let u_pixels = &u_line[x / 2..][..n_pixels / 2];
+
+                        let v_line = v_data.chunks_exact(v_stride).nth(y / 2).unwrap();
+                        let v_pixels = &v_line[x / 2..][..n_pixels / 2];
+
+                        for (y1, y2, u, v, dest_pgroup) in izip!(
+                            y1_pixels.chunks_exact(2),
+                            y2_pixels.chunks_exact(2),
+                            u_pixels,
+                            v_pixels,
+                            scratch_iter.by_ref()
+                        ) {
+                            dest_pgroup[0] = y1[0];
+                            dest_pgroup[1] = y1[1];
+                            dest_pgroup[2] = y2[0];
+                            dest_pgroup[3] = y2[1];
+                            dest_pgroup[4] = *u;
+                            dest_pgroup[5] = *v;
+                        }
+
+                        packed_len += length;
+                    }
+
+                    rtp_packet_builder = rtp_packet_builder.payload(&scratch_space[0..packed_len]);
+                }
+
+                // Unexpected video format
                 unexpected_fmt => todo!("Implement {unexpected_fmt:?}"),
             }
 
