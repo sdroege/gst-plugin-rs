@@ -460,24 +460,20 @@ impl<T: Send + 'static> AsRef<T> for Async<T> {
 
 impl<T: Send + 'static> Drop for Async<T> {
     fn drop(&mut self) {
-        if let Some(io) = self.io.take() {
-            if let Some(throttling_sched_hdl) = self.throttling_sched_hdl.take() {
+        match self.throttling_sched_hdl.take() {
+            Some(throttling_sched_hdl) => {
+                // The reactor for this source might run in another thread
                 if let Some(sched) = throttling_sched_hdl.upgrade() {
-                    let source = Arc::clone(&self.source);
-                    sched.spawn_and_unpark(async move {
-                        Reactor::with_mut(|reactor| {
-                            if let Err(err) = reactor.remove_io(&source) {
-                                gst::error!(
-                                    RUNTIME_CAT,
-                                    "Failed to remove fd {:?}: {err}",
-                                    source.registration,
-                                );
-                            }
-                        });
-                        drop(io);
-                    });
+                    if let Err(err) = sched.remove_io(&self.source) {
+                        gst::error!(
+                            RUNTIME_CAT,
+                            "Failed to remove fd {:?}: {err}",
+                            self.source.registration,
+                        );
+                    }
                 }
-            } else {
+            }
+            _ => {
                 Reactor::with_mut(|reactor| {
                     if let Err(err) = reactor.remove_io(&self.source) {
                         gst::error!(
