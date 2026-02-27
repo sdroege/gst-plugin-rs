@@ -24,7 +24,7 @@
  *
  * ## Usage
  *
- * ```ignore
+ * ```
  * use futures::prelude::*;
  * use gst::prelude::*;
  *

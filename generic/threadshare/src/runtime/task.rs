@@ -99,7 +99,7 @@ impl From<TransitionError> for gst::ErrorMessage {
 /// A state transition occurs as a result of a triggering event.
 /// The triggering event is asynchronously handled by a state machine
 /// running on a [`Context`].
-#[must_use = "This `TransitionStatus` may be `Pending`. In most cases it should be awaited. See `await_maybe_on_context`"]
+#[must_use = "This `TransitionStatus` may be `Pending`. In most cases it should be awaited. See `block_on_or_add_subtask_then`"]
 pub enum TransitionStatus {
     /// Transition result is ready.
     Ready(Result<TransitionOk, TransitionError>),
@@ -125,7 +125,7 @@ impl TransitionStatus {
     /// This function allows getting the `TransitionError` when
     /// the transition result is ready without `await`ing nor blocking.
     ///
-    /// See also [`Self::await_maybe_on_context`].
+    /// See also [`Self::block_on_or_add_subtask_then`].
     // FIXME once stabilized, this could use https://github.com/rust-lang/rust/issues/84277
     pub fn check(self) -> Result<TransitionStatus, TransitionError> {
         match self {
@@ -139,7 +139,7 @@ impl TransitionStatus {
     /// Notes:
     ///
     /// - If you need to execute code after the transition succeeds or fails,
-    ///   see [`block_on_or_add_subtask_then`].
+    ///   see [`Self::block_on_or_add_subtask_then`].
     /// - When running in an `async` block within a running transition or
     ///   task iteration, don't await for the transition as it would deadlock.
     ///   Use [`Self::check`] to make sure the state transition is valid.
@@ -280,10 +280,10 @@ impl TransitionStatus {
     /// Blocks on this state transition to complete, or adds a subtask if running on a [`Context`]
     /// executing the provided function after the transition succeeds or fails.
     ///
-    /// Compared to [`block_on_or_addsubtask`], this function also executes the provieded
-    /// `func` after the transition succeeded or failed. Code following [`block_on_or_addsubtask`]
-    /// can actually be executed before the transition if a subtask was added and the returned
-    /// `Result` might not reflect the actual transition result.
+    /// This function executes the provided `func` after the transition succeeded or failed.
+    /// Code following `block_on_or_addsubtask_then` can actually be executed before
+    /// the transition if a subtask was added and the returned `Result` might not reflect
+    /// the actual transition result.
     ///
     /// If the transition is already complete, `func` is executed immediately.
     ///
@@ -297,9 +297,21 @@ impl TransitionStatus {
     ///
     /// ## Example
     ///
-    /// ```ignore
-    /// # use gstthreadshare::runtime::task::{Task, TransitionOk, TransitionError};
-    /// # async fn async_fn() -> Result<TransitionOk, TransitionError> {
+    /// ```
+    /// # use gstthreadshare::runtime::task::{Task, TaskState, TransitionOk, TransitionError};
+    /// # use gst::{glib, subclass::prelude::ObjectSubclassExt};
+    /// # glib::wrapper! { pub struct MinimalObject(ObjectSubclass<MinimalImp>); }
+    /// # #[derive(Default)]
+    /// # pub struct MinimalImp;
+    /// # #[glib::object_subclass]
+    /// # impl gst::subclass::prelude::ObjectSubclass for MinimalImp {
+    /// #     const NAME: &'static str = "MinimalObject";
+    /// #     type Type = MinimalObject;
+    /// #     type ParentType = glib::Object;
+    /// # }
+    /// # impl gst::subclass::prelude::ObjectImpl for MinimalImp {}
+    /// # impl MinimalImp {
+    /// fn stop(&self) -> Result<(), gst::ErrorMessage> {
     /// # let task = Task::default();
     ///   task
     ///       .stop()
@@ -308,10 +320,11 @@ impl TransitionStatus {
     ///           // it will be executed after the transition succeeds or fails
     ///
     ///           if res.is_ok() {
+    /// #             let CAT = gst::DebugCategory::new("ts-test", gst::DebugColorFlags::empty(), Some("ts test"));
     ///               gst::debug!(CAT, obj = elem, "Stopped");
     ///           }
     ///       })
-    /// # Ok(flush_ok)
+    /// }
     /// # }
     /// ```
     pub fn block_on_or_add_subtask_then<T, F>(
@@ -1515,7 +1528,6 @@ mod tests {
         let start_status = task.start().check().unwrap();
 
         block_on(prepared_receiver.next()).unwrap();
-        // also tests await_maybe_on_context
         assert_eq!(
             prepare_status.block_on_or_add_subtask(&obj).unwrap(),
             Complete {
