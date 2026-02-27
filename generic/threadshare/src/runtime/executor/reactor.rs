@@ -56,11 +56,131 @@ thread_local! {
 }
 
 #[derive(Debug)]
-pub(super) struct Reactor {
+pub(super) struct IOHandler {
     /// Portable bindings to epoll/kqueue/event ports/wepoll.
     ///
     /// This is where I/O is polled, producing I/O events.
     poller: Poller,
+
+    /// Registered sources.
+    sources: Slab<Arc<Source>>,
+
+    /// Temporary storage for I/O events when polling the reactor.
+    ///
+    /// Holding a lock on this event list implies the exclusive right to poll I/O.
+    events: Events,
+}
+
+impl IOHandler {
+    fn clear(&mut self) {
+        self.sources.drain().for_each(|s| {
+            let _ = s.registration.delete(&self.poller);
+        });
+        self.events.clear();
+    }
+
+    fn insert_io(&mut self, raw: Registration) -> io::Result<Arc<Source>> {
+        // Create an I/O source for this file descriptor.
+        let source = {
+            let key = self.sources.vacant_entry().key();
+            let source = Arc::new(Source {
+                registration: raw,
+                key,
+                state: Default::default(),
+            });
+            self.sources.insert(source.clone());
+            source
+        };
+
+        // Register the file descriptor.
+        if let Err(err) = source.registration.add(&self.poller, source.key) {
+            gst::error!(
+                crate::runtime::RUNTIME_CAT,
+                "Failed to register fd {:?}: {}",
+                source.registration,
+                err,
+            );
+            self.sources.remove(source.key);
+            return Err(err);
+        }
+
+        Ok(source)
+    }
+
+    /// Deregisters an I/O source from the reactor.
+    pub fn remove_io(&mut self, source: &Source) -> io::Result<()> {
+        self.sources.remove(source.key);
+        source.registration.delete(&self.poller)
+    }
+
+    fn process(&mut self, tick: usize, wakers: &mut Vec<Waker>) -> io::Result<()> {
+        self.events.clear();
+
+        // Block on I/O events.
+        match self.poller.wait(&mut self.events, Some(Duration::ZERO)) {
+            // No I/O events occurred.
+            Ok(0) => Ok(()),
+            // At least one I/O event occurred.
+            Ok(_) => {
+                for ev in self.events.iter() {
+                    // Check if there is a source in the table with this key.
+                    if let Some(source) = self.sources.get(ev.key) {
+                        let mut state = source.state.lock().unwrap();
+
+                        // Collect wakers if any event was emitted.
+                        for &(dir, emitted) in &[(WRITE, ev.writable), (READ, ev.readable)] {
+                            if emitted {
+                                state[dir].tick = tick;
+                                state[dir].drain_into(wakers);
+                            }
+                        }
+
+                        // Re-register if there are still writers or readers. The can happen if
+                        // e.g. we were previously interested in both readability and writability,
+                        // but only one of them was emitted.
+                        if !state[READ].is_empty() || !state[WRITE].is_empty() {
+                            // Create the event that we are interested in.
+                            let event = {
+                                let mut event = Event::none(source.key);
+                                event.readable = !state[READ].is_empty();
+                                event.writable = !state[WRITE].is_empty();
+                                event
+                            };
+
+                            // Register interest in this event.
+                            source.registration.modify(&self.poller, event)?;
+                        }
+                    }
+                }
+
+                Ok(())
+            }
+
+            // The syscall was interrupted.
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => Ok(()),
+
+            // An actual error occurred.
+            Err(err) => Err(err),
+        }
+    }
+}
+
+impl Default for IOHandler {
+    fn default() -> Self {
+        IOHandler {
+            poller: Poller::new().expect("cannot initialize I/O event notification"),
+            sources: Default::default(),
+            events: Events::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(super) struct Reactor {
+    /// I/O event handler.
+    ///
+    /// This is where I/O sources are registered, I/O is polled, producing I/O events.
+    pub(super) io_handler: Arc<Mutex<IOHandler>>,
 
     /// Ticker bumped before polling.
     ///
@@ -81,14 +201,6 @@ pub(super) struct Reactor {
 
     /// List of wakers to wake when reacting.
     wakers: Vec<Waker>,
-
-    /// Registered sources.
-    sources: Slab<Arc<Source>>,
-
-    /// Temporary storage for I/O events when polling the reactor.
-    ///
-    /// Holding a lock on this event list implies the exclusive right to poll I/O.
-    events: Events,
 
     /// An ordered map of registered regular timers.
     ///
@@ -116,14 +228,12 @@ pub(super) struct Reactor {
 impl Reactor {
     fn new(max_throttling: Duration) -> Self {
         Reactor {
-            poller: Poller::new().expect("cannot initialize I/O event notification"),
+            io_handler: Default::default(),
             ticker: AtomicUsize::new(0),
             timers_check_instant: Instant::now(),
             time_slice_end: Instant::now(),
             half_max_throttling: max_throttling / 2,
             wakers: Vec::new(),
-            sources: Slab::new(),
-            events: Events::new(),
             timers: BTreeMap::new(),
             after_timers: BTreeMap::new(),
             timer_ops: ConcurrentQueue::bounded(1000),
@@ -148,8 +258,7 @@ impl Reactor {
             cur_reactor.borrow_mut().as_mut().map(|reactor| {
                 reactor.ticker = AtomicUsize::new(0);
                 reactor.wakers.clear();
-                reactor.sources.clear();
-                reactor.events.clear();
+                reactor.io_handler.lock().unwrap().clear();
                 reactor.timers.clear();
                 reactor.after_timers.clear();
                 while !reactor.timer_ops.is_empty() {
@@ -227,38 +336,13 @@ impl Reactor {
     }
 
     /// Registers an I/O source in the reactor.
-    pub fn insert_io(&mut self, raw: Registration) -> io::Result<Arc<Source>> {
-        // Create an I/O source for this file descriptor.
-        let source = {
-            let key = self.sources.vacant_entry().key();
-            let source = Arc::new(Source {
-                registration: raw,
-                key,
-                state: Default::default(),
-            });
-            self.sources.insert(source.clone());
-            source
-        };
-
-        // Register the file descriptor.
-        if let Err(err) = source.registration.add(&self.poller, source.key) {
-            gst::error!(
-                crate::runtime::RUNTIME_CAT,
-                "Failed to register fd {:?}: {}",
-                source.registration,
-                err,
-            );
-            self.sources.remove(source.key);
-            return Err(err);
-        }
-
-        Ok(source)
+    pub fn insert_io(&self, raw: Registration) -> io::Result<Arc<Source>> {
+        self.io_handler.lock().unwrap().insert_io(raw)
     }
 
     /// Deregisters an I/O source from the reactor.
-    pub fn remove_io(&mut self, source: &Source) -> io::Result<()> {
-        self.sources.remove(source.key);
-        source.registration.delete(&self.poller)
+    pub fn remove_io(&self, source: &Source) -> io::Result<()> {
+        self.io_handler.lock().unwrap().remove_io(source)
     }
 
     /// Registers a regular timer in the reactor.
@@ -402,54 +486,12 @@ impl Reactor {
         // Bump the ticker before polling I/O.
         let tick = self.ticker.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
 
-        self.events.clear();
-
         // Block on I/O events.
-        let res = match self.poller.wait(&mut self.events, Some(Duration::ZERO)) {
-            // No I/O events occurred.
-            Ok(0) => Ok(()),
-            // At least one I/O event occurred.
-            Ok(_) => {
-                for ev in self.events.iter() {
-                    // Check if there is a source in the table with this key.
-                    if let Some(source) = self.sources.get(ev.key) {
-                        let mut state = source.state.lock().unwrap();
-
-                        // Collect wakers if any event was emitted.
-                        for &(dir, emitted) in &[(WRITE, ev.writable), (READ, ev.readable)] {
-                            if emitted {
-                                state[dir].tick = tick;
-                                state[dir].drain_into(&mut self.wakers);
-                            }
-                        }
-
-                        // Re-register if there are still writers or readers. The can happen if
-                        // e.g. we were previously interested in both readability and writability,
-                        // but only one of them was emitted.
-                        if !state[READ].is_empty() || !state[WRITE].is_empty() {
-                            // Create the event that we are interested in.
-                            let event = {
-                                let mut event = Event::none(source.key);
-                                event.readable = !state[READ].is_empty();
-                                event.writable = !state[WRITE].is_empty();
-                                event
-                            };
-
-                            // Register interest in this event.
-                            source.registration.modify(&self.poller, event)?;
-                        }
-                    }
-                }
-
-                Ok(())
-            }
-
-            // The syscall was interrupted.
-            Err(err) if err.kind() == io::ErrorKind::Interrupted => Ok(()),
-
-            // An actual error occureed.
-            Err(err) => Err(err),
-        };
+        let res = self
+            .io_handler
+            .lock()
+            .unwrap()
+            .process(tick, &mut self.wakers);
 
         // Wake up ready tasks.
         if !self.wakers.is_empty() {
@@ -608,7 +650,8 @@ impl Source {
                 };
 
                 // Register interest in it.
-                self.registration.modify(&reactor.poller, event)?;
+                self.registration
+                    .modify(&reactor.io_handler.lock().unwrap().poller, event)?;
             }
 
             Poll::Pending
@@ -811,7 +854,7 @@ impl<H: Borrow<Async<T>> + Clone, T: Send + 'static> Future for Ready<H, T> {
                     .borrow()
                     .source
                     .registration
-                    .modify(&reactor.poller, event)?;
+                    .modify(&reactor.io_handler.lock().unwrap().poller, event)?;
             }
 
             Poll::Pending

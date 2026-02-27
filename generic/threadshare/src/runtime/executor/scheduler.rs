@@ -137,6 +137,8 @@ pub(super) struct Throttling {
     must_unpark_cvar: Condvar,
     #[cfg(feature = "tuning")]
     parked_duration: AtomicU64,
+    // this is needed to make sure sources are unregistered when stopping the scheduler
+    io_handler: Arc<Mutex<super::reactor::IOHandler>>,
 }
 
 impl Throttling {
@@ -157,11 +159,14 @@ impl Throttling {
 
                 let handle = CURRENT_SCHEDULER.with(|cur_sched| {
                     Reactor::init(max_throttling);
-                    let handle = ThrottlingHandle::new(Arc::new(Throttling {
-                        context_name: context_name.clone(),
-                        max_throttling,
-                        ..Default::default()
-                    }));
+                    let handle = Reactor::with(|reactor| {
+                        ThrottlingHandle::new(Arc::new(Throttling {
+                            context_name: context_name.clone(),
+                            max_throttling,
+                            io_handler: reactor.io_handler.clone(),
+                            ..Default::default()
+                        }))
+                    });
 
                     cur_sched.set(Scheduler::Throttling(handle.downgrade())).expect("new thread");
 
@@ -346,6 +351,20 @@ impl ThrottlingHandleInner {
     fn context_name(&self) -> &str {
         self.scheduler.context_name.as_ref()
     }
+
+    fn remove_io(
+        &self,
+        source: &Arc<super::reactor::Source>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.scheduler
+            .io_handler
+            .lock()
+            // this is called by drop implementations => make sure not to panic
+            .map_err(|_err| std::sync::PoisonError::new(()))?
+            .remove_io(source)?;
+
+        Ok(())
+    }
 }
 
 impl Drop for ThrottlingHandleInner {
@@ -479,6 +498,14 @@ impl ThrottlingHandle {
     pub async fn drain_sub_tasks(&self, task_id: TaskId) -> SubTaskOutput {
         let sub_tasks_fut = self.0.scheduler.task_queue.drain_sub_tasks(task_id);
         sub_tasks_fut.await
+    }
+
+    /// Synchronously removes the I/O source from the reactor.
+    pub(super) fn remove_io(
+        &self,
+        source: &Arc<super::reactor::Source>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.0.remove_io(source)
     }
 }
 
