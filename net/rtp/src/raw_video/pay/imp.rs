@@ -452,6 +452,26 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
                     }
                 }
 
+                // UYVP: packed 10-bit 4:2:2 YUV (U0-Y0-V0-Y1 U2-Y2-V2-Y3 U4 ...), 2 pixels in 5 bytes
+                VideoFormat::Uyvp => {
+                    let data = vframe.plane_data(0).unwrap();
+                    let stride = vframe.plane_stride()[0] as usize;
+
+                    for chunks in &packet.chunks {
+                        let line_number = chunks.y_off as usize;
+                        let pixel_offset = chunks.x_off as usize;
+
+                        let length = chunks.length as usize;
+
+                        let line = data.chunks_exact(stride).nth(line_number).unwrap();
+
+                        let byte_offset = (pixel_offset / 2) * 5;
+                        let pixels = &line[byte_offset..][..length];
+
+                        rtp_packet_builder = rtp_packet_builder.payload(pixels);
+                    }
+                }
+
                 // v308: Packed format, but components need to be swizzled for payloading
                 VideoFormat::V308 => {
                     let data = vframe.plane_data(0).unwrap();
