@@ -46,21 +46,21 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rtpL8depay2",
-        gst::Rank::MARGINAL,
+        gst::Rank::PRIMARY,
         RtpL8Depay::static_type(),
     )?;
 
     gst::Element::register(
         Some(plugin),
         "rtpL16depay2",
-        gst::Rank::MARGINAL,
+        gst::Rank::PRIMARY,
         RtpL16Depay::static_type(),
     )?;
 
     gst::Element::register(
         Some(plugin),
         "rtpL24depay2",
-        gst::Rank::MARGINAL,
+        gst::Rank::PRIMARY,
         RtpL24Depay::static_type(),
     )?;
 

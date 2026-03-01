@@ -21,7 +21,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rtpjpegpay2",
-        gst::Rank::MARGINAL,
+        gst::Rank::PRIMARY,
         RtpJpegPay::static_type(),
     )
 }

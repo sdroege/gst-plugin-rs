@@ -12631,7 +12631,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpL16pay2": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
@@ -12659,7 +12659,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpL20depay": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
@@ -12741,7 +12741,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpL24pay2": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
@@ -12769,7 +12769,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpL8depay2": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
@@ -12796,7 +12796,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpL8pay2": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
@@ -12824,7 +12824,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpac3depay2": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
@@ -12850,7 +12850,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpac3pay2": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
@@ -12904,7 +12904,7 @@
                         "writable": true
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpamrdepay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
@@ -12930,7 +12930,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpamrpay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
@@ -13012,7 +13012,7 @@
                         "writable": true
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpav1depay": {
                 "author": "Vivienne Watermeier <vwatermeier@igalia.com>",
@@ -13065,7 +13065,7 @@
                         "writable": true
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpav1pay": {
                 "author": "Vivienne Watermeier <vwatermeier@igalia.com>",
@@ -13092,7 +13092,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpgccbwe": {
                 "author": "Thibault Saunier <tsaunier@igalia.com>",
@@ -13200,7 +13200,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpjpegpay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
@@ -13226,7 +13226,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpklvdepay2": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
@@ -13252,7 +13252,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpklvpay2": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
@@ -13278,7 +13278,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpmp2tdepay2": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
@@ -13320,7 +13320,7 @@
                         "writable": true
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpmp2tpay2": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
@@ -13346,7 +13346,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpmp4adepay2": {
                 "author": "François Laignel <francois centricular com>",
@@ -13372,7 +13372,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpmp4apay2": {
                 "author": "François Laignel <francois centricular com>",
@@ -13398,7 +13398,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpmp4gdepay2": {
                 "author": "François Laignel <francois centricular com>",
@@ -13424,7 +13424,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpmp4gpay2": {
                 "author": "François Laignel <francois centricular com>",
@@ -13478,7 +13478,7 @@
                         "writable": true
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpmparobustdepay2": {
                 "author": "François Laignel <francois centricular com>",
@@ -13504,7 +13504,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpopusdepay2": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
@@ -13530,7 +13530,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary + 1"
             },
             "rtpopuspay2": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
@@ -13570,7 +13570,7 @@
                         "writable": true
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary + 1"
             },
             "rtppcmadepay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
@@ -13597,7 +13597,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtppcmapay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
@@ -13625,7 +13625,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtppcmudepay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
@@ -13652,7 +13652,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtppcmupay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
@@ -13680,7 +13680,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtprecv": {
                 "author": "Matthew Waters <matthew@centricular.com>",
@@ -13908,7 +13908,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpsmpte291pay": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
@@ -13934,7 +13934,7 @@
                         "presence": "always"
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpvp8depay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
@@ -13986,7 +13986,7 @@
                         "writable": true
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpvp8pay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
@@ -14066,7 +14066,7 @@
                         "writable": true
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpvp9depay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
@@ -14118,7 +14118,7 @@
                         "writable": true
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             },
             "rtpvp9pay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
@@ -14186,7 +14186,7 @@
                         "writable": true
                     }
                 },
-                "rank": "marginal"
+                "rank": "primary"
             }
         },
         "filename": "gstrsrtp",
@@ -16368,7 +16368,7 @@
                 "kind": "object",
                 "properties": {
                     "audio-caps": {
-                        "blurb": "Governs what audio codecs will be proposed. Valid values: [audio/x-opus; audio/x-raw, format=(string)S24BE, layout=(string)interleaved, rate=(int)[ 1, 2147483647 ], channels=(int)[ 1, 2147483647 ]; audio/x-raw, format=(string)S16BE, layout=(string)interleaved, rate=(int)[ 1, 2147483647 ], channels=(int)[ 1, 2147483647 ]; audio/x-raw, format=(string)U8, layout=(string)interleaved, rate=(int)[ 1, 2147483647 ], channels=(int)[ 1, 2147483647 ]]",
+                        "blurb": "Governs what audio codecs will be proposed. Valid values: [audio/x-opus; audio/x-raw, rate=(int)[ 1, 2147483647 ], channels=(int)[ 1, 2147483647 ], layout=(string)interleaved, format=(string)S24BE; audio/x-raw, rate=(int)[ 1, 2147483647 ], channels=(int)[ 1, 2147483647 ], layout=(string)interleaved, format=(string)S16BE; audio/x-raw, rate=(int)[ 1, 2147483647 ], channels=(int)[ 1, 2147483647 ], layout=(string)interleaved, format=(string)U8]",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,

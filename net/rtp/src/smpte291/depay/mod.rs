@@ -22,7 +22,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rtpsmpte291depay",
-        gst::Rank::MARGINAL,
+        gst::Rank::PRIMARY,
         RtpSmpte291Depay::static_type(),
     )
 }

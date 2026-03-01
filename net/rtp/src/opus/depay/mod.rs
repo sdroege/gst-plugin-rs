@@ -22,7 +22,10 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rtpopusdepay2",
-        gst::Rank::MARGINAL,
+        // +1 because unlike all other (de)payloaders, Opus was using
+        // PRIMARY instead of SECONDARY. See:
+        // https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/10940
+        gst::Rank::PRIMARY + 1,
         RtpOpusDepay::static_type(),
     )
 }

@@ -50,13 +50,13 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rtppcmadepay2",
-        gst::Rank::MARGINAL,
+        gst::Rank::PRIMARY,
         RtpPcmaDepay::static_type(),
     )?;
     gst::Element::register(
         Some(plugin),
         "rtppcmudepay2",
-        gst::Rank::MARGINAL,
+        gst::Rank::PRIMARY,
         RtpPcmuDepay::static_type(),
     )
 }
