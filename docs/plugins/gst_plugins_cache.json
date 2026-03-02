@@ -10161,6 +10161,32 @@
     "rsaudioparsers": {
         "description": "GStreamer Rust Audio Parsers Plugin",
         "elements": {
+            "ac4parse": {
+                "author": "Pablo García Sancho <pgarcia@fluendo.com>",
+                "description": "Parses AC4 audio streams",
+                "hierarchy": [
+                    "GstAc4Parse",
+                    "GstBaseParse",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Parser/Audio",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-ac4:\naudio/ac4:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "audio/x-ac4:\n         framed: true\n           rate: { (int)44100, (int)48000 }\n      framerate: [ 0/1, 2147483647/1 ]\nbitstream-version: { (int)1, (int)2 }\n      alignment: frame\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "primary"
+            },
             "s302mparse": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Extracts metadata from an S302M audio stream",

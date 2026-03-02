@@ -14,9 +14,11 @@
  */
 use gst::glib;
 
+mod ac4parse;
 mod s302mparse;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    ac4parse::register(plugin)?;
     s302mparse::register(plugin)?;
     Ok(())
 }
