@@ -1310,63 +1310,66 @@ impl SessionInner {
                 if i < request_src_pads.len() && request_src_pads[i].name().contains(media_name) {
                     let mut peer_caps = request_src_pads[i].peer_query_caps(None);
 
-                    peer_caps.fixate();
-
                     if peer_caps.is_any() {
                         matching_pad_found = true;
-                    } else if let Some(s) = peer_caps.structure(0) {
-                        for c in caps.iter() {
-                            gst::trace!(
-                                CAT,
-                                obj = element,
-                                "Comparing media caps: {c:#?} with peer caps: {peer_caps:#?} for pad {}",
-                                request_src_pads[i].name()
-                            );
-
-                            let codec_name = c.get::<&str>("encoding-name").unwrap();
-                            let media_type = c.get::<&str>("media").unwrap();
-
-                            gst::trace!(
-                                CAT,
-                                obj = element,
-                                "Comparing with codec name: {codec_name} and {s:?}",
-                            );
-
-                            if s.name().contains(codec_name.to_lowercase().as_str())
-                                || (s.name().contains(media_type))
-                                || s.has_field("encoding-name")
-                                    && s.get::<gst::List>("encoding-name").map_or_else(
-                                        |_| match s.get::<&str>("encoding-name") {
-                                            Ok(encoding_name) => encoding_name == codec_name,
-                                            _ => false,
-                                        },
-                                        |encoding_names| {
-                                            encoding_names.iter().any(|v| {
-                                                v.get::<&str>().is_ok_and(|encoding_name| {
-                                                    encoding_name == codec_name
-                                                })
-                                            })
-                                        },
-                                    )
-                            {
+                    } else {
+                        peer_caps.fixate();
+                        if let Some(s) = peer_caps.structure(0) {
+                            for c in caps.iter() {
                                 gst::trace!(
                                     CAT,
                                     obj = element,
-                                    "Using media: {media:#?} for pad {} with peer caps: {peer_caps:#?}",
+                                    "Comparing media caps: {c:#?} with peer caps: {peer_caps:#?} for pad {}",
                                     request_src_pads[i].name()
                                 );
 
-                                // use this pad to for this media, so set the media stream id to the pad
-                                let ws_pad =
-                                    request_src_pads[i].downcast_ref::<WebRTCSrcPad>().unwrap();
+                                let codec_name = c.get::<&str>("encoding-name").unwrap();
+                                let media_type = c.get::<&str>("media").unwrap();
 
-                                ws_pad.imp().set_stream_id(&stream_id);
+                                gst::trace!(
+                                    CAT,
+                                    obj = element,
+                                    "Comparing with codec name: {codec_name} and {s:?}",
+                                );
 
-                                self.pending_srcpads
-                                    .insert(stream_id.clone(), (ws_pad.clone(), caps.to_owned()));
+                                if s.name().contains(codec_name.to_lowercase().as_str())
+                                    || (s.name().contains(media_type))
+                                    || s.has_field("encoding-name")
+                                        && s.get::<gst::List>("encoding-name").map_or_else(
+                                            |_| match s.get::<&str>("encoding-name") {
+                                                Ok(encoding_name) => encoding_name == codec_name,
+                                                _ => false,
+                                            },
+                                            |encoding_names| {
+                                                encoding_names.iter().any(|v| {
+                                                    v.get::<&str>().is_ok_and(|encoding_name| {
+                                                        encoding_name == codec_name
+                                                    })
+                                                })
+                                            },
+                                        )
+                                {
+                                    gst::trace!(
+                                        CAT,
+                                        obj = element,
+                                        "Using media: {media:#?} for pad {} with peer caps: {peer_caps:#?}",
+                                        request_src_pads[i].name()
+                                    );
 
-                                matching_pad_found = true;
-                                break;
+                                    // use this pad to for this media, so set the media stream id to the pad
+                                    let ws_pad =
+                                        request_src_pads[i].downcast_ref::<WebRTCSrcPad>().unwrap();
+
+                                    ws_pad.imp().set_stream_id(&stream_id);
+
+                                    self.pending_srcpads.insert(
+                                        stream_id.clone(),
+                                        (ws_pad.clone(), caps.to_owned()),
+                                    );
+
+                                    matching_pad_found = true;
+                                    break;
+                                }
                             }
                         }
                     }
