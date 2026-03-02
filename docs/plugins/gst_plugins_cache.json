@@ -11311,6 +11311,20 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "textaccumulate-latency": {
+                        "blurb": "Amount of milliseconds to allow for text segmentation",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "3000",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
                     "transcribe-latency": {
                         "blurb": "Amount of milliseconds to allow for transcription",
                         "conditionally-available": false,

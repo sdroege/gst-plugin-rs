@@ -26,6 +26,7 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 const DEFAULT_TRANSCRIBE_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(1);
 const DEFAULT_LATENESS: gst::ClockTime = gst::ClockTime::ZERO;
 const DEFAULT_TRANSLATE_LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(500);
+const DEFAULT_TEXTACCUMULATE_LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(3_000);
 const DEFAULT_INPUT_LANG_CODE: &str = "en-US";
 const DEFAULT_OUTPUT_LANG_CODE: &str = "fr-FR";
 
@@ -43,6 +44,7 @@ struct Settings {
     transcribe_latency: gst::ClockTime,
     lateness: gst::ClockTime,
     translate_latency: gst::ClockTime,
+    textaccumulate_latency: gst::ClockTime,
 }
 
 impl Default for Settings {
@@ -52,6 +54,7 @@ impl Default for Settings {
             transcribe_latency: DEFAULT_TRANSCRIBE_LATENCY,
             lateness: DEFAULT_LATENESS,
             translate_latency: DEFAULT_TRANSLATE_LATENCY,
+            textaccumulate_latency: DEFAULT_TEXTACCUMULATE_LATENCY,
         }
     }
 }
@@ -152,11 +155,13 @@ impl TranslationBin {
             lateness,
             translate_latency,
             language_code,
+            textaccumulate_latency,
         } = self.settings.lock().unwrap().clone();
 
         let transcribe_latency_ms = transcribe_latency.mseconds() as u32;
         let lateness_ms = lateness.mseconds() as u32;
         let translate_latency_ms = translate_latency.mseconds() as u32;
+        let textaccumulate_latency_ms = textaccumulate_latency.mseconds() as u32;
 
         if transcriber.has_property_with_type("transcribe-latency", u32::static_type()) {
             transcriber.set_property("transcribe-latency", transcribe_latency_ms);
@@ -170,7 +175,9 @@ impl TranslationBin {
 
         transcriber.set_property("language-code", &language_code);
 
-        let accumulate = gst::ElementFactory::make("textaccumulate").build()?;
+        let accumulate = gst::ElementFactory::make("textaccumulate")
+            .property("latency", textaccumulate_latency_ms)
+            .build()?;
 
         let tee = gst::ElementFactory::make("tee")
             .property("allow-not-linked", true)
@@ -301,6 +308,13 @@ impl ObjectImpl for TranslationBin {
                     .mutable_ready()
                     .deprecated()
                     .build(),
+                glib::ParamSpecUInt::builder("textaccumulate-latency")
+                    .nick("textaccumulate latency")
+                    .blurb("Amount of milliseconds to allow for text segmentation")
+                    .default_value(DEFAULT_TEXTACCUMULATE_LATENCY.mseconds() as u32)
+                    .mutable_ready()
+                    .deprecated()
+                    .build(),
                 glib::ParamSpecString::builder("language-code")
                     .nick("Language Code")
                     .blurb("The language of the input stream")
@@ -347,6 +361,12 @@ impl ObjectImpl for TranslationBin {
                 self.state.lock().unwrap().transcriber =
                     value.get().expect("type checked upstream");
             }
+            "textaccumulate-latency" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.textaccumulate_latency = gst::ClockTime::from_mseconds(
+                    value.get::<u32>().expect("type checked upstream").into(),
+                );
+            }
             _ => unimplemented!(),
         }
     }
@@ -370,6 +390,10 @@ impl ObjectImpl for TranslationBin {
                 settings.language_code.to_value()
             }
             "transcriber" => self.state.lock().unwrap().transcriber.to_value(),
+            "textaccumulate-latency" => {
+                let settings = self.settings.lock().unwrap();
+                (settings.textaccumulate_latency.mseconds() as u32).to_value()
+            }
             _ => unimplemented!(),
         }
     }
