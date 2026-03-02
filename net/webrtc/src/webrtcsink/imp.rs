@@ -2886,6 +2886,20 @@ impl BaseWebRTCSink {
 
             session.last_sdp = None;
 
+            // Set transceiver direction to Inactive for removed streams before
+            // creating the offer, so the SDP reflects the removal.
+            for webrtc_pad in session.webrtc_pads.values() {
+                if let Some(ref name) = webrtc_pad.stream_name
+                    && (session.removed_streams.contains(name)
+                        || session.pending_removed_streams.contains(name))
+                {
+                    let transceiver = webrtc_pad
+                        .pad
+                        .property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
+                    transceiver.set_direction(gst_webrtc::WebRTCRTPTransceiverDirection::Inactive);
+                }
+            }
+
             let webrtcbin = session.webrtcbin.clone();
             drop(session);
 
