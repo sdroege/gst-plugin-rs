@@ -350,12 +350,14 @@ impl Accumulate {
                 ret
             }
             FlushStop(_) => {
+                let ret = gst::Pad::event_default(pad, Some(&*self.obj()), event);
+
                 if let Err(err) = self.start_srcpad_task() {
                     gst::error!(CAT, imp = self, "Failed to start srcpad task: {err}");
                     return false;
                 }
 
-                gst::Pad::event_default(pad, Some(&*self.obj()), event)
+                ret
             }
             StreamStart(_) => {
                 if let Err(err) = self.start_srcpad_task() {
