@@ -345,7 +345,7 @@ impl Accumulate {
                 gst::info!(CAT, imp = self, "received flush start, pausing");
                 let ret = gst::Pad::event_default(pad, Some(&*self.obj()), event);
                 let _ = self.state.lock().unwrap().accumulate_tx.take();
-                let _ = self.srcpad.pause_task();
+                let _ = self.srcpad.stop_task();
                 self.state.lock().unwrap().task_started = false;
                 ret
             }
