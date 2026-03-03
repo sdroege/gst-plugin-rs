@@ -4296,6 +4296,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-compress"
+version = "0.16.0-alpha"
+dependencies = [
+ "flate2",
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-app",
+ "gstreamer-base",
+ "gstreamer-check",
+ "tempfile",
+]
+
+[[package]]
 name = "gst-plugin-csound"
 version = "0.16.0-alpha"
 dependencies = [
@@ -4431,19 +4444,6 @@ dependencies = [
  "gstreamer",
  "gstreamer-base",
  "url",
-]
-
-[[package]]
-name = "gst-plugin-flate"
-version = "0.16.0-alpha"
-dependencies = [
- "flate2",
- "gst-plugin-version-helper",
- "gstreamer",
- "gstreamer-app",
- "gstreamer-base",
- "gstreamer-check",
- "tempfile",
 ]
 
 [[package]]

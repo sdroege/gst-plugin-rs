@@ -2768,6 +2768,165 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "compress": {
+        "description": "GStreamer plugin for lossless compression/decompression",
+        "elements": {
+            "deflatecompress": {
+                "author": "Daniel Morin <daniel.morin@collabora.com>",
+                "description": "Compress data using deflate (no checksum)",
+                "hierarchy": [
+                    "GstDeflateCompress",
+                    "GstFlateCompress",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Encoder/Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-deflate-compressed:\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "none"
+            },
+            "deflatedecompress": {
+                "author": "Daniel Morin <daniel.morin@collabora.com>",
+                "description": "Decompress deflate-compressed data",
+                "hierarchy": [
+                    "GstDeflateDecompress",
+                    "GstFlateDecompress",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Decoder/Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-deflate-compressed:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "none"
+            },
+            "zlibcompress": {
+                "author": "Daniel Morin <daniel.morin@collabora.com>",
+                "description": "Compress data using zlib (with checksum)",
+                "hierarchy": [
+                    "GstZlibCompress",
+                    "GstFlateCompress",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Encoder/Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-zlib-compressed:\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "none"
+            },
+            "zlibdecompress": {
+                "author": "Daniel Morin <daniel.morin@collabora.com>",
+                "description": "Decompress zlib-compressed data",
+                "hierarchy": [
+                    "GstZlibDecompress",
+                    "GstFlateDecompress",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Decoder/Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-zlib-compressed:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstcompress",
+        "license": "MPL-2.0",
+        "other-types": {
+            "GstFlateCompress": {
+                "hierarchy": [
+                    "GstFlateCompress",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "level": {
+                        "blurb": "Compression level (0=fast, 9=best)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "6",
+                        "max": "9",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                }
+            },
+            "GstFlateDecompress": {
+                "hierarchy": [
+                    "GstFlateDecompress",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object"
+            }
+        },
+        "package": "gst-plugin-compress",
+        "source": "gst-plugin-compress",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "csound": {
         "description": "GStreamer Audio Filter plugin based on Csound",
         "elements": {
@@ -4153,86 +4312,6 @@
         "other-types": {},
         "package": "gst-plugin-ffv1",
         "source": "gst-plugin-ffv1",
-        "tracers": {},
-        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-    },
-    "flate": {
-        "description": "GStreamer plugin for zlib and deflate compression/decompression",
-        "elements": {
-            "zlibcompress": {
-                "author": "Daniel Morin <daniel.morin@collabora.com>",
-                "description": "Compress data using zlib",
-                "hierarchy": [
-                    "GstZlibCompress",
-                    "GstBaseTransform",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Encoder/Generic",
-                "pad-templates": {
-                    "sink": {
-                        "caps": "ANY",
-                        "direction": "sink",
-                        "presence": "always"
-                    },
-                    "src": {
-                        "caps": "application/x-zlib-compressed:\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "properties": {
-                    "level": {
-                        "blurb": "Compression level (0=fast, 9=best)",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "6",
-                        "max": "9",
-                        "min": "0",
-                        "mutable": "playing",
-                        "readable": true,
-                        "type": "guint",
-                        "writable": true
-                    }
-                },
-                "rank": "none"
-            },
-            "zlibdecompress": {
-                "author": "Daniel Morin <daniel.morin@collabora.com>",
-                "description": "Decompress data using zlib",
-                "hierarchy": [
-                    "GstZlibDecompress",
-                    "GstBaseTransform",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Decoder/Generic",
-                "pad-templates": {
-                    "sink": {
-                        "caps": "application/x-zlib-compressed:\n",
-                        "direction": "sink",
-                        "presence": "always"
-                    },
-                    "src": {
-                        "caps": "ANY",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "rank": "none"
-            }
-        },
-        "filename": "gstflate",
-        "license": "MPL-2.0",
-        "other-types": {},
-        "package": "gst-plugin-flate",
-        "source": "gst-plugin-flate",
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },

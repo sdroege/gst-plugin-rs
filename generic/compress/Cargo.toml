@@ -1,21 +1,22 @@
 [package]
-name = "gst-plugin-flate"
+name = "gst-plugin-compress"
 version.workspace = true
 authors = ["Daniel Morin <daniel.morin@collabora.com>"]
 license = "MPL-2.0"
-description = "GStreamer plugin for zlib and deflate compression/decompression"
+description = "GStreamer plugin for lossless compression/decompression"
 repository.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-gst.workspace = true
+gst = { workspace = true, features = ["v1_18"] }
 gst-base.workspace = true
-flate2 = "1.0"
+flate2 = { version = "1.0", optional = true }
+# brotli = { version = "7", optional = true }   # future
 
 
 [lib]
-name = "gstflate"
+name = "gstcompress"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
@@ -28,6 +29,9 @@ tempfile = "3"
 gst-plugin-version-helper.workspace = true
 
 [features]
+default = ["flate"]
+flate = ["dep:flate2"]
+# brotli = ["dep:brotli"]   # future addition
 static = []
 capi = []
 doc = ["gst/v1_18"]

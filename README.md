@@ -29,7 +29,9 @@ You will find the following plugins in this repository:
 
     - `file`: A Rust implementation of the standard `filesrc` and `filesink` elements
 
-    - `flate`: General purpose lossless compression plugin.
+    - `compress`: General purpose lossless compression plugin.
+    
+      - flate: compress and decompress data using zlib and deflate
 
     - `gopbuffer`: Stores a minimum duration of data delimited by discrete GOPs (Group of Picture).
 

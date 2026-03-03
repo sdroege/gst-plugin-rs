@@ -18,7 +18,7 @@ option('whisper', type: 'feature', value: 'auto', description: 'Build whisper pl
 
 # generic
 option('file', type: 'feature', value: 'auto', description: 'Build file plugin')
-option('flate', type: 'feature', value: 'auto', description: 'Build flate plugin')
+option('compress', type: 'feature', value: 'auto', description: 'Build compress plugin')
 option('originalbuffer', type: 'feature', value: 'auto', description: 'Build originalbuffer plugin')
 option('gopbuffer', type: 'feature', value: 'auto', description: 'Build gopbuffer plugin')
 option('sodium', type: 'feature', value: 'auto', description: 'Build sodium plugin')

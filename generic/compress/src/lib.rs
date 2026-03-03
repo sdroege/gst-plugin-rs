@@ -9,24 +9,37 @@
 
 #![allow(clippy::non_send_fields_in_send_ty, unused_doc_comments)]
 
+#[cfg(not(any(feature = "flate")))]
+compile_error!("At least one compression feature must be enabled (e.g. --features flate).");
+
 /**
- * plugin-flate:
+ * plugin-compress:
+ *
+ * Plugin providing lossless generic compression and decompression elements.
  *
  * Since: plugins-rs-0.16
  */
 use gst::glib;
 
-mod zlibcompress;
-mod zlibdecompress;
+#[cfg(feature = "flate")]
+mod flate;
+#[cfg(feature = "flate")]
+mod flatecompress;
+#[cfg(feature = "flate")]
+mod flatedecompress;
 
+#[allow(unused_variables)]
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    zlibcompress::register(plugin)?;
-    zlibdecompress::register(plugin)?;
+    #[cfg(feature = "flate")]
+    {
+        flatecompress::register(plugin)?;
+        flatedecompress::register(plugin)?;
+    }
     Ok(())
 }
 
 gst::plugin_define!(
-    flate,
+    compress,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
     concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),

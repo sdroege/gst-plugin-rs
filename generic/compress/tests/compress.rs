@@ -17,9 +17,27 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstflate::plugin_register_static().unwrap();
+        gstcompress::plugin_register_static().unwrap();
     });
 }
+
+struct Compressor {
+    media_type: &'static str,
+    compress_element: &'static str,
+    decompress_element: &'static str,
+}
+
+const FLATE_ZLIB: Compressor = Compressor {
+    media_type: "application/x-zlib-compressed",
+    compress_element: "zlibcompress",
+    decompress_element: "zlibdecompress",
+};
+
+const FLATE_DEFLATE: Compressor = Compressor {
+    media_type: "application/x-deflate-compressed",
+    compress_element: "deflatecompress",
+    decompress_element: "deflatedecompress",
+};
 
 struct Pipeline(gst::Pipeline);
 
@@ -47,10 +65,10 @@ impl Pipeline {
                 MessageView::Eos(..) => break,
                 MessageView::Error(err) => {
                     panic!(
-                        "Error from {:?}: {} ({:?})",
-                        err.src().map(|s| s.path_string()),
-                        err.error(),
-                        err.debug()
+                        "Error from {src:?}: {error} ({debug:?})",
+                        src = err.src().map(|s| s.path_string()),
+                        error = err.error(),
+                        debug = err.debug()
                     );
                 }
                 _ => (),
@@ -86,18 +104,24 @@ fn compressible_data(size: usize) -> Vec<u8> {
     (0..size).map(|i| (i % 100) as u8).collect()
 }
 
+fn make_compress_harness(c: &Compressor) -> gst_check::Harness {
+    gst_check::Harness::new(c.compress_element)
+}
+
+fn make_decompress_harness(c: &Compressor) -> gst_check::Harness {
+    gst_check::Harness::new(c.decompress_element)
+}
+
 // direct compress + decompress pipeline
-// N frames produced by `videotestsrc` all emerge from `zlibdecompress`.
-#[test]
-fn test_frame_count() {
-    init();
+// N frames produced by the compressor all emerge from the decompressor.
+fn frame_count_impl(c: &Compressor) {
     const NUM_BUFFERS: usize = 5;
 
     let fixed_caps = gst::Caps::builder("application").build();
 
-    let mut h_compress = gst_check::Harness::new("zlibcompress");
+    let mut h_compress = make_compress_harness(c);
     h_compress.set_src_caps(fixed_caps.clone());
-    h_compress.set_sink_caps(gst::Caps::builder("application/x-zlib-compressed").build());
+    h_compress.set_sink_caps(gst::Caps::builder(c.media_type).build());
     h_compress.play();
 
     for _ in 0..NUM_BUFFERS {
@@ -106,11 +130,11 @@ fn test_frame_count() {
             .unwrap();
     }
 
-    let compressed_caps = gst::Caps::builder("application/x-zlib-compressed")
+    let compressed_caps = gst::Caps::builder(c.media_type)
         .field("original-caps", fixed_caps.clone())
         .build();
 
-    let mut h_decompress = gst_check::Harness::new("zlibdecompress");
+    let mut h_decompress = make_decompress_harness(c);
     h_decompress.set_src_caps(compressed_caps);
     h_decompress.set_sink_caps(fixed_caps);
     h_decompress.play();
@@ -128,9 +152,7 @@ fn test_frame_count() {
 
 // Compress → decompress is lossless, each frame is byte-for-byte identical
 // to the original produced by `videotestsrc`.
-#[test]
-fn test_data_integrity() {
-    init();
+fn data_integrity_impl(c: &Compressor) {
     const NUM_BUFFERS: i32 = 3;
 
     let Ok(pipeline) = gst::parse::launch(&format!(
@@ -138,7 +160,9 @@ fn test_data_integrity() {
          ! video/x-raw,format=RGB,width=32,height=24 \
          ! tee name=t \
            t. ! queue ! appsink name=original sync=false \
-           t. ! queue ! zlibcompress ! zlibdecompress ! appsink name=processed sync=false"
+           t. ! queue ! {compress} ! {decompress} ! appsink name=processed sync=false",
+        compress = c.compress_element,
+        decompress = c.decompress_element,
     )) else {
         println!("could not build pipeline");
         return;
@@ -174,13 +198,12 @@ fn test_data_integrity() {
 }
 
 // GDP file round-trip
-// Frames written through `zlibcompress ! gdppay ! filesink` are fully
-// recovered by `filesrc ! gdpdepay ! zlibdecompress`.
+// Frames written through `compress ! gdppay ! filesink` are fully
+// recovered by `filesrc ! gdpdepay ! decompress`.
 // The `original-caps` embedded in the compressed stream is carried by GDP,
-// so `zlibdecompress` can restore the correct srcpad caps
-#[test]
-fn test_gdp_file_roundtrip() {
-    init();
+// so the decompressor can restore the correct srcpad caps without out-of-band
+// information.
+fn gdp_file_roundtrip_impl(c: &Compressor) {
     const NUM_BUFFERS: i32 = 10;
 
     let dir = tempfile::TempDir::new().unwrap();
@@ -191,7 +214,8 @@ fn test_gdp_file_roundtrip() {
     let Ok(pipeline) = gst::parse::launch(&format!(
         "videotestsrc num-buffers={NUM_BUFFERS} \
          ! video/x-raw,format=RGB,width=32,height=24 \
-         ! zlibcompress ! gdppay ! filesink location={location_str}"
+         ! {compress} ! gdppay ! filesink location={location_str}",
+        compress = c.compress_element,
     )) else {
         println!("could not build write pipeline");
         return;
@@ -201,7 +225,8 @@ fn test_gdp_file_roundtrip() {
     // Read
     let Ok(pipeline) = gst::parse::launch(&format!(
         "filesrc location={location_str} \
-         ! gdpdepay ! zlibdecompress ! appsink name=sink sync=false"
+         ! gdpdepay ! {decompress} ! appsink name=sink sync=false",
+        decompress = c.decompress_element,
     )) else {
         println!("could not build read pipeline ");
         return;
@@ -223,15 +248,13 @@ fn test_gdp_file_roundtrip() {
     );
 }
 
-// Frames written through `zlibcompress ! filesink` (raw concatenated zlib
-// streams) are recovered by `filesrc ! zlibdecompress ! rawvideoparse`.
+// Frames written through `compress ! filesink` (raw concatenated compressed
+// streams) are recovered by `filesrc ! decompress ! rawvideoparse`.
 //
-// `zlibdecompress` uses `GstAdapter` to accumulate the arbitrary-sized
-// chunks produced by `filesrc` and `flate2::Decompress` to detect zlib
-// stream boundaries.
-#[test]
-fn test_raw_file_roundtrip() {
-    init();
+// The decompressor uses `GstAdapter` to accumulate the arbitrary-sized
+// chunks produced by `filesrc` and `flate2::Decompress` to detect stream
+// boundaries.
+fn raw_file_roundtrip_impl(c: &Compressor) {
     const NUM_BUFFERS: i32 = 10;
     const WIDTH: i32 = 32;
     const HEIGHT: i32 = 24;
@@ -246,19 +269,22 @@ fn test_raw_file_roundtrip() {
     let pipeline = gst::parse::launch(&format!(
         "videotestsrc num-buffers={NUM_BUFFERS} \
          ! video/x-raw,format={FORMAT_CAPS},width={WIDTH},height={HEIGHT} \
-         ! zlibcompress ! filesink location={location_str}"
+         ! {compress} ! filesink location={location_str}",
+        compress = c.compress_element,
     ))
     .expect("could not build write pipeline");
     Pipeline(pipeline.downcast::<gst::Pipeline>().unwrap()).into_completion();
 
-    // zlibdecompress reassembles complete frames from the raw byte
-    // stream using GstAdapter.  No caps are embedded, downstream need to
-    // specify what the stream contain in caps.
+    // The decompressor reassembles complete frames from the raw byte stream
+    // using GstAdapter. No caps are embedded; downstream specifies the format
+    // via rawvideoparse. The named decompressor element has fixed sink caps,
+    // so negotiation with filesrc completes automatically.
     let pipeline = gst::parse::launch(&format!(
         "filesrc location={location_str} \
-         ! zlibdecompress \
+         ! {decompress} \
          ! rawvideoparse format={FORMAT_PARSE} width={WIDTH} height={HEIGHT} \
-         ! appsink name=sink sync=false"
+         ! appsink name=sink sync=false",
+        decompress = c.decompress_element,
     ))
     .expect("could not build read pipeline");
     let pipeline = Pipeline(pipeline.downcast::<gst::Pipeline>().unwrap());
@@ -279,20 +305,16 @@ fn test_raw_file_roundtrip() {
 }
 
 // Level 9 produces smaller output than level 1 for compressible data.
-#[test]
-fn test_compression_level() {
-    init();
-
-    // Cycling value between 0 and 99 to have  to have enough repetition
-    // to be compressible, but also not constant which would be trivially
-    // compressible
+fn compression_level_impl(c: &Compressor) {
+    // Cycling values between 0 and 99: enough repetition to be compressible,
+    // but not constant (which would be trivially compressible at any level).
     let data = compressible_data(4096);
 
     let compressed_size = |level: u32| -> usize {
-        let mut h = gst_check::Harness::new("zlibcompress");
+        let mut h = make_compress_harness(c);
         h.element().unwrap().set_property("level", level);
         h.set_src_caps(gst::Caps::builder("application").build());
-        h.set_sink_caps(gst::Caps::builder("application/x-zlib-compressed").build());
+        h.set_sink_caps(gst::Caps::builder(c.media_type).build());
         h.play();
         h.push(gst::Buffer::from_slice(data.clone())).unwrap();
         h.pull().unwrap().size()
@@ -307,12 +329,9 @@ fn test_compression_level() {
     );
 }
 
-// `zlibcompress` srcpad caps carry `original-caps=(GstCaps)` containing
+// Compressor srcpad caps carry `original-caps=(GstCaps)` containing
 // the upstream video format.
-#[test]
-fn test_original_caps_embedded() {
-    init();
-
+fn original_caps_embedded_impl(c: &Compressor) {
     let raw_caps = gst::Caps::builder("video/x-raw")
         .field("format", "RGB")
         .field("width", 320i32)
@@ -320,7 +339,7 @@ fn test_original_caps_embedded() {
         .field("framerate", gst::Fraction::new(30, 1))
         .build();
 
-    let mut h = gst_check::Harness::new("zlibcompress");
+    let mut h = make_compress_harness(c);
     h.set_src_caps(raw_caps.clone());
     h.play();
 
@@ -344,7 +363,7 @@ fn test_original_caps_embedded() {
     };
 
     let s = compressed_caps.structure(0).unwrap();
-    assert_eq!(s.name(), "application/x-zlib-compressed");
+    assert_eq!(s.name(), c.media_type);
 
     let embedded = s
         .get::<gst::Caps>("original-caps")
@@ -355,12 +374,9 @@ fn test_original_caps_embedded() {
     );
 }
 
-// `zlibdecompress` srcpad caps are restored from the `original-caps` field
+// Decompressor srcpad caps are restored from the `original-caps` field
 // in the incoming compressed caps.
-#[test]
-fn test_srcpad_caps_restored() {
-    init();
-
+fn srcpad_caps_restored_impl(c: &Compressor) {
     let raw_caps = gst::Caps::builder("video/x-raw")
         .field("format", "RGB")
         .field("width", 320i32)
@@ -368,11 +384,11 @@ fn test_srcpad_caps_restored() {
         .field("framerate", gst::Fraction::new(30, 1))
         .build();
 
-    let compressed_caps = gst::Caps::builder("application/x-zlib-compressed")
+    let compressed_caps = gst::Caps::builder(c.media_type)
         .field("original-caps", raw_caps.clone())
         .build();
 
-    let mut h_compress = gst_check::Harness::new("zlibcompress");
+    let mut h_compress = make_compress_harness(c);
     h_compress.set_src_caps(raw_caps.clone());
     h_compress.play();
 
@@ -388,7 +404,7 @@ fn test_srcpad_caps_restored() {
     let _ = h_compress.pull_event();
     let compressed_buf = h_compress.pull().unwrap();
 
-    let mut h = gst_check::Harness::new("zlibdecompress");
+    let mut h = make_decompress_harness(c);
     h.set_src_caps(compressed_caps);
     h.play();
     h.push(compressed_buf).unwrap();
@@ -409,20 +425,17 @@ fn test_srcpad_caps_restored() {
 }
 
 // A compressed buffer split across two input buffers is correctly reassembled
-// as part of decompression
-#[test]
-fn test_fragmented_input_reassembly() {
-    init();
-
+// as part of decompression.
+fn fragmented_input_reassembly_impl(c: &Compressor) {
     let fixed_caps = gst::Caps::builder("application").build();
 
     // Use cycling data so the compressed output is large enough to split
     // into two non-trivial halves.
     let data = compressible_data(4096);
 
-    let mut h_compress = gst_check::Harness::new("zlibcompress");
+    let mut h_compress = make_compress_harness(c);
     h_compress.set_src_caps(fixed_caps.clone());
-    h_compress.set_sink_caps(gst::Caps::builder("application/x-zlib-compressed").build());
+    h_compress.set_sink_caps(gst::Caps::builder(c.media_type).build());
     h_compress.play();
     h_compress
         .push(gst::Buffer::from_slice(data.clone()))
@@ -432,11 +445,11 @@ fn test_fragmented_input_reassembly() {
     let compressed_map = compressed_buf.map_readable().unwrap();
     let mid = compressed_map.len() / 2;
 
-    let compressed_caps = gst::Caps::builder("application/x-zlib-compressed")
+    let compressed_caps = gst::Caps::builder(c.media_type)
         .field("original-caps", fixed_caps.clone())
         .build();
 
-    let mut h = gst_check::Harness::new("zlibdecompress");
+    let mut h = make_decompress_harness(c);
     h.set_src_caps(compressed_caps);
     h.set_sink_caps(fixed_caps);
     h.play();
@@ -450,7 +463,7 @@ fn test_fragmented_input_reassembly() {
         "first half alone should not have produced output"
     );
 
-    // Second half: stream is complete one decompressed buffer.
+    // Second half: stream is complete, one decompressed buffer.
     h.push(gst::Buffer::from_slice(compressed_map[mid..].to_vec()))
         .unwrap();
     assert_eq!(
@@ -469,21 +482,18 @@ fn test_fragmented_input_reassembly() {
     );
 }
 
-// GstMeta attached to the original buffer must survive the  compress,
-// decompress round-trip. zlibcompress propagates them via
-// BaseTransform::transform_meta and zlibdecompress restores them
+// GstMeta attached to the original buffer must survive the compress/decompress
+// round-trip. The compressor propagates them via BaseTransform::transform_meta
+// and the decompressor restores them via adapter::buffer_fast + copy_into.
 //
 // GstReferenceTimestampMeta is used here for testing purpose only
-#[test]
-fn test_meta_propagation() {
-    init();
-
+fn meta_propagation_impl(c: &Compressor) {
     let fixed_caps = gst::Caps::builder("application").build();
     let reference_caps = gst::Caps::builder("timestamp/x-ntp").build();
 
-    let mut h_compress = gst_check::Harness::new("zlibcompress");
+    let mut h_compress = make_compress_harness(c);
     h_compress.set_src_caps(fixed_caps.clone());
-    h_compress.set_sink_caps(gst::Caps::builder("application/x-zlib-compressed").build());
+    h_compress.set_sink_caps(gst::Caps::builder(c.media_type).build());
     h_compress.play();
 
     let mut buf = gst::Buffer::from_slice(compressible_data(10));
@@ -500,14 +510,14 @@ fn test_meta_propagation() {
         compressed_buf
             .meta::<gst::ReferenceTimestampMeta>()
             .is_some(),
-        "zlibcompress must propagate metas to the compressed buffer"
+        "compressor must propagate metas to the compressed buffer"
     );
 
-    let compressed_caps = gst::Caps::builder("application/x-zlib-compressed")
+    let compressed_caps = gst::Caps::builder(c.media_type)
         .field("original-caps", fixed_caps.clone())
         .build();
 
-    let mut h_decompress = gst_check::Harness::new("zlibdecompress");
+    let mut h_decompress = make_decompress_harness(c);
     h_decompress.set_src_caps(compressed_caps);
     h_decompress.set_sink_caps(fixed_caps);
     h_decompress.play();
@@ -517,7 +527,7 @@ fn test_meta_propagation() {
     let decompressed_buf = h_decompress.pull().unwrap();
     let meta = decompressed_buf
         .meta::<gst::ReferenceTimestampMeta>()
-        .expect("zlibdecompress must restore metas from the compressed buffer");
+        .expect("decompressor must restore metas from the compressed buffer");
     assert_eq!(
         meta.timestamp(),
         gst::ClockTime::from_seconds(42),
@@ -525,13 +535,48 @@ fn test_meta_propagation() {
     );
 }
 
+// Corrupted compressed data must be rejected and must not produce output
+// buffers. This is specific to compressor with an integrity check like zlib
+fn corruption_detected_impl(c: &Compressor) {
+    let fixed_caps = gst::Caps::builder("application").build();
+    let data = compressible_data(1024);
+
+    let mut h_compress = make_compress_harness(c);
+    h_compress.set_src_caps(fixed_caps.clone());
+    h_compress.set_sink_caps(gst::Caps::builder(c.media_type).build());
+    h_compress.play();
+    h_compress.push(gst::Buffer::from_slice(data)).unwrap();
+
+    let compressed_buf = h_compress.pull().unwrap();
+
+    // Flip bytes in the middle of the compressed payload.
+    let mut corrupted = compressed_buf.map_readable().unwrap().as_slice().to_vec();
+    let mid = corrupted.len() / 2;
+    corrupted[mid] ^= 0xff;
+    corrupted[mid + 1] ^= 0xff;
+
+    let compressed_caps = gst::Caps::builder(c.media_type)
+        .field("original-caps", fixed_caps.clone())
+        .build();
+
+    let mut h = make_decompress_harness(c);
+    h.set_src_caps(compressed_caps);
+    h.set_sink_caps(fixed_caps);
+    h.play();
+
+    let result = h.push(gst::Buffer::from_slice(corrupted));
+    assert!(result.is_err(), "decompressor must error on corrupted data");
+    assert_eq!(
+        h.buffers_in_queue(),
+        0,
+        "no buffer must be pushed downstream on corruption"
+    );
+}
+
 // Seek events are refused on the compressor srcpad: independently-compressed
 // frames cannot support byte-accurate seeking without an external index.
-#[test]
-fn test_seek_refused() {
-    init();
-
-    let mut h = gst_check::Harness::new("zlibcompress");
+fn seek_refused_impl(c: &Compressor) {
+    let mut h = make_compress_harness(c);
     h.set_src_caps(
         gst::Caps::builder("video/x-raw")
             .field("format", "RGB")
@@ -554,4 +599,130 @@ fn test_seek_refused() {
         !h.push_upstream_event(seek),
         "compressor must refuse seek events"
     );
+}
+
+#[test]
+fn test_zlib_frame_count() {
+    init();
+    frame_count_impl(&FLATE_ZLIB);
+}
+
+#[test]
+fn test_deflate_frame_count() {
+    init();
+    frame_count_impl(&FLATE_DEFLATE);
+}
+
+#[test]
+fn test_zlib_data_integrity() {
+    init();
+    data_integrity_impl(&FLATE_ZLIB);
+}
+
+#[test]
+fn test_deflate_data_integrity() {
+    init();
+    data_integrity_impl(&FLATE_DEFLATE);
+}
+
+#[test]
+fn test_zlib_gdp_file_roundtrip() {
+    init();
+    gdp_file_roundtrip_impl(&FLATE_ZLIB);
+}
+
+#[test]
+fn test_deflate_gdp_file_roundtrip() {
+    init();
+    gdp_file_roundtrip_impl(&FLATE_DEFLATE);
+}
+
+#[test]
+fn test_zlib_raw_file_roundtrip() {
+    init();
+    raw_file_roundtrip_impl(&FLATE_ZLIB);
+}
+
+#[test]
+fn test_deflate_raw_file_roundtrip() {
+    init();
+    raw_file_roundtrip_impl(&FLATE_DEFLATE);
+}
+
+#[test]
+fn test_zlib_compression_level() {
+    init();
+    compression_level_impl(&FLATE_ZLIB);
+}
+
+#[test]
+fn test_deflate_compression_level() {
+    init();
+    compression_level_impl(&FLATE_DEFLATE);
+}
+
+#[test]
+fn test_zlib_original_caps_embedded() {
+    init();
+    original_caps_embedded_impl(&FLATE_ZLIB);
+}
+
+#[test]
+fn test_deflate_original_caps_embedded() {
+    init();
+    original_caps_embedded_impl(&FLATE_DEFLATE);
+}
+
+#[test]
+fn test_zlib_srcpad_caps_restored() {
+    init();
+    srcpad_caps_restored_impl(&FLATE_ZLIB);
+}
+
+#[test]
+fn test_deflate_srcpad_caps_restored() {
+    init();
+    srcpad_caps_restored_impl(&FLATE_DEFLATE);
+}
+
+#[test]
+fn test_zlib_fragmented_input_reassembly() {
+    init();
+    fragmented_input_reassembly_impl(&FLATE_ZLIB);
+}
+
+#[test]
+fn test_deflate_fragmented_input_reassembly() {
+    init();
+    fragmented_input_reassembly_impl(&FLATE_DEFLATE);
+}
+
+#[test]
+fn test_zlib_meta_propagation() {
+    init();
+    meta_propagation_impl(&FLATE_ZLIB);
+}
+
+#[test]
+fn test_deflate_meta_propagation() {
+    init();
+    meta_propagation_impl(&FLATE_DEFLATE);
+}
+
+#[test]
+fn test_corruption_detected() {
+    init();
+    corruption_detected_impl(&FLATE_ZLIB);
+}
+
+#[test]
+fn test_zlib_seek_refused() {
+    init();
+    seek_refused_impl(&FLATE_ZLIB);
+}
+
+#[test]
+fn test_deflate_seek_refused() {
+    init();
+    seek_refused_impl(&FLATE_DEFLATE);
 }

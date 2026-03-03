@@ -1,6 +1,6 @@
-# Flate
+# Compress
 
-The Flate plugin provides general-purpose lossless compression elements for GStreamer streams. It works best with raw data streams and includes two elements based on the zlib compression algorithm: `zlibcompress` and `zlibdecompress`.
+The Compress plugin provides general-purpose lossless compression elements for GStreamer streams. It works best with raw data streams and includes two elements based on the zlib compression algorithm: `zlibcompress` and `zlibdecompress`.
 
 ## Concepts
 
