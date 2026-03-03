@@ -579,11 +579,12 @@ impl TranscriberSrcPad {
         self.state.lock().unwrap().push_eos();
     }
 
-    fn loop_fn(
-        &self,
-        receiver: &mut mpsc::UnboundedReceiver<TranscriberOutput>,
-    ) -> Result<(), gst::ErrorMessage> {
+    fn loop_fn(&self) -> Result<(), gst::ErrorMessage> {
         let future = async move {
+            let Some(mut receiver) = self.state.lock().unwrap().receiver.take() else {
+                return Ok(());
+            };
+
             let msg = match receiver.recv().await {
                 Some(msg) => msg,
                 /* Sender was closed */
@@ -592,6 +593,8 @@ impl TranscriberSrcPad {
                     return Ok(());
                 }
             };
+
+            self.state.lock().unwrap().receiver = Some(receiver);
 
             let Some(parent) = self.obj().parent() else {
                 return Ok(());
@@ -697,9 +700,10 @@ impl TranscriberSrcPad {
 
         let this_weak = self.downgrade();
         let pad_weak = self.obj().downgrade();
-        let (sender, mut receiver) = mpsc::unbounded_channel();
+        let (sender, receiver) = mpsc::unbounded_channel();
 
         state.sender = Some(sender);
+        state.receiver = Some(receiver);
         drop(state);
 
         let res = self.obj().start_task(move || {
@@ -710,7 +714,7 @@ impl TranscriberSrcPad {
                 return;
             };
 
-            if let Err(err) = this.loop_fn(&mut receiver) {
+            if let Err(err) = this.loop_fn() {
                 let parent = this
                     .obj()
                     .parent()
@@ -808,7 +812,7 @@ impl Transcriber {
 
         gst::info!(CAT, "all source pads joined");
 
-        Ok(self.disconnect(state, true))
+        Ok(self.disconnect(state, true, false))
     }
 
     fn src_activatemode(
@@ -866,7 +870,7 @@ impl Transcriber {
 
                 let mut ret = gst::Pad::event_default(pad, Some(&*self.obj()), event);
 
-                drop(self.disconnect(self.state.lock().unwrap(), false));
+                drop(self.disconnect(self.state.lock().unwrap(), false, true));
 
                 let state = self.state.lock().unwrap();
                 for srcpad in &state.srcpads {
@@ -907,6 +911,7 @@ impl Transcriber {
                 let mut compare_segment = segment.clone();
                 compare_segment.set_position(state.in_segment.position());
                 if state.in_segment != compare_segment {
+                    gst::info!(CAT, imp = self, "New segment, draining!");
                     // Do drain
                     state = match self.drain(state) {
                         Err(err) => {
@@ -965,16 +970,19 @@ impl Transcriber {
             gst::EventView::Caps(e) => {
                 if let Some(old_caps) = self.sinkpad.current_caps()
                     && old_caps != *e.caps()
-                    && let Err(err) = self.drain(self.state.lock().unwrap())
                 {
-                    gst::error!(CAT, imp = self, "Failed to drain: {err}");
-                    gst::element_imp_error!(
-                        self,
-                        gst::StreamError::Failed,
-                        ["Failed to drain: {err}"]
-                    );
-                    return false;
-                };
+                    gst::info!(CAT, imp = self, "New caps, draining!");
+
+                    if let Err(err) = self.drain(self.state.lock().unwrap()) {
+                        gst::error!(CAT, imp = self, "Failed to drain: {err}");
+                        gst::element_imp_error!(
+                            self,
+                            gst::StreamError::Failed,
+                            ["Failed to drain: {err}"]
+                        );
+                        return false;
+                    }
+                }
 
                 let srcpads = self.state.lock().unwrap().srcpads.clone();
 
@@ -1064,6 +1072,7 @@ impl Transcriber {
             if buffer.flags().contains(gst::BufferFlags::DISCONT)
                 && state.first_buffer_pts.is_some()
             {
+                gst::info!(CAT, imp = self, "DISCONT buffer, draining!");
                 state = match self.drain(state) {
                     Err(err) => {
                         gst::error!(CAT, imp = self, "Failed to drain: {err}");
@@ -1762,8 +1771,9 @@ impl Transcriber {
         &'a self,
         mut state: MutexGuard<'a, State>,
         take_stream_lock: bool,
+        flush: bool,
     ) -> MutexGuard<'a, State> {
-        gst::info!(CAT, imp = self, "Unpreparing");
+        gst::info!(CAT, imp = self, "Disconnecting");
 
         if let Some(abort_handle) = state.recv_abort_handle.take() {
             abort_handle.abort();
@@ -1780,8 +1790,11 @@ impl Transcriber {
         self.state_cond.notify_one();
 
         if take_stream_lock {
+            gst::log!(CAT, "Taking stream lock");
             let _lock = self.sinkpad.stream_lock();
         }
+
+        gst::log!(CAT, imp = self, "closing websocket sink");
 
         if let Some(mut ws_sink) = self.ws_sink.borrow_mut().take() {
             RUNTIME.block_on(async {
@@ -1798,14 +1811,14 @@ impl Transcriber {
         drop(state);
 
         for srcpad in &srcpads {
-            let seqnum = {
-                let mut sstate = srcpad.imp().state.lock().unwrap();
-                let _ = sstate.sender.take();
-                sstate.seqnum
-            };
-            srcpad.push_event(gst::event::FlushStart::builder().seqnum(seqnum).build());
-            let _ = srcpad.stop_task();
-            srcpad.push_event(gst::event::FlushStop::builder(false).seqnum(seqnum).build());
+            if flush {
+                let seqnum = srcpad.imp().state.lock().unwrap().seqnum;
+
+                gst::log!(CAT, "flushing source pad");
+
+                srcpad.push_event(gst::event::FlushStart::builder().seqnum(seqnum).build());
+            }
+            let _ = srcpad.imp().stop_task();
 
             let mut sstate = srcpad.imp().state.lock().unwrap();
             *sstate = TranscriberSrcPadState::default();
@@ -2444,7 +2457,7 @@ impl ElementImpl for Transcriber {
         gst::info!(CAT, imp = self, "Changing state {:?}", transition);
 
         if transition == gst::StateChange::PausedToReady {
-            drop(self.disconnect(self.state.lock().unwrap(), true));
+            drop(self.disconnect(self.state.lock().unwrap(), true, true));
         }
 
         self.parent_change_state(transition)
@@ -2467,6 +2480,7 @@ enum TranscriberOutput {
 #[derive(Debug)]
 struct TranscriberSrcPadState {
     sender: Option<mpsc::UnboundedSender<TranscriberOutput>>,
+    receiver: Option<mpsc::UnboundedReceiver<TranscriberOutput>>,
     discont: bool,
     out_segment: gst::FormattedSegment<gst::ClockTime>,
     seqnum: gst::Seqnum,
@@ -2479,6 +2493,7 @@ impl Default for TranscriberSrcPadState {
     fn default() -> Self {
         Self {
             sender: None,
+            receiver: None,
             discont: true,
             out_segment: gst::FormattedSegment::new(),
             seqnum: gst::Seqnum::next(),
