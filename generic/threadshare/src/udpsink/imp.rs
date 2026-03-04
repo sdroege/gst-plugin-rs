@@ -679,15 +679,20 @@ impl UdpSinkPadHandlerInner {
 
             if let Some(socket) = socket.as_mut() {
                 gst::log!(CAT, obj = elem, "Sending to {client:?}");
-                socket.send_to(&data, *client).await.map_err(|err| {
-                    gst::element_error!(
+                if let Err(err) = socket.send_to(&data, *client).await {
+                    gst::element_warning!(
                         elem,
-                        gst::StreamError::Failed,
-                        ("I/O error"),
-                        ["streaming stopped, I/O error {}", err]
+                        gst::ResourceError::Write,
+                        ("Error sending UDP packet"),
+                        ["client {client} size {}: {err}", data.len()]
                     );
-                    gst::FlowError::Error
-                })?;
+                    gst::warning!(
+                        CAT,
+                        obj = elem,
+                        "skipping sending packet with size {} to {client}: {err}",
+                        data.len(),
+                    );
+                }
             } else {
                 gst::element_error!(
                     elem,
