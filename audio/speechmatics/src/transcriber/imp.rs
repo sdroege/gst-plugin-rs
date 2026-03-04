@@ -1061,7 +1061,9 @@ impl Transcriber {
         if let Some(ref buffer) = buffer {
             let mut state = self.state.lock().unwrap();
 
-            if buffer.flags().contains(gst::BufferFlags::DISCONT) {
+            if buffer.flags().contains(gst::BufferFlags::DISCONT)
+                && state.first_buffer_pts.is_some()
+            {
                 state = match self.drain(state) {
                     Err(err) => {
                         gst::error!(CAT, imp = self, "Failed to drain: {err}");
