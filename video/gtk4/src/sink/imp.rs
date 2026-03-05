@@ -461,9 +461,20 @@ impl ElementImpl for PaintableSink {
                     let res = utils::invoke_on_main_thread(gtk::init);
 
                     if let Err(err) = res {
-                        gst::error!(CAT, imp = self, "Failed to create initialize GTK: {err}");
+                        gst::error!(CAT, imp = self, "Failed to initialize GTK: {err}");
                         return Err(gst::StateChangeError);
                     }
+                }
+
+                let have_gdk_display =
+                    utils::invoke_on_main_thread(move || gdk::Display::default().is_some());
+                if !have_gdk_display {
+                    gst::error!(
+                        CAT,
+                        imp = self,
+                        "Failed to get default GDK display. GTK is not initialized."
+                    );
+                    return Err(gst::StateChangeError);
                 }
 
                 let mut paintable_guard = self.paintable.lock().unwrap();
