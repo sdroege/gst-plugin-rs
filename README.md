@@ -63,6 +63,7 @@ You will find the following plugins in this repository:
       - `analyticscombiner`: Analytics combiner / batcher element
       - `analyticssplitter`: Analytics batch splitter element
       - `handdetectiontensordec`: Tensor decoder for hand detection tensors.
+      - `handlandmarktensordec`: Tensor decoder for hand landmark tensors with keypoint visibility metadata attachment.
       - `onvifmeta2relationmeta`: Convert ONVIF metadata to relation metas
       - `relationmeta2onvifmeta`: Convert relation metadata to ONVIF metas
       - `yolov8tensordec2`: Tensor decoder for YoloV8 tensors. Supports

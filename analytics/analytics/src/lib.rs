@@ -18,6 +18,10 @@ use gst::glib;
 pub(crate) const ONVIF_METADATA_SCHEMA: &str = "http://www.onvif.org/ver10/schema";
 pub(crate) const ONVIF_METADATA_PREFIX: &str = "tt";
 
+// helpers builds on gst_analytics::image_util, which is gated on v1_28, and is
+// only consumed by the v1_28+ tensor decoders below.
+#[cfg(feature = "v1_28")]
+mod helpers;
 mod onvifmeta2relationmeta;
 mod relationmeta2onvifmeta;
 
@@ -29,8 +33,8 @@ mod splitter;
 #[cfg(feature = "v1_28")]
 mod yolotensordec;
 
-#[cfg(feature = "v1_28")]
-mod handdetectiontensordec;
+#[cfg(feature = "v1_30")]
+mod hand;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "v1_30")]
@@ -52,8 +56,8 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "v1_28")]
     yolotensordec::register(plugin)?;
 
-    #[cfg(feature = "v1_28")]
-    handdetectiontensordec::register(plugin)?;
+    #[cfg(feature = "v1_30")]
+    hand::register(plugin)?;
 
     Ok(())
 }

@@ -36,7 +36,7 @@ static = []
 capi = []
 doc = []
 v1_28 = ["gst-analytics/v1_28"]
-v1_30 = ["gst/v1_30"]
+v1_30 = ["v1_28", "gst/v1_30", "gst-analytics/v1_30"]
 
 [[test]]
 name = "analyticscombiner"

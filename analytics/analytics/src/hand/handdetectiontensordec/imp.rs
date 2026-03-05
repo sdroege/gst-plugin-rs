@@ -18,11 +18,11 @@
 //! - `palm-detection-out`: Post-processed palm detections (`[score, cx, cy, size, kp0_x, kp0_y, kp2_x, kp2_y]`)
 //!
 //! ## Properties
-//! - `confidence-threshold` (f32, 0.0-1.0, default: 0.15): Minimum confidence to consider a hand
-//!   (recommended starting value for this model: 0.30)
+//! - `confidence-threshold` (f32, 0.0-1.0, default: 0.30): Minimum confidence to consider a hand
+//!   (the default is the recommended starting value for this model)
 //! - `max-hands` (u32, 1-8, default: 2): Maximum number of hands to process
-//! - `nms-iou-threshold` (f32, 0.0-1.0, default: 0.2): IoU threshold for palm detection NMS
-//!   (recommended starting value for this model: 0.08)
+//! - `nms-iou-threshold` (f32, 0.0-1.0, default: 0.08): IoU threshold for palm detection NMS
+//!   (the default is the recommended starting value for this model)
 //!
 //! ## Example Pipelines
 //!
@@ -30,14 +30,13 @@
 //! ```text
 //! gst-launch-1.0 \
 //!   v4l2src \
-//!   ! videoconvert ! videoscale ! video/x-raw,width=224,height=224 \
+//!   ! videoconvertscale add-borders=true \
 //!   ! onnxinference model-file=palm_detection_model.onnx \
 //!   ! handdetectiontensordec confidence-threshold=0.5 max-hands=2 \
 //!   ! objectdetectionoverlay \
 //!   ! videoconvert ! autovideosink
 //! ```
 //!
-use byte_slice_cast::AsSliceOf;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::ElementMetadata;
@@ -47,9 +46,13 @@ use gst_base::subclass::base_transform::BaseTransformImpl;
 use gst_video::VideoInfo;
 use std::sync::{LazyLock, Mutex};
 
-const DEFAULT_CONFIDENCE_THRESHOLD: f32 = 0.15;
+use super::super::helper::{
+    bbox_iou, extract_f32_tensor, oriented_od_params_from_bbox_and_rotation,
+};
+
+const DEFAULT_CONFIDENCE_THRESHOLD: f32 = 0.30;
 const DEFAULT_MAX_HANDS: u32 = 2;
-const DEFAULT_NMS_IOU_THRESHOLD: f32 = 0.2;
+const DEFAULT_NMS_IOU_THRESHOLD: f32 = 0.08;
 const HAND_CLASS_LABEL: &str = "hand";
 const PALM_DETECTION_OUT_ID: &str = "palm-detection-out";
 const PALM_MIN_RR_SIZE_NORM: f32 = 0.06;
@@ -57,6 +60,9 @@ const PALM_MAX_RR_SIZE_NORM: f32 = 1.40;
 const PALM_MIN_VISIBLE_BBOX_RATIO: f32 = 0.5;
 const PALM_MIN_KEYPOINT_SPAN_TO_BOX_RATIO: f32 = 0.15;
 const PALM_MAX_KEYPOINT_SPAN_TO_BOX_RATIO: f32 = 1.60;
+/// Offset applied to the hand-axis rotation to reach the oriented-OD +X baseline.
+/// This palm model puts 0 rad on the +Y axis, so shift by -PI/2.
+const HAND_AXIS_ROTATION_OFFSET: f32 = -std::f32::consts::FRAC_PI_2;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -78,53 +84,6 @@ struct PalmDetectionCandidate {
     rotation: f32,
     score: f32,
     bbox: (f32, f32, f32, f32),
-}
-
-fn extract_f32_tensor(
-    buffer: &gst::BufferRef,
-    tensor_id: glib::Quark,
-) -> Option<(Vec<f32>, Vec<usize>)> {
-    for meta in buffer.iter_meta::<gst_analytics::TensorMeta>() {
-        let tensor = meta
-            .typed_tensor(
-                tensor_id,
-                gst_analytics::TensorDataType::Float32,
-                gst_analytics::TensorDimOrder::RowMajor,
-                &[usize::MAX, usize::MAX, usize::MAX, usize::MAX],
-            )
-            .or_else(|| {
-                meta.typed_tensor(
-                    tensor_id,
-                    gst_analytics::TensorDataType::Float32,
-                    gst_analytics::TensorDimOrder::RowMajor,
-                    &[usize::MAX, usize::MAX, usize::MAX],
-                )
-            })
-            .or_else(|| {
-                meta.typed_tensor(
-                    tensor_id,
-                    gst_analytics::TensorDataType::Float32,
-                    gst_analytics::TensorDimOrder::RowMajor,
-                    &[usize::MAX, usize::MAX],
-                )
-            })
-            .or_else(|| {
-                meta.typed_tensor(
-                    tensor_id,
-                    gst_analytics::TensorDataType::Float32,
-                    gst_analytics::TensorDimOrder::RowMajor,
-                    &[usize::MAX],
-                )
-            });
-
-        let Some(tensor) = tensor else { continue };
-
-        let map = tensor.data().map_readable().ok()?;
-        let data = map.as_slice_of::<f32>().ok()?;
-        return Some((data.to_vec(), tensor.dims().to_vec()));
-    }
-
-    None
 }
 
 fn extract_hands_from_palm_detection(
@@ -336,65 +295,12 @@ fn is_valid_palm_candidate_normalized(candidate: PalmCandidateNormalized) -> boo
     visible_ratio >= PALM_MIN_VISIBLE_BBOX_RATIO
 }
 
-fn bbox_iou(a: (f32, f32, f32, f32), b: (f32, f32, f32, f32)) -> f32 {
-    gst_analytics::image_util::iou_f32(
-        gst_analytics::image_util::Rect::<f32> {
-            x: a.0,
-            y: a.1,
-            w: a.2 - a.0,
-            h: a.3 - a.1,
-        },
-        gst_analytics::image_util::Rect::<f32> {
-            x: b.0,
-            y: b.1,
-            w: b.2 - b.0,
-            h: b.3 - b.1,
-        },
-    )
-}
-
 fn hand_bbox_to_oriented_od_params(
     bbox: (f32, f32, f32, f32),
     rotation: f32,
     video_size: Option<(i32, i32)>,
 ) -> Option<(i32, i32, i32, i32, f32)> {
-    let (min_x, min_y, max_x, max_y) = bbox;
-    if !min_x.is_finite() || !min_y.is_finite() || !max_x.is_finite() || !max_y.is_finite() {
-        return None;
-    }
-
-    let (x0, y0, x1, y1) = (min_x.floor(), min_y.floor(), max_x.ceil(), max_y.ceil());
-
-    if x1 <= x0 || y1 <= y0 {
-        return None;
-    }
-
-    if let Some((frame_width, frame_height)) = video_size
-        && frame_width > 0
-        && frame_height > 0
-    {
-        let fw = frame_width as f32;
-        let fh = frame_height as f32;
-
-        // Keep boxes that are partially outside the frame. Only drop boxes that are
-        // completely outside (no overlap with the visible frame area).
-        if x1 <= 0.0 || y1 <= 0.0 || x0 >= fw || y0 >= fh {
-            return None;
-        }
-    }
-
-    let x = x0 as i32;
-    let y = y0 as i32;
-    let width = (x1 - x0) as i32;
-    let height = (y1 - y0) as i32;
-
-    if width <= 0 || height <= 0 {
-        return None;
-    }
-
-    let rotation_for_od = rotation - std::f32::consts::FRAC_PI_2;
-
-    Some((x, y, width, height, rotation_for_od))
+    oriented_od_params_from_bbox_and_rotation(bbox, rotation, HAND_AXIS_ROTATION_OFFSET, video_size)
 }
 
 fn apply_nms_to_palm_candidates(
@@ -537,7 +443,7 @@ impl ElementImpl for HandDetectionTensorDec {
                 "Hand Detection Tensor Decoder",
                 "Tensordecoder/Video",
                 "Decodes hand tensors and attaches object detection metadata",
-                "Jeremy Whiting<jeremy.whiting@collabora.com>",
+                "Jeremy Whiting <jeremy.whiting@collabora.com>",
             )
         });
         Some(&*ELEMENT_METADATA)
@@ -665,7 +571,7 @@ impl BaseTransformImpl for HandDetectionTensorDec {
                 continue;
             };
 
-            if let Err(err) = rmeta.add_oriented_od_mtd(
+            match rmeta.add_oriented_od_mtd(
                 class,
                 x,
                 y,
@@ -674,8 +580,14 @@ impl BaseTransformImpl for HandDetectionTensorDec {
                 rotation_for_od,
                 hand.confidence,
             ) {
-                gst::warning!(CAT, "Failed to add oriented OD metadata: {}", err);
-            }
+                Ok(_od) => {
+                    gst::debug!(CAT, "Added oriented OD metadata for hand");
+                }
+                Err(err) => {
+                    gst::warning!(CAT, "Failed to add oriented OD metadata: {}", err);
+                    continue;
+                }
+            };
         }
 
         Ok(gst::FlowSuccess::Ok)
