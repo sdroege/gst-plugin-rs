@@ -2771,6 +2771,74 @@
     "compress": {
         "description": "GStreamer plugin for lossless compression/decompression",
         "elements": {
+            "brotlicompress": {
+                "author": "Daniel Morin <daniel.morin@collabora.com>",
+                "description": "Compress data using Brotli",
+                "hierarchy": [
+                    "GstBrotliCompress",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Encoder/Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-brotli-compressed:\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "level": {
+                        "blurb": "Brotli compression level (0=fastest, 11=slowest/best ratio)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "6",
+                        "max": "11",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
+            "brotlidecompress": {
+                "author": "Daniel Morin <daniel.morin@collabora.com>",
+                "description": "Decompress data using Brotli",
+                "hierarchy": [
+                    "GstBrotliDecompress",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Decoder/Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-brotli-compressed:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "none"
+            },
             "deflatecompress": {
                 "author": "Daniel Morin <daniel.morin@collabora.com>",
                 "description": "Compress data using deflate (no checksum)",

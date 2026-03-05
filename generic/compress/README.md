@@ -1,6 +1,10 @@
 # Compress
 
-The Compress plugin provides general-purpose lossless compression elements for GStreamer streams. It works best with raw data streams and includes two elements based on the zlib compression algorithm: `zlibcompress` and `zlibdecompress`.
+The Compress plugin provides general-purpose lossless compression elements for GStreamer streams. It works best with raw data streams and includes the following element pairs:
+
+- `zlibcompress` / `zlibdecompress` — zlib compression (deflate with checksum)
+- `deflatecompress` / `deflatedecompress` — raw deflate compression (no checksum)
+- `brotlicompress` / `brotlidecompress` — Brotli compression
 
 ## Concepts
 

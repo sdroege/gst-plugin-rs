@@ -9,8 +9,8 @@
 
 #![allow(clippy::non_send_fields_in_send_ty, unused_doc_comments)]
 
-#[cfg(not(any(feature = "flate")))]
-compile_error!("At least one compression feature must be enabled (e.g. --features flate).");
+#[cfg(not(any(feature = "flate", feature = "brotli")))]
+compile_error!("At least one compression feature must be enabled (e.g. --features flate,brotli).");
 
 /**
  * plugin-compress:
@@ -21,6 +21,12 @@ compile_error!("At least one compression feature must be enabled (e.g. --feature
  */
 use gst::glib;
 
+mod compress_caps_helper;
+
+#[cfg(feature = "brotli")]
+mod brotlicompress;
+#[cfg(feature = "brotli")]
+mod brotlidecompress;
 #[cfg(feature = "flate")]
 mod flate;
 #[cfg(feature = "flate")]
@@ -34,6 +40,11 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     {
         flatecompress::register(plugin)?;
         flatedecompress::register(plugin)?;
+    }
+    #[cfg(feature = "brotli")]
+    {
+        brotlicompress::register(plugin)?;
+        brotlidecompress::register(plugin)?;
     }
     Ok(())
 }

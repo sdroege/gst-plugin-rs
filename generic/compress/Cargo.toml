@@ -12,7 +12,7 @@ rust-version.workspace = true
 gst = { workspace = true, features = ["v1_18"] }
 gst-base.workspace = true
 flate2 = { version = "1.0", optional = true }
-# brotli = { version = "7", optional = true }   # future
+brotli = { version = "7", optional = true }
 
 
 [lib]
@@ -29,9 +29,11 @@ tempfile = "3"
 gst-plugin-version-helper.workspace = true
 
 [features]
-default = ["flate"]
+default = ["all"]
+all = ["flate", "brotli"]
 flate = ["dep:flate2"]
-# brotli = ["dep:brotli"]   # future addition
+brotli = ["dep:brotli"]
+brotli-corruption-tests = ["brotli"]
 static = []
 capi = []
 doc = ["gst/v1_18"]

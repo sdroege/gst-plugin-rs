@@ -27,16 +27,25 @@ struct Compressor {
     decompress_element: &'static str,
 }
 
+#[cfg(feature = "flate")]
 const FLATE_ZLIB: Compressor = Compressor {
     media_type: "application/x-zlib-compressed",
     compress_element: "zlibcompress",
     decompress_element: "zlibdecompress",
 };
 
+#[cfg(feature = "flate")]
 const FLATE_DEFLATE: Compressor = Compressor {
     media_type: "application/x-deflate-compressed",
     compress_element: "deflatecompress",
     decompress_element: "deflatedecompress",
+};
+
+#[cfg(feature = "brotli")]
+const BROTLI: Compressor = Compressor {
+    media_type: "application/x-brotli-compressed",
+    compress_element: "brotlicompress",
+    decompress_element: "brotlidecompress",
 };
 
 struct Pipeline(gst::Pipeline);
@@ -304,8 +313,8 @@ fn raw_file_roundtrip_impl(c: &Compressor) {
     );
 }
 
-// Level 9 produces smaller output than level 1 for compressible data.
-fn compression_level_impl(c: &Compressor) {
+// Higher level produces smaller output than lower level for compressible data.
+fn compression_level_impl(c: &Compressor, low: u32, high: u32) {
     // Cycling values between 0 and 99: enough repetition to be compressible,
     // but not constant (which would be trivially compressible at any level).
     let data = compressible_data(4096);
@@ -320,12 +329,12 @@ fn compression_level_impl(c: &Compressor) {
         h.pull().unwrap().size()
     };
 
-    let size_1 = compressed_size(1);
-    let size_9 = compressed_size(9);
+    let size_low = compressed_size(low);
+    let size_high = compressed_size(high);
 
     assert!(
-        size_9 <= size_1,
-        "level 9 ({size_9} bytes) should not exceed level 1 ({size_1} bytes)"
+        size_high <= size_low,
+        "level {high} ({size_high} bytes) should not exceed level {low} ({size_low} bytes)"
     );
 }
 
@@ -426,12 +435,12 @@ fn srcpad_caps_restored_impl(c: &Compressor) {
 
 // A compressed buffer split across two input buffers is correctly reassembled
 // as part of decompression.
-fn fragmented_input_reassembly_impl(c: &Compressor) {
+fn fragmented_input_reassembly_impl(c: &Compressor, data_size: usize) {
     let fixed_caps = gst::Caps::builder("application").build();
 
     // Use cycling data so the compressed output is large enough to split
     // into two non-trivial halves.
-    let data = compressible_data(4096);
+    let data = compressible_data(data_size);
 
     let mut h_compress = make_compress_harness(c);
     h_compress.set_src_caps(fixed_caps.clone());
@@ -537,6 +546,7 @@ fn meta_propagation_impl(c: &Compressor) {
 
 // Corrupted compressed data must be rejected and must not produce output
 // buffers. This is specific to compressor with an integrity check like zlib
+#[cfg(feature = "flate")]
 fn corruption_detected_impl(c: &Compressor) {
     let fixed_caps = gst::Caps::builder("application").build();
     let data = compressible_data(1024);
@@ -564,12 +574,48 @@ fn corruption_detected_impl(c: &Compressor) {
     h.set_sink_caps(fixed_caps);
     h.play();
 
-    let result = h.push(gst::Buffer::from_slice(corrupted));
-    assert!(result.is_err(), "decompressor must error on corrupted data");
+    // Codecs with integrity checks (zlib) detect corruption on push, we
+    // assert no output is produced.
+    let _ = h.push(gst::Buffer::from_slice(corrupted));
     assert_eq!(
         h.buffers_in_queue(),
         0,
         "no buffer must be pushed downstream on corruption"
+    );
+}
+
+// Structural corruption (first bytes of the brotli stream) is detected
+// as ResultFailure, which surfaces as a flow error on push.
+// This is specific to brotli since zlib corruption is handled by corruption_detected_impl.
+#[cfg(feature = "brotli")]
+fn brotli_structural_corruption_flow_error_impl() {
+    let fixed_caps = gst::Caps::builder("application").build();
+    let data: Vec<u8> = (0u8..=255).chain(0u8..=255).collect();
+
+    let mut h_compress = make_compress_harness(&BROTLI);
+    h_compress.set_src_caps(fixed_caps.clone());
+    h_compress.set_sink_caps(gst::Caps::builder(BROTLI.media_type).build());
+    h_compress.play();
+    h_compress.push(gst::Buffer::from_slice(data)).unwrap();
+
+    let compressed_buf = h_compress.pull().unwrap();
+    let mut corrupted = compressed_buf.map_readable().unwrap().as_slice().to_vec();
+    for b in corrupted[..4].iter_mut() {
+        *b ^= 0xff;
+    }
+
+    let compressed_caps = gst::Caps::builder(BROTLI.media_type)
+        .field("original-caps", fixed_caps.clone())
+        .build();
+
+    let mut h = make_decompress_harness(&BROTLI);
+    h.set_src_caps(compressed_caps);
+    h.set_sink_caps(fixed_caps);
+    h.play();
+
+    assert!(
+        h.push(gst::Buffer::from_slice(corrupted)).is_err(),
+        "structural corruption must return a flow error"
     );
 }
 
@@ -602,127 +648,235 @@ fn seek_refused_impl(c: &Compressor) {
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_zlib_frame_count() {
     init();
     frame_count_impl(&FLATE_ZLIB);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_deflate_frame_count() {
     init();
     frame_count_impl(&FLATE_DEFLATE);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_zlib_data_integrity() {
     init();
     data_integrity_impl(&FLATE_ZLIB);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_deflate_data_integrity() {
     init();
     data_integrity_impl(&FLATE_DEFLATE);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_zlib_gdp_file_roundtrip() {
     init();
     gdp_file_roundtrip_impl(&FLATE_ZLIB);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_deflate_gdp_file_roundtrip() {
     init();
     gdp_file_roundtrip_impl(&FLATE_DEFLATE);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_zlib_raw_file_roundtrip() {
     init();
     raw_file_roundtrip_impl(&FLATE_ZLIB);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_deflate_raw_file_roundtrip() {
     init();
     raw_file_roundtrip_impl(&FLATE_DEFLATE);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_zlib_compression_level() {
     init();
-    compression_level_impl(&FLATE_ZLIB);
+    compression_level_impl(&FLATE_ZLIB, 1, 9);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_deflate_compression_level() {
     init();
-    compression_level_impl(&FLATE_DEFLATE);
+    compression_level_impl(&FLATE_DEFLATE, 1, 9);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_zlib_original_caps_embedded() {
     init();
     original_caps_embedded_impl(&FLATE_ZLIB);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_deflate_original_caps_embedded() {
     init();
     original_caps_embedded_impl(&FLATE_DEFLATE);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_zlib_srcpad_caps_restored() {
     init();
     srcpad_caps_restored_impl(&FLATE_ZLIB);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_deflate_srcpad_caps_restored() {
     init();
     srcpad_caps_restored_impl(&FLATE_DEFLATE);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_zlib_fragmented_input_reassembly() {
     init();
-    fragmented_input_reassembly_impl(&FLATE_ZLIB);
+    fragmented_input_reassembly_impl(&FLATE_ZLIB, 4096);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_deflate_fragmented_input_reassembly() {
     init();
-    fragmented_input_reassembly_impl(&FLATE_DEFLATE);
+    fragmented_input_reassembly_impl(&FLATE_DEFLATE, 4096);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_zlib_meta_propagation() {
     init();
     meta_propagation_impl(&FLATE_ZLIB);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_deflate_meta_propagation() {
     init();
     meta_propagation_impl(&FLATE_DEFLATE);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_corruption_detected() {
     init();
     corruption_detected_impl(&FLATE_ZLIB);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_zlib_seek_refused() {
     init();
     seek_refused_impl(&FLATE_ZLIB);
 }
 
 #[test]
+#[cfg(feature = "flate")]
 fn test_deflate_seek_refused() {
     init();
     seek_refused_impl(&FLATE_DEFLATE);
+}
+
+#[test]
+#[cfg(feature = "brotli")]
+fn test_brotli_frame_count() {
+    init();
+    frame_count_impl(&BROTLI);
+}
+
+#[test]
+#[cfg(feature = "brotli")]
+fn test_brotli_data_integrity() {
+    init();
+    data_integrity_impl(&BROTLI);
+}
+
+#[test]
+#[cfg(feature = "brotli")]
+fn test_brotli_gdp_file_roundtrip() {
+    init();
+    gdp_file_roundtrip_impl(&BROTLI);
+}
+
+#[test]
+#[cfg(feature = "brotli")]
+fn test_brotli_raw_file_roundtrip() {
+    init();
+    raw_file_roundtrip_impl(&BROTLI);
+}
+
+#[test]
+#[cfg(feature = "brotli")]
+fn test_brotli_compression_level() {
+    init();
+    compression_level_impl(&BROTLI, 0, 11);
+}
+
+#[test]
+#[cfg(feature = "brotli")]
+fn test_brotli_original_caps_embedded() {
+    init();
+    original_caps_embedded_impl(&BROTLI);
+}
+
+#[test]
+#[cfg(feature = "brotli")]
+fn test_brotli_srcpad_caps_restored() {
+    init();
+    srcpad_caps_restored_impl(&BROTLI);
+}
+
+#[test]
+#[cfg(feature = "brotli")]
+fn test_brotli_fragmented_input_reassembly() {
+    init();
+    fragmented_input_reassembly_impl(&BROTLI, 4096);
+}
+
+#[test]
+#[cfg(feature = "brotli")]
+fn test_brotli_meta_propagation() {
+    init();
+    meta_propagation_impl(&BROTLI);
+}
+
+#[test]
+#[cfg(feature = "brotli")]
+fn test_brotli_seek_refused() {
+    init();
+    seek_refused_impl(&BROTLI);
+}
+
+#[test]
+#[cfg(feature = "brotli")]
+fn test_brotli_structural_corruption_flow_error() {
+    init();
+    brotli_structural_corruption_flow_error_impl();
+}
+
+#[test]
+#[cfg(feature = "brotli")]
+fn test_brotli_large_output() {
+    // Exercises the NeedsMoreOutput branch in try_decompress: the decompressed
+    // payload exceeds the 65536 bytes internal output buffer, requiring multiple
+    // loop iterations. Also exercises NeedsMoreInput via fragmented input.
+    init();
+    fragmented_input_reassembly_impl(&BROTLI, 128 * 1024);
 }

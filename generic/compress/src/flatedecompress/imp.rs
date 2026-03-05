@@ -10,8 +10,9 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
+
+use crate::compress_caps_helper::decompress_transform_caps;
 
 use std::sync::LazyLock;
 use std::sync::Mutex;
@@ -118,47 +119,7 @@ impl BaseTransformImpl for FlateDecompress {
         caps: &gst::Caps,
         filter: Option<&gst::Caps>,
     ) -> Option<gst::Caps> {
-        let obj = self.obj();
-        let obj_ref = obj.upcast_ref::<gst::Element>();
-
-        let other_caps = match direction {
-            gst::PadDirection::Sink => caps
-                .structure(0)
-                .and_then(|s| s.get::<gst::Caps>("original-caps").ok())
-                .unwrap_or_else(gst::Caps::new_any),
-            gst::PadDirection::Src => {
-                let obj = self.obj();
-                let pad = obj.sink_pad();
-                let tmpl_caps = pad.pad_template_caps();
-                tmpl_caps
-                    .iter()
-                    .fold(gst::Caps::builder_full(), |builder, s| {
-                        if caps.is_any() {
-                            builder.structure(gst::Structure::new_empty(s.name()))
-                        } else {
-                            builder.structure(
-                                gst::Structure::builder(s.name())
-                                    .field("original-caps", caps)
-                                    .build(),
-                            )
-                        }
-                    })
-                    .build()
-            }
-            _ => return None,
-        };
-
-        gst::debug!(
-            CAT,
-            obj = obj_ref,
-            "Transformed caps {caps} -> {other_caps} ({direction:?})"
-        );
-
-        if let Some(f) = filter {
-            Some(f.intersect_with_mode(&other_caps, gst::CapsIntersectMode::First))
-        } else {
-            Some(other_caps)
-        }
+        decompress_transform_caps(self.obj().upcast_ref(), direction, caps, filter, &CAT)
     }
 
     fn set_caps(&self, incaps: &gst::Caps, _outcaps: &gst::Caps) -> Result<(), gst::LoggableError> {

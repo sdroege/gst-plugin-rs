@@ -64,6 +64,7 @@ You will find the following plugins in this repository:
     - `compress`: General purpose lossless compression plugin.
 
       - flate: compress and decompress data using zlib and deflate
+      - brotli: compress and decompress data using brotli
 
     - `gopbuffer`: Stores a minimum duration of data delimited by discrete GOPs (Group of Picture).
 
