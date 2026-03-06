@@ -132,7 +132,6 @@ default-members = [
     "utils/togglerecord",
     "utils/tracers",
     "utils/uriplaylistbin",
-    "utils/validate",
 
     "video/cdg",
     "video/ffv1",
