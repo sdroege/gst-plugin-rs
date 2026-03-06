@@ -6129,6 +6129,7 @@ impl WebRTCSink {
             let configured_headers = settings.signalling_server_headers.as_ref().cloned();
             gst::info!(CAT, "Accepting connection from {}", address);
 
+            #[allow(clippy::result_large_err)]
             let callback = |_req: &Request, mut response: Response| {
                 let headers = response.headers_mut();
                 if let Some(configured_headers) = configured_headers {
