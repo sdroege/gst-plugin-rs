@@ -54,9 +54,10 @@ use atomic_refcell::AtomicRefCell;
 
 use gst::{BufferPool, glib, prelude::*, subclass::prelude::*};
 
+use std::cmp;
 use std::sync::{LazyLock, Mutex};
 
-use gst_video::{VideoColorimetry, VideoFormat, VideoFrame, VideoInfo, video_frame::*};
+use gst_video::{VideoColorimetry, VideoFormat, VideoFrame, VideoInfo, prelude::*, video_frame::*};
 
 use crate::basedepay::{PacketToBufferRelation, RtpBaseDepay2Ext};
 
@@ -851,21 +852,61 @@ impl RtpRawVideoDepay {
                     );
                     (None, video_info.size() as u32, 0, 0)
                 });
+            let size = cmp::max(size, video_info.size() as u32);
 
             let mut pool = pool.unwrap_or_else(|| gst_video::VideoBufferPool::new().upcast());
 
-            let (allocator, params) = query
+            let (allocator, allocation_params) = query
                 .allocation_params()
                 .next()
                 .clone()
                 .unwrap_or((None, gst::AllocationParams::default()));
 
-            let mut config = pool.config();
-            config.set_params(Some(caps), size, min, max);
-            config.set_allocator(allocator.as_ref(), Some(&params));
+            let video_meta_index = query.find_allocation_meta::<gst_video::VideoMeta>();
+            let mut align = gst_video::VideoAlignment::default();
+            if let Some(params) = video_meta_index
+                .and_then(|idx| query.allocation_metas().nth(idx as usize))
+                .and_then(|(_, params)| params.filter(|params| params.has_name("video-meta")))
+            {
+                // FIXME: needs better API
+                let params = unsafe { &*(params.as_ptr() as *const gst::BufferPoolConfigRef) };
 
-            // Should be fine to add it unconditionally as long as it's with default strides/offsets
-            config.add_option(gst_video::BUFFER_POOL_OPTION_VIDEO_META);
+                if let Some(a) = params.video_alignment() {
+                    align = a;
+                }
+            }
+
+            let mut config = pool.config();
+
+            // Make use of downstream video alignment if possible
+            let video_meta_supported = video_meta_index.is_some()
+                && pool.has_option(gst_video::BUFFER_POOL_OPTION_VIDEO_META);
+            let video_alignment_supported = video_meta_supported
+                && pool.has_option(gst_video::BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
+
+            if video_meta_supported {
+                config.add_option(gst_video::BUFFER_POOL_OPTION_VIDEO_META);
+            }
+
+            let mut aligned_info = video_info.clone();
+            let mut aligned_params = allocation_params;
+            let mut aligned_size = cmp::max(size, video_info.size() as u32);
+            if video_alignment_supported {
+                config.add_option(gst_video::BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
+
+                if aligned_info.align(&mut align).is_err() {
+                    gst::debug!(CAT, imp = self, "Failed to align video info");
+                    return Err(gst::FlowError::NotNegotiated);
+                }
+                config.set_video_alignment(&align);
+                aligned_size = cmp::max(aligned_size, aligned_info.size() as u32);
+                let max_align = allocation_params.align()
+                    | align.stride_align().iter().copied().max().unwrap_or(0) as usize;
+                aligned_params.set_align(max_align);
+            }
+
+            config.set_params(Some(caps), aligned_size, min, max);
+            config.set_allocator(allocator.as_ref(), Some(&aligned_params));
 
             gst::info!(
                 CAT,
@@ -883,13 +924,25 @@ impl RtpRawVideoDepay {
                 "Failed to configure buffer pool {pool:?}, second try.."
             );
 
-            let mut config = pool.config();
-            if config.validate_params(Some(caps), size, min, max).is_err() {
-                pool = gst_video::VideoBufferPool::new().upcast();
-                config = pool.config();
-                config.set_params(Some(caps), size, min, max);
-                config.set_allocator(allocator.as_ref(), Some(&params));
+            let config = pool.config();
+            if config
+                .validate_params(Some(caps), aligned_size, min, max)
+                .is_ok()
+                && pool.set_config(config).is_ok()
+            {
+                return Ok(pool);
             }
+
+            gst::info!(
+                CAT,
+                imp = self,
+                "Failed to configure buffer pool {pool:?}, third try with default video buffer pool.."
+            );
+
+            pool = gst_video::VideoBufferPool::new().upcast();
+            let mut config = pool.config();
+            config.set_params(Some(caps), size, min, max);
+            config.set_allocator(allocator.as_ref(), Some(&allocation_params));
 
             if pool.set_config(config).is_ok() {
                 return Ok(pool);
