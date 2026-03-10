@@ -5,3 +5,6 @@ pub mod pay;
 
 mod pixel_group;
 mod vframe_utils;
+
+#[cfg(test)]
+mod tests;

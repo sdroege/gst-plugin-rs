@@ -239,6 +239,29 @@ pub fn run_test_pipeline_and_validate_data<T: Fn(&[u8], usize, usize) -> anyhow:
     )
 }
 
+// Validation function that gets the full buffer instead of just the byte slice
+pub fn run_test_pipeline_and_validate_buffer<
+    T: Fn(&gst::Buffer, usize, usize) -> anyhow::Result<()>,
+>(
+    src: Source,
+    pay: &str,
+    depay: &str,
+    expected_pay: Vec<Vec<ExpectedPacket>>,
+    expected_depay: Vec<Vec<ExpectedBuffer>>,
+    validate_depay_buffer_func: T,
+) {
+    run_test_pipeline_full_and_validate_buffer(
+        src,
+        pay,
+        depay,
+        expected_pay,
+        expected_depay,
+        None,
+        Liveness::NonLive,
+        validate_depay_buffer_func,
+    )
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Liveness {
     Live(i64),
@@ -279,6 +302,36 @@ pub fn run_test_pipeline_full_and_validate_data<
     expected_depay_caps: Option<gst::Caps>,
     liveness: Liveness,
     validate_depay_data_func: T,
+) {
+    run_test_pipeline_full_and_validate_buffer(
+        src,
+        pay,
+        depay,
+        expected_pay,
+        expected_depay,
+        expected_depay_caps,
+        liveness,
+        move |buffer, list_index, buffer_index| {
+            let map = buffer.map_readable().unwrap();
+            validate_depay_data_func(&map, list_index, buffer_index)
+        },
+    )
+}
+
+//
+// Validation function that gets the full buffer instead of just the byte slice
+#[allow(clippy::too_many_arguments)]
+pub fn run_test_pipeline_full_and_validate_buffer<
+    T: Fn(&gst::Buffer, usize, usize) -> anyhow::Result<()>,
+>(
+    src: Source,
+    pay: &str,
+    depay: &str,
+    expected_pay: Vec<Vec<ExpectedPacket>>,
+    expected_depay: Vec<Vec<ExpectedBuffer>>,
+    expected_depay_caps: Option<gst::Caps>,
+    liveness: Liveness,
+    validate_depay_buffer_func: T,
 ) {
     let pipeline = Pipeline(gst::Pipeline::new());
 
@@ -611,7 +664,7 @@ pub fn run_test_pipeline_full_and_validate_data<
         let mut iter_a;
         let mut iter_b;
 
-        let buffer_iter: &mut dyn Iterator<Item = &gst::BufferRef> =
+        let buffer_iter: &mut dyn Iterator<Item = gst::Buffer> =
             if let Some(list) = sample.buffer_list() {
                 assert_eq!(
                     list.len(),
@@ -621,10 +674,10 @@ pub fn run_test_pipeline_full_and_validate_data<
                     i,
                     list.len()
                 );
-                iter_a = list.iter();
+                iter_a = list.iter_owned();
                 &mut iter_a
             } else {
-                let buffer = sample.buffer().unwrap();
+                let buffer = sample.buffer_owned().unwrap();
                 assert_eq!(
                     expected_list.len(),
                     1,
@@ -681,8 +734,7 @@ pub fn run_test_pipeline_full_and_validate_data<
                 j, i, buffer_flags, expected_buffer.flags,
             );
 
-            let map = buffer.map_readable().unwrap();
-            match validate_depay_data_func(&map, i, j) {
+            match validate_depay_buffer_func(&buffer, i, j) {
                 Ok(_) => {}
                 Err(err) => panic!(
                     "Error validating data of buffer {j} of depayloaded buffer list {i}: {err}",
