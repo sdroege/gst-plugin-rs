@@ -32,6 +32,7 @@ const DEFAULT_BIND_ADDRESS: &str = "0.0.0.0";
 const DEFAULT_BIND_PORT: i32 = 0;
 const DEFAULT_BIND_ADDRESS_V6: &str = "::";
 const DEFAULT_BIND_PORT_V6: i32 = 0;
+const DEFAULT_REUSE: bool = true;
 const DEFAULT_SOCKET: Option<GioSocketWrapper> = None;
 const DEFAULT_USED_SOCKET: Option<GioSocketWrapper> = None;
 const DEFAULT_SOCKET_V6: Option<GioSocketWrapper> = None;
@@ -72,6 +73,7 @@ struct Settings {
     bind_port: i32,
     bind_address_v6: String,
     bind_port_v6: i32,
+    reuse: bool,
     socket: Option<GioSocketWrapper>,
     used_socket: Option<GioSocketWrapper>,
     socket_v6: Option<GioSocketWrapper>,
@@ -91,6 +93,7 @@ impl Default for Settings {
             bind_port: DEFAULT_BIND_PORT,
             bind_address_v6: DEFAULT_BIND_ADDRESS_V6.into(),
             bind_port_v6: DEFAULT_BIND_PORT_V6,
+            reuse: DEFAULT_REUSE,
             socket: DEFAULT_SOCKET,
             used_socket: DEFAULT_USED_SOCKET,
             socket_v6: DEFAULT_SOCKET_V6,
@@ -794,7 +797,7 @@ impl UdpSink {
                 Async::<UdpSocket>::try_from(socket).map_err(|err| {
                     error_msg!(
                         gst::ResourceError::OpenWrite,
-                        ["Failed to setup Async socket: {}", err]
+                        ["Failed to setup Async socket: {err}"]
                     )
                 })
             })?;
@@ -822,7 +825,7 @@ impl UdpSink {
             let bind_addr: IpAddr = bind_addr.parse().map_err(|err| {
                 error_msg!(
                     gst::ResourceError::Settings,
-                    ["Invalid address '{}' set: {}", bind_addr, err]
+                    ["Invalid address '{bind_addr}' set: {err}"]
                 )
             })?;
 
@@ -832,7 +835,7 @@ impl UdpSink {
             };
 
             let saddr = SocketAddr::new(bind_addr, bind_port as u16);
-            gst::debug!(CAT, imp = self, "Binding to {:?}", saddr);
+            gst::debug!(CAT, imp = self, "Binding to {saddr:?}");
 
             let socket = match family {
                 SocketFamily::Ipv4 => socket2::Socket::new(
@@ -864,10 +867,27 @@ impl UdpSink {
                 }
             };
 
+            socket.set_reuse_address(settings.reuse).map_err(|err| {
+                gst::error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to set reuse_address: {err}"]
+                )
+            })?;
+
+            #[cfg(unix)]
+            {
+                socket.set_reuse_port(settings.reuse).map_err(|err| {
+                    gst::error_msg!(
+                        gst::ResourceError::OpenRead,
+                        ["Failed to set reuse_port: {err}"]
+                    )
+                })?;
+            }
+
             socket.bind(&saddr.into()).map_err(|err| {
                 error_msg!(
                     gst::ResourceError::OpenWrite,
-                    ["Failed to bind socket: {}", err]
+                    ["Failed to bind socket: {err}"]
                 )
             })?;
 
@@ -875,7 +895,7 @@ impl UdpSink {
                 Async::<UdpSocket>::try_from(socket).map_err(|err| {
                     error_msg!(
                         gst::ResourceError::OpenWrite,
-                        ["Failed to setup Async socket: {}", err]
+                        ["Failed to setup Async socket: {err}"]
                     )
                 })
             })?;
@@ -886,7 +906,7 @@ impl UdpSink {
                 wrapper.set_tos(settings.qos_dscp).map_err(|err| {
                     error_msg!(
                         gst::ResourceError::OpenWrite,
-                        ["Failed to set QoS DSCP: {}", err]
+                        ["Failed to set QoS DSCP: {err}"]
                     )
                 })?;
             }
@@ -1044,6 +1064,11 @@ impl ObjectImpl for UdpSink {
                     .maximum(u16::MAX as i32)
                     .default_value(DEFAULT_BIND_PORT_V6)
                     .build(),
+                glib::ParamSpecBoolean::builder("reuse")
+                    .nick("Reuse")
+                    .blurb("Allow reuse of the port")
+                    .default_value(DEFAULT_REUSE)
+                    .build(),
                 glib::ParamSpecObject::builder::<gio::Socket>("socket")
                     .nick("Socket")
                     .blurb("Socket to use for UDP transmission. (None == allocate)")
@@ -1185,6 +1210,9 @@ impl ObjectImpl for UdpSink {
             "bind-port-v6" => {
                 settings.bind_port_v6 = value.get().expect("type checked upstream");
             }
+            "reuse" => {
+                settings.reuse = value.get().expect("type checked upstream");
+            }
             "socket" => {
                 settings.socket = value
                     .get::<Option<gio::Socket>>()
@@ -1283,6 +1311,7 @@ impl ObjectImpl for UdpSink {
             "bind-port" => settings.bind_port.to_value(),
             "bind-address-v6" => settings.bind_address_v6.to_value(),
             "bind-port-v6" => settings.bind_port_v6.to_value(),
+            "reuse" => settings.reuse.to_value(),
             "socket" => settings
                 .socket
                 .as_ref()

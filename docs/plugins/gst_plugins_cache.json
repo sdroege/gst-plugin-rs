@@ -20318,6 +20318,18 @@
                         "type": "gint",
                         "writable": true
                     },
+                    "reuse": {
+                        "blurb": "Allow reuse of the port",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "socket": {
                         "blurb": "Socket to use for UDP transmission. (None == allocate)",
                         "conditionally-available": false,
