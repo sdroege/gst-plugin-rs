@@ -183,32 +183,32 @@ fn run_raw_video_test(
 
 #[test]
 fn test_rtpvraw_rgb() {
-    run_raw_video_test(gst_video::VideoFormat::Rgb, 320, 240, 167);
+    run_raw_video_test(gst_video::VideoFormat::Rgb, 320, 240, 168);
 }
 
 #[test]
 fn test_rtpvraw_bgr() {
-    run_raw_video_test(gst_video::VideoFormat::Bgr, 320, 240, 167);
+    run_raw_video_test(gst_video::VideoFormat::Bgr, 320, 240, 168);
 }
 
 #[test]
 fn test_rtpvraw_rgba() {
-    run_raw_video_test(gst_video::VideoFormat::Rgba, 320, 240, 223);
+    run_raw_video_test(gst_video::VideoFormat::Rgba, 320, 240, 224);
 }
 
 #[test]
 fn test_rtpvraw_bgra() {
-    run_raw_video_test(gst_video::VideoFormat::Bgra, 320, 240, 223);
+    run_raw_video_test(gst_video::VideoFormat::Bgra, 320, 240, 224);
 }
 
 #[test]
 fn test_rtpvraw_v308() {
-    run_raw_video_test(gst_video::VideoFormat::V308, 320, 240, 167);
+    run_raw_video_test(gst_video::VideoFormat::V308, 320, 240, 168);
 }
 
 #[test]
 fn test_rtpvraw_uyvy() {
-    run_raw_video_test(gst_video::VideoFormat::Uyvy, 320, 240, 112);
+    run_raw_video_test(gst_video::VideoFormat::Uyvy, 320, 240, 113);
 }
 
 #[test]
@@ -218,10 +218,10 @@ fn test_rtpvraw_i420() {
 
 #[test]
 fn test_rtpvraw_y41b() {
-    run_raw_video_test(gst_video::VideoFormat::Y41b, 320, 240, 84);
+    run_raw_video_test(gst_video::VideoFormat::Y41b, 320, 240, 85);
 }
 
 #[test]
 fn test_rtpvraw_uyvp() {
-    run_raw_video_test(gst_video::VideoFormat::Uyvp, 320, 240, 140);
+    run_raw_video_test(gst_video::VideoFormat::Uyvp, 320, 240, 141);
 }

@@ -202,6 +202,6 @@ impl PacketBuilder {
         let packet = self.packet.as_mut().unwrap();
         let length_in_bytes = n_pgroups * self.pgroup_size;
         packet.add_line_chunk(x_off, y_off, length_in_bytes);
-        self.bytes_left_in_packet -= length_in_bytes;
+        self.bytes_left_in_packet -= VRAW_CHUNK_HDR_LEN + length_in_bytes;
     }
 }
