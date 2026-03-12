@@ -286,9 +286,6 @@ documentation:
     # Set the code page to UTF-8
     - chcp 65001
 
-    # export libclang from LLVM 20
-    - $env:LIBCLANG_PATH="$env:USERPROFILE\.cargo\bin"
-
     # We need to build each crate separately to choose that can build on windows
     - cmd.exe /C "C:\BuildTools\Common7\Tools\VsDevCmd.bat -host_arch=amd64 -arch=amd64 &&
       powershell ./ci/run_windows_tests.ps1"
