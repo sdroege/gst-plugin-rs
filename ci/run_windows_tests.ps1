@@ -41,6 +41,7 @@ function Run-Tests {
     }
     if ($Features -eq '--no-default-features') {
         $local_exclude += @("--exclude", "gst-plugin-burn")
+        $local_exclude += @("--exclude", "gst-plugin-compress")
     }
 
     Write-Host "Features: $Features"
