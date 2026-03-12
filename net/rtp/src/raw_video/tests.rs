@@ -184,26 +184,56 @@ fn run_raw_video_test(
 #[test]
 fn test_rtpvraw_rgb() {
     run_raw_video_test(gst_video::VideoFormat::Rgb, 320, 240, 168);
+    run_raw_video_test(gst_video::VideoFormat::Rgb, 320, 241, 169);
+    run_raw_video_test(gst_video::VideoFormat::Rgb, 320, 239, 168);
+    run_raw_video_test(gst_video::VideoFormat::Rgb, 321, 240, 169);
+    run_raw_video_test(gst_video::VideoFormat::Rgb, 319, 240, 168);
+    run_raw_video_test(gst_video::VideoFormat::Rgb, 321, 241, 170);
+    run_raw_video_test(gst_video::VideoFormat::Rgb, 319, 239, 167);
 }
 
 #[test]
 fn test_rtpvraw_bgr() {
     run_raw_video_test(gst_video::VideoFormat::Bgr, 320, 240, 168);
+    run_raw_video_test(gst_video::VideoFormat::Bgr, 320, 241, 169);
+    run_raw_video_test(gst_video::VideoFormat::Bgr, 320, 239, 168);
+    run_raw_video_test(gst_video::VideoFormat::Bgr, 321, 240, 169);
+    run_raw_video_test(gst_video::VideoFormat::Bgr, 319, 240, 168);
+    run_raw_video_test(gst_video::VideoFormat::Bgr, 321, 241, 170);
+    run_raw_video_test(gst_video::VideoFormat::Bgr, 319, 239, 167);
 }
 
 #[test]
 fn test_rtpvraw_rgba() {
     run_raw_video_test(gst_video::VideoFormat::Rgba, 320, 240, 224);
+    run_raw_video_test(gst_video::VideoFormat::Rgba, 320, 241, 225);
+    run_raw_video_test(gst_video::VideoFormat::Rgba, 320, 239, 224);
+    run_raw_video_test(gst_video::VideoFormat::Rgba, 321, 240, 225);
+    run_raw_video_test(gst_video::VideoFormat::Rgba, 319, 240, 224);
+    run_raw_video_test(gst_video::VideoFormat::Rgba, 321, 241, 226);
+    run_raw_video_test(gst_video::VideoFormat::Rgba, 319, 239, 223);
 }
 
 #[test]
 fn test_rtpvraw_bgra() {
     run_raw_video_test(gst_video::VideoFormat::Bgra, 320, 240, 224);
+    run_raw_video_test(gst_video::VideoFormat::Bgra, 320, 241, 225);
+    run_raw_video_test(gst_video::VideoFormat::Bgra, 320, 239, 224);
+    run_raw_video_test(gst_video::VideoFormat::Bgra, 321, 240, 225);
+    run_raw_video_test(gst_video::VideoFormat::Bgra, 319, 240, 224);
+    run_raw_video_test(gst_video::VideoFormat::Bgra, 321, 241, 226);
+    run_raw_video_test(gst_video::VideoFormat::Bgra, 319, 239, 223);
 }
 
 #[test]
 fn test_rtpvraw_v308() {
     run_raw_video_test(gst_video::VideoFormat::V308, 320, 240, 168);
+    run_raw_video_test(gst_video::VideoFormat::V308, 320, 241, 169);
+    run_raw_video_test(gst_video::VideoFormat::V308, 320, 239, 168);
+    run_raw_video_test(gst_video::VideoFormat::V308, 321, 240, 169);
+    run_raw_video_test(gst_video::VideoFormat::V308, 319, 240, 168);
+    run_raw_video_test(gst_video::VideoFormat::V308, 321, 241, 170);
+    run_raw_video_test(gst_video::VideoFormat::V308, 319, 239, 167);
 }
 
 #[test]
