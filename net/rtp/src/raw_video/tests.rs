@@ -14,6 +14,28 @@ fn init() {
     });
 }
 
+fn calc_active_bytes_per_line(video_info: &gst_video::VideoInfo) -> [usize; 4] {
+    use gst_video::VideoFormat::*;
+
+    let width = video_info.width() as usize;
+
+    match video_info.format() {
+        Rgb | Rgba | Bgr | Bgra | V308 | Uyvy => {
+            let pstride = video_info.comp_pstride(0) as usize;
+            [pstride * width, 0, 0, 0]
+        }
+        I420 | Uyvp => {
+            // 4:2:x
+            [width, width / 2, width / 2, 0]
+        }
+        Y41b => {
+            // 4:1:x
+            [width, width / 4, width / 4, 0]
+        }
+        fmt => todo!("implement for {fmt}"),
+    }
+}
+
 fn create_test_frame(video_info: &gst_video::VideoInfo, frame_idx: u64) -> gst::Buffer {
     let size = video_info.size();
     let mut buffer = gst::Buffer::with_size(size).unwrap();
@@ -24,6 +46,8 @@ fn create_test_frame(video_info: &gst_video::VideoInfo, frame_idx: u64) -> gst::
         let mut frame =
             gst_video::VideoFrameRef::from_buffer_ref_writable(buffer, video_info).unwrap();
 
+        let n_active_bytes_per_line = calc_active_bytes_per_line(video_info);
+
         // Fill with an increasing bit pattern that can be checked again later
         let mut idx = frame_idx;
         for plane_idx in 0..frame.n_planes() {
@@ -31,9 +55,10 @@ fn create_test_frame(video_info: &gst_video::VideoInfo, frame_idx: u64) -> gst::
             let plane = frame.plane_data_mut(plane_idx).unwrap();
 
             for line in plane.chunks_mut(stride) {
-                // FIXME: This fills padding at the end of each line which will get dropped
-                // but as we use 320 as width there is actually no padding
-                for b in line.iter_mut() {
+                // Skip padding at the end of each line
+                let n_active_bytes = n_active_bytes_per_line[plane_idx as usize];
+
+                for b in line[0..n_active_bytes].iter_mut() {
                     *b = (idx & 0xff) as u8;
                     idx = idx.wrapping_add(1);
                 }
@@ -51,19 +76,25 @@ fn check_test_frame(
 ) -> anyhow::Result<()> {
     let frame = gst_video::VideoFrameRef::from_buffer_ref_readable(buffer, video_info).unwrap();
 
+    let n_active_bytes_per_line = calc_active_bytes_per_line(video_info);
+
     let mut idx = frame_idx;
     for plane_idx in 0..frame.n_planes() {
         let stride = frame.plane_stride()[plane_idx as usize] as usize;
         let plane = frame.plane_data(plane_idx).unwrap();
 
         for (y, line) in plane.chunks(stride).enumerate() {
-            for (x, b) in line.iter().enumerate() {
+            // Skip padding at the end of each line
+            let n_active_bytes = n_active_bytes_per_line[plane_idx as usize];
+
+            for (x, b) in line[0..n_active_bytes].iter().enumerate() {
                 let expected_byte = (idx & 0xff) as u8;
                 let actual_byte = *b;
 
                 if actual_byte != expected_byte {
                     bail!(
-                        "Plane {plane_idx}: Expected byte {expected_byte} at position ({x}, {y}) but got {actual_byte}",
+                        "Plane {plane_idx}: Expected byte {expected_byte} at position ({x}, {y})\
+                        but got {actual_byte}, stride={stride}, active_bytes={n_active_bytes}",
                     );
                 }
                 idx = idx.wrapping_add(1);
