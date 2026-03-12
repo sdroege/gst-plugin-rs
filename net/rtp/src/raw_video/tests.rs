@@ -239,6 +239,12 @@ fn test_rtpvraw_v308() {
 #[test]
 fn test_rtpvraw_uyvy() {
     run_raw_video_test(gst_video::VideoFormat::Uyvy, 320, 240, 113);
+    run_raw_video_test(gst_video::VideoFormat::Uyvy, 320, 241, 113);
+    run_raw_video_test(gst_video::VideoFormat::Uyvy, 320, 239, 112);
+    run_raw_video_test(gst_video::VideoFormat::Uyvy, 321, 240, 114);
+    run_raw_video_test(gst_video::VideoFormat::Uyvy, 319, 240, 113);
+    run_raw_video_test(gst_video::VideoFormat::Uyvy, 321, 241, 114);
+    run_raw_video_test(gst_video::VideoFormat::Uyvy, 319, 239, 112);
 }
 
 #[test]

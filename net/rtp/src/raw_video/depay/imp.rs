@@ -586,11 +586,18 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
         {
             gst::trace!(CAT, imp = self, "Chunk {i}: {length} bytes @ {x},{y}");
 
-            let n_pixels = (length / pgroup.size()) * pgroup.x_inc();
+            let pgroup_size = pgroup.size();
+
+            let x_inc = pgroup.x_inc();
+            let y_inc = pgroup.y_inc();
+
+            let mut n_pixels = (length / pgroup_size) * x_inc;
+
+            let mut length = length;
 
             // Check lengths and line/pixel offsets
 
-            if payload.len() < length || length % pgroup.size() != 0 {
+            if payload.len() < length || length % pgroup_size != 0 {
                 gst::warning!(
                     CAT,
                     imp = self,
@@ -598,36 +605,44 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
                     length,
                     payload.len(),
                 );
-                return Ok(gst::FlowSuccess::Ok);
+
+                continue;
             }
 
-            if x + n_pixels > width
-                || y + pgroup.y_inc() > height
-                || x % pgroup.x_inc() != 0
-                || y % pgroup.y_inc() != 0
+            if x + x_inc > width.next_multiple_of(x_inc)
+                || y + y_inc > height.next_multiple_of(y_inc)
+                || x % x_inc != 0
+                || y % y_inc != 0
             {
                 gst::warning!(
                     CAT,
                     imp = self,
                     "Bad chunk header: {n_pixels} pixels @ {x},{y} \
                     with resolution {width}x{height} \
-                    and pgroup size {}, x_inc {}, y_inc {}",
-                    pgroup.size(),
-                    pgroup.x_inc(),
-                    pgroup.y_inc(),
+                    and pgroup size {pgroup_size}, x_inc {x_inc}, y_inc {y_inc}",
                 );
-                return Ok(gst::FlowSuccess::Ok);
+
+                continue;
             }
 
             let (chunk_data, remainder) = payload.split_at(length);
 
             match format {
                 // Formats where we can just memcpy pixels directly from source to dest
-                VideoFormat::Rgb
-                | VideoFormat::Rgba
-                | VideoFormat::Bgr
-                | VideoFormat::Bgra
-                | VideoFormat::Uyvy => {
+                VideoFormat::Rgb | VideoFormat::Rgba | VideoFormat::Bgr | VideoFormat::Bgra => {
+                    // Clip length if needed
+                    if x + n_pixels > width {
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Bad chunk header: {n_pixels} pixels @ {x},{y} \
+                            with resolution {width}x{height}, clipping",
+                        );
+
+                        n_pixels -= (x + n_pixels) - width;
+                        length = n_pixels * pstride;
+                    }
+
                     let data = vframe.plane_data_mut(0).unwrap();
                     let line = data.chunks_exact_mut(stride).nth(y).unwrap();
 
@@ -635,6 +650,30 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
                     let pixels = &mut line[byte_offset..][..length];
 
                     pixels.copy_from_slice(chunk_data);
+                }
+
+                // Uyvy: packed YUV 4:2:2
+                VideoFormat::Uyvy => {
+                    // Clip length if needed, but take into the odd width scenario
+                    if x + n_pixels > width.next_multiple_of(2) {
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Bad chunk header: {n_pixels} pixels @ {x},{y} \
+                            with resolution {width}x{height}, clipping",
+                        );
+
+                        n_pixels -= (x + n_pixels) - width.next_multiple_of(2);
+                        length = n_pixels * pstride;
+                    }
+
+                    let data = vframe.plane_data_mut(0).unwrap();
+                    let line = data.chunks_exact_mut(stride).nth(y).unwrap();
+
+                    let byte_offset = x * pstride;
+                    let pixels = &mut line[byte_offset..][..length];
+
+                    pixels.copy_from_slice(&chunk_data[0..length]);
                 }
 
                 // Uyvp: packed 10-bit 4:2:2 YUV (U0-Y0-V0-Y1 U2-Y2-V2-Y3 U4 ...), 2 pixels in 5 bytes
@@ -650,6 +689,19 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
 
                 // v308 is straight copy with some component reordering
                 VideoFormat::V308 => {
+                    // Clip length if needed
+                    if x + n_pixels > width {
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Bad chunk header: {n_pixels} pixels @ {x},{y} \
+                            with resolution {width}x{height}, clipping",
+                        );
+
+                        n_pixels -= (x + n_pixels) - width;
+                        length = n_pixels * pstride;
+                    }
+
                     let data = vframe.plane_data_mut(0).unwrap();
                     let line = data.chunks_exact_mut(stride).nth(y).unwrap();
 
