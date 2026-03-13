@@ -1094,8 +1094,13 @@ impl PushSrcImpl for UdpSrc {
                         if event.is_readable() {
                             gst::trace!(CAT, imp = self, "Socket readable again");
                             continue 'outer_loop;
-                        } else if event.is_read_closed() || event.is_write_closed() {
-                            gst::debug!(CAT, imp = self, "Socket unexpectedly closed");
+                        } else if event.is_write_closed() {
+                            gst::debug!(CAT, imp = self, "Socket unexpectedly write closed");
+                            // This can happen receiving an ICMP error
+                            // when the socket is bound to the same port as a UDP sender
+                            continue 'outer_loop;
+                        } else if event.is_read_closed() {
+                            gst::debug!(CAT, imp = self, "Socket unexpectedly read closed");
                             return Err(gst::FlowError::Error);
                         } else if event.is_error() {
                             gst::error!(CAT, imp = self, "Socket error");

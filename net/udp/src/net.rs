@@ -1268,9 +1268,19 @@ impl UdpSocket {
 
                 if n_msgs == -1 {
                     let err = io::Error::last_os_error();
-                    if err.kind() == io::ErrorKind::Interrupted {
-                        continue;
+                    match err.kind() {
+                        io::ErrorKind::Interrupted => continue,
+                        io::ErrorKind::HostUnreachable | io::ErrorKind::ConnectionReset => {
+                            // ICMP error
+                            // this can happen when the port is reused and shared with a UDP sender
+                            self.buffers_cache.extend(buffers.drain(..));
+                            gst::warning!(CAT, obj = self.element, "Read error: {err}");
+                            continue;
+                        }
+                        io::ErrorKind::WouldBlock => (),
+                        _ => gst::error!(CAT, obj = self.element, "Read error: {err}"),
                     }
+
                     self.buffers_cache.extend(buffers.drain(..));
                     return Err(err);
                 } else if n_msgs == 0 {
@@ -1807,6 +1817,18 @@ impl UdpSocket {
                     self.buffers_cache.push_back(buffer);
                     continue;
                 }
+                Err(err)
+                    if matches!(
+                        err.kind(),
+                        io::ErrorKind::HostUnreachable | io::ErrorKind::ConnectionReset
+                    ) =>
+                {
+                    // ICMP error
+                    // this can happen when the port is reused and shared with a UDP sender
+                    gst::warning!(CAT, obj = self.element, "Read error: {err}");
+                    self.buffers_cache.push_back(buffer);
+                    continue;
+                }
                 Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
                     self.buffers_cache.push_back(buffer);
                     break;
@@ -1933,6 +1955,18 @@ impl UdpSocket {
                     return Err(err).context("Receiving packet");
                 }
                 Err(err) if err.kind() == io::ErrorKind::Interrupted => {
+                    self.buffers_cache.push_back(buffer);
+                    continue;
+                }
+                Err(err)
+                    if matches!(
+                        err.kind(),
+                        io::ErrorKind::HostUnreachable | io::ErrorKind::ConnectionReset
+                    ) =>
+                {
+                    // ICMP error (ConnectionReset matches CONNECTION_CLOSED)
+                    // this can happen when the port is reused and shared with a UDP sender
+                    gst::warning!(CAT, obj = self.element, "Read error: {err}");
                     self.buffers_cache.push_back(buffer);
                     continue;
                 }
