@@ -2,7 +2,7 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, Weak},
     task::Waker,
     time::Duration,
 };
@@ -22,97 +22,79 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
-static SHARED_RTP_STATE: OnceLock<Mutex<HashMap<String, SharedRtpState>>> = OnceLock::new();
+/// Global Shared RTP state directory
+///
+/// Each entry corresponds to a named RTP State which can be shared by a sender and a receiver element.
+/// A new entry is added, if not already present, upon a call to `SharedRtpState::get_or_init` and
+/// a strong reference to the value of this entry is returned upon subsequent calls.
+///
+/// When no more elements hold a strong reference to the `SharedRtpState`, the `Drop` impl of
+/// `SharedRtpStateInner` removes the entry from the global Shared RTP state directory.
+/// This is why the `HashMap` value is a `Weak` pointer.
+static SHARED_RTP_STATE: OnceLock<Mutex<HashMap<String, Weak<Mutex<SharedRtpStateInner>>>>> =
+    OnceLock::new();
 
 #[derive(Debug, Clone)]
-pub struct SharedRtpState {
-    name: String,
-    inner: Arc<Mutex<SharedRtpStateInner>>,
-}
+pub struct SharedRtpState(Arc<Mutex<SharedRtpStateInner>>);
 
 #[derive(Debug)]
 struct SharedRtpStateInner {
+    name: String,
     sessions: HashMap<usize, SharedSession>,
-    send_outstanding: bool,
-    recv_outstanding: bool,
 }
 
 impl SharedRtpState {
-    pub fn recv_get_or_init(name: String) -> Self {
-        SHARED_RTP_STATE
+    pub fn get_or_init(name: String) -> Self {
+        use std::collections::hash_map::Entry;
+
+        match SHARED_RTP_STATE
             .get_or_init(|| Mutex::new(HashMap::new()))
             .lock()
             .unwrap()
             .entry(name)
-            .and_modify(|v| {
-                v.inner.lock().unwrap().recv_outstanding = true;
-            })
-            .or_insert_with_key(|name| SharedRtpState {
-                name: name.to_owned(),
-                inner: Arc::new(Mutex::new(SharedRtpStateInner {
+        {
+            Entry::Occupied(entry) => SharedRtpState(entry.get().upgrade().unwrap()),
+            Entry::Vacant(entry) => {
+                let shared_state = Arc::new(Mutex::new(SharedRtpStateInner {
+                    name: entry.key().to_owned(),
                     sessions: HashMap::new(),
-                    send_outstanding: false,
-                    recv_outstanding: true,
-                })),
-            })
-            .clone()
-    }
+                }));
+                entry.insert(Arc::downgrade(&shared_state));
 
-    pub fn send_get_or_init(name: String) -> Self {
-        SHARED_RTP_STATE
-            .get_or_init(|| Mutex::new(HashMap::new()))
-            .lock()
-            .unwrap()
-            .entry(name)
-            .and_modify(|v| {
-                v.inner.lock().unwrap().send_outstanding = true;
-            })
-            .or_insert_with_key(|name| SharedRtpState {
-                name: name.to_owned(),
-                inner: Arc::new(Mutex::new(SharedRtpStateInner {
-                    sessions: HashMap::new(),
-                    send_outstanding: true,
-                    recv_outstanding: false,
-                })),
-            })
-            .clone()
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn unmark_send_outstanding(&self) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.send_outstanding = false;
-        if !inner.recv_outstanding {
-            Self::remove_from_global(&self.name);
+                SharedRtpState(shared_state)
+            }
         }
     }
 
-    pub fn unmark_recv_outstanding(&self) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.recv_outstanding = false;
-        if !inner.send_outstanding {
-            Self::remove_from_global(&self.name);
-        }
-    }
-
-    fn remove_from_global(name: &str) {
-        let _shared = SHARED_RTP_STATE.get().unwrap().lock().unwrap().remove(name);
+    // Currently this is only used in NULL -> Ready to make sure current name matches the rtp_id
+    // Should we need to avoid returning an owned String, we could return a wrapper around
+    // `MutexGuard` and impl `Deref::Target = &str`, or use `MutexGuard::map` once it's stable.
+    pub fn name(&self) -> String {
+        self.0.lock().unwrap().name.clone()
     }
 
     pub fn session_get_or_init<F>(&self, id: usize, f: F) -> SharedSession
     where
         F: FnOnce() -> SharedSession,
     {
-        self.inner
+        self.0
             .lock()
             .unwrap()
             .sessions
             .entry(id)
             .or_insert_with(f)
             .clone()
+    }
+}
+
+impl Drop for SharedRtpStateInner {
+    fn drop(&mut self) {
+        SHARED_RTP_STATE
+            .get()
+            .expect("get_or_init when SharedRtpState was acquired")
+            .lock()
+            .expect("none of the code paths can panic with this mutex locked")
+            .remove(&self.name);
     }
 }
 
