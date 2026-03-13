@@ -75,11 +75,15 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
+static TIMESTAMP_NTP_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::builder("timestamp/x-ntp").build());
+
 #[derive(Debug, Clone)]
 struct Settings {
     rtp_id: String,
     latency: gst::ClockTime,
     timestamping_mode: sync::TimestampingMode,
+    add_reference_timestamp_meta: bool,
 }
 
 impl Default for Settings {
@@ -88,6 +92,7 @@ impl Default for Settings {
             rtp_id: String::from("rtp-id"),
             latency: DEFAULT_LATENCY,
             timestamping_mode: sync::TimestampingMode::default(),
+            add_reference_timestamp_meta: false,
         }
     }
 }
@@ -1028,7 +1033,7 @@ impl RtpRecv {
         let internal_session = session.internal_session.clone();
         let mut session_inner = internal_session.inner.lock().unwrap();
 
-        let pts = {
+        let (pts, ntp_time) = {
             let mut sync_context = self.sync_context.lock().unwrap();
             let sync_context = sync_context.as_mut().unwrap();
             if !sync_context.has_clock_rate(rtp.ssrc()) {
@@ -1066,10 +1071,7 @@ impl RtpRecv {
                 sync_context.set_clock_rate(rtp.ssrc(), clock_rate);
             }
 
-            // TODO: Put NTP time as `gst::ReferenceTimeStampMeta` on the buffers if selected via property
-            let (pts, _ntp_time) =
-                sync_context.calculate_pts(rtp.ssrc(), rtp.timestamp(), arrival_time.nseconds());
-            pts
+            sync_context.calculate_pts(rtp.ssrc(), rtp.timestamp(), arrival_time.nseconds())
         };
 
         let segment = session.rtp_recv_sink_segment.as_ref().unwrap();
@@ -1097,6 +1099,19 @@ impl RtpRecv {
                     {
                         let buf_mut = buffer.make_mut();
                         buf_mut.set_pts(pts);
+
+                        if self.settings.lock().unwrap().add_reference_timestamp_meta
+                            && let Some(ntp_time) = ntp_time
+                        {
+                            gst::ReferenceTimestampMeta::add(
+                                buf_mut,
+                                &TIMESTAMP_NTP_CAPS,
+                                gst::ClockTime::from_nseconds(
+                                    ntp_time.as_duration().unwrap().as_nanos() as u64,
+                                ),
+                                None,
+                            );
+                        }
                     }
                     let (recv_src_pad, is_new_pad) = session.get_or_create_rtp_src(self, pt, ssrc);
                     if is_new_pad {
@@ -1143,6 +1158,19 @@ impl RtpRecv {
                     {
                         let buf_mut = buffer.make_mut();
                         buf_mut.set_pts(pts);
+
+                        if self.settings.lock().unwrap().add_reference_timestamp_meta
+                            && let Some(ntp_time) = ntp_time
+                        {
+                            gst::ReferenceTimestampMeta::add(
+                                buf_mut,
+                                &TIMESTAMP_NTP_CAPS,
+                                gst::ClockTime::from_nseconds(
+                                    ntp_time.as_duration().unwrap().as_nanos() as u64,
+                                ),
+                                None,
+                            );
+                        }
                     }
                     let (recv_src_pad, is_new_pad) = session.get_or_create_rtp_src(self, pt, ssrc);
                     if is_new_pad {
@@ -2181,6 +2209,11 @@ impl ObjectImpl for RtpRecv {
                     .default_value(sync::TimestampingMode::default())
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("add-reference-timestamp-meta")
+                    .nick("Add Reference Timestamp Meta")
+                    .blurb("Add Reference Timestamp Meta to buffers with the sender clock timestamp")
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -2212,6 +2245,10 @@ impl ObjectImpl for RtpRecv {
                     .get::<sync::TimestampingMode>()
                     .expect("Type checked upstream");
             }
+            "add-reference-timestamp-meta" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.add_reference_timestamp_meta = value.get().expect("Type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -2233,6 +2270,10 @@ impl ObjectImpl for RtpRecv {
             "timestamping-mode" => {
                 let settings = self.settings.lock().unwrap();
                 settings.timestamping_mode.to_value()
+            }
+            "add-reference-timestamp-meta" => {
+                let settings = self.settings.lock().unwrap();
+                settings.add_reference_timestamp_meta.to_value()
             }
             _ => unimplemented!(),
         }
