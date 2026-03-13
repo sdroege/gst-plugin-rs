@@ -148,3 +148,85 @@ fn test_socket_reuse() {
         assert_eq!(buffer.size(), 160);
     }
 }
+
+#[test]
+#[ignore = "In order to test this properly, the UNREACHABLE_DESTINATION must point to an unknown host in the subnet"]
+fn icmp_destination_unreachable() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+
+    use gio::prelude::*;
+
+    const UNREACHABLE_DESTINATION: &str = "192.168.1.15:6003";
+    const BIND_PORT: i32 = 6002;
+    const MAX_SEND: usize = 15;
+
+    init();
+
+    let socket = gio::Socket::new(
+        gio::SocketFamily::Ipv4,
+        gio::SocketType::Datagram,
+        gio::SocketProtocol::Udp,
+    )
+    .unwrap();
+    #[cfg(any(
+        target_os = "android",
+        target_os = "linux",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "freebsd",
+    ))]
+    socket
+        .set_option(libc::IPPROTO_IP, libc::IP_RECVERR, 1)
+        .unwrap();
+    let addr = gio::InetAddress::new_any(gio::SocketFamily::Ipv4);
+    socket
+        .bind(&gio::InetSocketAddress::new(&addr, BIND_PORT as u16), true)
+        .unwrap();
+
+    let udpsrc = gst::ElementFactory::make("ts-udpsrc")
+        .property("context", "icmp-dest-unreachable")
+        .property("socket", socket)
+        .build()
+        .unwrap();
+    let bus = gst::glib::Object::new::<gst::Bus>();
+    udpsrc.set_bus(Some(&bus));
+
+    let mut ts_src_h = gst_check::Harness::with_element(&udpsrc, None, Some("src"));
+    ts_src_h.play();
+
+    let done = Arc::new(AtomicBool::new(false));
+    thread::spawn({
+        let done = done.clone();
+        move || {
+            let udpsink = gst::ElementFactory::make("ts-udpsink")
+                .property("context", "icmp-dest-unreachable")
+                .property("bind-port", BIND_PORT)
+                .property("clients", UNREACHABLE_DESTINATION)
+                .build()
+                .unwrap();
+
+            let mut ts_sink_h = gst_check::Harness::with_element(&udpsink, Some("sink"), None);
+            ts_sink_h.set_src_caps_str("foo/bar");
+            ts_sink_h.play();
+
+            for i in 0..MAX_SEND {
+                ts_sink_h.push(gst::Buffer::from_slice([42])).unwrap();
+                println!("udp send: {i}");
+                thread::sleep(std::time::Duration::from_millis(500));
+            }
+
+            done.store(true, Ordering::SeqCst);
+        }
+    });
+
+    while !done.load(Ordering::SeqCst) {
+        while let Some(msg) = bus.pop() {
+            if let gst::MessageView::Error(msg) = msg.view() {
+                panic!("udp recv: {msg:?}");
+            }
+        }
+    }
+}

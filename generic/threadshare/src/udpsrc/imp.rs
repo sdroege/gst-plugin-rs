@@ -610,67 +610,81 @@ impl TaskImpl for UdpSrcTask {
     }
 
     async fn try_next(&mut self) -> Result<gst::Buffer, gst::FlowError> {
-        let event_fut = self.event_receiver.next().fuse();
-        let socket_fut = self.socket.as_mut().unwrap().try_next().fuse();
+        loop {
+            let event_fut = self.event_receiver.next().fuse();
+            let socket_fut = self.socket.as_mut().unwrap().try_next().fuse();
 
-        pin_mut!(event_fut);
-        pin_mut!(socket_fut);
+            pin_mut!(event_fut);
+            pin_mut!(socket_fut);
 
-        futures::select! {
-            event_res = event_fut => match event_res {
-                Some(event) => {
-                    gst::debug!(CAT, obj = self.element, "Handling element level event {event:?}");
+            futures::select! {
+                event_res = event_fut => match event_res {
+                    Some(event) => {
+                        gst::debug!(CAT, obj = self.element, "Handling element level event {event:?}");
 
-                    match event.view() {
-                        gst::EventView::Eos(_) => Err(gst::FlowError::Eos),
-                        ev => {
-                            gst::error!(CAT, obj = self.element, "Unexpected event {ev:?} on channel");
-                            Err(gst::FlowError::Error)
+                        match event.view() {
+                            gst::EventView::Eos(_) => return Err(gst::FlowError::Eos),
+                            ev => {
+                                gst::error!(CAT, obj = self.element, "Unexpected event {ev:?} on channel");
+                                return Err(gst::FlowError::Error);
+                            }
                         }
                     }
-                }
-                None => {
-                    gst::error!(CAT, obj = self.element, "Unexpected return on event channel");
-                    Err(gst::FlowError::Error)
-                }
-            },
-            socket_res = socket_fut => match socket_res {
-                Ok((mut buffer, saddr)) => {
-                    if let Some(saddr) = saddr
-                        && self.retrieve_sender_address {
-                            NetAddressMeta::add(
-                                buffer.get_mut().unwrap(),
-                                &gio::InetSocketAddress::from(saddr),
-                            );
-                        }
-
-                    Ok(buffer)
+                    None => {
+                        gst::error!(CAT, obj = self.element, "Unexpected return on event channel");
+                        return Err(gst::FlowError::Error);
+                    }
                 },
-                Err(err) => {
-                    gst::error!(CAT, obj = self.element, "Got error {err:#}");
+                socket_res = socket_fut => match socket_res {
+                    Ok((mut buffer, saddr)) => {
+                        if let Some(saddr) = saddr
+                            && self.retrieve_sender_address {
+                                NetAddressMeta::add(
+                                    buffer.get_mut().unwrap(),
+                                    &gio::InetSocketAddress::from(saddr),
+                                );
+                            }
 
-                    match err {
-                        SocketError::Gst(err) => {
-                            gst::element_error!(
-                                self.element,
-                                gst::StreamError::Failed,
-                                ("Internal data stream error"),
-                                ["streaming stopped, reason {err}"]
-                            );
+                        return Ok(buffer);
+                    },
+                    Err(err) => {
+                        match err {
+                            SocketError::Gst(err) => {
+                                gst::element_error!(
+                                    self.element,
+                                    gst::StreamError::Failed,
+                                    ("Internal data stream error"),
+                                    ["streaming stopped, reason {err}"]
+                                );
+                                gst::error!(CAT, obj = self.element, "socket recv: {err}");
+                            }
+                            SocketError::Io(err) => {
+                                if matches!(
+                                    err.kind(),
+                                    io::ErrorKind::HostUnreachable
+                                    // This is needed on Windows & matches CONNECTION_CLOSED
+                                    | io::ErrorKind::ConnectionReset
+                                ) {
+                                    // ICMP error
+                                    // this can happen when the port is reused and shared with a UDP sender
+                                    gst::warning!(CAT, obj = self.element, "socket recv: {err}");
+                                    continue;
+                                }
+
+                                gst::element_error!(
+                                    self.element,
+                                    gst::StreamError::Failed,
+                                    ("I/O error"),
+                                    ["streaming stopped, I/O error {err}"]
+                                );
+                                gst::error!(CAT, obj = self.element, "socket recv: {err}");
+                            }
                         }
-                        SocketError::Io(err) => {
-                            gst::element_error!(
-                                self.element,
-                                gst::StreamError::Failed,
-                                ("I/O error"),
-                                ["streaming stopped, I/O error {err}"]
-                            );
-                        }
+
+                        return Err(gst::FlowError::Error);
                     }
-
-                    Err(gst::FlowError::Error)
-                }
-            },
+                },
+            }
         }
     }
 
