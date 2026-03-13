@@ -12,7 +12,7 @@ rust-version.workspace = true
 gst = { workspace = true, features = ["v1_20"] }
 gst-base.workspace = true
 gst-audio = { workspace = true, features = ["v1_16"] }
-whisper-rs = { version = "0.15", features = [] }
+whisper-rs = { version = "0.16", features = [] }
 byte-slice-cast = "1.0"
 
 [lib]

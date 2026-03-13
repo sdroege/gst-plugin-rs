@@ -229,7 +229,7 @@ struct State {
     // Used to determine whether a token is "special"
     token_eot: Option<WhisperTokenId>,
     out_pts: Option<gst::ClockTime>,
-    inference_tx: Option<mpsc::Sender<(WhisperState, Result<i32, WhisperError>)>>,
+    inference_tx: Option<mpsc::Sender<(WhisperState, Result<(), WhisperError>)>>,
     model_tx: Option<mpsc::Sender<WhisperState>>,
     model_rx: Option<mpsc::Receiver<WhisperState>>,
     thread_pool: Option<glib::ThreadPool>,
