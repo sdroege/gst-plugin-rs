@@ -2401,7 +2401,7 @@ impl ElementImpl for RtpRecv {
                 } else {
                     let shared_state = state
                         .shared_state
-                        .get_or_insert_with(|| SharedRtpState::recv_get_or_init(rtp_id));
+                        .get_or_insert_with(|| SharedRtpState::get_or_init(rtp_id));
                     let mut session = RecvSession::new(shared_state, id);
                     let ret = new_pad(&mut session);
                     state.sessions.push(session);
@@ -2446,7 +2446,7 @@ impl ElementImpl for RtpRecv {
                 } else {
                     let shared_state = state
                         .shared_state
-                        .get_or_insert_with(|| SharedRtpState::recv_get_or_init(rtp_id));
+                        .get_or_insert_with(|| SharedRtpState::get_or_init(rtp_id));
                     let mut session = RecvSession::new(shared_state, id);
                     let ret = new_pad(&mut session);
                     state.sessions.push(session);
@@ -2561,14 +2561,14 @@ impl ElementImpl for RtpRecv {
                 match state.shared_state.as_mut() {
                     Some(shared) => {
                         if !empty_sessions && shared.name() != rtp_id {
-                            let other_name = shared.name().to_owned();
+                            let other_name = shared.name();
                             drop(state);
                             self.post_error_message(gst::error_msg!(gst::LibraryError::Settings, ["rtp-id {rtp_id} does not match the currently set value {other_name}"]));
                             return Err(gst::StateChangeError);
                         }
                     }
                     None => {
-                        state.shared_state = Some(SharedRtpState::send_get_or_init(rtp_id.clone()));
+                        state.shared_state = Some(SharedRtpState::get_or_init(rtp_id.clone()));
                     }
                 }
             }
@@ -2625,14 +2625,6 @@ impl ElementImpl for RtpRecv {
         }
 
         Ok(success)
-    }
-}
-
-impl Drop for RtpRecv {
-    fn drop(&mut self) {
-        if let Some(ref shared_state) = self.state.lock().unwrap().shared_state {
-            shared_state.unmark_recv_outstanding();
-        }
     }
 }
 
