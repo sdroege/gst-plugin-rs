@@ -73,6 +73,7 @@ pub(crate) const VRAW_CHUNK_HDR_LEN: usize = 6;
 pub struct RtpRawVideoDepay {
     state: AtomicRefCell<State>,
     settings: Mutex<Settings>,
+    scratch_space: AtomicRefCell<Vec<u8>>,
 }
 
 #[derive(Debug)]
@@ -654,7 +655,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
 
                 // Uyvy: packed YUV 4:2:2
                 VideoFormat::Uyvy => {
-                    // Clip length if needed, but take into the odd width scenario
+                    // Clip length if needed, but take into account the odd width scenario
                     if x + n_pixels > width.next_multiple_of(2) {
                         gst::warning!(
                             CAT,
@@ -718,8 +719,39 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
                 }
 
                 // Planar YUV 4:2:0
+                #[allow(clippy::manual_div_ceil)]
                 VideoFormat::I420 => {
                     use itertools::izip;
+
+                    // Clip length if needed, but take into the odd width scenario
+                    if x + n_pixels > width {
+                        if x + n_pixels > width.next_multiple_of(2) {
+                            gst::warning!(
+                                CAT,
+                                imp = self,
+                                "Bad chunk header: {n_pixels} pixels @ {x},{y} \
+                                with resolution {width}x{height}, clipping",
+                            );
+                        }
+
+                        n_pixels -= (x + n_pixels) - width;
+
+                        // We don't use it below right now, but should still update for correctness
+                        #[allow(unused_assignments)]
+                        {
+                            length = n_pixels * pstride;
+                        }
+                    }
+
+                    // Y stride not being a multiple of 2 is not a reasonable setup for 4:2:0
+                    if !n_pixels.is_multiple_of(2) && !stride.is_multiple_of(2) {
+                        gst::error!(
+                            CAT,
+                            imp = self,
+                            "Y stride for I420 is {stride} which is not a multiple of 2!",
+                        );
+                        return Err(gst::FlowError::NotNegotiated);
+                    }
 
                     const PGROUP_SIZE_I420: usize = 6;
 
@@ -727,16 +759,34 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
                     let v_stride = vframe.plane_stride()[2] as usize;
 
                     let [y_data, u_data, v_data, _] = vframe.planes_data_mut();
-                    let y_lines = y_data.chunks_exact_mut(2 * stride).nth(y / 2).unwrap();
-                    let (y_line1, y_line2) = y_lines.split_at_mut(stride);
-                    let y1_pixels = &mut y_line1[x..][..n_pixels];
-                    let y2_pixels = &mut y_line2[x..][..n_pixels];
+
+                    let mut scratch_space = self.scratch_space.borrow_mut();
+
+                    let (y1_pixels, y2_pixels) = if height.is_multiple_of(2) || y + 2 <= height {
+                        // Normal case, where height is a multiple of 2 or we're well below height
+                        let y_lines = y_data.chunks_exact_mut(2 * stride).nth(y / 2).unwrap();
+                        let (y_line1, y_line2) = y_lines.split_at_mut(stride);
+                        let y1_pixels = &mut y_line1[x..][..n_pixels.next_multiple_of(2)];
+                        let y2_pixels = &mut y_line2[x..][..n_pixels.next_multiple_of(2)];
+
+                        (y1_pixels, y2_pixels)
+                    } else {
+                        // Case where height is odd and we're at the bottom of the frame
+                        // with only one line left to fill
+                        let y_line1 = y_data.chunks_exact_mut(stride).nth(y).unwrap();
+                        let y1_pixels = &mut y_line1[x..][..n_pixels.next_multiple_of(2)];
+
+                        scratch_space.resize(n_pixels.next_multiple_of(2), 0);
+                        let y2_pixels = &mut scratch_space[..];
+
+                        (y1_pixels, y2_pixels)
+                    };
 
                     let u_line = u_data.chunks_exact_mut(u_stride).nth(y / 2).unwrap();
-                    let u_pixels = &mut u_line[x / 2..][..n_pixels / 2];
+                    let u_pixels = &mut u_line[x / 2..][..n_pixels.next_multiple_of(2) / 2];
 
                     let v_line = v_data.chunks_exact_mut(v_stride).nth(y / 2).unwrap();
-                    let v_pixels = &mut v_line[x / 2..][..n_pixels / 2];
+                    let v_pixels = &mut v_line[x / 2..][..n_pixels.next_multiple_of(2) / 2];
 
                     for (y1, y2, u, v, src) in izip!(
                         y1_pixels.chunks_exact_mut(2),

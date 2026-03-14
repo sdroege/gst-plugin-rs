@@ -389,6 +389,8 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
 
         let video_info = vframe.info();
 
+        let height = video_info.height() as usize;
+
         let State {
             packing_template,
             extended_seqnum,
@@ -539,13 +541,20 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
                         let length = chunks.length as usize;
                         let n_pixels = (length / PGROUP_SIZE_I420) * PGROUP_XINC_I420;
 
-                        // We iterate over the Y plane in steps of two lines (to match Cb/Cr subsampling)
-                        let y_lines = y_data.chunks_exact(2 * y_stride).nth(y / 2).unwrap();
+                        // We iterate over the Y plane in steps of two lines (to match Cb/Cr subsampling),
+                        // but need to special case last line in case of odd heights
+                        let (y1_pixels, y2_pixels) = if height.is_multiple_of(2) || y + 2 <= height
+                        {
+                            let y_lines = y_data.chunks_exact(2 * y_stride).nth(y / 2).unwrap();
 
-                        let (y_line1, y_line2) = y_lines.split_at(y_stride);
+                            let (y_line1, y_line2) = y_lines.split_at(y_stride);
 
-                        let y1_pixels = &y_line1[x..][..n_pixels];
-                        let y2_pixels = &y_line2[x..][..n_pixels];
+                            (&y_line1[x..][..n_pixels], &y_line2[x..][..n_pixels])
+                        } else {
+                            let y_line = y_data.chunks_exact(y_stride).nth(y).unwrap();
+
+                            (&y_line[x..][..n_pixels], &y_line[x..][..n_pixels])
+                        };
 
                         let u_line = u_data.chunks_exact(u_stride).nth(y / 2).unwrap();
                         let u_pixels = &u_line[x / 2..][..n_pixels / 2];

@@ -14,6 +14,7 @@ fn init() {
     });
 }
 
+#[allow(clippy::manual_div_ceil)]
 fn calc_active_bytes_per_line(video_info: &gst_video::VideoInfo) -> [usize; 4] {
     use gst_video::VideoFormat::*;
 
@@ -26,7 +27,12 @@ fn calc_active_bytes_per_line(video_info: &gst_video::VideoInfo) -> [usize; 4] {
         }
         I420 | Uyvp => {
             // 4:2:x
-            [width, width / 2, width / 2, 0]
+            [
+                width,
+                width.next_multiple_of(2) / 2,
+                width.next_multiple_of(2) / 2,
+                0,
+            ]
         }
         Y41b => {
             // 4:1:x
@@ -250,6 +256,12 @@ fn test_rtpvraw_uyvy() {
 #[test]
 fn test_rtpvraw_i420() {
     run_raw_video_test(gst_video::VideoFormat::I420, 320, 240, 84);
+    run_raw_video_test(gst_video::VideoFormat::I420, 320, 241, 85);
+    run_raw_video_test(gst_video::VideoFormat::I420, 320, 239, 84);
+    run_raw_video_test(gst_video::VideoFormat::I420, 321, 240, 85);
+    run_raw_video_test(gst_video::VideoFormat::I420, 319, 240, 84);
+    run_raw_video_test(gst_video::VideoFormat::I420, 321, 241, 86);
+    run_raw_video_test(gst_video::VideoFormat::I420, 319, 239, 84);
 }
 
 #[test]
