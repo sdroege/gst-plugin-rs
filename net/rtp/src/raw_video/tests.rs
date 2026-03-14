@@ -36,7 +36,12 @@ fn calc_active_bytes_per_line(video_info: &gst_video::VideoInfo) -> [usize; 4] {
         }
         Y41b => {
             // 4:1:x
-            [width, width / 4, width / 4, 0]
+            [
+                width,
+                width.next_multiple_of(4) / 4,
+                width.next_multiple_of(4) / 4,
+                0,
+            ]
         }
         fmt => todo!("implement for {fmt}"),
     }
@@ -267,6 +272,12 @@ fn test_rtpvraw_i420() {
 #[test]
 fn test_rtpvraw_y41b() {
     run_raw_video_test(gst_video::VideoFormat::Y41b, 320, 240, 85);
+    run_raw_video_test(gst_video::VideoFormat::Y41b, 320, 241, 85);
+    run_raw_video_test(gst_video::VideoFormat::Y41b, 320, 239, 85);
+    run_raw_video_test(gst_video::VideoFormat::Y41b, 321, 240, 86);
+    run_raw_video_test(gst_video::VideoFormat::Y41b, 319, 240, 85);
+    run_raw_video_test(gst_video::VideoFormat::Y41b, 321, 241, 86);
+    run_raw_video_test(gst_video::VideoFormat::Y41b, 319, 239, 85);
 }
 
 #[test]

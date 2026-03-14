@@ -610,6 +610,8 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
                         let length = chunks.length as usize;
                         let n_pixels = (length / PGROUP_SIZE_Y41B) * PGROUP_XINC_Y41B;
 
+                        debug_assert!(n_pixels.is_multiple_of(4));
+
                         let y_line = y_data.chunks_exact(y_stride).nth(y).unwrap();
                         let y_pixels = &y_line[x..][..n_pixels];
 

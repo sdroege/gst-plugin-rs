@@ -806,8 +806,39 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
 
                 // Planar YUV 4:1:1
                 // Samples are packed in order Cb0-Y0-Y1-Cr0-Y2-Y3
+                #[allow(clippy::manual_div_ceil)]
                 VideoFormat::Y41b => {
                     use itertools::izip;
+
+                    // Clip length if needed, but take into the odd width scenario
+                    if x + n_pixels > width {
+                        if x + n_pixels > width.next_multiple_of(4) {
+                            gst::warning!(
+                                CAT,
+                                imp = self,
+                                "Bad chunk header: {n_pixels} pixels @ {x},{y} \
+                                with resolution {width}x{height}, clipping",
+                            );
+                        }
+
+                        n_pixels -= (x + n_pixels) - width;
+
+                        // We don't use it below right now, but should still update for correctness
+                        #[allow(unused_assignments)]
+                        {
+                            length = n_pixels * pstride;
+                        }
+                    }
+
+                    // Y stride not being a multiple of 4 is not a reasonable setup for 4:1:1
+                    if !n_pixels.is_multiple_of(4) && !stride.is_multiple_of(4) {
+                        gst::error!(
+                            CAT,
+                            imp = self,
+                            "Y stride for Y41B is {stride} which is not a multiple of 4!",
+                        );
+                        return Err(gst::FlowError::NotNegotiated);
+                    }
 
                     const PGROUP_SIZE_Y41B: usize = 6;
 
@@ -816,13 +847,13 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
                     let [y_data, u_data, v_data, _] = vframe.planes_data_mut();
 
                     let y_line = y_data.chunks_exact_mut(stride).nth(y).unwrap();
-                    let y_pixels = &mut y_line[x..][..n_pixels];
+                    let y_pixels = &mut y_line[x..][..n_pixels.next_multiple_of(4)];
 
                     let u_line = u_data.chunks_exact_mut(u_stride).nth(y).unwrap();
-                    let u_pixels = &mut u_line[x / 4..][..n_pixels / 4];
+                    let u_pixels = &mut u_line[x / 4..][..n_pixels.next_multiple_of(4) / 4];
 
                     let v_line = v_data.chunks_exact_mut(v_stride).nth(y).unwrap();
-                    let v_pixels = &mut v_line[x / 4..][..n_pixels / 4];
+                    let v_pixels = &mut v_line[x / 4..][..n_pixels.next_multiple_of(4) / 4];
 
                     for (y, u, v, src) in izip!(
                         y_pixels.chunks_exact_mut(4),
