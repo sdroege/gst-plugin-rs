@@ -27,7 +27,6 @@ architecture of rtspsrc. There are some major problems with rtspsrc:
 
 Roughly in order of priority:
 
-* Credentials support
 * TLS/TCP support
 * NAT hole punching
 * Allow ignoring specific streams (SDP medias)

@@ -36,6 +36,7 @@ use gst::glib;
 use gst::prelude::*;
 
 mod body;
+mod digest;
 mod imp;
 mod sdp;
 mod tcp_message;

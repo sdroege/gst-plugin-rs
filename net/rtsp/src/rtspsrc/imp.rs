@@ -32,9 +32,9 @@ use tokio::task::JoinHandle;
 use tokio::time;
 
 use rtsp_types::headers::{
-    ACCEPT, CONTENT_BASE, CONTENT_LOCATION, CSeq, NptRange, NptTime, Public, Range, RtpInfos,
-    RtpLowerTransport, RtpProfile, RtpTransport, RtpTransportParameters, Session, Transport,
-    TransportMode, Transports, USER_AGENT,
+    ACCEPT, AUTHORIZATION, CONTENT_BASE, CONTENT_LOCATION, CSeq, NptRange, NptTime, Public, Range,
+    RtpInfos, RtpLowerTransport, RtpProfile, RtpTransport, RtpTransportParameters, Session,
+    Transport, TransportMode, Transports, USER_AGENT, WWW_AUTHENTICATE,
 };
 use rtsp_types::{Message, Method, Request, Response, StatusCode, Version};
 
@@ -48,6 +48,7 @@ use gst::subclass::prelude::*;
 use gst_net::gio;
 
 use super::body::Body;
+use super::digest::*;
 use super::sdp;
 use super::transport::RtspTransportInfo;
 
@@ -64,6 +65,8 @@ const MAX_MESSAGE_SIZE: usize = 1024 * 1024;
 const MAX_BIND_PORT_RETRY: u16 = 100;
 const UDP_PACKET_MAX_SIZE: u32 = 65535 - 8;
 const RTCP_ADDR_CACHE_SIZE: usize = 100;
+const MAX_AUTH_RETRIES: u32 = 1;
+const INITIAL_NONCE: u32 = 1;
 
 static RTCP_CAPS: LazyLock<gst::Caps> =
     LazyLock::new(|| gst::Caps::from(gst::Structure::new_empty("application/x-rtcp")));
@@ -75,6 +78,119 @@ const DEFAULT_USER_AGENT: &str = concat!(
     "-",
     env!("COMMIT_ID")
 );
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AuthMethod {
+    Basic,
+    Digest,
+}
+
+#[allow(clippy::too_many_arguments, clippy::result_large_err)]
+fn add_auth_header(
+    req: &mut Request<Body>,
+    username: &str,
+    password: &str,
+    auth_method: &AuthMethod,
+    digest_params: Option<DigestParams>,
+    method: &Method,
+    uri: &Url,
+    nonce_count: u32,
+) -> Result<(), RtspError> {
+    if username.is_empty() && password.is_empty() {
+        return Err(RtspError::Fatal("Missing username/password".to_string()));
+    }
+
+    match auth_method {
+        AuthMethod::Basic => {
+            let credentials = format!("{}:{}", username, password);
+            let encoded = data_encoding::BASE64.encode(credentials.as_bytes());
+            req.insert_header(AUTHORIZATION, format!("Basic {}", encoded));
+        }
+        AuthMethod::Digest => {
+            use rand::prelude::*;
+
+            let Some(params) = digest_params else {
+                return Err(RtspError::Fatal("Missing Digest".to_string()));
+            };
+
+            let cnonce = {
+                let mut bytes = [0u8; 8];
+                rand::rng().fill_bytes(&mut bytes);
+                hex::encode(bytes)
+            };
+            let nc = format!("{:08x}", nonce_count + 1);
+
+            let response = {
+                let response =
+                    compute_digest_response(&params, method, uri, username, password, &cnonce, &nc);
+
+                let mut parts = vec![
+                    format!("username=\"{username}\""),
+                    format!("realm=\"{}\"", params.realm),
+                    format!("nonce=\"{}\"", params.nonce),
+                    format!("uri=\"{uri}\""),
+                    format!("response=\"{response}\""),
+                ];
+
+                parts.push(format!("algorithm={}", params.algorithm));
+
+                if let Some(qop) = &params.qop {
+                    parts.push(format!("qop={}", qop));
+                    parts.push(format!("cnonce=\"{}\"", cnonce));
+                    parts.push(format!("nc={}", nc));
+                }
+
+                if let Some(opaque) = &params.opaque {
+                    parts.push(format!("opaque=\"{}\"", opaque));
+                }
+
+                parts.join(", ")
+            };
+
+            req.insert_header(AUTHORIZATION, format!("Digest {}", response));
+        }
+    }
+
+    Ok(())
+}
+
+#[allow(clippy::result_large_err)]
+fn rebuild_request_with_auth(
+    mut req: Request<Body>,
+    auth_method: &AuthMethod,
+    digest_params: Option<DigestParams>,
+    username: &str,
+    password: &str,
+    nonce_count: u32,
+) -> Result<Request<Body>, RtspError> {
+    req.remove_header(&AUTHORIZATION);
+
+    let url = req.request_uri().unwrap().clone();
+    let method = req.method().clone();
+
+    add_auth_header(
+        &mut req,
+        username,
+        password,
+        auth_method,
+        digest_params,
+        &method,
+        &url,
+        nonce_count,
+    )?;
+
+    Ok(req)
+}
+
+fn reset_nonce(
+    new_params: Option<&DigestParams>,
+    old_params: Option<&DigestParams>,
+    current_nonce_count: u32,
+) -> bool {
+    new_params
+        .zip(old_params)
+        .is_some_and(|(n, o)| n.nonce != o.nonce && current_nonce_count != 1)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RtspProtocol {
@@ -146,6 +262,8 @@ pub enum RtspError {
     InvalidMessage(&'static str),
     #[error("Fatal error")]
     Fatal(String),
+    #[error("Authentication challenge")]
+    AuthChallenge(AuthMethod, Option<String>),
 }
 
 pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
@@ -210,11 +328,6 @@ impl RtspSrc {
                 &format!("Failed to parse URI '{uri}': {err:?}"),
             )
         })?;
-
-        if uri.password().is_some() || !uri.username().is_empty() {
-            // TODO
-            gst::fixme!(CAT, "URI credentials are currently ignored");
-        }
 
         match (uri.host_str(), uri.port()) {
             (Some(_), Some(_)) | (Some(_), None) => Ok(()),
@@ -1060,14 +1173,31 @@ impl RtspSrc {
                         let Some(s) = &session else {
                             return Err(RtspError::Fatal(format!("Can't handle {expected:?} response, no SETUP")).into());
                         };
-                        match expected {
-                            Method::Play => {
-                                state.play_response(&rsp, *cseq, s).await?;
-                                self.post_complete("request", "PLAY response received");
-                            }
-                            Method::Teardown => state.teardown_response(&rsp, *cseq, s).await?,
+                        let (resp_type, res) = match expected {
+                            Method::Play => (Method::Play, state.play_response(&rsp, *cseq, s).await),
+                            Method::Teardown => (Method::Teardown, state.teardown_response(&rsp, *cseq, s).await),
                             m => unreachable!("BUG: unexpected response method: {m:?}"),
                         };
+
+                        match res {
+                            Ok(_) => {
+                                self.post_complete("request", format!("{:?} response received", resp_type).as_str());
+                            }
+                            Err(RtspError::AuthChallenge(method, challenge)) => {
+                                state.auth_method = Some(method.clone());
+
+                                if let Some(c) = challenge.as_ref() { state.update_digest(parse_digest_params(c)) }
+
+                                // Retry the request with proper authentication
+                                let cseq = match resp_type {
+                                    Method::Play => state.play(s).await?,
+                                    Method::Teardown => state.teardown(s).await?,
+                                    _ => unreachable!("BUG: unexpected response method: {s:?}"),
+                                };
+                                expected_response = Some((resp_type, cseq));
+                            }
+                            Err(e) => return Err(e.into()),
+                        }
                     }
                     Some(Err(e)) => {
                         // TODO: reconnect or ignore if UDP sockets are still receiving data
@@ -1221,6 +1351,11 @@ struct RtspTaskState {
 
     setup_params: Vec<RtspSetupParams>,
     handles: Vec<JoinHandle<()>>,
+    username: String,
+    password: String,
+    auth_method: Option<AuthMethod>,
+    digest_params: Option<DigestParams>,
+    nonce_count: u32,
 }
 
 struct RtspSetupParams {
@@ -1232,6 +1367,9 @@ struct RtspSetupParams {
 
 impl RtspTaskState {
     fn new(url: Url, stream: RtspStream, sink: RtspSink) -> Self {
+        let username = url.username().to_string();
+        let password = url.password().unwrap_or("").to_string();
+
         RtspTaskState {
             cseq: 0u32,
             url,
@@ -1243,6 +1381,11 @@ impl RtspTaskState {
             sink,
             setup_params: Vec::new(),
             handles: Vec::new(),
+            username,
+            password,
+            auth_method: None,
+            digest_params: None,
+            nonce_count: INITIAL_NONCE,
         }
     }
 
@@ -1253,12 +1396,37 @@ impl RtspTaskState {
         req_name: Method,
         session: Option<&Session>,
     ) -> Result<(), RtspError> {
+        if rsp.status() == StatusCode::Unauthorized {
+            if let Some(auth_header) = rsp.header(&WWW_AUTHENTICATE) {
+                if auth_header.as_str().starts_with("Digest") {
+                    return Err(RtspError::AuthChallenge(
+                        AuthMethod::Digest,
+                        Some(auth_header.to_string()),
+                    ));
+                } else if auth_header.as_str().starts_with("Basic") {
+                    return Err(RtspError::AuthChallenge(
+                        AuthMethod::Basic,
+                        Some(auth_header.to_string()),
+                    ));
+                }
+            }
+
+            return Err(RtspError::Fatal(format!(
+                "{req_name:?} request failed authentication"
+            )));
+        }
+
+        if rsp.status() == StatusCode::NotFound {
+            return Err(RtspError::AuthChallenge(AuthMethod::Basic, None));
+        }
+
         if rsp.status() != StatusCode::Ok {
             return Err(RtspError::Fatal(format!(
                 "{req_name:?} request failed: {}",
                 rsp.reason_phrase()
             )));
         }
+
         match rsp.typed_header::<CSeq>() {
             Ok(Some(v)) => {
                 if *v != cseq {
@@ -1299,6 +1467,70 @@ impl RtspTaskState {
         Ok(())
     }
 
+    async fn send_request_with_auth(
+        &mut self,
+        req: Request<Body>,
+    ) -> Result<Response<Body>, RtspError> {
+        let mut req = req;
+        let mut auth_retries = 0;
+
+        loop {
+            if let Some(auth_method) = &self.auth_method {
+                req = rebuild_request_with_auth(
+                    req,
+                    auth_method,
+                    self.digest_params.clone(),
+                    &self.username,
+                    &self.password,
+                    self.nonce_count,
+                )?;
+                self.nonce_count += 1;
+            };
+
+            gst::debug!(CAT, "-->> {req:#?}");
+            self.sink.send(req.clone().into()).await?;
+
+            let rsp = match self.stream.next().await {
+                Some(Ok(rtsp_types::Message::Response(rsp))) => Ok(rsp),
+                Some(Ok(m)) => Err(RtspError::UnexpectedMessage("Response", m)),
+                Some(Err(e)) => Err(e.into()),
+                None => {
+                    Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "response").into())
+                }
+            }?;
+            gst::debug!(CAT, "-->> {rsp:#?}");
+
+            match Self::check_response(&rsp, self.cseq, req.method().clone(), None) {
+                Ok(_) => return Ok(rsp),
+                Err(RtspError::AuthChallenge(auth_method, challenge)) => {
+                    if auth_retries >= MAX_AUTH_RETRIES {
+                        return Err(RtspError::Fatal(
+                            "Too many authentication retries".to_string(),
+                        ));
+                    }
+                    auth_retries += 1;
+
+                    self.auth_method = Some(auth_method.clone());
+
+                    if let Some(c) = challenge.as_ref() {
+                        self.update_digest(parse_digest_params(c))
+                    }
+
+                    req = rebuild_request_with_auth(
+                        req,
+                        &auth_method,
+                        self.digest_params.clone(),
+                        &self.username,
+                        &self.password,
+                        self.nonce_count,
+                    )?;
+                    self.nonce_count += 1;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
     async fn options(&mut self) -> Result<(), RtspError> {
         self.cseq += 1;
         let req = Request::builder(Method::Options, self.version)
@@ -1306,20 +1538,7 @@ impl RtspTaskState {
             .request_uri(self.url.clone())
             .header(USER_AGENT, DEFAULT_USER_AGENT)
             .build(Body::default());
-
-        gst::debug!(CAT, "-->> {req:#?}");
-        self.sink.send(req.into()).await?;
-
-        let rsp = match self.stream.next().await {
-            Some(Ok(rtsp_types::Message::Response(rsp))) => Ok(rsp),
-            Some(Ok(m)) => Err(RtspError::UnexpectedMessage("OPTIONS response", m)),
-            Some(Err(e)) => Err(e.into()),
-            None => Err(
-                std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "options response").into(),
-            ),
-        }?;
-        gst::debug!(CAT, "<<-- {rsp:#?}");
-        Self::check_response(&rsp, self.cseq, Method::Options, None)?;
+        let rsp = self.send_request_with_auth(req).await?;
 
         let Ok(Some(methods)) = rsp.typed_header::<Public>() else {
             return Err(RtspError::InvalidMessage(
@@ -1358,26 +1577,13 @@ impl RtspTaskState {
             .header(ACCEPT, "application/sdp")
             .request_uri(self.url.clone())
             .build(Body::default());
+        let rsp = self.send_request_with_auth(req).await?;
 
-        gst::debug!(CAT, "-->> {req:#?}");
-        self.sink.send(req.into()).await?;
-
-        let rsp = match self.stream.next().await {
-            Some(Ok(rtsp_types::Message::Response(rsp))) => Ok(rsp),
-            Some(Ok(m)) => Err(RtspError::UnexpectedMessage("DESCRIBE response", m)),
-            Some(Err(e)) => Err(e.into()),
-            None => Err(std::io::Error::new(
-                std::io::ErrorKind::UnexpectedEof,
-                "describe response",
-            )
-            .into()),
-        }?;
         gst::debug!(
             CAT,
             "<<-- Response {:#?}",
             rsp.headers().collect::<Vec<_>>()
         );
-        Self::check_response(&rsp, self.cseq, Method::Describe, None)?;
 
         self.content_base_or_location = rsp
             .header(&CONTENT_BASE)
@@ -1448,7 +1654,7 @@ impl RtspTaskState {
         protocols: &[RtspProtocol],
         mode: TransportMode,
     ) -> Result<Vec<RtspSetupParams>, RtspError> {
-        let sdp = self.sdp.as_ref().expect("Must have SDP by now");
+        let sdp = self.sdp.clone().expect("Must have SDP by now");
         let base = self
             .content_base_or_location
             .as_ref()
@@ -1494,8 +1700,8 @@ impl RtspTaskState {
                 .ok()
                 .flatten()
                 .and_then(|v| sdp::parse_control_path(v, &base));
-            let Some(control_url) = media_control.as_ref().or(self.aggregate_control.as_ref())
-            else {
+            let aggregate_control = self.aggregate_control.clone();
+            let Some(control_url) = media_control.as_ref().or(aggregate_control.as_ref()) else {
                 gst::warning!(
                     CAT,
                     "No session control or media control for {} fmt {}, ignoring",
@@ -1602,25 +1808,12 @@ impl RtspTaskState {
                 req
             };
             let req = req.build(Body::default());
-            let cseq = self.cseq;
 
-            gst::debug!(CAT, "-->> {req:#?}");
-            self.sink.send(req.into()).await?;
-
-            // RTSP 2 supports pipelining of SETUP requests, so this ping-pong would have to be
-            // reworked if we want to support it.
-            let rsp = match self.stream.next().await {
-                Some(Ok(rtsp_types::Message::Response(rsp))) => Ok(rsp),
-                Some(Ok(m)) => Err(RtspError::UnexpectedMessage("SETUP response", m)),
-                Some(Err(e)) => Err(e.into()),
-                None => Err(std::io::Error::new(
-                    std::io::ErrorKind::UnexpectedEof,
-                    "setup response",
-                )
-                .into()),
-            }?;
+            // RTSP 2 supports pipelining of SETUP requests, so this
+            // ping-pong would have to be reworked if we want to support it.
+            let rsp = self.send_request_with_auth(req).await?;
             gst::debug!(CAT, "<<-- {rsp:#?}");
-            Self::check_response(&rsp, cseq, Method::Setup, session.as_ref())?;
+
             let new_session = rsp
                 .typed_header::<Session>()?
                 .ok_or(RtspError::InvalidMessage("No session in SETUP response"))?;
@@ -1713,8 +1906,8 @@ impl RtspTaskState {
             .typed_header::<Session>(session);
 
         let req = req.build(Body::default());
-        gst::debug!(CAT, "-->> {req:#?}");
-        self.sink.send(req.into()).await?;
+        self.send_request_with_auth(req).await?;
+
         Ok(self.cseq)
     }
 
@@ -1725,6 +1918,7 @@ impl RtspTaskState {
         session: &Session,
     ) -> Result<(), RtspError> {
         Self::check_response(rsp, cseq, Method::Play, Some(session))?;
+
         if let Some(RtpInfos::V1(rtpinfos)) = rsp.typed_header::<RtpInfos>()? {
             for rtpinfo in rtpinfos {
                 for params in self.setup_params.iter_mut() {
@@ -1762,8 +1956,8 @@ impl RtspTaskState {
             .typed_header::<Session>(session);
 
         let req = req.build(Body::default());
-        gst::debug!(CAT, "-->> {req:#?}");
-        self.sink.send(req.into()).await?;
+        self.send_request_with_auth(req).await?;
+
         Ok(self.cseq)
     }
 
@@ -1775,6 +1969,18 @@ impl RtspTaskState {
     ) -> Result<(), RtspError> {
         Self::check_response(rsp, cseq, Method::Teardown, Some(session))?;
         Ok(())
+    }
+
+    fn update_digest(&mut self, new_params: Option<DigestParams>) {
+        if reset_nonce(
+            new_params.as_ref(),
+            self.digest_params.as_ref(),
+            self.nonce_count,
+        ) {
+            self.nonce_count = 1;
+        }
+
+        self.digest_params = new_params;
     }
 }
 
