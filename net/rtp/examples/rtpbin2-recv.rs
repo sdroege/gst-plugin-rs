@@ -94,11 +94,7 @@ fn add_rtp_recv(
         .unwrap();
 }
 
-#[tokio::main]
-async fn main() {
-    gst::init().unwrap();
-    gstrsrtp::plugin_register_static().unwrap();
-
+async fn run() {
     let pipeline = gst::Pipeline::new();
 
     let rtprecv = gst::ElementFactory::make("rtprecv")
@@ -254,6 +250,14 @@ async fn main() {
 
     pipeline.debug_to_dot_file(gst::DebugGraphDetails::all(), "rtpbin2-recv-stopping");
     pipeline.set_state(gst::State::Null).unwrap();
+}
+
+#[tokio::main]
+async fn main() {
+    gst::init().unwrap();
+    gstrsrtp::plugin_register_static().unwrap();
+
+    run().await;
 
     // This is needed by some tracers to write their log file
     unsafe {
