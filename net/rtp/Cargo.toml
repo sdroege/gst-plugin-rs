@@ -37,6 +37,8 @@ tokio = { version = "1", default-features = false, features = ["rt-multi-thread"
 tokio-util = "0.7.15"
 
 [dev-dependencies]
+# Used by examples
+clap = { version = "4", features = ["derive"] }
 gst-check = { workspace = true, features = ["v1_20"] }
 gst-app   = { workspace = true, features = ["v1_20"] }
 tokio = { version = "1", default-features = false, features = ["macros", "signal"] }

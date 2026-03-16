@@ -18,11 +18,7 @@ const SEND_PORT: u16 = 5005;
 
 const LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(200);
 
-#[tokio::main]
-async fn main() {
-    gst::init().unwrap();
-    gstrsrtp::plugin_register_static().unwrap();
-
+async fn run() {
     let pipeline = gst::Pipeline::new();
 
     let rtprecv = gst::ElementFactory::make("rtprecv")
@@ -246,6 +242,14 @@ async fn main() {
         "rtpbin2-recv-bundle-stopping",
     );
     pipeline.set_state(gst::State::Null).unwrap();
+}
+
+#[tokio::main]
+async fn main() {
+    gst::init().unwrap();
+    gstrsrtp::plugin_register_static().unwrap();
+
+    run().await;
 
     // This is needed by some tracers to write their log file
     unsafe {
