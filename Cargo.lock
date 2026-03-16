@@ -4834,6 +4834,7 @@ dependencies = [
  "bitstream-io",
  "byte-slice-cast",
  "chrono",
+ "clap",
  "futures",
  "gio",
  "glib",

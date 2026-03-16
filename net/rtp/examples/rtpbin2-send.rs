@@ -1,21 +1,22 @@
 // SPDX-License-Identifier: MPL-2.0
 
-/// Sends one audio stream and one video stream in two separate RTP sessions.
-/// Use `rtpbin2-recv` as a receiver.
+use clap::Parser;
 use futures::pin_mut;
 use futures::prelude::*;
 use gst::prelude::*;
 
-use std::{env, process};
+#[derive(Parser, Debug)]
+#[clap(version)]
+#[clap(about = "Sends streams in separate RTP sessions. Can use `rtpbin2-recv` as a receiver")]
+pub struct Args {
+    /// Don't send the audio stream.
+    #[clap(long)]
+    pub no_audio: bool,
 
-const USAGE: &str = r#"Usage: rtpbin2-send [media-arg]
-
-where 'media-arg' is either:
-
-* -a or --audio-only: only stream audio
-* -v or --video-only: only stream video
-* by default, stream audio and video.
-"#;
+    /// Don't send the video stream.
+    #[clap(long)]
+    pub no_video: bool,
+}
 
 const RTP_ID: &str = "example-rtp-id";
 const HOST: &str = "127.0.0.1";
@@ -114,25 +115,7 @@ fn add_rtp_send(
         .unwrap();
 }
 
-#[tokio::main]
-async fn main() -> process::ExitCode {
-    let mut with_audio = true;
-    let mut with_video = true;
-
-    if let Some(media_arg) = env::args().nth(1) {
-        match media_arg.as_str() {
-            "--audio-only" | "-a" => with_video = false,
-            "--video-only" | "-v" => with_audio = false,
-            _ => {
-                println!("{USAGE}");
-                return process::ExitCode::FAILURE;
-            }
-        }
-    }
-
-    gst::init().unwrap();
-    gstrsrtp::plugin_register_static().unwrap();
-
+async fn run(args: Args) {
     let pipeline = gst::Pipeline::new();
 
     let rtpsend = gst::ElementFactory::make("rtpsend")
@@ -147,7 +130,7 @@ async fn main() -> process::ExitCode {
         .unwrap();
     pipeline.add(&rtprecv).unwrap();
 
-    if with_video {
+    if !args.no_video {
         println!("Adding video stream...");
 
         let video_src = gst::ElementFactory::make("videotestsrc")
@@ -182,7 +165,7 @@ async fn main() -> process::ExitCode {
         );
     }
 
-    if with_audio {
+    if !args.no_audio {
         println!("Adding audio stream...");
 
         let audio_src = gst::ElementFactory::make("audiotestsrc")
@@ -247,11 +230,19 @@ async fn main() -> process::ExitCode {
 
     pipeline.debug_to_dot_file(gst::DebugGraphDetails::all(), "rtpbin2-send-stopping");
     pipeline.set_state(gst::State::Null).unwrap();
+}
+
+#[tokio::main]
+async fn main() {
+    let args = Args::parse();
+
+    gst::init().unwrap();
+    gstrsrtp::plugin_register_static().unwrap();
+
+    run(args).await;
 
     // This is needed by some tracers to write their log file
     unsafe {
         gst::deinit();
     }
-
-    process::ExitCode::SUCCESS
 }

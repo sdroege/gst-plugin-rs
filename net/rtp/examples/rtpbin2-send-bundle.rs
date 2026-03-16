@@ -15,11 +15,7 @@ const HOST: &str = "127.0.0.1";
 const SEND_PORT: u16 = 5004;
 const RECV_PORT: u16 = 5005;
 
-#[tokio::main]
-async fn main() {
-    gst::init().unwrap();
-    gstrsrtp::plugin_register_static().unwrap();
-
+async fn run() {
     let pipeline = gst::Pipeline::new();
 
     let rtpsend = gst::ElementFactory::make("rtpsend")
@@ -223,6 +219,14 @@ async fn main() {
         "rtpbin2-send-bundle-stopping",
     );
     pipeline.set_state(gst::State::Null).unwrap();
+}
+
+#[tokio::main]
+async fn main() {
+    gst::init().unwrap();
+    gstrsrtp::plugin_register_static().unwrap();
+
+    run().await;
 
     // This is needed by some tracers to write their log file
     unsafe {
