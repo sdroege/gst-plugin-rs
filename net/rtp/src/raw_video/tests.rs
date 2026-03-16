@@ -283,4 +283,20 @@ fn test_rtpvraw_y41b() {
 #[test]
 fn test_rtpvraw_uyvp() {
     run_raw_video_test(gst_video::VideoFormat::Uyvp, 320, 240, 141);
+    run_raw_video_test(gst_video::VideoFormat::Uyvp, 320, 241, 142);
+    run_raw_video_test(gst_video::VideoFormat::Uyvp, 320, 239, 140);
+
+    // Some versions of GStreamer (< 1.28.2) have a too-small default stride for odd widths
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::Uyvp, 321, 240)
+        .build()
+        .unwrap();
+
+    if video_info.stride()[0] >= 805 {
+        run_raw_video_test(gst_video::VideoFormat::Uyvp, 321, 240, 142);
+        run_raw_video_test(gst_video::VideoFormat::Uyvp, 319, 240, 141);
+        run_raw_video_test(gst_video::VideoFormat::Uyvp, 321, 241, 142);
+        run_raw_video_test(gst_video::VideoFormat::Uyvp, 319, 239, 140);
+    } else {
+        eprintln!("Skipping test, libgstvideo has too small strides for odd widths for UYVP");
+    }
 }

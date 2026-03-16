@@ -679,13 +679,26 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
 
                 // Uyvp: packed 10-bit 4:2:2 YUV (U0-Y0-V0-Y1 U2-Y2-V2-Y3 U4 ...), 2 pixels in 5 bytes
                 VideoFormat::Uyvp => {
+                    // Clip length if needed, but take into account the odd width scenario
+                    if x + n_pixels > width.next_multiple_of(2) {
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Bad chunk header: {n_pixels} pixels @ {x},{y} \
+                            with resolution {width}x{height}, clipping",
+                        );
+
+                        n_pixels -= (x + n_pixels) - width.next_multiple_of(2);
+                        length = (n_pixels / 2) * 5;
+                    }
+
                     let data = vframe.plane_data_mut(0).unwrap();
                     let line = data.chunks_exact_mut(stride).nth(y).unwrap();
 
                     let byte_offset = (x / 2) * 5;
                     let pixels = &mut line[byte_offset..][..length];
 
-                    pixels.copy_from_slice(chunk_data);
+                    pixels.copy_from_slice(&chunk_data[0..length]);
                 }
 
                 // v308 is straight copy with some component reordering
