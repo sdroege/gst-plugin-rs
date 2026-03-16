@@ -590,9 +590,36 @@ impl Drop for RecvSession {
         {
             return;
         }
-        let _ = rtpbin2::get_or_init_runtime()
-            .expect("initialized in change_state()")
-            .block_on(rtp_task_handle);
+
+        // All pads inactive and task Stop command sent
+        // => rtp_task_handle will complete swiftly
+
+        if let Ok(cur_rt_handle) = tokio::runtime::Handle::try_current() {
+            // Running within a tokio runtime
+
+            use tokio::runtime::RuntimeFlavor;
+            if cur_rt_handle.runtime_flavor() == RuntimeFlavor::CurrentThread {
+                if futures::executor::enter().is_ok() {
+                    // This should not panic and will not block too long
+                    let _ = futures::executor::block_on(rtp_task_handle);
+                }
+                // else, also running within a `futures` executor and we can't use `block_in_place`
+                // ideally we would block here too, but we can't without panicking.
+            } else {
+                // Inform the runtime this might block a bit so it can take care of other tasks
+                let _ =
+                    tokio::task::block_in_place(move || cur_rt_handle.block_on(rtp_task_handle));
+            }
+        } else if futures::executor::enter().is_err() {
+            // Already running within a `futures` executor but not within a `tokio` runtime
+            // => this will not panic and will not block too long
+            let _ = rtpbin2::get_or_init_runtime()
+                .expect("initialized in change_state()")
+                .block_on(rtp_task_handle);
+        } else {
+            // Not running within a `tokio` runtime nor a `futures` executor
+            let _ = futures::executor::block_on(rtp_task_handle);
+        }
     }
 }
 
