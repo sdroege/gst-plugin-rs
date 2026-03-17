@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-# Copied from gstreamer.git/ci/gitlab/trigger_cerbero_pipeline.py
+# Copied from gstreamer/ci/gitlab/trigger_cerbero_pipeline.py
 
 import time
 import os
@@ -86,11 +86,26 @@ if __name__ == "__main__":
         "CI_GSTREAMER_TRIGGERED": "true",
     }
 
-    pipe = cerbero.trigger_pipeline(
-        token=os.environ['CI_JOB_TOKEN'],
-        ref=cerbero_branch,
-        variables=variables,
-    )
+    try:
+        pipe = cerbero.trigger_pipeline(
+            token=os.environ['CI_JOB_TOKEN'],
+            ref=cerbero_branch,
+            variables=variables,
+        )
+    except gitlab.exceptions.GitlabCreateError as e:
+        if e.response_code == 400:
+            exit('''
+
+            Could not start cerbero sub-pipeline due to insufficient permissions.
+
+            This is not a problem and is expected if you are not a GStreamer
+            developer with merge permission in the cerbero project.
+
+            When your Merge Request is assigned to Marge (our merge bot), it
+            will trigger the cerbero sub-pipeline with the correct permissions.
+            ''')
+        else:
+            exit(f'Could not create cerbero sub-pipeline. Error: {e}')
 
     fprint(f'Cerbero pipeline running at {pipe.web_url} ')
     while True:
