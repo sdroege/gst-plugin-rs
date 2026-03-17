@@ -17,11 +17,15 @@ use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::num::NonZeroUsize;
 use std::pin::Pin;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::Result;
+use rustls_pki_types::ServerName;
+use rustls_platform_verifier::BuilderVerifierExt;
 use std::sync::LazyLock;
+use tokio_rustls::rustls::ClientConfig;
+use tokio_rustls::{TlsConnector, rustls};
 
 use futures::{Sink, SinkExt, Stream, StreamExt};
 use socket2::Socket;
@@ -78,6 +82,12 @@ const DEFAULT_USER_AGENT: &str = concat!(
     "-",
     env!("COMMIT_ID")
 );
+
+#[allow(clippy::large_enum_variant)]
+enum TcpOrTlsStream {
+    Plain(TcpStream),
+    Tls(tokio_rustls::client::TlsStream<TcpStream>),
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AuthMethod {
@@ -338,6 +348,7 @@ impl RtspSrc {
             "rtspu" => &[RtspProtocol::UdpMulticast, RtspProtocol::Udp],
             "rtspt" => &[RtspProtocol::Tcp],
             "rtsp" => &settings.protocols,
+            "rtsps" => &[RtspProtocol::Tcp],
             scheme => {
                 return Err(glib::Error::new(
                     gst::URIError::UnsupportedProtocol,
@@ -644,11 +655,17 @@ impl RtspSrc {
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        let Some(url) = self.settings.lock().unwrap().location.clone() else {
-            return Err(gst::error_msg!(
-                gst::ResourceError::Settings,
-                ["No location set"]
-            ));
+        let (url, tls_enabled) = {
+            let settings = self.settings.lock().unwrap();
+            let Some(url) = settings.location.clone() else {
+                return Err(gst::error_msg!(
+                    gst::ResourceError::Settings,
+                    ["No location set"]
+                ));
+            };
+            let tls_enabled = url.scheme() == "rtsps";
+
+            (url, tls_enabled)
         };
 
         gst::info!(CAT, imp = self, "Location: {url}",);
@@ -668,11 +685,11 @@ impl RtspSrc {
 
         let join_handle = RUNTIME.spawn(async move {
             gst::info!(CAT, "Connecting to {url} ..");
-            let hostname_port =
-                format!("{}:{}", url.host_str().unwrap(), url.port().unwrap_or(554));
+            let hostname = url.clone().host_str().unwrap().to_string();
+            let port = url.port().unwrap_or(if tls_enabled { 322 } else { 554 });
+            let hostname_port = format!("{hostname}:{port}");
 
-            // TODO: Add TLS support
-            let s = match TcpStream::connect(hostname_port).await {
+            let stream = match TcpStream::connect(hostname_port).await {
                 Ok(s) => s,
                 Err(err) => {
                     gst::element_imp_error!(
@@ -683,18 +700,74 @@ impl RtspSrc {
                     return;
                 }
             };
-            let _ = s.set_nodelay(true);
+            let _ = stream.set_nodelay(true);
+
+            let s = if tls_enabled {
+                let dnsname = match ServerName::try_from(hostname.clone()) {
+                    Ok(dnsname) => dnsname,
+                    Err(err) => {
+                        gst::element_imp_error!(
+                            task_src,
+                            gst::ResourceError::Write,
+                            ["Server name failed for '{hostname}': {err}"]
+                        );
+                        return;
+                    }
+                };
+
+                let provider = Arc::new(rustls::crypto::ring::default_provider());
+                let config = ClientConfig::builder_with_provider(provider)
+                    .with_safe_default_protocol_versions()
+                    .unwrap()
+                    .with_platform_verifier()
+                    .unwrap()
+                    .with_no_client_auth();
+                let connector = TlsConnector::from(Arc::new(config));
+
+                let s = match connector.connect(dnsname, stream).await {
+                    Ok(s) => s,
+                    Err(err) => {
+                        gst::element_imp_error!(
+                            task_src,
+                            gst::ResourceError::OpenWrite,
+                            ["Failed TLS connect to server {hostname}:{port}: {err}"]
+                        );
+                        return;
+                    }
+                };
+
+                TcpOrTlsStream::Tls(s)
+            } else {
+                TcpOrTlsStream::Plain(stream)
+            };
 
             gst::info!(CAT, "Connected!");
 
-            let (read, write) = s.into_split();
+            let (state, task_ret) = match s {
+                TcpOrTlsStream::Plain(tcp_stream) => {
+                    let (read, write) = tcp_stream.into_split();
+                    let stream =
+                        Box::pin(super::tcp_message::async_read(read, MAX_MESSAGE_SIZE).fuse());
+                    let sink = Box::pin(super::tcp_message::async_write(write));
 
-            let stream = Box::pin(super::tcp_message::async_read(read, MAX_MESSAGE_SIZE).fuse());
-            let sink = Box::pin(super::tcp_message::async_write(write));
+                    let mut state = RtspTaskState::new(url, stream, sink);
+                    let task_ret = task_src.rtsp_task(&mut state, rx).await;
 
-            let mut state = RtspTaskState::new(url, stream, sink);
+                    (state, task_ret)
+                }
+                TcpOrTlsStream::Tls(tls_stream) => {
+                    let (read, write) = tokio::io::split(tls_stream);
+                    let stream =
+                        Box::pin(super::tcp_message::async_read(read, MAX_MESSAGE_SIZE).fuse());
+                    let sink = Box::pin(super::tcp_message::async_write(write));
 
-            let task_ret = task_src.rtsp_task(&mut state, rx).await;
+                    let mut state = RtspTaskState::new(url, stream, sink);
+                    let task_ret = task_src.rtsp_task(&mut state, rx).await;
+
+                    (state, task_ret)
+                }
+            };
+
             gst::info!(CAT, "Exited rtsp_task");
 
             // Cleanup after stopping
