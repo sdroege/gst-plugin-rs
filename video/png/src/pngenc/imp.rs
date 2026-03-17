@@ -50,6 +50,46 @@ struct State {
     video_info: gst_video::VideoInfo,
 }
 
+#[allow(clippy::large_enum_variant)]
+enum SliceContainer<'a> {
+    Reference(gst_video::VideoFrameRef<&'a gst::BufferRef>),
+    Owned(Vec<u8>),
+}
+
+impl<'a> SliceContainer<'a> {
+    /// Make a new struct that will automatically repackage the given buffer
+    /// if it's not tightly packed.
+    ///
+    /// Original by Markus Ebner on gifenc
+    ///
+    /// https://gstreamer.freedesktop.org/documentation/additional/design/mediatype-video-raw.html?gi-language=c#formats
+    fn new(frame: gst_video::VideoFrameRef<&'a gst::BufferRef>) -> Self {
+        assert_eq!(frame.n_planes(), 1);
+        let line_size = (frame.width() * frame.n_components() * frame.comp_depth(0) / 8) as usize;
+        let line_stride = frame.comp_stride(0) as usize;
+        if line_size == line_stride {
+            Self::Reference(frame)
+        } else {
+            let mut packed_frame: Vec<u8> = Vec::with_capacity(line_size * frame.height() as usize);
+            frame
+                .plane_data(0)
+                .unwrap()
+                .chunks_exact(line_stride)
+                .map(|padded_line| &padded_line[..line_size])
+                .for_each(|line| packed_frame.extend_from_slice(line));
+
+            Self::Owned(packed_frame)
+        }
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        match self {
+            SliceContainer::Reference(v) => v.plane_data(0).unwrap(),
+            SliceContainer::Owned(items) => items,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct PngEncoder {
     state: Mutex<Option<State>>,
@@ -239,8 +279,11 @@ impl VideoEncoderImpl for PngEncoder {
 
         {
             let input_buffer = frame.input_buffer().expect("frame without input buffer");
-            let input_map = input_buffer.map_readable().unwrap();
-            writer.write_image_data(&input_map).map_err(|e| {
+            let container =
+                gst_video::VideoFrameRef::from_buffer_ref_readable(input_buffer, &state.video_info)
+                    .map(SliceContainer::new)
+                    .unwrap();
+            writer.write_image_data(container.as_slice()).map_err(|e| {
                 gst::error!(CAT, imp = self, "Failed to write image data: {e}");
                 gst::element_imp_error!(self, gst::CoreError::Failed, ["{e}"]);
                 gst::FlowError::Error
