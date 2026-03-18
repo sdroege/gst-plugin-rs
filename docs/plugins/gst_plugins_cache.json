@@ -2516,12 +2516,12 @@
                 "klass": "Inference/Classification/Video",
                 "pad-templates": {
                     "sink": {
-                        "caps": "video/x-raw:\n         format: RGB\n          width: { (int)480, (int)640, (int)800, (int)1024 }\n         height: { (int)480, (int)640, (int)800, (int)1024 }\n      framerate: [ 0/1, 2147483647/1 ]\npixel-aspect-ratio: 1/1\n",
+                        "caps": "video/x-raw:\n         format: RGB\n          width: [ 32, 2147483616, 32 ]\n         height: [ 32, 2147483616, 32 ]\n      framerate: [ 0/1, 2147483647/1 ]\npixel-aspect-ratio: 1/1\n",
                         "direction": "sink",
                         "presence": "always"
                     },
                     "src": {
-                        "caps": "video/x-raw:\n         format: RGB\n          width: { (int)480, (int)640, (int)800, (int)1024 }\n         height: { (int)480, (int)640, (int)800, (int)1024 }\n      framerate: [ 0/1, 2147483647/1 ]\npixel-aspect-ratio: 1/1\n        tensors: \"tensorgroups\\,\\ yolox-out\\=\\(/uniquelist\\)\\{\\ \\(caps\\)\\\"tensor/strided\\\\\\,\\\\\\ dims\\\\\\=\\\\\\(int\\\\\\)\\\\\\<\\\\\\ 1\\\\\\,\\\\\\ 0\\\\\\,\\\\\\ \\\\\\[\\\\\\ 5\\\\\\,\\\\\\ 2147483647\\\\\\ \\\\\\]\\\\\\ \\\\\\>\\\\\\,\\\\\\ dims-order\\\\\\=\\\\\\(string\\\\\\)row-major\\\\\\,\\\\\\ type\\\\\\=\\\\\\(string\\\\\\)float32\\\"\\ \\}\\;\"\n",
+                        "caps": "video/x-raw:\n         format: RGB\n          width: [ 32, 2147483616, 32 ]\n         height: [ 32, 2147483616, 32 ]\n      framerate: [ 0/1, 2147483647/1 ]\npixel-aspect-ratio: 1/1\n        tensors: \"tensorgroups\\,\\ yolox-out\\=\\(/uniquelist\\)\\{\\ \\(caps\\)\\\"tensor/strided\\\\\\,\\\\\\ dims\\\\\\=\\\\\\(int\\\\\\)\\\\\\<\\\\\\ 1\\\\\\,\\\\\\ 0\\\\\\,\\\\\\ \\\\\\[\\\\\\ 5\\\\\\,\\\\\\ 2147483647\\\\\\ \\\\\\]\\\\\\ \\\\\\>\\\\\\,\\\\\\ dims-order\\\\\\=\\\\\\(string\\\\\\)row-major\\\\\\,\\\\\\ type\\\\\\=\\\\\\(string\\\\\\)float32\\\"\\ \\}\\;\"\n",
                         "direction": "src",
                         "presence": "always"
                     }

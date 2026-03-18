@@ -233,15 +233,22 @@ impl ElementImpl for YoloxInference {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
-            // FIXME: Unclear which resolutions are actually supported but all these are working
-            let widths_heights = gst::List::new([480i32, 640, 800, 1024]);
+            //    yolox requires this because of multiple layered strided convolutions
+            //    that reduce the resolution by half plus concatenation of tensors
+            //    upsampled by a factor of 2. Any input resolution that is not divisible
+            //    by 32 would cause dimension mismatches, which then lead to a panic.
+            let set_width_height = |caps: &mut gst::Caps| {
+                let caps = caps.get_mut().unwrap();
+                caps.set("width", gst::IntRange::with_step(32, i32::MAX - 31, 32));
+                caps.set("height", gst::IntRange::with_step(32, i32::MAX - 31, 32));
+            };
 
-            let sink_caps = gst_video::VideoCapsBuilder::new()
+            let mut sink_caps = gst_video::VideoCapsBuilder::new()
                 .format(gst_video::VideoFormat::Rgb)
-                .field("width", &widths_heights)
-                .field("height", &widths_heights)
                 .pixel_aspect_ratio(gst::Fraction::new(1, 1))
                 .build();
+            set_width_height(&mut sink_caps);
+
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,
@@ -250,11 +257,9 @@ impl ElementImpl for YoloxInference {
             )
             .unwrap();
 
-            let src_caps = gst_video::VideoCapsBuilder::new()
+            let mut src_caps = gst_video::VideoCapsBuilder::new()
                 .format(gst_video::VideoFormat::Rgb)
                 .pixel_aspect_ratio(gst::Fraction::new(1, 1))
-                .field("width", &widths_heights)
-                .field("height", &widths_heights)
                 .field(
                     "tensors",
                     gst::Structure::builder("tensorgroups")
@@ -276,6 +281,8 @@ impl ElementImpl for YoloxInference {
                         .build(),
                 )
                 .build();
+            set_width_height(&mut src_caps);
+
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
