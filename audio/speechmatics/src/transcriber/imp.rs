@@ -572,7 +572,7 @@ impl TranscriberSrcPad {
             (transcript.metadata.end_time as f64 * 1_000_000_000.0) as u64,
         ) + first_pts;
 
-        state.advance_position(start_time, end_time);
+        state.advance_position(Some(start_time), Some(end_time));
     }
 
     fn enqueue_eos(&self) {
@@ -604,6 +604,8 @@ impl TranscriberSrcPad {
                 .downcast::<super::Transcriber>()
                 .expect("parent is transcriber");
 
+            let desynchronized = transcriber.imp().settings.lock().unwrap().latency_ms == u32::MAX;
+
             let (last_position, seqnum) = {
                 let state = self.state.lock().unwrap();
 
@@ -611,7 +613,31 @@ impl TranscriberSrcPad {
             };
 
             match msg {
-                TranscriberOutput::Buffer(buf) => {
+                TranscriberOutput::Buffer(mut buf) => {
+                    if desynchronized {
+                        let buf_mut = buf.make_mut();
+
+                        let pts = if let Some(last_position) = last_position {
+                            let rtime = transcriber
+                                .current_running_time()
+                                .expect("Have current running time");
+                            last_position.max(
+                                self.state
+                                    .lock()
+                                    .unwrap()
+                                    .out_segment
+                                    .position_from_running_time(rtime)
+                                    .unwrap(),
+                            )
+                        } else {
+                            transcriber
+                                .current_running_time()
+                                .expect("Have current running time")
+                        };
+
+                        buf_mut.set_pts(pts);
+                    }
+
                     let pts = buf.pts().unwrap();
 
                     if let Some(last_position) = last_position
@@ -644,6 +670,17 @@ impl TranscriberSrcPad {
                     Ok(())
                 }
                 TranscriberOutput::Position(position) => {
+                    let position = position.unwrap_or_else(|| {
+                        let now = transcriber
+                            .current_running_time()
+                            .expect("Have current running time");
+                        self.state
+                            .lock()
+                            .unwrap()
+                            .out_segment
+                            .position_from_running_time(now)
+                            .unwrap()
+                    });
                     if let Some(last_position) = last_position
                         && position > last_position
                     {
@@ -770,7 +807,6 @@ impl Transcriber {
 
         if ret {
             let (live, _, _) = peer_query.result();
-            gst::info!(CAT, imp = self, "queried upstream liveness: {live}");
 
             self.state.lock().unwrap().upstream_is_live = Some(live);
 
@@ -839,9 +875,15 @@ impl Transcriber {
 
                 if ret {
                     let (live, min, _) = peer_query.result();
-                    let our_latency = gst::ClockTime::from_mseconds(
-                        self.settings.lock().unwrap().latency_ms as u64,
-                    );
+
+                    let latency_ms = self.settings.lock().unwrap().latency_ms;
+
+                    let (live, our_latency) = if latency_ms == u32::MAX {
+                        (true, gst::ClockTime::ZERO)
+                    } else {
+                        (live, gst::ClockTime::from_mseconds(latency_ms as u64))
+                    };
+
                     if live {
                         q.set(true, min + our_latency, gst::ClockTime::NONE);
                     } else {
@@ -934,10 +976,20 @@ impl Transcriber {
 
                 drop(state);
 
-                let lateness =
-                    gst::ClockTime::from_mseconds(self.settings.lock().unwrap().lateness_ms as u64);
+                let (lateness, desynchronized) = {
+                    let settings = self.settings.lock().unwrap();
+                    (
+                        gst::ClockTime::from_mseconds(settings.lateness_ms as u64),
+                        settings.latency_ms == u32::MAX,
+                    )
+                };
 
-                let mut segment_to_push = segment.clone();
+                let mut segment_to_push = if desynchronized {
+                    segment.clone()
+                } else {
+                    gst::FormattedSegment::new()
+                };
+
                 segment_to_push.set_base(segment.base().unwrap_or(gst::ClockTime::ZERO) + lateness);
 
                 for srcpad in &srcpads {
@@ -1065,6 +1117,7 @@ impl Transcriber {
         gst::trace!(CAT, imp = self, "Handling {:?}", buffer);
 
         let now = self.obj().current_running_time();
+        let desynchronized = self.settings.lock().unwrap().latency_ms == u32::MAX;
 
         if let Some(ref buffer) = buffer {
             let mut state = self.state.lock().unwrap();
@@ -1097,7 +1150,9 @@ impl Transcriber {
                 }
             }
 
-            if let Some(now) = now {
+            if let Some(now) = now
+                && !desynchronized
+            {
                 for srcpad in &state.srcpads {
                     srcpad
                         .imp()
@@ -1467,10 +1522,11 @@ impl Transcriber {
         let s = in_caps.structure(0).unwrap();
         let sample_rate: i32 = s.get::<i32>("rate").unwrap();
 
-        let (connect_request, messages) = {
+        let (connect_request, messages, desynchronized) = {
             let settings = self.settings.lock().unwrap();
+            let desynchronized = settings.latency_ms == u32::MAX;
 
-            if settings.latency_ms + settings.lateness_ms < 700 {
+            if !desynchronized && settings.latency_ms + settings.lateness_ms < 700 {
                 gst::error!(
                     CAT,
                     imp = self,
@@ -1592,7 +1648,7 @@ impl Transcriber {
                 .unwrap(),
             );
 
-            (connect_request, messages)
+            (connect_request, messages, settings.latency_ms == u32::MAX)
         };
 
         let this_weak = self.downgrade();
@@ -1696,7 +1752,30 @@ impl Transcriber {
             let this_weak_2 = this_weak.clone();
             let future = async move {
                 while let Some(this) = this_weak_2.upgrade() {
-                    let Some(msg) = ws_stream.next().await else {
+                    let Some(msg) = (if desynchronized {
+                        match tokio::time::timeout(
+                            std::time::Duration::from_millis(50),
+                            ws_stream.next(),
+                        )
+                        .await
+                        {
+                            Err(_) => {
+                                let state = this.state.lock().unwrap();
+                                for srcpad in &state.srcpads {
+                                    srcpad
+                                        .imp()
+                                        .state
+                                        .lock()
+                                        .unwrap()
+                                        .advance_position(None, None);
+                                }
+                                continue;
+                            }
+                            Ok(res) => res,
+                        }
+                    } else {
+                        ws_stream.next().await
+                    }) else {
                         break;
                     };
 
@@ -2460,7 +2539,31 @@ impl ElementImpl for Transcriber {
             drop(self.disconnect(self.state.lock().unwrap(), true, true));
         }
 
-        self.parent_change_state(transition)
+        let mut success = self.parent_change_state(transition)?;
+
+        let desynchronized = self.settings.lock().unwrap().latency_ms == u32::MAX;
+
+        if desynchronized {
+            match transition {
+                gst::StateChange::ReadyToPaused => {
+                    success = gst::StateChangeSuccess::NoPreroll;
+                }
+                gst::StateChange::PlayingToPaused => {
+                    success = gst::StateChangeSuccess::NoPreroll;
+                }
+                _ => (),
+            }
+        }
+
+        Ok(success)
+    }
+
+    fn provide_clock(&self) -> Option<gst::Clock> {
+        if self.settings.lock().unwrap().latency_ms == u32::MAX {
+            Some(gst::SystemClock::obtain())
+        } else {
+            None
+        }
     }
 }
 
@@ -2474,7 +2577,7 @@ enum TranscriberOutput {
     Buffer(gst::Buffer),
     Event(gst::Event),
     Eos,
-    Position(gst::ClockTime),
+    Position(Option<gst::ClockTime>),
 }
 
 #[derive(Debug)]
@@ -2557,8 +2660,14 @@ impl TranscriberSrcPadState {
         }
     }
 
-    fn advance_position(&mut self, start_time: gst::ClockTime, end_time: gst::ClockTime) {
-        self.trim_input_times(start_time);
+    fn advance_position(
+        &mut self,
+        start_time: Option<gst::ClockTime>,
+        end_time: Option<gst::ClockTime>,
+    ) {
+        if let Some(start_time) = start_time {
+            self.trim_input_times(start_time);
+        }
 
         if let Some(ref mut sender) = self.sender {
             let _ = sender.send(TranscriberOutput::Position(end_time));
