@@ -15985,7 +15985,7 @@
                     "pad-path": {
                         "blurb": "Pad path to target",
                         "conditionally-available": false,
-                        "construct": false,
+                        "construct": true,
                         "construct-only": false,
                         "controllable": false,
                         "default": "NULL",
@@ -15997,7 +15997,7 @@
                     "target-factory": {
                         "blurb": "Factory name to target",
                         "conditionally-available": false,
-                        "construct": false,
+                        "construct": true,
                         "construct-only": false,
                         "controllable": false,
                         "default": "NULL",
