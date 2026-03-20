@@ -22,12 +22,15 @@ pub enum DigestAlgorithm {
 impl FromStr for DigestAlgorithm {
     type Err = String;
 
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        match s.to_ascii_lowercase().as_str() {
-            "md5" => Ok(Self::Md5),
-            "sha-256" => Ok(Self::Sha256),
-            "sha-512-256" => Ok(Self::Sha512),
-            alg => Err(format!("Unsupported algorithm {alg}")),
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.eq_ignore_ascii_case("md5") {
+            Ok(Self::Md5)
+        } else if s.eq_ignore_ascii_case("sha-256") {
+            Ok(Self::Sha256)
+        } else if s.eq_ignore_ascii_case("sha-512-256") {
+            Ok(Self::Sha512)
+        } else {
+            Err(format!("Unsupported algorithm: {s}"))
         }
     }
 }
