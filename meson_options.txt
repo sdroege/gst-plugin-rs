@@ -82,6 +82,7 @@ option('rav1e', type: 'feature', value: 'auto', description: 'Build rav1e plugin
 option('debugseimetainserter', type: 'feature', value: 'auto', description: 'Build seidebugmeta plugin')
 option('skia', type: 'feature', value: 'auto', description: 'Build skia plugin')
 option('videofx', type: 'feature', value: 'auto', description: 'Build videofx plugin')
+option('viuer', type: 'feature', value: 'auto', description: 'Build viuer terminal video sink plugin')
 option('vvdec', type: 'feature', value: 'auto', description: 'Build vvdec plugin')
 option('webp', type: 'feature', value: 'auto', description: 'Build webp plugin')
 

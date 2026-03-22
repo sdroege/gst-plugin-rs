@@ -186,6 +186,9 @@ plugins = {
     'library': 'libgstrsvideofx',
     'extra-deps': {'cairo-gobject': []},
   },
+  'viuer': {
+    'library': 'libgstviuer',
+  },
   'gopbuffer': {'library': 'libgstgopbuffer'},
   'quinn': {
     'library': 'libgstquinn',

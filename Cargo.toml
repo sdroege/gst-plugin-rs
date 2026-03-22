@@ -76,6 +76,7 @@ members = [
     "video/rav1e",
     "video/skia",
     "video/videofx",
+    "video/viuer",
     "video/vvdec",
     "video/webp",
 ]

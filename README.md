@@ -232,6 +232,8 @@ You will find the following plugins in this repository:
       - `colordetect`: A pass-through filter able to detect the dominant color(s) on incoming frames, using [color-thief](https://github.com/RazrFalcon/color-thief-rs).
       - `videocompare`: Compare similarity of video frames. The element can use different hashing algorithms like [Blockhash](https://github.com/commonsmachinery/blockhash-rfc), [DSSIM](https://kornel.ski/dssim), and others.
 
+    - `viuer`: Terminal-based video sink making use of the [viuer](https://github.com/atanunq/viuer) crate.
+
     - `vvdec`: VVC/H.266 decoder based on [VVdeC](https://github.com/fraunhoferhhi/vvdec), the Fraunhofer Versatile Video Decoder.
 
     - `webp`: WebP decoder based on the [libwebp-sys-2](https://github.com/qnighy/libwebp-sys2-rs) library.
