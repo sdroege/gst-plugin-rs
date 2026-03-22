@@ -1,6 +1,6 @@
 // GStreamer RTP MPEG audio Payloader / Depayloader - unit tests
 //
-// Copyright (C) 2024 Tim-Philipp Müller <tim centricular com>
+// Copyright (C) 2024-2026 Tim-Philipp Müller <tim centricular com>
 //
 // This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at
@@ -14,6 +14,8 @@ use crate::mpa::mpeg_audio_utils::*;
 use crate::tests::{
     ExpectedBuffer, ExpectedPacket, Liveness, Source, run_test_pipeline, run_test_pipeline_full,
 };
+
+use gst::prelude::*;
 
 fn init() {
     use std::sync::Once;
@@ -31,6 +33,9 @@ const MP3_DATA: &[u8] = include_bytes!("audiotestsrc-1ch-48kHz.mp3").as_slice();
 
 // First few frames of sample file from bug 598335
 const MP3_FREEFORMAT_DATA: &[u8] = include_bytes!("freeformat-384kbps-2ch-44.1kHz.mp3").as_slice();
+
+// Changing frame headers (2ch/1ch 48kHz/44.1kHz)
+const MP3_CONFIG_CHANGES_DATA: &[u8] = include_bytes!("changing-config-1-4-3.mp3").as_slice();
 
 pub(crate) fn parse_mpa_frames(data: &[u8]) -> Vec<&[u8]> {
     let mut frames = vec![];
@@ -888,6 +893,101 @@ fn test_mpa_pay_depay_freeformat_fragmented() {
                 .pts(pts_from_frame(2))
                 .duration(frame_duration)
                 .size(1254)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+    ];
+
+    run_test_pipeline(
+        Source::Buffers(input_caps, input_buffers),
+        "rtpmpapay2 mtu=1200",
+        "rtpmpadepay2",
+        expected_pay,
+        expected_depay,
+    );
+}
+
+// test_mpa_depay_frame_header_changes_within_single_payload
+//
+// Check that the depayloader picks up on format changes within a single multi-frame RTP packet.
+#[test]
+fn test_mpa_depay_frame_header_changes_within_single_payload() {
+    init();
+
+    let frames = parse_mpa_frames(MP3_CONFIG_CHANGES_DATA);
+
+    // We'll hoodwink the payloader into thinking that these frames are all the same config. It
+    // won't double check and assumes that an upstream parser or other element would send new
+    // caps if the config changes, so hopefully these frames are all packed into a single
+    // RTP packet, which is what we need in order to make sure the depayloader can figure out
+    // the changing config within the single payload.
+    let input_caps = {
+        let hdr = peek_frame_header(FramedData(frames[0])).unwrap();
+
+        gst::Caps::builder("audio/mpeg")
+            .field("rate", hdr.sample_rate as i32)
+            .field("channels", hdr.channels as i32)
+            .field("mpegversion", hdr.version as i32)
+            .field("layer", hdr.layer as i32)
+            .field("parsed", true)
+            .build()
+    };
+
+    let mut input_buffers = vec![];
+    let mut expected_pay = vec![];
+
+    let pts = gst::ClockTime::ZERO;
+    let duration = gst::ClockTime::from_nseconds(200489792); // 4*24ms + 4*26.122448ms
+    let discont_flag = gst::BufferFlags::DISCONT;
+    input_buffers.push(make_buffer(
+        MP3_CONFIG_CHANGES_DATA,
+        pts,
+        duration,
+        discont_flag,
+    ));
+
+    let marker_flag = gst::BufferFlags::MARKER;
+
+    expected_pay.push(vec![
+        ExpectedPacket::builder()
+            .pts(pts)
+            .flags(discont_flag | marker_flag)
+            .pt(14)
+            .rtp_time(0)
+            .marker_bit(true)
+            .build(),
+    ]);
+
+    let duration_4frames_2ch_at_44_1 = (4 * 1152u64)
+        .mul_div_floor(*gst::ClockTime::SECOND, 44100)
+        .map(gst::ClockTime::from_nseconds)
+        .unwrap();
+
+    let expected_depay = vec![
+        // 1 frame of 1ch @ 48kHz
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_nseconds(0))
+                .duration(gst::ClockTime::from_nseconds(24000000))
+                .size(96)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+                .build(),
+        ],
+        // 4 frames of 2ch @ 44.1kHz
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_nseconds(24000000))
+                .duration(duration_4frames_2ch_at_44_1)
+                .size(4 * 104)
+                .flags(gst::BufferFlags::empty())
+                .build(),
+        ],
+        // 3 frames of 1ch @ 48kHz
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_nseconds(24000000) + duration_4frames_2ch_at_44_1)
+                .duration(gst::ClockTime::from_nseconds(3 * 24000000))
+                .size(3 * 96)
                 .flags(gst::BufferFlags::empty())
                 .build(),
         ],

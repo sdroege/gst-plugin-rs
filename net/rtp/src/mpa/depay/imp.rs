@@ -36,7 +36,9 @@ use std::fmt::Debug;
 use std::ops::RangeInclusive;
 use std::sync::LazyLock;
 
-use crate::basedepay::{Packet, PacketToBufferRelation, RtpBaseDepay2Ext, RtpBaseDepay2Impl};
+use crate::basedepay::{
+    Packet, PacketToBufferRelation, RtpBaseDepay2Ext, RtpBaseDepay2Impl, TimestampOffset,
+};
 
 use crate::mpa::mpeg_audio_utils::PeekData::{FramedData, PartialData};
 use crate::mpa::mpeg_audio_utils::{FrameHeader, peek_frame_header};
@@ -473,6 +475,56 @@ impl RtpMpegAudioDepay {
         Ok(gst::FlowSuccess::Ok)
     }
 
+    fn output_buffer(
+        &self,
+        state: &State,
+        packet: &Packet,
+        offset: usize,
+        len: usize,
+        acc_duration: &mut gst::ClockTime,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        if len == 0 {
+            return Ok(gst::FlowSuccess::Ok);
+        }
+
+        let mut outbuf = packet.payload_subbuffer_from_offset_with_length(offset, len);
+
+        let outbuf_ref = outbuf.get_mut().unwrap();
+
+        let frame_hdr = state.last_frame_header.as_ref().unwrap();
+
+        // All frames in the chunk we output have the same number of samples and sample rate
+        let n_frames = len / frame_hdr.frame_len.unwrap();
+
+        let duration = (n_frames as u64 * frame_hdr.samples_per_frame as u64)
+            .mul_div_floor(*gst::ClockTime::SECOND, frame_hdr.sample_rate as u64)
+            .map(gst::ClockTime::from_nseconds)
+            .unwrap();
+
+        outbuf_ref.set_duration(duration);
+
+        let pts_off = *acc_duration;
+
+        *acc_duration += duration;
+
+        // Marker flag indicates start of talkspurt (only set for first output buffer for a packet)
+        if packet.marker_bit() && offset <= 4 {
+            outbuf_ref.set_flags(gst::BufferFlags::RESYNC);
+        }
+
+        gst::trace!(CAT, imp = self, "Finishing buffer {outbuf:?}");
+
+        self.obj().queue_buffer(
+            PacketToBufferRelation::SeqnumsWithOffset {
+                seqnums: packet.ext_seqnum()..=packet.ext_seqnum(),
+                timestamp_offset: TimestampOffset::Pts(gst::Signed::<gst::ClockTime>::from(
+                    pts_off,
+                )),
+            },
+            outbuf,
+        )
+    }
+
     fn handle_unfragmented_payload(
         &self,
         state: &mut State,
@@ -483,6 +535,9 @@ impl RtpMpegAudioDepay {
 
         // One or more complete frames!
         let mut n_frames = 0;
+        let mut acc_size = 0;
+        let mut acc_offset = 4;
+        let mut acc_duration = gst::ClockTime::ZERO;
 
         // We handled the single freeformat frame without known length case above, so here we now
         // have either a single normal frame, multiple normal frames, or multiple freeformat frames.
@@ -494,12 +549,20 @@ impl RtpMpegAudioDepay {
             gst::log!(
                 CAT,
                 imp = self,
-                "Frame {n_frames}: {frame_header:?}, {}",
+                "Frame {n_frames} @ {acc_offset}: {frame_header:?}, {}",
                 if format_changed { "format_changed" } else { "" },
             );
 
             if format_changed {
                 self.update_src_caps(&frame_header);
+
+                // Mid-packet format change? Push out any pending data for the old format
+                if acc_size > 0 {
+                    gst::log!(CAT, imp = self, "Mid-packet format change");
+                    self.output_buffer(state, packet, acc_offset, acc_size, &mut acc_duration)?;
+                    acc_offset += acc_size;
+                    acc_size = 0;
+                }
 
                 state.last_frame_header = Some(frame_header.clone());
             }
@@ -519,6 +582,8 @@ impl RtpMpegAudioDepay {
                 break;
             }
 
+            acc_size += frame_len;
+
             (_, payload) = payload.split_at(frame_len);
         }
 
@@ -537,29 +602,8 @@ impl RtpMpegAudioDepay {
             );
         }
 
-        // Push out everything we got
-        let mut outbuf = packet.payload_subbuffer(4..);
-
-        let outbuf_ref = outbuf.get_mut().unwrap();
-
-        // We assume all frames in the packet have the same number of samples and sample rate
-        outbuf_ref.set_duration(
-            (n_frames as u64 * first_frame_header.samples_per_frame as u64)
-                .mul_div_floor(
-                    *gst::ClockTime::SECOND,
-                    first_frame_header.sample_rate as u64,
-                )
-                .map(gst::ClockTime::from_nseconds),
-        );
-
-        // Marker flag indicates start of talkspurt
-        if packet.marker_bit() {
-            outbuf_ref.set_flags(gst::BufferFlags::RESYNC);
-        }
-
-        gst::trace!(CAT, imp = self, "Finishing buffer {outbuf:?}");
-
-        self.obj().queue_buffer(packet.into(), outbuf)
+        // Push out everything we got left, if there's anything left
+        self.output_buffer(state, packet, acc_offset, acc_size, &mut acc_duration)
     }
 
     fn update_src_caps(&self, new_frame_header: &FrameHeader) {
