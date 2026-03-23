@@ -15538,6 +15538,18 @@
                     }
                 },
                 "properties": {
+                    "certificate-file": {
+                        "blurb": "Path to certificate chain for the private key file in PEM format",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "location": {
                         "blurb": "RTSP server, credentials and media path, e.g. rtsp://user:p4ssw0rd@camera-5.local:8554/h264_1080p30",
                         "conditionally-available": false,
@@ -15562,6 +15574,18 @@
                         "mutable": "ready",
                         "readable": true,
                         "type": "guint",
+                        "writable": true
+                    },
+                    "private-key-file": {
+                        "blurb": "Path to a PKCS1, PKCS8 or SEC1 private key file in PEM format",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
                         "writable": true
                     },
                     "protocols": {
@@ -15605,7 +15629,15 @@
                         "writable": true
                     }
                 },
-                "rank": "none"
+                "rank": "none",
+                "signals": {
+                    "tls-client-auth": {
+                        "action": true,
+                        "args": [],
+                        "return-type": "GstStructure",
+                        "when": "last"
+                    }
+                }
             }
         },
         "filename": "gstrsrtsp",

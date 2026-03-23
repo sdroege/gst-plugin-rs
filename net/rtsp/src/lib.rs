@@ -16,6 +16,7 @@
 use gst::glib;
 
 mod rtspsrc;
+mod utils;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     rtspsrc::register(plugin)?;
