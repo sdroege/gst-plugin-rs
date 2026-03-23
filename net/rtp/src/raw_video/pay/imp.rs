@@ -68,6 +68,9 @@ use super::packing_template::{FramePackingTemplate, VRAW_CHUNK_HDR_LEN, VRAW_EXT
 
 use std::str::FromStr;
 
+// Mostly used on local networks, so keep default MTU on higher side
+const RTP_VRAW_DEFAULT_MTU: u32 = 1400;
+
 #[derive(Default)]
 pub struct RtpRawVideoPay {
     state: AtomicRefCell<State>,
@@ -176,6 +179,7 @@ impl ElementImpl for RtpRawVideoPay {
 
 impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
     const ALLOWED_META_TAGS: &'static [&'static str] = &["video"];
+    const DEFAULT_MTU: u32 = RTP_VRAW_DEFAULT_MTU;
 
     fn set_sink_caps(&self, caps: &gst::Caps) -> bool {
         let Ok(info) = gst_video::VideoInfo::from_caps(caps) else {
