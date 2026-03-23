@@ -563,8 +563,22 @@ impl TranscriberBin {
             .property_from_str("leaky", "downstream")
             .build()?;
 
+        // We want to ignore errors from the transcriber branch. As we expect
+        // error-causing elements (most likely transcribers failing to connect
+        // for instance) to communicate errors through error messages, we will
+        // go to passthrough in this case, and do not want to let the error propagate
+        // further up the pipeline in the meantime.
+        //
+        // We keep the default conversion to not-linked as the tee further upstream
+        // is configured to ignore not-linked.
+        let errorignore = gst::ElementFactory::make("errorignore")
+            .name("transqueue-errorignore")
+            .property("ignore-notnegotiated", false)
+            .build()?;
+
         pad_state.transcription_bin.add_many([
             &aqueue_transcription,
+            &errorignore,
             &pad_state.transcriber_resample,
             &pad_state.transcriber_aconv,
         ])?;
@@ -585,6 +599,7 @@ impl TranscriberBin {
 
         gst::Element::link_many([
             &aqueue_transcription,
+            &errorignore,
             &pad_state.transcriber_resample,
             &pad_state.transcriber_aconv,
         ])?;
