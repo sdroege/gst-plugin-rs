@@ -11,21 +11,20 @@
 //
 // https://www.rfc-editor.org/rfc/rfc2326.html
 
+use crate::utils::create_tls_connector;
 use std::collections::{HashMap, btree_set::BTreeSet};
 use std::convert::TryFrom;
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::num::NonZeroUsize;
+use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::sync::LazyLock;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use anyhow::Result;
 use rustls_pki_types::ServerName;
-use rustls_platform_verifier::BuilderVerifierExt;
-use std::sync::LazyLock;
-use tokio_rustls::rustls::ClientConfig;
-use tokio_rustls::{TlsConnector, rustls};
 
 use futures::{Sink, SinkExt, Stream, StreamExt};
 use socket2::Socket;
@@ -71,6 +70,8 @@ const UDP_PACKET_MAX_SIZE: u32 = 65535 - 8;
 const RTCP_ADDR_CACHE_SIZE: usize = 100;
 const MAX_AUTH_RETRIES: u32 = 1;
 const INITIAL_NONCE: u32 = 1;
+
+const SIGNAL_TLS_CLIENT_AUTH: &str = "tls-client-auth";
 
 static RTCP_CAPS: LazyLock<gst::Caps> =
     LazyLock::new(|| gst::Caps::from(gst::Structure::new_empty("application/x-rtcp")));
@@ -226,6 +227,8 @@ struct Settings {
     protocols: Vec<RtspProtocol>,
     timeout: gst::ClockTime,
     receive_mtu: u32,
+    certificate_file: Option<PathBuf>,
+    private_key_file: Option<PathBuf>,
 }
 
 impl Default for Settings {
@@ -236,6 +239,8 @@ impl Default for Settings {
             timeout: DEFAULT_TIMEOUT,
             protocols: parse_protocols_str(DEFAULT_PROTOCOLS).unwrap(),
             receive_mtu: DEFAULT_RECEIVE_MTU,
+            certificate_file: None,
+            private_key_file: None,
         }
     }
 }
@@ -433,11 +438,20 @@ impl ObjectImpl for RtspSrc {
                     .default_value(DEFAULT_TIMEOUT.into())
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecString::builder("certificate-file")
+                    .nick("Certificate file for client authentication")
+                    .blurb("Path to certificate chain for the private key file in PEM format")
+                    .build(),
+                glib::ParamSpecString::builder("private-key-file")
+                    .nick("Private key file for client authentication")
+                    .blurb("Path to a PKCS1, PKCS8 or SEC1 private key file in PEM format")
+                    .build(),
             ]
         });
 
         PROPERTIES.as_ref()
     }
+
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let res = match pspec.name() {
             "receive-mtu" => {
@@ -471,6 +485,18 @@ impl ObjectImpl for RtspSrc {
                 let mut settings = self.settings.lock().unwrap();
                 let timeout = value.get().expect("type checked upstream");
                 settings.timeout = timeout;
+                Ok(())
+            }
+            "certificate-file" => {
+                let mut settings = self.settings.lock().unwrap();
+                let value: String = value.get().unwrap();
+                settings.certificate_file = Some(value.into());
+                Ok(())
+            }
+            "private-key-file" => {
+                let mut settings = self.settings.lock().unwrap();
+                let value: String = value.get().unwrap();
+                settings.private_key_file = Some(value.into());
                 Ok(())
             }
             name => unimplemented!("Property '{name}'"),
@@ -517,8 +543,38 @@ impl ObjectImpl for RtspSrc {
                 let settings = self.settings.lock().unwrap();
                 settings.timeout.to_value()
             }
+            "certificate-file" => {
+                let settings = self.settings.lock().unwrap();
+                let certfile = settings.certificate_file.as_ref();
+                certfile.to_value()
+            }
+            "private-key-file" => {
+                let settings = self.settings.lock().unwrap();
+                let privkey = settings.private_key_file.as_ref();
+                privkey.to_value()
+            }
             name => unimplemented!("Property '{name}'"),
         }
+    }
+
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
+            vec![
+                // GstRtspSrc2::tls-client-auth:
+                //
+                // Returns: a #GstStructure. The returned #GstStructure should contain:
+                //
+                // "certificate-file" field of type string having path to certificate file
+                // "private-key-file" field of type string having path to private key file
+                glib::subclass::Signal::builder(SIGNAL_TLS_CLIENT_AUTH)
+                    .return_type::<Option<gst::Structure>>()
+                    .action()
+                    .class_handler(|_| Some(None::<gst::Structure>.to_value()))
+                    .build(),
+            ]
+        });
+
+        SIGNALS.as_ref()
     }
 
     fn constructed(&self) {
@@ -655,7 +711,7 @@ impl RtspSrc {
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        let (url, tls_enabled) = {
+        let (url, tls_enabled, cert, key) = {
             let settings = self.settings.lock().unwrap();
             let Some(url) = settings.location.clone() else {
                 return Err(gst::error_msg!(
@@ -664,8 +720,10 @@ impl RtspSrc {
                 ));
             };
             let tls_enabled = url.scheme() == "rtsps";
+            let certificate_file = settings.certificate_file.clone();
+            let private_key_file = settings.private_key_file.clone();
 
-            (url, tls_enabled)
+            (url, tls_enabled, certificate_file, private_key_file)
         };
 
         gst::info!(CAT, imp = self, "Location: {url}",);
@@ -682,6 +740,8 @@ impl RtspSrc {
             debug_assert!(cmd_queue_opt.is_none());
             cmd_queue_opt.replace(tx);
         }
+
+        let self_weak = self.obj().downgrade();
 
         let join_handle = RUNTIME.spawn(async move {
             gst::info!(CAT, "Connecting to {url} ..");
@@ -715,14 +775,17 @@ impl RtspSrc {
                     }
                 };
 
-                let provider = Arc::new(rustls::crypto::ring::default_provider());
-                let config = ClientConfig::builder_with_provider(provider)
-                    .with_safe_default_protocol_versions()
-                    .unwrap()
-                    .with_platform_verifier()
-                    .unwrap()
-                    .with_no_client_auth();
-                let connector = TlsConnector::from(Arc::new(config));
+                let connector = match create_tls_connector(self_weak, cert, key) {
+                    Ok(c) => c,
+                    Err(err) => {
+                        gst::element_imp_error!(
+                            task_src,
+                            gst::ResourceError::Read,
+                            ["Failed to create TlsConnector: {err}"]
+                        );
+                        return;
+                    }
+                };
 
                 let s = match connector.connect(dnsname, stream).await {
                     Ok(s) => s,
