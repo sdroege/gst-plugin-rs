@@ -334,7 +334,8 @@ impl Session {
         now: Instant,
     ) -> RecvReply {
         trace!(
-            "receive rtp from:{from:?} at {now:?}, ssrc:{}, pt:{}, seqno:{}, rtp ts:{}, bytes:{}",
+            "receive rtp from:{from:?} at {now:?}, ssrc: {:#08x} ({}), pt:{}, seqno:{}, rtp ts:{}, bytes:{}",
+            rtp.ssrc(),
             rtp.ssrc(),
             rtp.payload_type(),
             rtp.sequence_number(),
@@ -392,7 +393,12 @@ impl Session {
             let mut source = RemoteSendSource::new(rtp.ssrc());
             source.set_rtp_from(from);
             self.remote_senders.insert(rtp.ssrc(), source);
-            trace!("new receive ssrc:{}, pt:{}", rtp.ssrc(), rtp.payload_type());
+            trace!(
+                "new receive ssrc: {:#08x} ({}), pt:{}",
+                rtp.ssrc(),
+                rtp.ssrc(),
+                rtp.payload_type()
+            );
             RecvReply::NewSsrc(rtp.ssrc(), rtp.payload_type())
         }
     }
@@ -401,7 +407,8 @@ impl Session {
     /// must do with this packet.
     pub fn handle_send(&mut self, rtp: &RtpPacket, now: Instant) -> SendReply {
         trace!(
-            "sending at {now:?} ssrc:{}, pt:{}, seqno:{}, rtp ts:{}, bytes:{}",
+            "sending at {now:?} ssrc: {:#08x} ({}), pt:{}, seqno:{}, rtp ts:{}, bytes:{}",
+            rtp.ssrc(),
             rtp.ssrc(),
             rtp.payload_type(),
             rtp.sequence_number(),
@@ -430,7 +437,8 @@ impl Session {
         if let Some(source) = self.local_senders.get_mut(&rtp.ssrc()) {
             if source.state() != SourceState::Normal {
                 warn!(
-                    "source {} is in state {:?}, dropping send",
+                    "source {:#08x} ({}) is in state {:?}, dropping send",
+                    source.ssrc(),
                     source.ssrc(),
                     source.state()
                 );
@@ -447,7 +455,12 @@ impl Session {
                 );
                 SendReply::Passthrough
             } else {
-                trace!("no clock rate for pt:{}, dropping", rtp.payload_type());
+                trace!(
+                    "source {:#08x} ({}): no clock rate for pt:{}, dropping",
+                    rtp.ssrc(),
+                    rtp.ssrc(),
+                    rtp.payload_type()
+                );
                 SendReply::Drop
             }
         } else {
@@ -460,7 +473,12 @@ impl Session {
                 // TODO: signal updated timeout
             }
             self.local_senders.insert(rtp.ssrc(), source);
-            info!("new send ssrc:{}, pt:{}", rtp.ssrc(), rtp.payload_type());
+            info!(
+                "new send ssrc: {:#08x} ({}), pt:{}",
+                rtp.ssrc(),
+                rtp.ssrc(),
+                rtp.payload_type()
+            );
             SendReply::NewSsrc(rtp.ssrc(), rtp.payload_type())
         }
     }
@@ -543,13 +561,14 @@ impl Session {
     /// caller may need to handle.
     pub fn handle_rtcp_recv(
         &mut self,
+        origin: &str,
         rtcp: Compound,
         rtcp_len: usize,
         from: Option<SocketAddr>,
         now: Instant,
         ntp_time: SystemTime,
     ) -> Vec<RtcpRecvReply> {
-        trace!("Receive RTCP at {now:?}, ntp:{ntp_time:?}");
+        trace!("{origin} Receive RTCP at {now:?}, ntp:{ntp_time:?}");
         // TODO: handle from: Option<SocketAddr>
         let mut replies = vec![];
 
@@ -559,7 +578,7 @@ impl Session {
 
         let mut reconsidered_timeout = false;
         for (i, p) in rtcp.enumerate() {
-            trace!("recv rtcp {i}th packet: {p:?}");
+            trace!("{origin} recv rtcp {i}th packet: {p:?}");
             match p {
                 // TODO: actually handle App packets
                 Ok(Packet::App(_app)) => (),
@@ -1983,7 +2002,7 @@ pub(crate) mod tests {
         let rtcp = Compound::parse(data).unwrap();
 
         assert_eq!(
-            session.handle_rtcp_recv(rtcp, len, None, now, ntp_now),
+            session.handle_rtcp_recv("receive_two_ssrc_sr", rtcp, len, None, now, ntp_now),
             vec![
                 RtcpRecvReply::NewRtpNtp((
                     ssrcs[0],
@@ -2284,7 +2303,14 @@ pub(crate) mod tests {
         let rtcp = Compound::parse(&data[..len]).unwrap();
 
         assert_eq!(
-            session.handle_rtcp_recv(rtcp, len, None, now, ntp_now),
+            session.handle_rtcp_recv(
+                "ignore_recv_bye_for_local_sender",
+                rtcp,
+                len,
+                None,
+                now,
+                ntp_now
+            ),
             vec![]
         );
         let source = session.mut_local_send_source_by_ssrc(ssrc).unwrap();
@@ -2310,7 +2336,14 @@ pub(crate) mod tests {
             .unwrap();
         let rtcp = Compound::parse(&data[..len]).unwrap();
         assert_eq!(
-            session.handle_rtcp_recv(rtcp, len, Some(from), now, ntp_now),
+            session.handle_rtcp_recv(
+                "ssrc_collision_on_send",
+                rtcp,
+                len,
+                Some(from),
+                now,
+                ntp_now
+            ),
             vec![
                 RtcpRecvReply::NewSsrc(ssrc),
                 RtcpRecvReply::NewCName(("cname".to_string(), ssrc))
@@ -2337,7 +2370,14 @@ pub(crate) mod tests {
             .unwrap();
         let rtcp = Compound::parse(&data[..len]).unwrap();
         assert_eq!(
-            session.handle_rtcp_recv(rtcp, len, Some(from), now, ntp_now),
+            session.handle_rtcp_recv(
+                "ssrc_collision_on_send",
+                rtcp,
+                len,
+                Some(from),
+                now,
+                ntp_now
+            ),
             vec![
                 RtcpRecvReply::NewSsrc(new_ssrc),
                 RtcpRecvReply::NewCName(("cname".to_string(), new_ssrc))
@@ -2375,7 +2415,14 @@ pub(crate) mod tests {
             .unwrap();
         let rtcp = Compound::parse(&data[..len]).unwrap();
         assert_eq!(
-            session.handle_rtcp_recv(rtcp, len, Some(from), now, ntp_now),
+            session.handle_rtcp_recv(
+                "ssrc_collision_on_recv",
+                rtcp,
+                len,
+                Some(from),
+                now,
+                ntp_now
+            ),
             vec![RtcpRecvReply::SsrcCollision(ssrc)]
         );
     }
@@ -2439,7 +2486,7 @@ pub(crate) mod tests {
 
         let rtcp = Compound::parse(data).unwrap();
         assert_eq!(
-            session.handle_rtcp_recv(rtcp, len, None, now, ntp_now),
+            session.handle_rtcp_recv("bye_remote_sender", rtcp, len, None, now, ntp_now),
             vec![
                 RtcpRecvReply::SsrcBye(ssrc),
                 RtcpRecvReply::TimerReconsideration
@@ -2612,7 +2659,7 @@ pub(crate) mod tests {
             .unwrap();
         let rtcp = Compound::parse(&data[..len]).unwrap();
         assert_eq!(
-            session.handle_rtcp_recv(rtcp, len, Some(from), now, ntp_now),
+            session.handle_rtcp_recv("point_to_point", rtcp, len, Some(from), now, ntp_now),
             vec![
                 RtcpRecvReply::NewSsrc(recv_ssrc),
                 RtcpRecvReply::NewCName(("cname1".to_string(), recv_ssrc))
@@ -2639,7 +2686,7 @@ pub(crate) mod tests {
             .unwrap();
         let rtcp = Compound::parse(&data[..len]).unwrap();
         assert_eq!(
-            session.handle_rtcp_recv(rtcp, len, Some(from), now, ntp_now),
+            session.handle_rtcp_recv("point_to_point", rtcp, len, Some(from), now, ntp_now),
             vec![
                 RtcpRecvReply::NewCName(("cname1".to_string(), recv_ssrc)),
                 RtcpRecvReply::NewSsrc(recv2_ssrc),
@@ -2667,7 +2714,7 @@ pub(crate) mod tests {
             .unwrap();
         let rtcp = Compound::parse(&data[..len]).unwrap();
         assert_eq!(
-            session.handle_rtcp_recv(rtcp, len, Some(from), now, ntp_now),
+            session.handle_rtcp_recv("point_to_point", rtcp, len, Some(from), now, ntp_now),
             vec![
                 RtcpRecvReply::NewCName(("cname1".to_string(), recv_ssrc)),
                 RtcpRecvReply::NewCName(("cname2".to_string(), recv2_ssrc))

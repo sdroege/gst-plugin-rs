@@ -115,7 +115,7 @@ impl JitterBuffer {
         }
     }
 
-    pub fn queue_serialized_item(&mut self) -> QueueResult {
+    pub fn queue_serialized_item(&mut self, origin: &str) -> QueueResult {
         if self.items.is_empty() {
             let id = self.packet_counter;
             self.packet_counter += 1;
@@ -130,19 +130,28 @@ impl JitterBuffer {
             seqnum: (*self.seqnums.last().unwrap_or(&0)),
         };
         self.items.insert(item);
-        trace!("Queued serialized item and assigned ID {id}");
+        trace!("{origin} Queued serialized item and assigned ID {id}");
 
         QueueResult::Queued(id)
     }
 
-    pub fn set_flushing(&mut self, flushing: bool) {
-        trace!("Flush changed from {} to {flushing}", self.flushing);
+    pub fn set_flushing(&mut self, origin: &str, flushing: bool) {
+        trace!(
+            "{origin} Flush changed from {} to {flushing}",
+            self.flushing
+        );
         self.flushing = flushing;
         self.last_output_seqnum = None;
         self.can_forward_packets_when_empty = self.latency.is_zero();
     }
 
-    pub fn queue_packet(&mut self, rtp: &RtpPacket, mut pts: u64, now: Instant) -> QueueResult {
+    pub fn queue_packet(
+        &mut self,
+        origin: &str,
+        rtp: &RtpPacket,
+        mut pts: u64,
+        now: Instant,
+    ) -> QueueResult {
         if self.flushing {
             return QueueResult::Flushing;
         }
@@ -157,22 +166,21 @@ impl JitterBuffer {
         self.last_input_ts = Some(pts);
 
         self.base_times.get_or_insert_with(|| {
-            debug!("Selected base times {now:?} {pts}");
+            debug!("{origin} Selected base times {now:?} {pts}");
 
             (now, pts)
         });
 
         // Maintain (and trim) our seqnum list for duplicate detection
         while self.seqnums.len() >= u16::MAX as usize {
-            debug!("Trimming");
+            debug!("{origin} Trimming");
             self.seqnums.pop_first();
         }
 
         if self.seqnums.contains(&seqnum) {
             trace!(
-                "Duplicated packet seqnum {} (extended {})",
+                "{origin} Duplicated packet seqnum {} (extended {seqnum})",
                 rtp.sequence_number(),
-                seqnum,
             );
             self.stats.num_duplicates += 1;
             return QueueResult::Duplicate;
@@ -184,10 +192,8 @@ impl JitterBuffer {
             && last_output_seqnum >= seqnum
         {
             debug!(
-                "Late packet seqnum {} (extended {}), last output seqnum {}",
+                "{origin} Late packet seqnum {} (extended {seqnum}), last output seqnum {last_output_seqnum}",
                 rtp.sequence_number(),
-                seqnum,
-                last_output_seqnum
             );
             self.stats.num_late += 1;
             return QueueResult::Late;
@@ -217,9 +223,8 @@ impl JitterBuffer {
 
                     assert!(gap != 1);
                     debug!(
-                        "Packets before seqnum {} (extended {}) considered lost",
+                        "{origin} Packets before seqnum {} (extended {seqnum}) considered lost",
                         rtp.sequence_number(),
-                        seqnum
                     );
                     self.stats.num_lost += gap - 1;
                 }
@@ -249,14 +254,14 @@ impl JitterBuffer {
         }
 
         trace!(
-            "Queued RTP packet with ts {pts}, seqnum {} (extended {seqnum}), assigned ID {id}",
+            "{origin} Queued RTP packet with ts {pts}, seqnum {} (extended {seqnum}), assigned ID {id}",
             rtp.sequence_number()
         );
 
         QueueResult::Queued(id)
     }
 
-    pub fn poll(&mut self, now: Instant) -> PollResult {
+    pub fn poll(&mut self, origin: &str, now: Instant) -> PollResult {
         if self.flushing {
             if let Some(item) = self.items.pop_first() {
                 return PollResult::Drop(item.id);
@@ -265,7 +270,7 @@ impl JitterBuffer {
             }
         }
 
-        trace!("Polling at {now:?}");
+        trace!("{origin} Polling at {now:?}");
 
         let Some(item) = self.items.first() else {
             return PollResult::Empty;
@@ -286,13 +291,13 @@ impl JitterBuffer {
 
         let duration_since_base_instant = now - base_instant;
 
-        trace!("Duration since base instant {duration_since_base_instant:?}");
+        trace!("{origin} Duration since base instant {duration_since_base_instant:?}");
 
         let ts = pts.checked_sub(base_ts).unwrap();
         let deadline = Duration::from_nanos(ts) + self.latency;
 
         trace!(
-            "Considering packet ID {} (seqnum {}, extended {}) with ts {ts}, deadline is {deadline:?}",
+            "{origin} Considering packet ID {} (seqnum {}, extended {}) with ts {ts}, deadline is {deadline:?}",
             item.id,
             item.seqnum & 0xffff,
             item.seqnum
@@ -300,7 +305,7 @@ impl JitterBuffer {
 
         if deadline <= duration_since_base_instant {
             debug!(
-                "Packet with id {} (seqnum {}, extended {}) is ready",
+                "{origin} Packet with id {} (seqnum {}, extended {}) is ready",
                 item.id,
                 item.seqnum & 0xffff,
                 item.seqnum
@@ -313,7 +318,7 @@ impl JitterBuffer {
 
                     if gap != 1 {
                         debug!(
-                            "Packets before ID {} (seqnum {}, extended {}) considered lost",
+                            "{origin} Packets before ID {} (seqnum {}, extended {}) considered lost",
                             item.id,
                             item.seqnum & 0xffff,
                             item.seqnum
@@ -338,7 +343,7 @@ impl JitterBuffer {
             }
         } else {
             trace!(
-                "Packet ID {} (seqnum {}, extended {}) is not ready",
+                "{origin} Packet ID {} (seqnum {}, extended {}) is not ready",
                 item.id,
                 item.seqnum & 0xffff,
                 item.seqnum
@@ -359,25 +364,29 @@ mod tests {
 
     #[test]
     fn empty() {
+        const ORIGIN: &str = "empty";
+
         let mut jb = JitterBuffer::new(Duration::from_secs(1));
-        jb.set_flushing(false);
+        jb.set_flushing(ORIGIN, false);
 
         let now = Instant::now();
 
-        assert_eq!(jb.poll(now), PollResult::Empty);
+        assert_eq!(jb.poll(ORIGIN, now), PollResult::Empty);
     }
 
     #[test]
     fn receive_one_packet_no_latency() {
+        const ORIGIN: &str = "receive_one_packet_no_latency";
+
         let mut jb = JitterBuffer::new(Duration::from_secs(0));
-        jb.set_flushing(false);
+        jb.set_flushing(ORIGIN, false);
 
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
 
         let now = Instant::now();
 
-        let QueueResult::Forward { id, discont } = jb.queue_packet(&packet, 0, now) else {
+        let QueueResult::Forward { id, discont } = jb.queue_packet(ORIGIN, &packet, 0, now) else {
             unreachable!()
         };
 
@@ -387,20 +396,22 @@ mod tests {
 
     #[test]
     fn receive_one_packet_with_latency() {
+        const ORIGIN: &str = "receive_one_packet_with_latency";
+
         let mut jb = JitterBuffer::new(Duration::from_secs(1));
-        jb.set_flushing(false);
+        jb.set_flushing(ORIGIN, false);
 
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
 
         let mut now = Instant::now();
 
-        let QueueResult::Queued(id) = jb.queue_packet(&packet, 0, now) else {
+        let QueueResult::Queued(id) = jb.queue_packet(ORIGIN, &packet, 0, now) else {
             unreachable!()
         };
 
         assert_eq!(
-            jb.poll(now),
+            jb.poll(ORIGIN, now),
             PollResult::Timeout(now + Duration::from_secs(1))
         );
 
@@ -408,19 +419,24 @@ mod tests {
         now -= Duration::from_nanos(1);
 
         assert_eq!(
-            jb.poll(now),
+            jb.poll(ORIGIN, now),
             PollResult::Timeout(now + Duration::from_nanos(1))
         );
 
         now += Duration::from_nanos(1);
 
-        assert_eq!(jb.poll(now), PollResult::Forward { id, discont: true });
+        assert_eq!(
+            jb.poll(ORIGIN, now),
+            PollResult::Forward { id, discont: true }
+        );
     }
 
     #[test]
     fn ordered_packets_no_latency() {
+        const ORIGIN: &str = "ordered_packets_no_latency";
+
         let mut jb = JitterBuffer::new(Duration::from_secs(0));
-        jb.set_flushing(false);
+        jb.set_flushing(ORIGIN, false);
 
         let now = Instant::now();
 
@@ -430,7 +446,7 @@ mod tests {
         let QueueResult::Forward {
             id: _,
             discont: true,
-        } = jb.queue_packet(&packet, 0, now)
+        } = jb.queue_packet(ORIGIN, &packet, 0, now)
         else {
             unreachable!()
         };
@@ -440,7 +456,7 @@ mod tests {
         let QueueResult::Forward {
             id: _,
             discont: false,
-        } = jb.queue_packet(&packet, 0, now)
+        } = jb.queue_packet(ORIGIN, &packet, 0, now)
         else {
             unreachable!()
         };
@@ -448,8 +464,10 @@ mod tests {
 
     #[test]
     fn ordered_packets_no_latency_with_gap() {
+        const ORIGIN: &str = "ordered_packets_no_latency_with_gap";
+
         let mut jb = JitterBuffer::new(Duration::from_secs(0));
-        jb.set_flushing(false);
+        jb.set_flushing("ordered_packets_no_latency_with_gap", false);
 
         let now = Instant::now();
 
@@ -458,7 +476,7 @@ mod tests {
         let QueueResult::Forward {
             id: _,
             discont: true,
-        } = jb.queue_packet(&packet, 0, now)
+        } = jb.queue_packet(ORIGIN, &packet, 0, now)
         else {
             unreachable!()
         };
@@ -468,7 +486,7 @@ mod tests {
         let QueueResult::Forward {
             id: _,
             discont: true,
-        } = jb.queue_packet(&packet, 0, now)
+        } = jb.queue_packet(ORIGIN, &packet, 0, now)
         else {
             unreachable!()
         };
@@ -476,8 +494,10 @@ mod tests {
 
     #[test]
     fn misordered_packets_no_latency() {
+        const ORIGIN: &str = "misordered_packets_no_latency";
+
         let mut jb = JitterBuffer::new(Duration::from_secs(0));
-        jb.set_flushing(false);
+        jb.set_flushing(ORIGIN, false);
 
         let now = Instant::now();
 
@@ -486,19 +506,22 @@ mod tests {
         let QueueResult::Forward {
             id: _,
             discont: true,
-        } = jb.queue_packet(&packet, 0, now)
+        } = jb.queue_packet(ORIGIN, &packet, 0, now)
         else {
             unreachable!()
         };
 
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        assert_eq!(jb.queue_packet(&packet, 0, now), QueueResult::Late);
+        assert_eq!(jb.queue_packet(ORIGIN, &packet, 0, now), QueueResult::Late);
 
         // Try and push a duplicate
         let rtp_data = generate_rtp_packet(0x12345678, 1, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        assert_eq!(jb.queue_packet(&packet, 0, now), QueueResult::Duplicate);
+        assert_eq!(
+            jb.queue_packet(ORIGIN, &packet, 0, now),
+            QueueResult::Duplicate
+        );
 
         // We do accept future sequence numbers up to a distance of at least i16::MAX
         let rtp_data = generate_rtp_packet(0x12345678, i16::MAX as u16 + 1, 0, 4);
@@ -506,7 +529,7 @@ mod tests {
         let QueueResult::Forward {
             id: _,
             discont: true,
-        } = jb.queue_packet(&packet, 0, now)
+        } = jb.queue_packet(ORIGIN, &packet, 0, now)
         else {
             unreachable!()
         };
@@ -514,42 +537,45 @@ mod tests {
         // But no further
         let rtp_data = generate_rtp_packet(0x12345678, 2, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        assert_eq!(jb.queue_packet(&packet, 0, now), QueueResult::Late);
+        assert_eq!(jb.queue_packet(ORIGIN, &packet, 0, now), QueueResult::Late);
     }
 
     #[test]
     fn ordered_packets_with_latency() {
+        const ORIGIN: &str = "ordered_packets_with_latency";
+
         let mut jb = JitterBuffer::new(Duration::from_secs(1));
-        jb.set_flushing(false);
+        jb.set_flushing("ordered_packets_with_latency", false);
 
         let mut now = Instant::now();
 
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id_first) = jb.queue_packet(&packet, 0, now) else {
+        let QueueResult::Queued(id_first) = jb.queue_packet(ORIGIN, &packet, 0, now) else {
             unreachable!()
         };
 
         assert_eq!(
-            jb.poll(now),
+            jb.poll(ORIGIN, now),
             PollResult::Timeout(now + Duration::from_secs(1))
         );
 
         let rtp_data = generate_rtp_packet(0x12345678, 1, 180000, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id_second) = jb.queue_packet(&packet, 2_000_000_000, now) else {
+        let QueueResult::Queued(id_second) = jb.queue_packet(ORIGIN, &packet, 2_000_000_000, now)
+        else {
             unreachable!()
         };
 
         assert_eq!(
-            jb.poll(now),
+            jb.poll(ORIGIN, now),
             PollResult::Timeout(now + Duration::from_secs(1))
         );
 
         now += Duration::from_secs(1);
 
         assert_eq!(
-            jb.poll(now),
+            jb.poll(ORIGIN, now),
             PollResult::Forward {
                 id: id_first,
                 discont: true
@@ -557,14 +583,14 @@ mod tests {
         );
 
         assert_eq!(
-            jb.poll(now),
+            jb.poll(ORIGIN, now),
             PollResult::Timeout(now + Duration::from_secs(2))
         );
 
         now += Duration::from_secs(2);
 
         assert_eq!(
-            jb.poll(now),
+            jb.poll(ORIGIN, now),
             PollResult::Forward {
                 id: id_second,
                 discont: false
@@ -589,64 +615,68 @@ mod tests {
 
     #[test]
     fn stats() {
+        const ORIGIN: &str = "stats";
+
         let mut jb = JitterBuffer::new(Duration::from_secs(1));
-        jb.set_flushing(false);
+        jb.set_flushing("stats", false);
 
         let mut now = Instant::now();
 
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        jb.queue_packet(&packet, 0, now);
+        jb.queue_packet(ORIGIN, &packet, 0, now);
 
         assert_stats(&jb, 0, 0, 0, 0);
 
         // At this point pushing the same packet in before it gets output
         // results in an increment of the duplicate stat
-        jb.queue_packet(&packet, 0, now);
+        jb.queue_packet(ORIGIN, &packet, 0, now);
         assert_stats(&jb, 0, 0, 1, 0);
 
         now += Duration::from_secs(1);
-        let _ = jb.poll(now);
+        let _ = jb.poll(ORIGIN, now);
 
         assert_stats(&jb, 0, 0, 1, 1);
 
         // Pushing it after the first version got output also results in
         // an increment of the duplicate stat
-        jb.queue_packet(&packet, 0, now);
+        jb.queue_packet(ORIGIN, &packet, 0, now);
         assert_stats(&jb, 0, 0, 2, 1);
 
         // Then after a packet with seqnum 2 goes through, the lost
         // stat must be incremented by 1 (as packet with seqnum 1 went missing)
         let rtp_data = generate_rtp_packet(0x12345678, 2, 9000, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        jb.queue_packet(&packet, 100_000_000, now);
+        jb.queue_packet(ORIGIN, &packet, 100_000_000, now);
 
         now += Duration::from_millis(100);
-        let _ = jb.poll(now);
+        let _ = jb.poll(ORIGIN, now);
         assert_stats(&jb, 0, 1, 2, 2);
 
         // If the packet with seqnum 1 does arrive after that, it should be
         // considered both late and lost
         let rtp_data = generate_rtp_packet(0x12345678, 1, 4500, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        jb.queue_packet(&packet, 50_000_000, now);
+        jb.queue_packet(ORIGIN, &packet, 50_000_000, now);
 
-        let _ = jb.poll(now);
+        let _ = jb.poll(ORIGIN, now);
         assert_stats(&jb, 1, 1, 2, 2);
 
         // Finally if it arrives again it should be considered a duplicate,
         // and will have achieved the dubious honor of simultaneously being
         // lost, late and duplicated
-        jb.queue_packet(&packet, 50_000_000, now);
+        jb.queue_packet(ORIGIN, &packet, 50_000_000, now);
 
-        let _ = jb.poll(now);
+        let _ = jb.poll(ORIGIN, now);
         assert_stats(&jb, 1, 1, 3, 2);
     }
 
     #[test]
     fn serialized_items() {
+        const ORIGIN: &str = "serialized_items";
+
         let mut jb = JitterBuffer::new(Duration::from_secs(1));
-        jb.set_flushing(false);
+        jb.set_flushing(ORIGIN, false);
 
         let now = Instant::now();
 
@@ -656,7 +686,7 @@ mod tests {
         let QueueResult::Forward {
             id: id_first_serialized_item,
             discont: discont_first_serialized_item,
-        } = jb.queue_serialized_item()
+        } = jb.queue_serialized_item(ORIGIN)
         else {
             unreachable!()
         };
@@ -664,19 +694,20 @@ mod tests {
         assert!(!discont_first_serialized_item);
 
         // query has been forwarded immediately
-        assert_eq!(jb.poll(now), PollResult::Empty);
+        assert_eq!(jb.poll(ORIGIN, now), PollResult::Empty);
 
-        let QueueResult::Queued(id_first_packet) = jb.queue_packet(&packet, 0, now) else {
+        let QueueResult::Queued(id_first_packet) = jb.queue_packet(ORIGIN, &packet, 0, now) else {
             unreachable!()
         };
         assert_eq!(id_first_packet, id_first_serialized_item + 1);
-        let QueueResult::Queued(id_second_serialized_item) = jb.queue_serialized_item() else {
+        let QueueResult::Queued(id_second_serialized_item) = jb.queue_serialized_item(ORIGIN)
+        else {
             unreachable!()
         };
         assert_eq!(id_second_serialized_item, id_first_packet + 1);
 
         assert_eq!(
-            jb.poll(now + Duration::from_secs(1)),
+            jb.poll(ORIGIN, now + Duration::from_secs(1)),
             PollResult::Forward {
                 id: id_first_packet,
                 discont: true
@@ -684,7 +715,7 @@ mod tests {
         );
 
         assert_eq!(
-            jb.poll(now + Duration::from_secs(1)),
+            jb.poll(ORIGIN, now + Duration::from_secs(1)),
             PollResult::Forward {
                 id: id_second_serialized_item,
                 discont: false
@@ -696,48 +727,58 @@ mod tests {
         let QueueResult::Forward {
             id: id_second_packet,
             discont: discont_second_packet,
-        } = jb.queue_packet(&packet, 0, now)
+        } = jb.queue_packet(ORIGIN, &packet, 0, now)
         else {
             unreachable!()
         };
         assert_eq!(id_second_packet, id_second_serialized_item + 1);
         assert!(!discont_second_packet);
-        assert_eq!(jb.poll(now), PollResult::Empty);
+        assert_eq!(jb.poll(ORIGIN, now), PollResult::Empty);
     }
 
     #[test]
     fn flushing_queue() {
+        const ORIGIN: &str = "flushing_queue";
+
         let mut jb = JitterBuffer::new(Duration::from_secs(1));
-        jb.set_flushing(false);
+        jb.set_flushing(ORIGIN, false);
 
         let now = Instant::now();
 
         let rtp_data = generate_rtp_packet(0x12345678, 0, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
 
-        let QueueResult::Forward { .. } = jb.queue_serialized_item() else {
+        let QueueResult::Forward { .. } = jb.queue_serialized_item("flushing_queue") else {
             unreachable!()
         };
 
-        let QueueResult::Queued(id_first) = jb.queue_packet(&packet, 0, now) else {
+        let QueueResult::Queued(id_first) = jb.queue_packet(ORIGIN, &packet, 0, now) else {
             unreachable!()
         };
 
-        let QueueResult::Queued(id_second_serialized_item) = jb.queue_serialized_item() else {
+        let QueueResult::Queued(id_second_serialized_item) =
+            jb.queue_serialized_item("flushing_queue")
+        else {
             unreachable!()
         };
 
         // Everything after this should eventually return flushing, poll() will instruct to drop
         // everything stored and then return flushing indefinitely.
-        jb.set_flushing(true);
-        assert_eq!(jb.queue_packet(&packet, 0, now), QueueResult::Flushing);
+        jb.set_flushing("flushing_queue", true);
+        assert_eq!(
+            jb.queue_packet(ORIGIN, &packet, 0, now),
+            QueueResult::Flushing
+        );
 
-        assert_eq!(jb.poll(now), PollResult::Drop(id_first));
-        assert_eq!(jb.poll(now), PollResult::Drop(id_second_serialized_item));
-        assert_eq!(jb.poll(now), PollResult::Flushing);
-        assert_eq!(jb.poll(now), PollResult::Flushing);
+        assert_eq!(jb.poll(ORIGIN, now), PollResult::Drop(id_first));
+        assert_eq!(
+            jb.poll(ORIGIN, now),
+            PollResult::Drop(id_second_serialized_item)
+        );
+        assert_eq!(jb.poll(ORIGIN, now), PollResult::Flushing);
+        assert_eq!(jb.poll(ORIGIN, now), PollResult::Flushing);
 
-        jb.set_flushing(false);
-        assert_eq!(jb.poll(now), PollResult::Empty);
+        jb.set_flushing("flushing_queue", false);
+        assert_eq!(jb.poll(ORIGIN, now), PollResult::Empty);
     }
 }

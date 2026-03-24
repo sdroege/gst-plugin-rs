@@ -556,7 +556,8 @@ impl RemoteSendSource {
         let previous_seqnum = self.ext_seqnum.current();
         let ext_seqnum = self.ext_seqnum.next(seqnum);
         trace!(
-            "source {} previous {previous_seqnum:?}, ext_seqnum {ext_seqnum}",
+            "{:#08x} ({}) previous {previous_seqnum:?}, ext_seqnum {ext_seqnum}",
+            self.ssrc(),
             self.ssrc()
         );
 
@@ -566,7 +567,8 @@ impl RemoteSendSource {
         };
 
         trace!(
-            "source {} in state {:?} received seqnum {seqnum} with a difference of {diff} from the previous seqnum",
+            "{:#08x} ({}) in state {:?} received seqnum {seqnum} with a difference of {diff} from the previous seqnum",
+            self.ssrc(),
             self.ssrc(),
             self.state()
         );
@@ -575,13 +577,14 @@ impl RemoteSendSource {
             // consecutive packets are good
             if diff == 1 {
                 if (0..=1).contains(&n_probation) {
-                    info!("source {} leaving probation", self.ssrc());
+                    info!("{:#08x} ({}) leaving probation", self.ssrc(), self.ssrc());
                     self.init_sequence(seqnum);
                     self.set_state(SourceState::Normal);
                     SourceRecvReply::Passthrough
                 } else {
                     debug!(
-                        "source {} holding seqnum {seqnum} on probation",
+                        "{:#08x} ({}) holding seqnum {seqnum} on probation",
+                        self.ssrc(),
                         self.ssrc()
                     );
                     self.held_buffers.push_front(HeldRecvBuffer {
@@ -593,7 +596,8 @@ impl RemoteSendSource {
                     while self.held_buffers.len() > self.probation_packets {
                         if let Some(held) = self.held_buffers.pop_back() {
                             debug!(
-                                "source {} dropping seqnum {seqnum} on probation",
+                                "{:#08x} ({}) dropping seqnum {seqnum} on probation",
+                                self.ssrc(),
                                 self.ssrc()
                             );
                             return SourceRecvReply::Drop(held.id);
@@ -604,7 +608,8 @@ impl RemoteSendSource {
                 }
             } else if self.probation_packets > 0 {
                 debug!(
-                    "source {} resetting probation counter to {} at seqnum {seqnum}",
+                    "{:#08x} ({}) resetting probation counter to {} at seqnum {seqnum}",
+                    self.ssrc(),
                     self.ssrc(),
                     self.probation_packets
                 );
@@ -626,7 +631,8 @@ impl RemoteSendSource {
                 SourceRecvReply::Hold(hold_buffer_id)
             } else {
                 info!(
-                    "source {} leaving probation (no probation configured)",
+                    "{:#08x} ({}) leaving probation (no probation configured)",
+                    self.ssrc(),
                     self.ssrc()
                 );
                 self.init_sequence(seqnum);
@@ -636,7 +642,11 @@ impl RemoteSendSource {
         } else if diff >= 1 && diff < DEFAULT_MAX_DROPOUT as i64 {
             SourceRecvReply::Passthrough
         } else if diff < -(DEFAULT_MAX_MISORDER as i64) || diff >= DEFAULT_MAX_DROPOUT as i64 {
-            debug!("non-consecutive packet outside of configured limits, dropping");
+            debug!(
+                "{:#08x} ({}) non-consecutive packet outside of configured limits, dropping",
+                self.ssrc(),
+                self.ssrc()
+            );
 
             // TODO: we will want to perform a few tasks here that the C jitterbuffer
             // used to be taking care of:
@@ -662,7 +672,8 @@ impl RemoteSendSource {
             && let Some(held) = self.held_buffers.pop_back()
         {
             info!(
-                "source {} pushing stored seqnum {}",
+                "{:#08x} ({}) pushing stored seqnum {}",
+                self.ssrc(),
                 self.ssrc(),
                 held.seqnum
             );
@@ -678,7 +689,11 @@ impl RemoteSendSource {
             return SourceRecvReply::Forward(held.id);
         }
 
-        trace!("setting ext seqnum to {ext_seqnum}");
+        trace!(
+            "{:#08x} ({}) setting ext seqnum to {ext_seqnum}",
+            self.ssrc(),
+            self.ssrc(),
+        );
         self.recv_packet_add_to_stats(
             rtp_timestamp,
             time,
@@ -716,7 +731,12 @@ impl RemoteSendSource {
                 0
             };
             self.transit = Some(transit);
-            trace!("jitter {} diff {diff}", self.jitter);
+            trace!(
+                "{:#08x} ({}) jitter {} diff {diff}",
+                self.ssrc(),
+                self.ssrc(),
+                self.jitter
+            );
             self.jitter = self
                 .jitter
                 .saturating_add(diff.saturating_sub((self.jitter.saturating_add(8)) >> 4));
@@ -806,16 +826,19 @@ impl RemoteSendSource {
         };
 
         trace!(
-            "ssrc {} current packet counts ext_seqnum {:?} recv_packets {}",
-            self.source.ssrc, self.ext_seqnum, self.recv_packets
+            "{:#08x} ({}) current packet counts ext_seqnum {:?} recv_packets {}",
+            self.source.ssrc, self.source.ssrc, self.ext_seqnum, self.recv_packets
         );
         trace!(
-            "ssrc {} previous rtcp values ext_seqnum {:?} recv_packets {}",
-            self.source.ssrc, self.ext_seqnum_at_last_rtcp, self.recv_packets_at_last_rtcp
+            "{:#08x} ({}) previous rtcp values ext_seqnum {:?} recv_packets {}",
+            self.source.ssrc,
+            self.source.ssrc,
+            self.ext_seqnum_at_last_rtcp,
+            self.recv_packets_at_last_rtcp
         );
         trace!(
-            "ssrc {} fraction expected {expected_since_last_rtcp} lost {lost_packets_since_last_rtcp} fraction lost {fraction_lost}",
-            self.source.ssrc
+            "{:#08x} ({}) fraction expected {expected_since_last_rtcp} lost {lost_packets_since_last_rtcp} fraction lost {fraction_lost}",
+            self.source.ssrc, self.source.ssrc
         );
 
         Rb {
@@ -851,7 +874,11 @@ impl RemoteSendSource {
     #[cfg(test)]
     /// Set the number of probation packets before validating this source
     pub fn set_probation_packets(&mut self, n_packets: usize) {
-        info!("source {} setting probation to {n_packets}", self.ssrc());
+        info!(
+            "{:#08x} ({}) setting probation to {n_packets}",
+            self.ssrc(),
+            self.ssrc()
+        );
         self.probation_packets = n_packets;
         match self.state() {
             SourceState::Bye | SourceState::Normal => (),

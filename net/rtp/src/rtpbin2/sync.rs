@@ -108,7 +108,7 @@ impl Context {
     pub fn set_clock_rate(&mut self, ssrc_val: u32, clock_rate: u32) {
         if let Some(ssrc) = self.ssrcs.get_mut(&ssrc_val) {
             if ssrc.set_clock_rate(clock_rate) {
-                debug!("{ssrc_val:#08x} times reset after clock rate change");
+                debug!("{ssrc_val:#08x} ({ssrc_val}) times reset after clock rate change");
                 if let Some(ref cname) = ssrc.cname {
                     self.cname_to_largest_delays.remove(cname);
                 }
@@ -136,7 +136,7 @@ impl Context {
     #[allow(dead_code)]
     pub fn remove_ssrc(&mut self, ssrc_val: u32) {
         if let Some(ssrc) = self.ssrcs.remove(&ssrc_val) {
-            debug!("{ssrc_val:#08x} ssrc removed");
+            debug!("{ssrc_val:#08x} ({ssrc_val}) ssrc removed");
             if let Some(ref cname) = ssrc.cname {
                 self.disassociate(ssrc_val, cname)
             }
@@ -168,7 +168,7 @@ impl Context {
     }
 
     pub fn add_sender_report(&mut self, ssrc_val: u32, rtp_timestamp: u32, ntp_timestamp: u64) {
-        debug!("Adding new sender report for ssrc {ssrc_val:#08x}");
+        debug!("Adding new sender report for ssrc {ssrc_val:#08x} ({ssrc_val})");
 
         let ssrc = self
             .ssrcs
@@ -176,7 +176,7 @@ impl Context {
             .or_insert_with(|| Ssrc::new(None));
 
         debug!(
-            "Latest NTP time: {:?}",
+            "{ssrc_val:#08x} ({ssrc_val}) Latest NTP time: {:?}",
             NtpTime::from(ntp_timestamp).as_duration().unwrap()
         );
 
@@ -203,12 +203,18 @@ impl Context {
         // Now potentially correct the skew by observing how RTP times and arrival times progress
         let mut pts = match self.mode {
             TimestampingMode::Skew => {
-                let (skew_corrected, discont) = ssrc.observations.process(rtp_ext_ns, arrival_time);
-                trace!("{ssrc_val:#08x} using skew corrected RTP ext: {skew_corrected}");
+                let (skew_corrected, discont) =
+                    ssrc.observations
+                        .process(ssrc_val, rtp_ext_ns, arrival_time);
+                trace!(
+                    "{ssrc_val:#08x} ({ssrc_val}) using skew corrected RTP ext: {skew_corrected}"
+                );
 
                 if discont {
                     ssrc.reset_times();
-                    debug!("{ssrc_val:#08x} times reset after observations discontinuity");
+                    debug!(
+                        "{ssrc_val:#08x} ({ssrc_val}) times reset after observations discontinuity"
+                    );
                     if let Some(ref cname) = ssrc.cname {
                         self.cname_to_largest_delays.remove(cname);
                     }
@@ -217,12 +223,12 @@ impl Context {
                 skew_corrected
             }
             TimestampingMode::Rtp => {
-                trace!("{ssrc_val:#08x} using uncorrected RTP ext: {rtp_ext_ns}");
+                trace!("{ssrc_val:#08x} ({ssrc_val}) using uncorrected RTP ext: {rtp_ext_ns}");
 
                 rtp_ext_ns
             }
             TimestampingMode::Arrival => {
-                trace!("{ssrc_val:#08x} using arrival time: {arrival_time}");
+                trace!("{ssrc_val:#08x} ({ssrc_val}) using arrival time: {arrival_time}");
 
                 arrival_time
             }
@@ -237,12 +243,12 @@ impl Context {
 
         // Base the PTS on the first arrival time
         pts += base_arrival_time;
-        trace!("{ssrc_val:#08x} added up base arrival time: {pts}");
+        trace!("{ssrc_val:#08x} ({ssrc_val}) added up base arrival time: {pts}");
         // Now subtract the base PTS we calculated
         pts = pts.saturating_sub(base_pts);
-        trace!("{ssrc_val:#08x} subtracted base PTS: {base_pts}");
+        trace!("{ssrc_val:#08x} ({ssrc_val}) subtracted base PTS: {base_pts}");
 
-        trace!("{ssrc_val:#08x} PTS prior to potential SR offsetting: {pts}");
+        trace!("{ssrc_val:#08x} ({ssrc_val}) PTS prior to potential SR offsetting: {pts}");
 
         let mut ntp_time: Option<NtpTime> = None;
 
@@ -268,7 +274,7 @@ impl Context {
                     (last_sr_ntp.as_duration().unwrap().as_nanos() as u64).checked_sub(rtp_range_ns)
                 } {
                     trace!(
-                        "{ssrc_val:#08x} Base NTP time on first packet after new SR is {:?} ({:?})",
+                        "{ssrc_val:#08x} ({ssrc_val}) Base NTP time on first packet after new SR is {:?} ({:?})",
                         base_ntp_time,
                         Duration::from_nanos(base_ntp_time)
                     );
@@ -280,14 +286,19 @@ impl Context {
                             Some(-(base_ntp_time as i64 - base_arrival_time as i64));
                     }
 
-                    trace!("{ssrc_val:#08x} Current delay is {:?}", ssrc.current_delay);
+                    trace!(
+                        "{ssrc_val:#08x} ({ssrc_val}) Current delay is {:?}",
+                        ssrc.current_delay
+                    );
 
                     if let Some(ref cname) = ssrc.cname {
                         // We should recalculate a new largest delay for this CNAME
                         self.cname_to_largest_delays.remove(cname);
                     }
                 } else {
-                    warn!("{ssrc_val:#08x} Invalid NTP RTP time mapping, waiting for next SR");
+                    warn!(
+                        "{ssrc_val:#08x} ({ssrc_val}) Invalid NTP RTP time mapping, waiting for next SR"
+                    );
                     ssrc.last_sr_ntp_timestamp = None;
                     ssrc.last_sr_rtp_ext = None;
                 }
@@ -326,7 +337,7 @@ impl Context {
                         all_sync: true,
                     };
 
-                    trace!("{ssrc_val:#08x} searching for new largest delay");
+                    trace!("{ssrc_val:#08x} ({ssrc_val}) searching for new largest delay");
 
                     let ssrc_vals = self.cnames_to_ssrcs.get(&cname).unwrap();
 
@@ -340,7 +351,7 @@ impl Context {
                                 cname_largest_delay.largest_delay = delay;
                             }
                         } else {
-                            trace!("{ssrc_val:#08x} has no delay calculated yet");
+                            trace!("{ssrc_val:#08x} ({ssrc_val}) has no delay calculated yet");
                             cname_largest_delay.all_sync = false;
                         }
                     }
@@ -348,18 +359,18 @@ impl Context {
                     cname_largest_delay
                 });
 
-            trace!("{ssrc_val:#08x} Largest delay is {cname_largest_delay:?}");
+            trace!("{ssrc_val:#08x} ({ssrc_val}) Largest delay is {cname_largest_delay:?}");
 
             if cname_largest_delay.all_sync {
                 let offset = (cname_largest_delay.largest_delay - delay.unwrap()) as u64;
 
-                trace!("{ssrc_val:#08x} applying offset {offset}");
+                trace!("{ssrc_val:#08x} ({ssrc_val}) applying offset {offset}");
 
                 pts += offset;
             }
         }
 
-        debug!("{ssrc_val:#08x} calculated PTS {pts}");
+        debug!("{ssrc_val:#08x} ({ssrc_val}) calculated PTS {pts}");
 
         (pts, ntp_time)
     }
@@ -396,7 +407,7 @@ impl Default for Observations {
 }
 
 impl Observations {
-    fn out_time(&self, base_local_time: u64, remote_diff: u64) -> (u64, bool) {
+    fn out_time(&self, ssrc: u32, base_local_time: u64, remote_diff: u64) -> (u64, bool) {
         let out_time = base_local_time + remote_diff;
         let out_time = if self.skew < 0 {
             out_time.saturating_sub((-self.skew) as u64)
@@ -404,8 +415,11 @@ impl Observations {
             out_time + (self.skew as u64)
         };
 
-        trace!("Skew {}, min delta {}", self.skew, self.min_delta);
-        trace!("Outputting {out_time}");
+        trace!(
+            "{ssrc:#08x} ({ssrc}) Skew {}, min delta {}",
+            self.skew, self.min_delta
+        );
+        trace!("{ssrc:#08x} ({ssrc}) Outputting {out_time}");
 
         (out_time, false)
     }
@@ -413,21 +427,25 @@ impl Observations {
     // Based on the algorithm used in GStreamer's rtpjitterbuffer, which comes from
     // Fober, Orlarey and Letz, 2005, "Real Time Clock Skew Estimation over Network Delays":
     // http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.102.1546
-    fn process(&mut self, remote_time: u64, local_time: u64) -> (u64, bool) {
-        trace!("Local time {local_time}, remote time {remote_time}",);
+    fn process(&mut self, ssrc: u32, remote_time: u64, local_time: u64) -> (u64, bool) {
+        trace!("{ssrc:#08x} ({ssrc}) Local time {local_time}, remote time {remote_time}",);
 
-        let (base_remote_time, base_local_time) =
-            match (self.base_remote_time, self.base_local_time) {
-                (Some(remote), Some(local)) => (remote, local),
-                _ => {
-                    debug!("Initializing base time: local {local_time}, remote {remote_time}",);
-                    self.base_remote_time = Some(remote_time);
-                    self.base_local_time = Some(local_time);
-                    self.highest_remote_time = Some(remote_time);
+        let (base_remote_time, base_local_time) = match (
+            self.base_remote_time,
+            self.base_local_time,
+        ) {
+            (Some(remote), Some(local)) => (remote, local),
+            _ => {
+                debug!(
+                    "{ssrc:#08x} ({ssrc}) Initializing base time: local {local_time}, remote {remote_time}",
+                );
+                self.base_remote_time = Some(remote_time);
+                self.base_local_time = Some(local_time);
+                self.highest_remote_time = Some(remote_time);
 
-                    return (local_time, false);
-                }
-            };
+                return (local_time, false);
+            }
+        };
 
         let highest_remote_time = self.highest_remote_time.unwrap();
 
@@ -435,7 +453,7 @@ impl Observations {
 
         /* Only update observations when remote times progress forward */
         if remote_time <= highest_remote_time {
-            return self.out_time(base_local_time, remote_diff);
+            return self.out_time(ssrc, base_local_time, remote_diff);
         }
 
         self.highest_remote_time = Some(remote_time);
@@ -443,17 +461,21 @@ impl Observations {
         let local_diff = local_time.saturating_sub(base_local_time);
         let delta = (local_diff as i64) - (remote_diff as i64);
 
-        trace!("Local diff {local_diff}, remote diff {remote_diff}, delta {delta}",);
+        trace!(
+            "{ssrc:#08x} ({ssrc}) Local diff {local_diff}, remote diff {remote_diff}, delta {delta}",
+        );
 
         if remote_diff > 0 && local_diff > 0 {
             let slope = (local_diff as f64) / (remote_diff as f64);
             if !(0.8..1.2).contains(&slope) {
-                warn!("Too small/big slope {slope}, resetting");
+                warn!("{ssrc:#08x} ({ssrc}) Too small/big slope {slope}, resetting");
 
                 let discont = !self.deltas.is_empty();
                 *self = Observations::default();
 
-                debug!("Initializing base time: local {local_time}, remote {remote_time}",);
+                debug!(
+                    "{ssrc:#08x} ({ssrc}) Initializing base time: local {local_time}, remote {remote_time}",
+                );
                 self.base_remote_time = Some(remote_time);
                 self.base_local_time = Some(local_time);
                 self.highest_remote_time = Some(remote_time);
@@ -465,12 +487,17 @@ impl Observations {
         if (delta > self.skew && delta - self.skew > 1_000_000_000)
             || (delta < self.skew && self.skew - delta > 1_000_000_000)
         {
-            warn!("Delta {} too far from skew {}, resetting", delta, self.skew);
+            warn!(
+                "{ssrc:#08x} ({ssrc}) Delta {} too far from skew {}, resetting",
+                delta, self.skew
+            );
 
             let discont = !self.deltas.is_empty();
             *self = Observations::default();
 
-            debug!("Initializing base time: local {local_time}, remote {remote_time}",);
+            debug!(
+                "{ssrc:#08x} ({ssrc}) Initializing base time: local {local_time}, remote {remote_time}",
+            );
             self.base_remote_time = Some(remote_time);
             self.base_local_time = Some(local_time);
             self.highest_remote_time = Some(remote_time);
@@ -510,7 +537,7 @@ impl Observations {
             self.skew = (self.min_delta + (124 * self.skew)) / 125;
         }
 
-        self.out_time(base_local_time, remote_diff)
+        self.out_time(ssrc, base_local_time, remote_diff)
     }
 }
 
