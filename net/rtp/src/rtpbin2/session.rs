@@ -2010,6 +2010,7 @@ pub(crate) mod tests {
                         assert_eq!(
                             rb.delay_since_last_sender_report_timestamp(),
                             NtpTime::from_duration(new_ntp_now.duration_since(ntp_now).unwrap())
+                                .unwrap()
                                 .as_u32()
                         );
                         if rb.ssrc() == ssrcs[0] {
