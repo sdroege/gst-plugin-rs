@@ -184,9 +184,10 @@ struct SendSession {
 
 impl SendSession {
     fn new(shared_state: &SharedRtpState, id: usize, settings: &Settings) -> Self {
-        let internal_session = shared_state.session_get_or_init(id, || {
+        let internal_session = shared_state.session_get_or_init(id, |cname| {
             SharedSession::new(
                 id,
+                cname,
                 settings.profile.into(),
                 settings.min_rtcp_interval,
                 settings.reduced_size_rtcp,

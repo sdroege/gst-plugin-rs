@@ -417,8 +417,8 @@ struct RecvSession {
 
 impl RecvSession {
     fn new(shared_state: &SharedRtpState, id: usize) -> Self {
-        let internal_session = shared_state.session_get_or_init(id, || {
-            SharedSession::new(id, RtpProfile::Avp, RTCP_MIN_REPORT_INTERVAL, false)
+        let internal_session = shared_state.session_get_or_init(id, |cname| {
+            SharedSession::new(id, cname, RtpProfile::Avp, RTCP_MIN_REPORT_INTERVAL, false)
         });
 
         let recv_flow_combiner = Arc::new(Mutex::new(gst_base::UniqueFlowCombiner::new()));

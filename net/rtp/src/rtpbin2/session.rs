@@ -171,10 +171,9 @@ pub enum RequestRemoteKeyUnitReply {
 }
 
 impl Session {
-    pub fn new() -> Self {
-        let cname = generate_cname();
+    pub fn new(cname: &str) -> Self {
         let mut sdes = HashMap::new();
-        sdes.insert(SdesItem::CNAME, cname);
+        sdes.insert(SdesItem::CNAME, cname.to_owned());
         Self {
             min_rtcp_interval: RTCP_MIN_REPORT_INTERVAL,
             profile: RtpProfile::default(),
@@ -1606,7 +1605,7 @@ impl Session {
     }
 }
 
-fn generate_cname() -> String {
+pub fn generate_cname() -> String {
     let mut rng = rand::rng();
     let user = rng.random::<u32>();
     let host = rng.random::<u32>();
@@ -1645,7 +1644,7 @@ pub(crate) mod tests {
     #[test]
     fn receive_probation() {
         init_logs();
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         let from = "127.0.0.1:1000".parse().unwrap();
         let now = Instant::now();
         let mut held = vec![];
@@ -1739,7 +1738,7 @@ pub(crate) mod tests {
     #[test]
     fn send_new_ssrc() {
         init_logs();
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
 
         let now = Instant::now();
@@ -1770,7 +1769,7 @@ pub(crate) mod tests {
     #[test]
     fn receive_disable_probation() {
         init_logs();
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         let now = Instant::now();
         let rtp_data = generate_rtp_packet(0x12345678, 100, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
@@ -1784,7 +1783,7 @@ pub(crate) mod tests {
     #[test]
     fn receive_two_ssrc_rr() {
         init_logs();
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         let now = Instant::now();
         let ntp_now = SystemTime::now();
         let ssrcs = [0x12345678, 0x87654321];
@@ -1874,7 +1873,7 @@ pub(crate) mod tests {
     #[test]
     fn send_two_ssrc_sr() {
         init_logs();
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
 
         let now = Instant::now();
@@ -1935,7 +1934,7 @@ pub(crate) mod tests {
     #[test]
     fn receive_two_ssrc_sr() {
         init_logs();
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
 
         let now = Instant::now();
@@ -2041,7 +2040,7 @@ pub(crate) mod tests {
     #[test]
     fn send_receiver_two_ssrc_sr_rr() {
         init_logs();
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
         session.set_min_rtcp_interval(Duration::from_secs(1));
 
@@ -2143,7 +2142,7 @@ pub(crate) mod tests {
     #[test]
     fn session_internal_sender_ssrc() {
         init_logs();
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
 
         let now = Instant::now();
@@ -2183,7 +2182,7 @@ pub(crate) mod tests {
     #[test]
     fn sender_source_timeout() {
         init_logs();
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
 
         let now = Instant::now();
@@ -2245,7 +2244,7 @@ pub(crate) mod tests {
     #[test]
     fn ignore_recv_bye_for_local_sender() {
         // test that receiving a BYE for our (local) senders is ignored
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
         let now = Instant::now();
         let ntp_now = SystemTime::now();
@@ -2294,7 +2293,7 @@ pub(crate) mod tests {
 
     #[test]
     fn ssrc_collision_on_send() {
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
         let now = Instant::now();
         let ntp_now = SystemTime::now();
@@ -2352,7 +2351,7 @@ pub(crate) mod tests {
 
     #[test]
     fn ssrc_collision_on_recv() {
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
         let now = Instant::now();
         let ntp_now = SystemTime::now();
@@ -2383,7 +2382,7 @@ pub(crate) mod tests {
 
     #[test]
     fn ssrc_collision_third_party() {
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
         let now = Instant::now();
         let ssrc = 0x11223344;
@@ -2413,7 +2412,7 @@ pub(crate) mod tests {
 
     #[test]
     fn bye_remote_sender() {
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
         let now = Instant::now();
         let ntp_now = SystemTime::now();
@@ -2452,7 +2451,7 @@ pub(crate) mod tests {
 
     #[test]
     fn bye_local_sender() {
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
         let now = Instant::now();
         let ntp_now = SystemTime::now();
@@ -2511,7 +2510,7 @@ pub(crate) mod tests {
 
     #[test]
     fn early_rtcp() {
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
         session.set_profile(RtpProfile::Avpf);
         let now = Instant::now();
@@ -2591,7 +2590,7 @@ pub(crate) mod tests {
 
     #[test]
     fn point_to_point() {
-        let mut session = Session::new();
+        let mut session = Session::new("cname");
         assert!(session.is_point_to_point);
         session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
         let now = Instant::now();

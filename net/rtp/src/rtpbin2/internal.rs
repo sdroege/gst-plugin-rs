@@ -40,6 +40,8 @@ pub struct SharedRtpState(Arc<Mutex<SharedRtpStateInner>>);
 #[derive(Debug)]
 struct SharedRtpStateInner {
     name: String,
+    /// Shared CNAME that is used by default for all sessions created for this shared state.
+    cname: String,
     sessions: HashMap<usize, SharedSession>,
 }
 
@@ -57,6 +59,7 @@ impl SharedRtpState {
             Entry::Vacant(entry) => {
                 let shared_state = Arc::new(Mutex::new(SharedRtpStateInner {
                     name: entry.key().to_owned(),
+                    cname: super::session::generate_cname(),
                     sessions: HashMap::new(),
                 }));
                 entry.insert(Arc::downgrade(&shared_state));
@@ -75,15 +78,13 @@ impl SharedRtpState {
 
     pub fn session_get_or_init<F>(&self, id: usize, f: F) -> SharedSession
     where
-        F: FnOnce() -> SharedSession,
+        F: FnOnce(&str) -> SharedSession,
     {
-        self.0
-            .lock()
-            .unwrap()
-            .sessions
-            .entry(id)
-            .or_insert_with(f)
-            .clone()
+        let mut inner = self.0.lock().unwrap();
+        let SharedRtpStateInner {
+            cname, sessions, ..
+        } = &mut *inner;
+        sessions.entry(id).or_insert_with(|| f(cname)).clone()
     }
 }
 
@@ -108,11 +109,12 @@ pub struct SharedSession {
 impl SharedSession {
     pub fn new(
         id: usize,
+        cname: &str,
         profile: RtpProfile,
         min_rtcp_interval: Duration,
         reduced_size_rtcp: bool,
     ) -> Self {
-        let mut inner = SharedSessionInner::new(id);
+        let mut inner = SharedSessionInner::new(id, cname);
         inner.session.set_min_rtcp_interval(min_rtcp_interval);
         inner.session.set_profile(profile);
         inner.session.set_reduced_size_rtcp(reduced_size_rtcp);
@@ -139,11 +141,11 @@ pub(crate) struct SharedSessionInner {
 }
 
 impl SharedSessionInner {
-    fn new(id: usize) -> Self {
+    fn new(id: usize, cname: &str) -> Self {
         Self {
             id,
 
-            session: Session::new(),
+            session: Session::new(cname),
 
             pt_map: HashMap::default(),
             rtcp_waker: None,
