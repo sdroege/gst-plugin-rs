@@ -300,6 +300,20 @@ impl Session {
         self.pt_map.get(&pt).copied()
     }
 
+    pub fn set_sdes(&mut self, sdes: HashMap<u8, String>) {
+        for source in self.local_senders.values_mut() {
+            source.set_sdes(sdes.clone());
+        }
+        for source in self.local_receivers.values_mut() {
+            source.set_sdes(sdes.clone());
+        }
+        self.sdes = sdes;
+    }
+
+    pub fn sdes(&self) -> impl Iterator<Item = (u8, &str)> + '_ {
+        self.sdes.iter().map(|(k, v)| (*k, v.as_str()))
+    }
+
     fn handle_ssrc_conflict(&mut self, addr: SocketAddr, now: Instant) -> bool {
         if let Some(time) = self.conflicting_addresses.get_mut(&addr) {
             trace!("ignoring looped packet from known collision address {addr:?}");
@@ -442,9 +456,7 @@ impl Session {
             let mut source = LocalSendSource::new(rtp.ssrc());
             source.set_last_activity(now);
             source.set_state(SourceState::Normal);
-            for (k, v) in self.sdes.iter() {
-                source.set_sdes_item(*k, v.as_bytes());
-            }
+            source.set_sdes(self.sdes.clone());
             if self.local_senders.is_empty() && self.rtcp_reverse_consideration(0, now) {
                 // TODO: signal updated timeout
             }
@@ -914,9 +926,7 @@ impl Session {
                 if !self.have_ssrc(ssrc) {
                     let mut source = LocalReceiveSource::new(ssrc);
                     source.set_state(SourceState::Normal);
-                    for (k, v) in self.sdes.iter() {
-                        source.set_sdes_item(*k, v.as_bytes());
-                    }
+                    source.set_sdes(self.sdes.clone());
                     self.local_receivers.insert(ssrc, source);
                     self.internal_rtcp_sender_src = Some(ssrc);
                     return ssrc;
@@ -2541,7 +2551,7 @@ pub(crate) mod tests {
         };
 
         let source = session.mut_local_send_source_by_ssrc(send_ssrc).unwrap();
-        source.set_sdes_item(SdesItem::NAME, b"name");
+        source.set_sdes_item(SdesItem::NAME, "name");
 
         // request early rtcp.  The resulting RTCP packet, will only have the CNAME sdes item and a
         // single SR/RR.

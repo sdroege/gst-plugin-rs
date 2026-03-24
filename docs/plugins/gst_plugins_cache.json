@@ -14724,6 +14724,18 @@
                         "readable": true,
                         "type": "GstStructure",
                         "writable": true
+                    },
+                    "sdes": {
+                        "blurb": "The SDES items of this session",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "application/x-rtp2-sdes;",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": true
                     }
                 },
                 "signals": {

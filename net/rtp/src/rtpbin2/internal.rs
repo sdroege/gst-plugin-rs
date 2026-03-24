@@ -179,6 +179,14 @@ impl SharedSessionInner {
         self.pt_map.iter().map(|(&k, v)| (k, v))
     }
 
+    pub fn set_sdes(&mut self, sdes: HashMap<u8, String>) {
+        self.session.set_sdes(sdes);
+    }
+
+    pub fn sdes(&self) -> impl Iterator<Item = (u8, &str)> + '_ {
+        self.session.sdes()
+    }
+
     pub fn stats(&self) -> gst::Structure {
         let mut session_stats = gst::Structure::builder("application/x-rtpbin2-session-stats")
             .field("id", self.id as u64);

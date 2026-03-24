@@ -32,6 +32,8 @@ impl Rtp2Session {
 mod imp {
     use std::sync::Arc;
 
+    use rtcp_types::SdesItem;
+
     use super::*;
 
     #[derive(Debug, Default)]
@@ -100,6 +102,80 @@ mod imp {
             ret.build()
         }
 
+        pub fn set_sdes(&self, sdes: Option<gst::Structure>) {
+            let Some(session) = self.session() else {
+                return;
+            };
+            let mut session = session.lock().unwrap();
+
+            let Some(sdes) = sdes else {
+                session.set_sdes(std::collections::HashMap::new());
+                return;
+            };
+
+            let sdes = sdes
+                .iter()
+                .filter_map(|(key_str, value)| {
+                    let key = match key_str.as_str() {
+                        "cname" => SdesItem::CNAME,
+                        "name" => SdesItem::NAME,
+                        "email" => SdesItem::EMAIL,
+                        "phone" => SdesItem::PHONE,
+                        "loc" => SdesItem::LOC,
+                        "tool" => SdesItem::TOOL,
+                        "note" => SdesItem::NOTE,
+                        "priv" => SdesItem::PRIV,
+                        _ => {
+                            gst::warning!(CAT, "{key_str} is not a valid SDES item");
+                            return None;
+                        }
+                    };
+
+                    match value.get::<&str>() {
+                        Ok(value) => {
+                            if value.len() > 255
+                            /* SdesItem::VALUE_MAX_LEN */
+                            {
+                                gst::warning!(CAT, "{key_str} has a too long SDES value");
+                                return None;
+                            }
+                            Some((key, value.to_string()))
+                        }
+                        _ => {
+                            gst::warning!(CAT, "{key_str} does not contain a SDES value");
+                            None
+                        }
+                    }
+                })
+                .collect::<std::collections::HashMap<u8, String>>();
+            session.set_sdes(sdes);
+        }
+
+        pub fn sdes(&self) -> gst::Structure {
+            let mut ret = gst::Structure::builder("application/x-rtp2-sdes");
+            let Some(session) = self.session() else {
+                return ret.build();
+            };
+            let session = session.lock().unwrap();
+
+            for (key, value) in session.sdes() {
+                let key = match key {
+                    SdesItem::CNAME => "cname",
+                    SdesItem::NAME => "name",
+                    SdesItem::EMAIL => "email",
+                    SdesItem::PHONE => "phone",
+                    SdesItem::LOC => "loc",
+                    SdesItem::TOOL => "tool",
+                    SdesItem::NOTE => "note",
+                    SdesItem::PRIV => "priv",
+                    _ => continue,
+                };
+                ret = ret.field(key, value);
+            }
+
+            ret.build()
+        }
+
         pub fn stats(&self) -> Option<gst::Structure> {
             let session = self.session()?;
             let session = session.lock().unwrap();
@@ -124,6 +200,10 @@ mod imp {
                         .nick("RTP Payload Type Map")
                         .blurb("Mapping of RTP payload type to caps")
                         .build(),
+                    glib::ParamSpecBoxed::builder::<gst::Structure>("sdes")
+                        .nick("SDES")
+                        .blurb("The SDES items of this session")
+                        .build(),
                 ]
             });
 
@@ -133,6 +213,7 @@ mod imp {
         fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
             match pspec.name() {
                 "pt-map" => self.pt_map().to_value(),
+                "sdes" => self.sdes().to_value(),
                 "stats" => self.stats().to_value(),
                 _ => unreachable!(),
             }
@@ -141,6 +222,11 @@ mod imp {
         fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
             match pspec.name() {
                 "pt-map" => self.set_pt_map(
+                    value
+                        .get::<Option<gst::Structure>>()
+                        .expect("Type checked upstream"),
+                ),
+                "sdes" => self.set_sdes(
                     value
                         .get::<Option<gst::Structure>>()
                         .expect("Type checked upstream"),

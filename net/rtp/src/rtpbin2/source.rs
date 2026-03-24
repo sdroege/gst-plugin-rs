@@ -251,14 +251,18 @@ impl LocalSendSource {
         self.source.ssrc
     }
 
-    /// Set an sdes item for this source
-    pub fn set_sdes_item(&mut self, type_: u8, value: &[u8]) {
-        if let Ok(s) = std::str::from_utf8(value) {
-            self.source.sdes.insert(type_, s.to_owned());
-        }
+    /// Set an SDES item for this source
+    #[allow(unused)]
+    pub fn set_sdes_item(&mut self, type_: u8, value: &str) {
+        self.source.sdes.insert(type_, value.to_owned());
     }
 
-    /// Retrieve the sdes for this source
+    /// Set SDES items for this source
+    pub fn set_sdes(&mut self, sdes: HashMap<u8, String>) {
+        self.source.sdes = sdes;
+    }
+
+    /// Retrieve the SDES for this source
     pub fn sdes(&self) -> &HashMap<u8, String> {
         &self.source.sdes
     }
@@ -996,11 +1000,15 @@ impl LocalReceiveSource {
         self.source.payload_type
     }
 
-    /// Set an sdes item for this source
-    pub fn set_sdes_item(&mut self, type_: u8, value: &[u8]) {
-        if let Ok(s) = std::str::from_utf8(value) {
-            self.source.sdes.insert(type_, s.to_owned());
-        }
+    /// Set an SDES item for this source
+    #[allow(unused)]
+    pub fn set_sdes_item(&mut self, type_: u8, value: &str) {
+        self.source.sdes.insert(type_, value.to_owned());
+    }
+
+    /// Set SDES items for this source
+    pub fn set_sdes(&mut self, sdes: HashMap<u8, String>) {
+        self.source.sdes = sdes;
     }
 
     /// Retrieve the sdes for this source
