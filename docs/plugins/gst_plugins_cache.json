@@ -15521,7 +15521,63 @@
         "elements": {},
         "filename": "gstrstracers",
         "license": "MPL",
-        "other-types": {},
+        "other-types": {
+            "GstPcapWriterFakeProtocol": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Udp",
+                        "name": "udp",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "None",
+                        "name": "none",
+                        "value": "1"
+                    }
+                ]
+            },
+            "GstPipelineSnapshotCleanupMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "CleanupInitial: Remove all .dot files from folder when starting",
+                        "name": "initial",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "CleanupAutomatic: cleanup .dot files before each snapshots if pipeline-snapshot::folder-mode is not None otherwise cleanup `.dot` files in folders",
+                        "name": "automatic",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "None: Never remove any dot file",
+                        "name": "none",
+                        "value": "2"
+                    }
+                ]
+            },
+            "GstPipelineSnapshotFolderMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "None: Do not use folders to store dot files",
+                        "name": "none",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Numbered: Use folders to store dot files, each time `.snapshot()` is called a new folder is created and named with a number starting from 0.",
+                        "name": "numbered",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Timed: Use folders to store dot files, each time `.snapshot()` is called a new folder is created and named with the current timestamp.",
+                        "name": "timed",
+                        "value": "2"
+                    }
+                ]
+            }
+        },
         "package": "gst-plugin-tracers",
         "source": "gst-plugin-tracers",
         "tracers": {

@@ -16,5 +16,6 @@ glib::wrapper! {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    imp::FakeProtocol::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     gst::Tracer::register(Some(plugin), "pcap-writer", PcapWriter::static_type())
 }
