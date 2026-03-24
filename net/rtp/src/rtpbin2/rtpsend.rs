@@ -372,7 +372,7 @@ impl RtpSend {
         now: Instant,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mapped = buffer.map_readable().map_err(|e| {
-            gst::error!(CAT, imp = self, "Failed to map input buffer {e:?}");
+            gst::error!(CAT, obj = sinkpad, "Failed to map input buffer {e:?}");
             gst::FlowError::Error
         })?;
         let rtp = match rtp_types::RtpPacket::parse(&mapped) {
@@ -380,7 +380,7 @@ impl RtpSend {
             Err(e) => {
                 gst::error!(
                     CAT,
-                    imp = self,
+                    obj = sinkpad,
                     "Failed to parse input as valid rtp packet: {e:?}"
                 );
                 return Ok(gst::FlowSuccess::Ok);
@@ -436,7 +436,7 @@ impl RtpSend {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let state = self.state.lock().unwrap();
         let Some(session) = state.session_by_id(id) else {
-            gst::error!(CAT, "No session?");
+            gst::error!(CAT, obj = pad, "No session?");
             return Err(gst::FlowError::Error);
         };
 
@@ -459,7 +459,7 @@ impl RtpSend {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let state = self.state.lock().unwrap();
         let Some(session) = state.session_by_id(id) else {
-            gst::error!(CAT, "No session?");
+            gst::error!(CAT, obj = pad, "No session?");
             return Err(gst::FlowError::Error);
         };
 

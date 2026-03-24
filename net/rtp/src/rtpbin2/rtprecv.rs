@@ -136,7 +136,9 @@ impl futures::stream::Stream for JitterBufferStream {
 
         let mut pending_items = JitterBufferPendingItems::new();
         loop {
-            let ret = jitterbuffer_store.jitterbuffer.poll(now);
+            let ret = jitterbuffer_store
+                .jitterbuffer
+                .poll(&self.recv_src_pad.pad.name(), now);
             gst::trace!(
                 CAT,
                 obj = self.recv_src_pad.pad,
@@ -454,7 +456,7 @@ impl RecvSession {
             .unwrap();
 
         let mut jb_store = recv_pad.jitter_buffer_store.lock().unwrap();
-        jb_store.jitterbuffer.set_flushing(false);
+        jb_store.jitterbuffer.set_flushing(&pad.name(), false);
         if let Some(waker) = jb_store.waker.take() {
             waker.wake()
         }
@@ -475,7 +477,7 @@ impl RecvSession {
             .unwrap();
 
         let mut jb_store = recv_pad.jitter_buffer_store.lock().unwrap();
-        jb_store.jitterbuffer.set_flushing(true);
+        jb_store.jitterbuffer.set_flushing(&pad.name(), true);
         if let Some(waker) = jb_store.waker.take() {
             waker.wake()
         }
@@ -1025,7 +1027,7 @@ impl RtpRecv {
                         .ok()
                 });
         let mapped = buffer.map_readable().map_err(|e| {
-            gst::error!(CAT, imp = self, "Failed to map input buffer {e:?}");
+            gst::error!(CAT, obj = pad, "Failed to map input buffer {e:?}");
             gst::FlowError::Error
         })?;
 
@@ -1043,14 +1045,14 @@ impl RtpRecv {
 
                 gst::error!(
                     CAT,
-                    imp = self,
+                    obj = pad,
                     "Failed to parse input as valid rtp packet: {e:?}"
                 );
                 return Ok(RecvRtpBuffer::Drop);
             }
         };
 
-        gst::trace!(CAT, obj = pad, "using arrival time {}", arrival_time);
+        gst::trace!(CAT, obj = pad, "using arrival time {arrival_time}");
 
         let internal_session = session.internal_session.clone();
         let mut session_inner = internal_session.inner.lock().unwrap();
@@ -1083,7 +1085,7 @@ impl RtpRecv {
 
                         gst::warning!(
                             CAT,
-                            imp = self,
+                            obj = pad,
                             "Have no clock-rate for payload type {}",
                             rtp.payload_type()
                         );
@@ -1103,7 +1105,7 @@ impl RtpRecv {
         let pts = segment
             .position_from_running_time(gst::ClockTime::from_nseconds(pts))
             .unwrap();
-        gst::debug!(CAT, obj = pad, "Calculated PTS: {}", pts);
+        gst::debug!(CAT, obj = pad, "Calculated PTS: {pts}");
 
         loop {
             let recv_ret = session_inner.session.handle_recv(&rtp, addr, now);
@@ -1229,7 +1231,11 @@ impl RtpRecv {
                 }
                 HeldRecvItem::Buffer(mut buffer) => {
                     let mapped = buffer.buffer.map_readable().map_err(|e| {
-                        gst::error!(CAT, imp = self, "Failed to map input buffer {e:?}");
+                        gst::error!(
+                            CAT,
+                            obj = buffer.recv_src_pad.pad,
+                            "Failed to map input buffer {e:?}"
+                        );
                         gst::FlowError::Error
                     })?;
                     let rtp = match rtp_types::RtpPacket::parse(&mapped) {
@@ -1237,7 +1243,7 @@ impl RtpRecv {
                         Err(e) => {
                             gst::error!(
                                 CAT,
-                                imp = self,
+                                obj = buffer.recv_src_pad.pad,
                                 "Failed to parse input as valid rtp packet: {e:?}"
                             );
                             return Ok(state);
@@ -1263,6 +1269,7 @@ impl RtpRecv {
                     let mut jb_store = buffer.recv_src_pad.jitter_buffer_store.lock().unwrap();
 
                     let ret = jb_store.jitterbuffer.queue_packet(
+                        &buffer.recv_src_pad.pad.name(),
                         &rtp,
                         buffer.buffer.pts().unwrap().nseconds(),
                         now,
@@ -1383,7 +1390,11 @@ impl RtpRecv {
                     let buf_list = list.list.make_mut();
                     for mut buffer in buf_list.drain(..) {
                         let mapped = buffer.map_readable().map_err(|e| {
-                            gst::error!(CAT, imp = self, "Failed to map input buffer {e:?}");
+                            gst::error!(
+                                CAT,
+                                obj = list.recv_src_pad.pad,
+                                "Failed to map input buffer {e:?}"
+                            );
                             gst::FlowError::Error
                         })?;
                         let rtp = match rtp_types::RtpPacket::parse(&mapped) {
@@ -1391,7 +1402,7 @@ impl RtpRecv {
                             Err(e) => {
                                 gst::error!(
                                     CAT,
-                                    imp = self,
+                                    obj = list.recv_src_pad.pad,
                                     "Failed to parse input as valid rtp packet: {e:?}"
                                 );
                                 continue;
@@ -1399,6 +1410,7 @@ impl RtpRecv {
                         };
 
                         let ret = jb_store.jitterbuffer.queue_packet(
+                            &list.recv_src_pad.pad.name(),
                             &rtp,
                             buffer.pts().unwrap().nseconds(),
                             now,
@@ -1547,7 +1559,7 @@ impl RtpRecv {
                     ControlFlow::Continue(None)
                 }
                 Ok(RecvRtpBuffer::IsRtcp(buffer)) => {
-                    match Self::rtcp_sink_chain(self, id, buffer) {
+                    match Self::rtcp_sink_chain(self, pad, id, buffer) {
                         Ok(_buf) => ControlFlow::Continue(None),
                         Err(e) => {
                             ret = Err(e);
@@ -1666,7 +1678,7 @@ impl RtpRecv {
             }
             RecvRtpBuffer::IsRtcp(buffer) => {
                 drop(state);
-                return Self::rtcp_sink_chain(self, id, buffer);
+                return Self::rtcp_sink_chain(self, pad, id, buffer);
             }
             RecvRtpBuffer::Drop => None,
             RecvRtpBuffer::Forward((buffer, jb)) => Some((buffer, jb)),
@@ -1695,6 +1707,7 @@ impl RtpRecv {
 
     fn rtcp_sink_chain(
         &self,
+        pad: &gst::Pad,
         id: usize,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -1714,7 +1727,7 @@ impl RtpRecv {
                         .ok()
                 });
         let mapped = buffer.map_readable().map_err(|e| {
-            gst::error!(CAT, imp = self, "Failed to map input buffer {e:?}");
+            gst::error!(CAT, obj = pad, "Failed to map input buffer {e:?}");
             gst::FlowError::Error
         })?;
         let rtcp = match rtcp_types::Compound::parse(&mapped) {
@@ -1722,7 +1735,7 @@ impl RtpRecv {
             Err(e) => {
                 gst::error!(
                     CAT,
-                    imp = self,
+                    obj = pad,
                     "Failed to parse input as valid rtcp packet: {e:?}"
                 );
                 return Ok(gst::FlowSuccess::Ok);
@@ -1734,10 +1747,14 @@ impl RtpRecv {
 
         let now = Instant::now();
         let ntp_now = SystemTime::now();
-        let replies =
-            session_inner
-                .session
-                .handle_rtcp_recv(rtcp, mapped.len(), addr, now, ntp_now);
+        let replies = session_inner.session.handle_rtcp_recv(
+            &pad.name(),
+            rtcp,
+            mapped.len(),
+            addr,
+            now,
+            ntp_now,
+        );
         let rtp_send_sinkpad = session_inner.rtp_send_sinkpad.clone();
         drop(session_inner);
         drop(state);
@@ -1776,7 +1793,7 @@ impl RtpRecv {
                     if let Some(ref rtp_send_sinkpad) = rtp_send_sinkpad {
                         gst::debug!(
                             CAT,
-                            imp = self,
+                            obj = pad,
                             "Sending force-keyunit event for ssrcs {ssrcs:?} (all headers: {fir})"
                         );
                         // TODO what to do with the ssrc?
@@ -1789,7 +1806,7 @@ impl RtpRecv {
                     } else {
                         gst::debug!(
                             CAT,
-                            imp = self,
+                            obj = pad,
                             "Can't send force-keyunit event because of missing sinkpad"
                         );
                     }
@@ -1857,7 +1874,10 @@ impl RtpRecv {
 
                     let mut jb_store = recv_src_pad.jitter_buffer_store.lock().unwrap();
 
-                    match jb_store.jitterbuffer.queue_serialized_item() {
+                    match jb_store
+                        .jitterbuffer
+                        .queue_serialized_item(&recv_src_pad.pad.name())
+                    {
                         jitterbuffer::QueueResult::Forward { id, discont: _ } => {
                             // SAFETY: the `query` `ptr::NonNull` was built above from
                             //         the `query` argument with type `&ref mut gst::QueryRef`.
@@ -1946,7 +1966,10 @@ impl RtpRecv {
 
             let mut jb_store = recv_src_pad.jitter_buffer_store.lock().unwrap();
 
-            match jb_store.jitterbuffer.queue_serialized_item() {
+            match jb_store
+                .jitterbuffer
+                .queue_serialized_item(&recv_src_pad.pad.name())
+            {
                 jitterbuffer::QueueResult::Forward { id, discont: _ } => {
                     gst::trace!(CAT, obj = recv_src_pad.pad, "Forwarding {id}: {event:?}");
 
@@ -2443,11 +2466,11 @@ impl ElementImpl for RtpRecv {
                     Vec<gst::Event>,
                 )> {
                     let sinkpad = gst::Pad::builder_from_template(templ)
-                        .chain_function(move |_pad, parent, buffer| {
+                        .chain_function(move |pad, parent, buffer| {
                             RtpRecv::catch_panic_pad_function(
                                 parent,
                                 || Err(gst::FlowError::Error),
-                                |this| this.rtcp_sink_chain(id, buffer),
+                                |this| this.rtcp_sink_chain(pad, id, buffer),
                             )
                         })
                         .iterate_internal_links_function(|pad, parent| {
@@ -2727,7 +2750,7 @@ mod tests {
             .lock()
             .unwrap()
             .jitterbuffer
-            .set_flushing(false);
+            .set_flushing(&rspad.pad.name(), false);
 
         (rspad, peer, buf_rx)
     }
@@ -2736,7 +2759,9 @@ mod tests {
         let mut jb_store = rspad.jitter_buffer_store.lock().unwrap();
 
         assert_eq!(
-            jb_store.jitterbuffer.queue_serialized_item(),
+            jb_store
+                .jitterbuffer
+                .queue_serialized_item(&rspad.pad.name()),
             QueueResult::Forward {
                 id: 0,
                 discont: false
@@ -2752,7 +2777,9 @@ mod tests {
             )
         );
         assert_eq!(
-            jb_store.jitterbuffer.queue_serialized_item(),
+            jb_store
+                .jitterbuffer
+                .queue_serialized_item(&rspad.pad.name()),
             QueueResult::Forward {
                 id: 1,
                 discont: false
@@ -2781,7 +2808,11 @@ mod tests {
         let rtp_data =
             crate::rtpbin2::session::tests::generate_rtp_packet(rspad.ssrc, seq_no, rtp_ts, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id) = jb_store.jitterbuffer.queue_packet(&packet, pts, now) else {
+        let QueueResult::Queued(id) =
+            jb_store
+                .jitterbuffer
+                .queue_packet(&rspad.pad.name(), &packet, pts, now)
+        else {
             unreachable!()
         };
 
