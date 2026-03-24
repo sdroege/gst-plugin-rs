@@ -2040,13 +2040,12 @@ impl RtpRecv {
             gst::EventView::Caps(caps) => {
                 let mut state = self.state.lock().unwrap();
 
-                if let Some((pt, clock_rate)) = pt_clock_rate_from_caps(caps.caps()) {
+                if let Some(_) = pt_clock_rate_from_caps(caps.caps()) {
                     if let Some(session) = state.mut_session_by_id(id) {
                         let caps = caps.caps_owned();
                         session.rtp_recv_sink_caps = Some(caps.clone());
 
                         let mut session_inner = session.internal_session.inner.lock().unwrap();
-                        session_inner.session.set_pt_clock_rate(pt, clock_rate);
                         session_inner.add_caps(caps);
                     }
                 } else {

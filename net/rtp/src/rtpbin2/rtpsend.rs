@@ -475,11 +475,10 @@ impl RtpSend {
     fn rtp_sink_event(&self, pad: &gst::Pad, event: gst::Event, id: usize) -> bool {
         match event.view() {
             gst::EventView::Caps(caps) => {
-                if let Some((pt, clock_rate)) = pt_clock_rate_from_caps(caps.caps()) {
+                if let Some(_) = pt_clock_rate_from_caps(caps.caps()) {
                     let state = self.state.lock().unwrap();
                     if let Some(session) = state.session_by_id(id) {
                         let mut session = session.internal_session.inner.lock().unwrap();
-                        session.session.set_pt_clock_rate(pt, clock_rate);
                         session.add_caps(caps.caps_owned());
                     }
                 } else {
