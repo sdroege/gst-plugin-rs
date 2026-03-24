@@ -1795,6 +1795,7 @@ impl RtpRecv {
                         .emit_by_name::<()>("new-ssrc", &[&ssrc]);
                 }
                 RtcpRecvReply::SsrcCollision(ssrc) => {
+                    // FIXME: Also remove from sync context?
                     if let Some(pad) = rtp_send_sinkpad.as_ref() {
                         // XXX: Another option is to have us rewrite ssrc's instead of asking
                         // upstream to do so.
@@ -1852,9 +1853,24 @@ impl RtpRecv {
                         .unwrap()
                         .add_sender_report(ssrc, rtp, ntp);
                 }
-                RtcpRecvReply::SsrcBye(ssrc) => internal_session
-                    .config
-                    .emit_by_name::<()>("bye-ssrc", &[&ssrc]),
+                RtcpRecvReply::SsrcBye(ssrc) => {
+                    let mut sync_context = self.sync_context.lock().unwrap();
+                    sync_context.as_mut().unwrap().remove_ssrc(ssrc);
+                    drop(sync_context);
+
+                    internal_session
+                        .config
+                        .emit_by_name::<()>("bye-ssrc", &[&ssrc])
+                }
+                RtcpRecvReply::SsrcTimedOut(timed_out_ssrcs) => {
+                    // Signal on the config happens already on the sender side for timed
+                    // out SSRCs.
+                    let mut sync_context = self.sync_context.lock().unwrap();
+                    for ssrc in timed_out_ssrcs {
+                        sync_context.as_mut().unwrap().remove_ssrc(ssrc);
+                    }
+                    drop(sync_context);
+                }
             }
         }
         drop(mapped);
@@ -2040,7 +2056,7 @@ impl RtpRecv {
             gst::EventView::Caps(caps) => {
                 let mut state = self.state.lock().unwrap();
 
-                if let Some(_) = pt_clock_rate_from_caps(caps.caps()) {
+                if pt_clock_rate_from_caps(caps.caps()).is_some() {
                     if let Some(session) = state.mut_session_by_id(id) {
                         let caps = caps.caps_owned();
                         session.rtp_recv_sink_caps = Some(caps.clone());

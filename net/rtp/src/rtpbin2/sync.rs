@@ -132,8 +132,6 @@ impl Context {
         }
     }
 
-    // FIXME: call this on timeouts / BYE (maybe collisions too?)
-    #[allow(dead_code)]
     pub fn remove_ssrc(&mut self, ssrc_val: u32) {
         if let Some(ssrc) = self.ssrcs.remove(&ssrc_val) {
             debug!("{ssrc_val:#08x} ({ssrc_val}) ssrc removed");

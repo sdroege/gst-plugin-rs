@@ -78,6 +78,7 @@ pub struct Session {
     local_receivers: HashMap<u32, LocalReceiveSource>,
     remote_receivers: HashMap<u32, RemoteReceiveSource>,
     remote_senders: HashMap<u32, RemoteSendSource>,
+    timed_out_ssrcs: VecDeque<u32>,
     average_rtcp_size: usize,
     last_sent_data: Option<Instant>,
     hold_buffer_counter: usize,
@@ -154,10 +155,14 @@ pub enum RtcpRecvReply {
     NewRtpNtp((u32, u32, u64)),
     /// A ssrc has byed
     SsrcBye(u32),
+    /// SSRCs timed out
+    SsrcTimedOut(Vec<u32>),
 }
 
 #[derive(Debug)]
 pub enum RtcpSendReply {
+    /// SSRCs timed out
+    SsrcTimedOut(Vec<u32>),
     /// Data needs to be sent
     Data(Vec<u8>),
     /// A ssrc has byed
@@ -183,6 +188,7 @@ impl Session {
             local_receivers: HashMap::new(),
             remote_receivers: HashMap::new(),
             remote_senders: HashMap::new(),
+            timed_out_ssrcs: VecDeque::new(),
             last_rtcp_sent_times: VecDeque::new(),
             rtcp_interval: None,
             next_rtcp_send: RtcpTimeMembers {
@@ -574,6 +580,12 @@ impl Session {
 
         if self.bye_state.is_none() {
             self.update_rtcp_average(rtcp_len + UDP_IP_OVERHEAD_BYTES);
+        }
+
+        if !self.timed_out_ssrcs.is_empty() {
+            replies.push(RtcpRecvReply::SsrcTimedOut(
+                self.timed_out_ssrcs.drain(..).collect(),
+            ));
         }
 
         let mut reconsidered_timeout = false;
@@ -1151,9 +1163,7 @@ impl Session {
     }
 
     // RFC 3550 6.3.5
-    // FIXME: we should surface this information to the element in order
-    // to perform clean up of the sync context
-    fn handle_timeouts(&mut self, now: Instant) {
+    fn handle_timeouts(&mut self, now: Instant) -> Vec<u32> {
         trace!("handling rtcp timeouts");
         let td = RTCP_SOURCE_TIMEOUT_N_INTERVALS
             * self
@@ -1161,12 +1171,37 @@ impl Session {
                 .max(Duration::from_secs(5));
 
         // delete all sources that are too old
-        self.local_receivers
-            .retain(|_ssrc, source| now - source.last_activity() < td);
-        self.remote_senders
-            .retain(|_ssrc, source| now - source.last_activity() < td);
-        self.remote_receivers
-            .retain(|_ssrc, source| now - source.last_activity() < td);
+        let mut timed_out_ssrcs = vec![];
+        self.local_receivers.retain(|_ssrc, source| {
+            if now - source.last_activity() < td {
+                true
+            } else {
+                timed_out_ssrcs.push(source.ssrc());
+                false
+            }
+        });
+        self.remote_senders.retain(|_ssrc, source| {
+            if now - source.last_activity() < td {
+                true
+            } else {
+                timed_out_ssrcs.push(source.ssrc());
+                false
+            }
+        });
+        self.remote_receivers.retain(|_ssrc, source| {
+            if now - source.last_activity() < td {
+                true
+            } else {
+                timed_out_ssrcs.push(source.ssrc());
+                false
+            }
+        });
+        self.timed_out_ssrcs.extend(&timed_out_ssrcs);
+        // If RTCP recv is not called often enough, forget old SSRCs here instead
+        // of accumulating memory potentially forever.
+        while self.timed_out_ssrcs.len() > 256 {
+            let _ = self.timed_out_ssrcs.pop_front();
+        }
 
         // There is a SHOULD about performing RTCP reverse timer consideration here if any sources
         // were timed out, however we are here before calculating the next rtcp timeout so are
@@ -1206,6 +1241,8 @@ impl Session {
         // remove outdated conflicting addresses
         self.conflicting_addresses
             .retain(|_addr, time| now - *time < RTCP_ADDRESS_CONFLICT_TIMEOUT);
+
+        timed_out_ssrcs
     }
 
     /// Produce a RTCP packet (or `None` if it is too early to send a RTCP packet).  After this call returns,
@@ -1288,7 +1325,11 @@ impl Session {
         self.update_rtcp_average(data.len() + UDP_IP_OVERHEAD_BYTES);
 
         if !is_early {
-            self.handle_timeouts(now);
+            let timed_out_ssrcs = self.handle_timeouts(now);
+            if !timed_out_ssrcs.is_empty() {
+                self.pending_rtcp_send
+                    .push_front(RtcpSendReply::SsrcTimedOut(timed_out_ssrcs));
+            }
 
             self.update_point_to_point();
             let mut interval = self.rtcp_interval();

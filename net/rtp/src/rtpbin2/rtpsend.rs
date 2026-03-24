@@ -258,6 +258,15 @@ impl SendSession {
                             .emit_by_name::<()>("bye-ssrc", &[&ssrc]);
                         None
                     }
+                    RtcpSendReply::SsrcTimedOut(timed_out_ssrcs) => {
+                        for ssrc in timed_out_ssrcs {
+                            session
+                                .internal_session
+                                .config
+                                .emit_by_name::<()>("timeout-ssrc", &[&ssrc]);
+                        }
+                        None
+                    }
                 }
             };
 
@@ -475,7 +484,7 @@ impl RtpSend {
     fn rtp_sink_event(&self, pad: &gst::Pad, event: gst::Event, id: usize) -> bool {
         match event.view() {
             gst::EventView::Caps(caps) => {
-                if let Some(_) = pt_clock_rate_from_caps(caps.caps()) {
+                if pt_clock_rate_from_caps(caps.caps()).is_some() {
                     let state = self.state.lock().unwrap();
                     if let Some(session) = state.session_by_id(id) {
                         let mut session = session.internal_session.inner.lock().unwrap();

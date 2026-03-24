@@ -244,6 +244,9 @@ mod imp {
                     glib::subclass::Signal::builder("bye-ssrc")
                         .param_types([u32::static_type()])
                         .build(),
+                    glib::subclass::Signal::builder("timeout-ssrc")
+                        .param_types([u32::static_type()])
+                        .build(),
                 ]
             });
 

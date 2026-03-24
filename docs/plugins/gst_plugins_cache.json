@@ -14758,6 +14758,16 @@
                         ],
                         "return-type": "void",
                         "when": "last"
+                    },
+                    "timeout-ssrc": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "guint"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
                     }
                 }
             },
