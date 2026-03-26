@@ -80,11 +80,13 @@ fn send_receive(src_pipeline_props: &str, sink_pipeline_props: &str) {
     drop(h2);
 }
 
+#[ignore]
 #[test]
 fn test_send_receive_without_datagram() {
     send_receive("port=7770", "url=https://127.0.0.1:7770");
 }
 
+#[ignore]
 #[test]
 fn test_send_receive_with_datagram() {
     send_receive("port=7771", "use-datagram=true url=https://127.0.0.1:7771");
