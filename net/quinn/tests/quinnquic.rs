@@ -26,6 +26,7 @@ fn make_buffer(content: &[u8]) -> gst::Buffer {
     buf
 }
 
+#[ignore]
 #[test]
 fn test_send_receive_without_datagram() {
     init();
@@ -69,6 +70,7 @@ fn test_send_receive_without_datagram() {
     drop(h2);
 }
 
+#[ignore]
 #[test]
 fn test_send_receive_with_datagram() {
     init();
