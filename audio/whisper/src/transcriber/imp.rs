@@ -145,7 +145,7 @@ type LogLevel = i32;
 
 unsafe extern "C" fn my_log_callback(
     level: LogLevel,
-    text: *const i8,
+    text: *const std::ffi::c_char,
     _user_data: *mut std::ffi::c_void,
 ) {
     let c_str = unsafe { std::ffi::CStr::from_ptr(text) };
