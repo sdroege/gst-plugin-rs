@@ -15550,6 +15550,17 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "extra-http-request-headers": {
+                        "blurb": "Extra HTTP headers to send with requests",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": false,
+                        "type": "GstStructure",
+                        "writable": true
+                    },
                     "location": {
                         "blurb": "RTSP server, credentials and media path, e.g. rtsp://user:p4ssw0rd@camera-5.local:8554/h264_1080p30",
                         "conditionally-available": false,

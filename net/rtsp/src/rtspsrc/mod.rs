@@ -37,6 +37,7 @@ use gst::prelude::*;
 
 mod body;
 mod digest;
+mod http_tunnel;
 mod imp;
 mod sdp;
 mod tcp_message;

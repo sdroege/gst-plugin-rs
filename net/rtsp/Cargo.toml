@@ -32,6 +32,10 @@ md-5 = "0.10"
 sha2 = "0.10"
 rand = "0.10"
 hex = "0.4"
+httparse = "1.10"
+base64 = "0.22"
+bytes = "1"
+tokio-util = "0.7"
 
 [lib]
 name = "gstrsrtsp"
