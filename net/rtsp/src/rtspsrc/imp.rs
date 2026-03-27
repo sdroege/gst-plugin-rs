@@ -11,7 +11,9 @@
 //
 // https://www.rfc-editor.org/rfc/rfc2326.html
 
+use crate::rtspsrc::http_tunnel::TunnelStream;
 use crate::utils::create_tls_connector;
+use rand::distr::{Alphanumeric, Distribution};
 use std::collections::{HashMap, btree_set::BTreeSet};
 use std::convert::TryFrom;
 use std::fmt;
@@ -28,6 +30,7 @@ use rustls_pki_types::ServerName;
 
 use futures::{Sink, SinkExt, Stream, StreamExt};
 use socket2::Socket;
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpStream, UdpSocket};
 use tokio::runtime;
 use tokio::sync::{mpsc, oneshot};
@@ -88,6 +91,7 @@ const DEFAULT_USER_AGENT: &str = concat!(
 enum TcpOrTlsStream {
     Plain(TcpStream),
     Tls(tokio_rustls::client::TlsStream<TcpStream>),
+    Http(TunnelStream),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -220,6 +224,38 @@ impl fmt::Display for RtspProtocol {
     }
 }
 
+fn rewrite_url_scheme(url: Url, new_scheme: &str) -> Url {
+    match url.scheme() {
+        "rtsph" => {
+            let mut url = url;
+            let _ = url.set_scheme(new_scheme);
+            url
+        }
+        _ => url,
+    }
+}
+
+fn rtsp_url(url: Url) -> Url {
+    rewrite_url_scheme(url, "rtsp")
+}
+
+fn rtsp_http_url(url: Url) -> Url {
+    rewrite_url_scheme(url, "http")
+}
+
+fn rtsp_task_state<R, W>(url: Url, read: R, write: W) -> RtspTaskState
+where
+    R: AsyncRead + Unpin + Send + 'static,
+    W: AsyncWrite + Unpin + Send + 'static,
+{
+    use super::tcp_message::{async_read, async_write};
+
+    let stream = Box::pin(async_read(read, MAX_MESSAGE_SIZE).fuse());
+    let sink = Box::pin(async_write(write));
+
+    RtspTaskState::new(url, stream, sink)
+}
+
 #[derive(Debug, Clone)]
 struct Settings {
     location: Option<Url>,
@@ -229,6 +265,7 @@ struct Settings {
     receive_mtu: u32,
     certificate_file: Option<PathBuf>,
     private_key_file: Option<PathBuf>,
+    extra_headers: Vec<(String, String)>,
 }
 
 impl Default for Settings {
@@ -241,6 +278,7 @@ impl Default for Settings {
             receive_mtu: DEFAULT_RECEIVE_MTU,
             certificate_file: None,
             private_key_file: None,
+            extra_headers: Vec::new(),
         }
     }
 }
@@ -354,6 +392,7 @@ impl RtspSrc {
             "rtspt" => &[RtspProtocol::Tcp],
             "rtsp" => &settings.protocols,
             "rtsps" => &[RtspProtocol::Tcp],
+            "rtsph" => &[RtspProtocol::Tcp],
             scheme => {
                 return Err(glib::Error::new(
                     gst::URIError::UnsupportedProtocol,
@@ -446,6 +485,12 @@ impl ObjectImpl for RtspSrc {
                     .nick("Private key file for client authentication")
                     .blurb("Path to a PKCS1, PKCS8 or SEC1 private key file in PEM format")
                     .build(),
+                glib::ParamSpecBoxed::builder::<gst::Structure>("extra-http-request-headers")
+                    .nick("Extra Headers")
+                    .blurb("Extra HTTP headers to send with requests")
+                    .write_only()
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -497,6 +542,20 @@ impl ObjectImpl for RtspSrc {
                 let mut settings = self.settings.lock().unwrap();
                 let value: String = value.get().unwrap();
                 settings.private_key_file = Some(value.into());
+                Ok(())
+            }
+            "extra-headers" => {
+                let mut settings = self.settings.lock().unwrap();
+                let s = value
+                    .get::<gst::Structure>()
+                    .expect("type checked upstream");
+
+                for (k, v) in s.iter() {
+                    if let Ok(v) = v.get::<String>() {
+                        settings.extra_headers.push((k.to_string(), v));
+                    }
+                }
+
                 Ok(())
             }
             name => unimplemented!("Property '{name}'"),
@@ -711,7 +770,7 @@ impl RtspSrc {
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        let (url, tls_enabled, cert, key) = {
+        let (url, tls_enabled, cert, key, tunnel_enabled, extra_headers) = {
             let settings = self.settings.lock().unwrap();
             let Some(url) = settings.location.clone() else {
                 return Err(gst::error_msg!(
@@ -720,10 +779,19 @@ impl RtspSrc {
                 ));
             };
             let tls_enabled = url.scheme() == "rtsps";
+            let tunnel_enabled = url.scheme() == "rtsph";
             let certificate_file = settings.certificate_file.clone();
             let private_key_file = settings.private_key_file.clone();
+            let extra_headers = settings.extra_headers.clone();
 
-            (url, tls_enabled, certificate_file, private_key_file)
+            (
+                url,
+                tls_enabled,
+                certificate_file,
+                private_key_file,
+                tunnel_enabled,
+                extra_headers,
+            )
         };
 
         gst::info!(CAT, imp = self, "Location: {url}",);
@@ -743,65 +811,92 @@ impl RtspSrc {
 
         let self_weak = self.obj().downgrade();
 
+        let mut rng = rand::rng();
+        let session_id = Alphanumeric
+            .sample_iter(&mut rng)
+            .take(24)
+            .map(char::from)
+            .collect::<String>();
+
         let join_handle = RUNTIME.spawn(async move {
             gst::info!(CAT, "Connecting to {url} ..");
-            let hostname = url.clone().host_str().unwrap().to_string();
-            let port = url.port().unwrap_or(if tls_enabled { 322 } else { 554 });
-            let hostname_port = format!("{hostname}:{port}");
 
-            let stream = match TcpStream::connect(hostname_port).await {
-                Ok(s) => s,
-                Err(err) => {
-                    gst::element_imp_error!(
-                        task_src,
-                        gst::ResourceError::OpenRead,
-                        ["Failed to connect to RTSP server: {err:#?}"]
-                    );
-                    return;
-                }
-            };
-            let _ = stream.set_nodelay(true);
+            let s = if tunnel_enabled {
+                gst::info!(CAT, "Using session id: {session_id}");
 
-            let s = if tls_enabled {
-                let dnsname = match ServerName::try_from(hostname.clone()) {
-                    Ok(dnsname) => dnsname,
-                    Err(err) => {
-                        gst::element_imp_error!(
-                            task_src,
-                            gst::ResourceError::Write,
-                            ["Server name failed for '{hostname}': {err}"]
-                        );
-                        return;
-                    }
-                };
-
-                let connector = match create_tls_connector(self_weak, cert, key) {
-                    Ok(c) => c,
-                    Err(err) => {
-                        gst::element_imp_error!(
-                            task_src,
-                            gst::ResourceError::Read,
-                            ["Failed to create TlsConnector: {err}"]
-                        );
-                        return;
-                    }
-                };
-
-                let s = match connector.connect(dnsname, stream).await {
+                let http_url = rtsp_http_url(url.clone());
+                let tunnel = match TunnelStream::new(http_url, &extra_headers, session_id).await {
                     Ok(s) => s,
                     Err(err) => {
                         gst::element_imp_error!(
                             task_src,
-                            gst::ResourceError::OpenWrite,
-                            ["Failed TLS connect to server {hostname}:{port}: {err}"]
+                            gst::ResourceError::OpenRead,
+                            ["Failed to connect to RTSP server: {err:#?}"]
                         );
                         return;
                     }
                 };
 
-                TcpOrTlsStream::Tls(s)
+                TcpOrTlsStream::Http(tunnel)
             } else {
-                TcpOrTlsStream::Plain(stream)
+                let hostname = url.clone().host_str().unwrap().to_string();
+                let port = url.port().unwrap_or(if tls_enabled { 322 } else { 554 });
+                let hostname_port = format!("{hostname}:{port}");
+
+                let stream = match TcpStream::connect(hostname_port).await {
+                    Ok(s) => s,
+                    Err(err) => {
+                        gst::element_imp_error!(
+                            task_src,
+                            gst::ResourceError::OpenRead,
+                            ["Failed to connect to RTSP server: {err:#?}"]
+                        );
+                        return;
+                    }
+                };
+                let _ = stream.set_nodelay(true);
+
+                if tls_enabled {
+                    let dnsname = match ServerName::try_from(hostname.clone()) {
+                        Ok(dnsname) => dnsname,
+                        Err(err) => {
+                            gst::element_imp_error!(
+                                task_src,
+                                gst::ResourceError::Write,
+                                ["Server name failed for '{hostname}': {err}"]
+                            );
+                            return;
+                        }
+                    };
+
+                    let connector = match create_tls_connector(self_weak, cert, key) {
+                        Ok(c) => c,
+                        Err(err) => {
+                            gst::element_imp_error!(
+                                task_src,
+                                gst::ResourceError::Read,
+                                ["Failed to create TlsConnector: {err}"]
+                            );
+                            return;
+                        }
+                    };
+
+                    let s = match connector.connect(dnsname, stream).await {
+                        Ok(s) => s,
+                        Err(err) => {
+                            gst::element_imp_error!(
+                                task_src,
+                                gst::ResourceError::OpenWrite,
+                                ["Failed TLS connect to server {hostname}:{port}: {err}"]
+                            );
+                            return;
+                        }
+                    };
+
+                    TcpOrTlsStream::Tls(s)
+                } else {
+                    TcpOrTlsStream::Plain(stream)
+                }
             };
 
             gst::info!(CAT, "Connected!");
@@ -809,22 +904,24 @@ impl RtspSrc {
             let (state, task_ret) = match s {
                 TcpOrTlsStream::Plain(tcp_stream) => {
                     let (read, write) = tcp_stream.into_split();
-                    let stream =
-                        Box::pin(super::tcp_message::async_read(read, MAX_MESSAGE_SIZE).fuse());
-                    let sink = Box::pin(super::tcp_message::async_write(write));
 
-                    let mut state = RtspTaskState::new(url, stream, sink);
+                    let mut state = rtsp_task_state(url, read, write);
                     let task_ret = task_src.rtsp_task(&mut state, rx).await;
 
                     (state, task_ret)
                 }
                 TcpOrTlsStream::Tls(tls_stream) => {
                     let (read, write) = tokio::io::split(tls_stream);
-                    let stream =
-                        Box::pin(super::tcp_message::async_read(read, MAX_MESSAGE_SIZE).fuse());
-                    let sink = Box::pin(super::tcp_message::async_write(write));
 
-                    let mut state = RtspTaskState::new(url, stream, sink);
+                    let mut state = rtsp_task_state(url, read, write);
+                    let task_ret = task_src.rtsp_task(&mut state, rx).await;
+
+                    (state, task_ret)
+                }
+                TcpOrTlsStream::Http(tunnel_stream) => {
+                    let (read, write) = tokio::io::split(tunnel_stream);
+
+                    let mut state = rtsp_task_state(url, read, write);
                     let task_ret = task_src.rtsp_task(&mut state, rx).await;
 
                     (state, task_ret)
@@ -1505,6 +1602,7 @@ impl RtspTaskState {
     fn new(url: Url, stream: RtspStream, sink: RtspSink) -> Self {
         let username = url.username().to_string();
         let password = url.password().unwrap_or("").to_string();
+        let url = rtsp_url(url);
 
         RtspTaskState {
             cseq: 0u32,

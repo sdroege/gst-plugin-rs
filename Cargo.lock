@@ -5093,6 +5093,8 @@ version = "0.15.2"
 dependencies = [
  "anyhow",
  "atomic_refcell",
+ "base64 0.22.1",
+ "bytes",
  "data-encoding",
  "futures",
  "gst-plugin-version-helper",
@@ -5101,6 +5103,7 @@ dependencies = [
  "gstreamer-net",
  "gstreamer-pbutils",
  "hex",
+ "httparse",
  "lru",
  "md-5",
  "rand 0.10.1",
@@ -5114,6 +5117,7 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.26.4",
  "tokio-stream",
+ "tokio-util",
  "url",
 ]
 

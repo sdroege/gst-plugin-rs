@@ -31,7 +31,6 @@ Roughly in order of priority:
 * Allow ignoring specific streams (SDP medias)
   - Currently all available source pads must be linked
 * SRTP support
-* HTTP tunnelling
 * Proxy support
 * `GET_PARAMETER` / `SET_PARAMETER`
 * Make TCP connection optional when using UDP transport
