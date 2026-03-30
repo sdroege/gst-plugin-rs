@@ -1050,7 +1050,7 @@ impl ObjectImpl for Polly {
             }
             "max-overflow" => {
                 let settings = self.settings.lock().unwrap();
-                (settings.latency.mseconds() as u32).to_value()
+                (settings.max_overflow.mseconds() as u32).to_value()
             }
             _ => unimplemented!(),
         }
