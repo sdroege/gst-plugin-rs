@@ -38,6 +38,7 @@
  * Since: plugins-rs-0.13.0
  */
 use std::collections::{BTreeMap, HashMap};
+use std::fmt;
 use std::net::SocketAddr;
 use std::ops::{ControlFlow, Deref};
 use std::pin::Pin;
@@ -268,7 +269,6 @@ impl futures::stream::Stream for JitterBufferStream {
     }
 }
 
-#[derive(Debug)]
 enum JitterBufferItem {
     Packet(gst::Buffer),
     PacketList(gst::BufferList),
@@ -277,6 +277,23 @@ enum JitterBufferItem {
         std::ptr::NonNull<gst::QueryRef>,
         std::sync::mpsc::SyncSender<bool>,
     ),
+}
+
+impl fmt::Debug for JitterBufferItem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use JitterBufferItem::*;
+        match self {
+            Packet(buf) => f.debug_tuple("Packet").field(buf).finish(),
+            PacketList(buf_list) => f.debug_tuple("PacketList").field(buf_list).finish(),
+            Event(event) => f.debug_tuple("Event").field(event).finish(),
+            Query(query, _) => f
+                .debug_tuple("Query")
+                // SAFETY: the `query` `ptr::NonNull` was built above from
+                //         the `query` argument with type `&mut gst::QueryRef`.
+                .field(unsafe { query.as_ref() })
+                .finish(),
+        }
+    }
 }
 
 // SAFETY: Need to be able to pass *mut gst::QueryRef
@@ -1924,7 +1941,7 @@ impl RtpRecv {
                     {
                         jitterbuffer::QueueResult::Forward { id, discont: _ } => {
                             // SAFETY: the `query` `ptr::NonNull` was built above from
-                            //         the `query` argument with type `&ref mut gst::QueryRef`.
+                            //         the `query` argument with type `&mut gst::QueryRef`.
                             let query = unsafe { query.as_mut() };
 
                             gst::trace!(
@@ -1942,7 +1959,10 @@ impl RtpRecv {
                             gst::trace!(
                                 CAT,
                                 obj = recv_src_pad.pad,
-                                "jb queuing serialized query ({id}): {query:?}",
+                                "jb queuing serialized query ({id}): {:?}",
+                                // SAFETY: the `query` `ptr::NonNull` was built above from
+                                //         the `query` argument with type `&mut gst::QueryRef`.
+                                unsafe { query.as_ref() },
                             );
 
                             let (query_tx, query_rx) = std::sync::mpsc::sync_channel(1);
