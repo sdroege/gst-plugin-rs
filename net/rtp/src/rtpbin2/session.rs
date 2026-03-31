@@ -766,13 +766,13 @@ impl Session {
         if !self.remote_receivers.contains_key(&sender_ssrc)
             && !self.remote_senders.contains_key(&sender_ssrc)
         {
-            trace!("No remote source known for sender ssrc {sender_ssrc}");
+            trace!("No remote source known for sender ssrc {sender_ssrc:#08x} ({sender_ssrc})");
         }
 
         let mut ssrcs = Vec::new();
         for media_ssrc in media_ssrcs {
             let Some(sender) = self.local_senders.get(&media_ssrc) else {
-                trace!("Not a local sender for ssrc {media_ssrc}");
+                trace!("Not a local sender for ssrc {media_ssrc:#08x} ({media_ssrc})");
                 continue;
             };
 
@@ -780,24 +780,28 @@ impl Session {
                 .received_report_blocks()
                 .find(|(ssrc, _rb)| *ssrc == sender_ssrc)
             else {
-                trace!("No RB for sender ssrc {sender_ssrc} yet");
+                trace!("No RB for sender ssrc {sender_ssrc:#08x} ({sender_ssrc}) yet");
                 continue;
             };
 
             if let Some(sender) = self.remote_senders.get_mut(&sender_ssrc) {
                 if !sender.remote_request_key_unit_allowed(now, rb.1) {
-                    trace!("Requesting key-unit not allowed again yet");
+                    trace!(
+                        "Requesting key-unit not allowed again yet for sender ssrc {sender_ssrc:#08x} ({sender_ssrc})"
+                    );
                     continue;
                 }
             } else if let Some(sender) = self.remote_receivers.get_mut(&sender_ssrc)
                 && !sender.remote_request_key_unit_allowed(now, rb.1)
             {
-                trace!("Requesting key-unit not allowed again yet");
+                trace!(
+                    "Requesting key-unit not allowed again yet for sender ssrc {sender_ssrc:#08x} ({sender_ssrc})"
+                );
                 continue;
             }
 
             trace!(
-                "Requesting key-unit from sender ssrc {sender_ssrc} for media ssrc {media_ssrc} (fir: {fir})"
+                "Requesting key-unit from sender ssrc {sender_ssrc:#08x} ({sender_ssrc}) for media ssrc {media_ssrc:#08x} ({media_ssrc}) (fir: {fir})"
             );
             ssrcs.push(media_ssrc);
         }
@@ -1107,7 +1111,12 @@ impl Session {
         for source in self.remote_senders.values_mut() {
             let pli = source.generate_pli();
             if let Some(pli) = pli {
-                debug!("Generating PLI for sender {}: {:?}", source.ssrc(), pli);
+                debug!(
+                    "Generating PLI for sender {:#08x} ({}): {:?}",
+                    source.ssrc(),
+                    source.ssrc(),
+                    pli
+                );
                 rtcp = rtcp.add_packet(
                     rtcp_types::PayloadFeedback::builder_owned(pli)
                         .sender_ssrc(ssrc)
@@ -1183,7 +1192,7 @@ impl Session {
                         None
                     }
                 })
-                .inspect(|source| trace!("ssrc {source} has become a receiver"))
+                .inspect(|source| trace!("ssrc {source:#08x} ({source}) has become a receiver"))
                 .collect::<Vec<_>>();
 
             for ssrc in removed_senders {
@@ -1594,11 +1603,11 @@ impl Session {
         let mut replies = Vec::new();
 
         if !self.remote_senders.contains_key(&ssrc) {
-            trace!("No remote sender with ssrc {ssrc} known");
+            trace!("No remote sender with ssrc {ssrc:#08x} ({ssrc}) known");
             return replies;
         };
 
-        debug!("Requesting remote key-unit for ssrc {ssrc} of type {typ:?}");
+        debug!("Requesting remote key-unit for ssrc {ssrc:#08x} ({ssrc}) of type {typ:?}");
 
         // FIXME: Use hard-coded 5s interval here
         let res = self.request_early_rtcp(now, Duration::from_secs(5));
