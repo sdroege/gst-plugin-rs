@@ -66,6 +66,7 @@ const DEFAULT_PROTOCOLS: &str = "udp-mcast,udp,tcp";
 // Equal to MTU + 8 by default to avoid incorrectly detecting an MTU sized buffer as having
 // possibly overflown our receive buffer, and triggering a doubling of the buffer sizes.
 const DEFAULT_RECEIVE_MTU: u32 = 1500 + 8;
+const DEFAULT_DO_RTSP_KEEP_ALIVE: bool = true;
 
 const MAX_MESSAGE_SIZE: usize = 1024 * 1024;
 const MAX_BIND_PORT_RETRY: u16 = 100;
@@ -266,6 +267,7 @@ struct Settings {
     certificate_file: Option<PathBuf>,
     private_key_file: Option<PathBuf>,
     extra_headers: Vec<(String, String)>,
+    do_rtsp_keep_alive: bool,
 }
 
 impl Default for Settings {
@@ -279,6 +281,7 @@ impl Default for Settings {
             certificate_file: None,
             private_key_file: None,
             extra_headers: Vec::new(),
+            do_rtsp_keep_alive: DEFAULT_DO_RTSP_KEEP_ALIVE,
         }
     }
 }
@@ -289,6 +292,7 @@ enum Commands {
     //Pause,
     Teardown(Option<oneshot::Sender<()>>),
     Data(rtsp_types::Data<Body>),
+    KeepAlive,
 }
 
 #[derive(Debug, Default)]
@@ -491,6 +495,11 @@ impl ObjectImpl for RtspSrc {
                     .write_only()
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("do-rtsp-keep-alive")
+                    .nick("Do RTSP Keep Alive")
+                    .blurb("Send RTSP keep alive packets, disable for old incompatible server.")
+                    .default_value(DEFAULT_DO_RTSP_KEEP_ALIVE)
+                    .build(),
             ]
         });
 
@@ -558,6 +567,11 @@ impl ObjectImpl for RtspSrc {
 
                 Ok(())
             }
+            "do-rtsp-keep-alive" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.do_rtsp_keep_alive = value.get::<bool>().expect("type checked upstream");
+                Ok(())
+            }
             name => unimplemented!("Property '{name}'"),
         };
 
@@ -611,6 +625,10 @@ impl ObjectImpl for RtspSrc {
                 let settings = self.settings.lock().unwrap();
                 let privkey = settings.private_key_file.as_ref();
                 privkey.to_value()
+            }
+            "do-rtsp-keep-alive" => {
+                let settings = self.settings.lock().unwrap();
+                settings.do_rtsp_keep_alive.to_value()
             }
             name => unimplemented!("Property '{name}'"),
         }
@@ -931,6 +949,9 @@ impl RtspSrc {
             gst::info!(CAT, "Exited rtsp_task");
 
             // Cleanup after stopping
+            if let Some(h) = state.keep_alive_task {
+                h.abort()
+            }
             for h in &state.handles {
                 h.abort();
             }
@@ -1144,17 +1165,26 @@ impl RtspSrc {
         state.describe().await?;
 
         let mut session: Option<Session> = None;
+        let mut session_timeout: Option<Duration> = None;
         // SETUP streams (TCP interleaved)
         state.setup_params = {
             state
                 .setup(
                     &mut session,
+                    &mut session_timeout,
                     settings.port_start,
                     &settings.protocols,
                     TransportMode::Play,
                 )
                 .await?
         };
+
+        if settings.do_rtsp_keep_alive
+            && let Some((_, timeout)) = session.as_ref().zip(session_timeout)
+        {
+            state.start_keep_alive_task(cmd_tx.clone(), timeout)
+        }
+
         let manager = RtspManager::new(std::env::var("USE_RTP2").is_ok_and(|s| s == "1"));
 
         let obj = self.obj();
@@ -1471,6 +1501,12 @@ impl RtspSrc {
                         state.sink.send(Message::Data(data)).await?;
                         gst::debug!(CAT, "Sent RTCP RR over TCP");
                     }
+                    Commands::KeepAlive => {
+                        if let Some(s) = &session {
+                            state.keep_alive(s).await?;
+                            expected_response = None;
+                        };
+                    }
                 },
                 else => {
                     gst::error!(CAT, "No select statement matched, breaking loop");
@@ -1589,6 +1625,8 @@ struct RtspTaskState {
     auth_method: Option<AuthMethod>,
     digest_params: Option<DigestParams>,
     nonce_count: u32,
+    methods: Option<Public>,
+    keep_alive_task: Option<JoinHandle<()>>,
 }
 
 struct RtspSetupParams {
@@ -1620,6 +1658,8 @@ impl RtspTaskState {
             auth_method: None,
             digest_params: None,
             nonce_count: INITIAL_NONCE,
+            methods: None,
+            keep_alive_task: None,
         }
     }
 
@@ -1799,6 +1839,7 @@ impl RtspTaskState {
                 unsupported.join(",")
             )))
         } else {
+            self.methods = Some(methods);
             Ok(())
         }
     }
@@ -1884,6 +1925,7 @@ impl RtspTaskState {
     async fn setup(
         &mut self,
         session: &mut Option<Session>,
+        session_timeout: &mut Option<Duration>,
         port_start: u16,
         protocols: &[RtspProtocol],
         mode: TransportMode,
@@ -2051,6 +2093,23 @@ impl RtspTaskState {
             let new_session = rsp
                 .typed_header::<Session>()?
                 .ok_or(RtspError::InvalidMessage("No session in SETUP response"))?;
+
+            if let Some(timeout) = new_session.1.or(Some(60)) {
+                // See `gst_rtsp_connection_next_timeout_usec` in gstrtspconnection.c.
+                let timeout = match timeout {
+                    // Because we should act before the timeout we timeout 5
+                    // seconds in advance.
+                    t if t >= 20 => t - 5,
+                    // else timeout 20% earlier
+                    t if t >= 5 => t - (t / 5),
+                    // else timeout 1 second earlier
+                    t if t >= 1 => t - 1,
+                    _ => timeout,
+                };
+
+                *session_timeout = Some(Duration::from_secs(timeout));
+            }
+
             // Manually strip timeout field: https://github.com/sdroege/rtsp-types/issues/24
             session.replace(Session(new_session.0, None));
             let mut parsed_transport = if let Some(transports) = rsp.typed_header::<Transports>()? {
@@ -2195,6 +2254,47 @@ impl RtspTaskState {
         Ok(self.cseq)
     }
 
+    async fn keep_alive(&mut self, session: &Session) -> Result<(), RtspError> {
+        self.cseq += 1;
+        let request_uri = self.aggregate_control.as_ref().unwrap_or(&self.url).clone();
+        let method = self
+            .methods
+            .as_ref()
+            .and_then(|m| {
+                if m.contains(&Method::SetParameter) {
+                    Some(Method::SetParameter)
+                } else if m.contains(&Method::GetParameter) {
+                    Some(Method::GetParameter)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(Method::Options);
+        let mut req = Request::builder(method, self.version)
+            .typed_header::<CSeq>(&self.cseq.into())
+            .header(USER_AGENT, DEFAULT_USER_AGENT)
+            .request_uri(request_uri)
+            .typed_header::<Session>(session)
+            .build(Body::default());
+
+        if let Some(auth_method) = &self.auth_method {
+            req = rebuild_request_with_auth(
+                req,
+                auth_method,
+                self.digest_params.clone(),
+                &self.username,
+                &self.password,
+                self.nonce_count,
+            )?;
+            self.nonce_count += 1;
+        };
+
+        gst::debug!(CAT, "-->> {req:#?}");
+        self.sink.send(req.into()).await?;
+
+        Ok(())
+    }
+
     async fn teardown_response(
         &mut self,
         rsp: &Response<Body>,
@@ -2215,6 +2315,29 @@ impl RtspTaskState {
         }
 
         self.digest_params = new_params;
+    }
+
+    fn start_keep_alive_task(&mut self, cmd_tx: mpsc::Sender<Commands>, timeout: Duration) {
+        let task = RUNTIME.spawn(async move {
+            let mut interval = tokio::time::interval(timeout);
+            interval.tick().await;
+
+            loop {
+                interval.tick().await;
+
+                match cmd_tx.send(Commands::KeepAlive).await {
+                    Ok(_) => {
+                        gst::debug!(CAT, "Keep-alive successful");
+                    }
+                    Err(err) => {
+                        gst::error!(CAT, "Keep-alive failed {err:?}");
+                        break;
+                    }
+                }
+            }
+        });
+
+        self.keep_alive_task = Some(task);
     }
 }
 
