@@ -6,40 +6,16 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use anyhow::Error;
 use gst::glib;
 use gst::prelude::*;
-use gst_plugin_webrtc_signalling::handlers::Handler;
-use gst_plugin_webrtc_signalling::server::Server;
-use gstrswebrtc::RUNTIME;
 use serial_test::file_serial;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
     mpsc,
 };
-use std::time::Duration;
-use tokio::net::TcpListener;
 
-async fn spawn_signalling_server(tx: mpsc::Sender<Result<(), Error>>) -> Result<(), Error> {
-    let addr = String::from("0.0.0.0:8443");
-    let server = Server::spawn(Handler::new);
-    let Ok(listener) = TcpListener::bind(&addr).await else {
-        let err = anyhow::anyhow!("failed to bind");
-        let _ = tx.send(Err(err));
-        return Err(anyhow::anyhow!("failed to bind"));
-    };
-
-    let _ = tx.send(Ok(()));
-    while let Ok((stream, _address)) = listener.accept().await {
-        let mut server_clone = server.clone();
-        RUNTIME.spawn(async move { server_clone.accept_async(stream).await });
-    }
-
-    Ok(())
-}
-
-fn init() -> Option<tokio::task::JoinHandle<Result<(), anyhow::Error>>> {
+fn init() {
     use std::sync::Once;
     static INIT: Once = Once::new();
 
@@ -47,35 +23,20 @@ fn init() -> Option<tokio::task::JoinHandle<Result<(), anyhow::Error>>> {
         gst::init().unwrap();
         gstrswebrtc::plugin_register_static().expect("Register rswebrtc plugin");
     });
-
-    let (tx, rx) = std::sync::mpsc::channel();
-
-    let handle = Some(RUNTIME.spawn(async move {
-        spawn_signalling_server(tx)
-            .await
-            .inspect_err(|e| panic!("{e:?}"))
-    }));
-
-    match rx.recv_timeout(Duration::from_secs(20)) {
-        Ok(Ok(())) => {}
-        Ok(Err(e)) => {
-            panic!("Failed to start signalling server : {e:?}");
-        }
-        Err(e) => {
-            panic!("Timed out waiting for the signalling server to start :{e:?}");
-        }
-    }
-
-    handle
 }
 
-fn run_webrtc_producer(pipeline_str: &str, tx: mpsc::Sender<String>) -> gst::Pipeline {
+fn run_webrtc_producer(
+    pipeline_str: &str,
+    tx: mpsc::Sender<String>,
+    signaller_server_port: u16,
+) -> gst::Pipeline {
     let pipeline = gst::parse::launch(pipeline_str)
         .expect("producer pipeline")
         .downcast::<gst::Pipeline>()
         .unwrap();
     let webrtcsink = pipeline.by_name("ws").unwrap();
 
+    webrtcsink.set_property("signalling-server-port", signaller_server_port as u32);
     let signaller = webrtcsink
         .dynamic_cast_ref::<gst::ChildProxy>()
         .unwrap()
@@ -103,11 +64,12 @@ fn run_test(
     consumer_pipeline_str: &str,
     output_caps_name: &str,
     media_type: &str,
+    signaller_server_port: u16,
 ) {
-    let mut h = init();
+    init();
 
     let (tx, rx) = mpsc::channel::<String>();
-    let producer = run_webrtc_producer(producer_pipeline_str, tx);
+    let producer = run_webrtc_producer(producer_pipeline_str, tx, signaller_server_port);
 
     let producer_peer_id = rx.recv().unwrap();
     let consumer = gst::parse::launch(consumer_pipeline_str)
@@ -124,6 +86,10 @@ fn run_test(
         .unwrap();
 
     signaller.set_property("producer-peer-id", producer_peer_id);
+
+    let uri = format!("ws://127.0.0.1:{signaller_server_port}");
+    signaller.set_property("uri", uri.as_str());
+
     let caps_matched = Arc::new(AtomicBool::new(false));
 
     webrtcsrc.connect_pad_added(glib::clone!(
@@ -166,20 +132,17 @@ fn run_test(
 
     let producer_stop = producer.set_state(gst::State::Null).unwrap();
     assert_eq!(producer_stop, gst::StateChangeSuccess::Success);
-
-    if let Some(h) = h.take() {
-        h.abort();
-    };
 }
 
 #[test]
 #[file_serial(webrtctest)]
 fn test_webrtcsrc_no_depayloading() {
     run_test(
-        "videotestsrc ! vp8enc ! webrtcsink congestion-control=0 name=ws",
+        "videotestsrc ! vp8enc ! webrtcsink congestion-control=0 name=ws run-signalling-server=true",
         "webrtcsrc name=ws ! rtpvp8depay ! vp8dec ! fakesink",
         "application/x-rtp",
         "video",
+        8444,
     );
 }
 
@@ -187,10 +150,11 @@ fn test_webrtcsrc_no_depayloading() {
 #[file_serial(webrtctest)]
 fn test_webrtcsrc_no_decoding() {
     run_test(
-        "videotestsrc ! vp8enc ! webrtcsink name=ws congestion-control=0",
+        "videotestsrc ! vp8enc ! webrtcsink name=ws congestion-control=0 run-signalling-server=true",
         "webrtcsrc name=ws ! vp8dec ! fakesink",
         "video/x-vp8",
         "video",
+        8445,
     );
 }
 
@@ -198,9 +162,10 @@ fn test_webrtcsrc_no_decoding() {
 #[file_serial(webrtctest)]
 fn test_webrtcsrc_decoding() {
     run_test(
-        "videotestsrc ! vp8enc ! webrtcsink congestion-control=0 name=ws",
+        "videotestsrc ! vp8enc ! webrtcsink congestion-control=0 name=ws run-signalling-server=true",
         "webrtcsrc name=ws ! video/x-raw ! fakesink",
         "video/x-raw",
         "video",
+        8446,
     );
 }
