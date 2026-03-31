@@ -4103,6 +4103,18 @@
                         "type": "gboolean",
                         "writable": true
                     },
+                    "enable-dummy": {
+                        "blurb": "Enable the dummy source, which is activated when neither the main nor fallback source is available",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "enable-video": {
                         "blurb": "Enable the video stream, this will output black or the fallback video if there's no video in the configured URI",
                         "conditionally-available": false,
