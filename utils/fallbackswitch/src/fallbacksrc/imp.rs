@@ -326,12 +326,14 @@ impl ObjectImpl for FallbackSrc {
             vec![
                 glib::ParamSpecBoolean::builder("enable-audio")
                     .nick("Enable Audio (DEPRECATED)")
+                    .deprecated()
                     .blurb("Enable the audio stream, this will output silence if there's no audio in the configured URI")
                     .default_value(true)
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecBoolean::builder("enable-video")
                     .nick("Enable Video (DEPRECATED)")
+                    .deprecated()
                     .blurb("Enable the video stream, this will output black or the fallback video if there's no video in the configured URI")
                     .default_value(true)
                     .mutable_ready()
