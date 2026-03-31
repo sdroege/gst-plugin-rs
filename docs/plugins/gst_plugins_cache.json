@@ -4139,6 +4139,17 @@
                         "type": "GstCaps",
                         "writable": true
                     },
+                    "fallback-source": {
+                        "blurb": "Source to use instead of the fallback URI",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstElement",
+                        "writable": true
+                    },
                     "fallback-uri": {
                         "blurb": "Fallback URI to use for video in case the main stream doesn't work",
                         "conditionally-available": false,
