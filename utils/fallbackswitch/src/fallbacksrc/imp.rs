@@ -12,9 +12,9 @@ use gst::subclass::prelude::*;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
 
+use std::cmp;
 use std::sync::Arc;
 use std::time::Instant;
-use std::{cmp, mem};
 
 use std::sync::LazyLock;
 
@@ -4305,37 +4305,18 @@ impl FallbackSrc {
                             Some(state) => state,
                         };
 
-                        let (source, old_source) = if !fallback_source {
-                            if let Source::Uri(..) = state.configured_source {
-                                // FIXME: Create a new uridecodebin3 because it currently is not reusable
-                                // See https://gitlab.freedesktop.org/gstreamer/gst-plugins-base/-/issues/746
-                                element.remove(&state.source.bin).unwrap();
+                        let source = if !fallback_source {
+                            state.source.pending_restart = false;
+                            state.source.pending_restart_timeout = None;
+                            state.stats.buffering_percent = 100;
+                            state.last_buffering_update = None;
 
-                                let mut source = imp.create_main_input(
-                                    &state.configured_source,
-                                    state.settings.buffer_duration,
-                                    state.source_caps.clone(),
-                                );
-
-                                source.running = state.source.running;
-
-                                (
-                                    source.bin.clone(),
-                                    Some(mem::replace(&mut state.source, source)),
-                                )
-                            } else {
-                                state.source.pending_restart = false;
-                                state.source.pending_restart_timeout = None;
-                                state.stats.buffering_percent = 100;
-                                state.last_buffering_update = None;
-
-                                if let Some(timeout) = state.source.restart_timeout.take() {
-                                    gst::debug!(CAT, imp = imp, "Unscheduling restart timeout");
-                                    timeout.unschedule();
-                                }
-
-                                (state.source.bin.clone(), None)
+                            if let Some(timeout) = state.source.restart_timeout.take() {
+                                gst::debug!(CAT, imp = imp, "Unscheduling restart timeout");
+                                timeout.unschedule();
                             }
+
+                            state.source.bin.clone()
                         } else if let Some(ref mut source) = state.fallback_source {
                             source.pending_restart = false;
                             source.pending_restart_timeout = None;
@@ -4347,18 +4328,12 @@ impl FallbackSrc {
                                 timeout.unschedule();
                             }
 
-                            (source.bin.clone(), None)
+                            source.bin.clone()
                         } else {
                             return;
                         };
 
                         drop(state_guard);
-
-                        if let Some(old_source) = old_source {
-                            // Drop old source after releasing the lock, it might call the pad-removed callback
-                            // still
-                            drop(old_source);
-                        }
 
                         if source.sync_state_with_parent().is_err() {
                             gst::error!(
