@@ -83,6 +83,7 @@ struct Settings {
     uri: Option<String>,
     source: Option<gst::Element>,
     fallback_uri: Option<String>,
+    fallback_source: Option<gst::Element>,
     timeout: gst::ClockTime,
     restart_timeout: gst::ClockTime,
     retry_timeout: gst::ClockTime,
@@ -110,6 +111,7 @@ impl Default for Settings {
             uri: None,
             source: None,
             fallback_uri: None,
+            fallback_source: None,
             timeout: 5.seconds(),
             restart_timeout: 5.seconds(),
             retry_timeout: 60.seconds(),
@@ -256,6 +258,7 @@ struct State {
     // Configure settings
     settings: Settings,
     configured_source: Source,
+    configured_fallback_source: Option<Source>,
 
     // Statistics
     stats: Stats,
@@ -353,6 +356,11 @@ impl ObjectImpl for FallbackSrc {
                 glib::ParamSpecString::builder("fallback-uri")
                     .nick("Fallback URI")
                     .blurb("Fallback URI to use for video in case the main stream doesn't work")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecObject::builder::<gst::Element>("fallback-source")
+                    .nick("Fallback Source")
+                    .blurb("Source to use instead of the fallback URI")
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecUInt64::builder("timeout")
@@ -538,6 +546,18 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.fallback_uri = new_value;
             }
+            "fallback-source" => {
+                let mut settings = self.settings.lock();
+                let new_value = value.get().expect("type checked upstream");
+                gst::info!(
+                    CAT,
+                    imp = self,
+                    "Changing fallback source from {:?} to {:?}",
+                    settings.fallback_source,
+                    new_value,
+                );
+                settings.fallback_source = new_value;
+            }
             "timeout" => {
                 let mut settings = self.settings.lock();
                 let new_value = value.get().expect("type checked upstream");
@@ -720,6 +740,10 @@ impl ObjectImpl for FallbackSrc {
             "fallback-uri" => {
                 let settings = self.settings.lock();
                 settings.fallback_uri.to_value()
+            }
+            "fallback-source" => {
+                let settings = self.settings.lock();
+                settings.fallback_source.to_value()
             }
             "timeout" => {
                 let settings = self.settings.lock();
@@ -1292,12 +1316,12 @@ impl FallbackSrc {
 
     fn create_fallback_input(
         &self,
-        fallback_uri: Option<&str>,
+        fallback_source: Option<&Source>,
         buffer_duration: i64,
         source_caps: gst::Caps,
     ) -> Option<SourceBin> {
-        let source: gst::Element = match fallback_uri {
-            Some(uri) => gst::ElementFactory::make("uridecodebin3")
+        let source: gst::Element = match fallback_source {
+            Some(Source::Uri(uri)) => gst::ElementFactory::make("uridecodebin3")
                 .name("dbin-fallback")
                 .property("uri", uri)
                 .property("use-buffering", true)
@@ -1305,6 +1329,7 @@ impl FallbackSrc {
                 .property("caps", source_caps)
                 .build()
                 .expect("No uridecodebin3 found"),
+            Some(Source::Element(source)) => CustomSource::new(source).upcast(),
             None => return None,
         };
 
@@ -1623,7 +1648,18 @@ impl FallbackSrc {
             }
         };
 
-        let fallback_uri = &settings.fallback_uri;
+        let configured_fallback_source = settings
+            .fallback_uri
+            .as_ref()
+            .cloned()
+            .map(Source::Uri)
+            .or_else(|| {
+                settings
+                    .fallback_source
+                    .as_ref()
+                    .cloned()
+                    .map(Source::Element)
+            });
 
         let mut source_caps = gst::Caps::new_empty();
         source_caps.merge(settings.audio_caps.clone());
@@ -1638,7 +1674,7 @@ impl FallbackSrc {
 
         // Create fallback input
         let fallback_source = self.create_fallback_input(
-            fallback_uri.as_deref(),
+            configured_fallback_source.as_ref(),
             settings.buffer_duration,
             source_caps.clone(),
         );
@@ -1663,6 +1699,7 @@ impl FallbackSrc {
             fallback_last_buffering_update: None,
             settings,
             configured_source,
+            configured_fallback_source,
             stats: Stats::default(),
             manually_blocked,
             schedule_restart_on_unblock: false,
@@ -1786,20 +1823,11 @@ impl FallbackSrc {
         }
 
         if let Source::Element(ref source) = state.configured_source {
-            // Explicitly remove the source element from the CustomSource so that we can
-            // later create a new CustomSource and add it again there.
-            let parent = if source.has_as_parent(&state.source.bin) {
-                Some(&state.source.bin)
-            } else if source.has_as_parent(&state.source.source) {
-                Some(state.source.source.downcast_ref::<gst::Bin>().unwrap())
-            } else {
-                None
-            };
+            self.release_custom_source(source, &state.source);
+        }
 
-            if let Some(parent) = parent {
-                let _ = source.set_state(gst::State::Null);
-                let _ = parent.remove(source);
-            }
+        if let Some(Source::Element(ref source)) = state.configured_fallback_source {
+            self.release_custom_source(source, state.fallback_source.as_ref().unwrap());
         }
 
         for source in [Some(&mut state.source), state.fallback_source.as_mut()]
@@ -1822,6 +1850,23 @@ impl FallbackSrc {
         }
 
         gst::debug!(CAT, imp = self, "Stopped");
+    }
+
+    fn release_custom_source(&self, source: &gst::Element, source_bin: &SourceBin) {
+        // Explicitly remove the source element from the CustomSource so that we can later
+        // create a new CustomSource and add it again there.
+        let parent = if source.has_as_parent(&source_bin.bin) {
+            Some(source_bin.bin.upcast_ref::<gst::Bin>())
+        } else if source.has_as_parent(&source_bin.source) {
+            Some(source_bin.source.downcast_ref::<gst::Bin>().unwrap())
+        } else {
+            None
+        };
+
+        if let Some(parent) = parent {
+            let _ = source.set_state(gst::State::Null);
+            let _ = parent.remove(source);
+        }
     }
 
     fn change_source_state(&self, transition: gst::StateChange, fallback_source: bool) {
