@@ -98,6 +98,7 @@ struct Settings {
 
     enable_audio: bool,
     enable_video: bool,
+    enable_dummy: bool,
 }
 
 impl Default for Settings {
@@ -124,6 +125,7 @@ impl Default for Settings {
 
             enable_audio: true,
             enable_video: true,
+            enable_dummy: true,
         }
     }
 }
@@ -177,7 +179,7 @@ struct Output {
     fallback_branch: Option<OutputBranch>,
 
     // Dummy source bin if fallback stream fails or is not present at all
-    dummy_source: gst::Bin,
+    dummy_source: Option<gst::Bin>,
 
     // fallbackswitch
     // fallbackswitch in the main bin, linked to the ghostpads above
@@ -450,6 +452,12 @@ impl ObjectImpl for FallbackSrc {
                     .blurb("Raw audio caps for dummy audio stream")
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("enable-dummy")
+                    .nick("Enable dummy source")
+                    .blurb("Enable the dummy source, which is activated when neither the main nor fallback source is available")
+                    .default_value(true)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -481,6 +489,18 @@ impl ObjectImpl for FallbackSrc {
                     new_value,
                 );
                 settings.enable_video = new_value;
+            }
+            "enable-dummy" => {
+                let mut settings = self.settings.lock();
+                let new_value = value.get().expect("type checked upstream");
+                gst::info!(
+                    CAT,
+                    imp = self,
+                    "Changing enable-dummy from {:?} to {:?}",
+                    settings.enable_dummy,
+                    new_value,
+                );
+                settings.enable_dummy = new_value;
             }
             "uri" => {
                 let mut settings = self.settings.lock();
@@ -684,6 +704,10 @@ impl ObjectImpl for FallbackSrc {
             "enable-video" => {
                 let settings = self.settings.lock();
                 settings.enable_video.to_value()
+            }
+            "enable-dummy" => {
+                let settings = self.settings.lock();
+                settings.enable_dummy.to_value()
             }
             "uri" => {
                 let settings = self.settings.lock();
@@ -1013,7 +1037,9 @@ impl ElementImpl for FallbackSrc {
                 }
 
                 for output in state.streams.iter().filter_map(|s| s.output.as_ref()) {
-                    send_eos_elements.push(output.dummy_source.clone());
+                    if let Some(dummy_source) = &output.dummy_source {
+                        send_eos_elements.push(dummy_source.clone());
+                    }
 
                     for branch in [output.main_branch.as_ref(), output.fallback_branch.as_ref()]
                         .iter()
@@ -1407,6 +1433,7 @@ impl FallbackSrc {
         filter_caps: &gst::Caps,
         seqnum: gst::Seqnum,
         group_id: gst::GroupId,
+        enable_dummy: bool,
     ) -> Output {
         let switch = gst::ElementFactory::make("fallbackswitch")
             .property("timeout", timeout.nseconds())
@@ -1418,24 +1445,27 @@ impl FallbackSrc {
         self.obj().add(&switch).unwrap();
         switch.sync_state_with_parent().unwrap();
 
-        let dummy_source = if is_audio {
-            Self::create_dummy_audio_source(filter_caps, min_latency)
-        } else {
-            Self::create_dummy_video_source(filter_caps, min_latency)
-        };
+        let dummy_source = enable_dummy.then(|| {
+            let source = if is_audio {
+                Self::create_dummy_audio_source(filter_caps, min_latency)
+            } else {
+                Self::create_dummy_video_source(filter_caps, min_latency)
+            };
+            self.obj().add(&source).unwrap();
+            source.sync_state_with_parent().unwrap();
 
-        self.obj().add(&dummy_source).unwrap();
-        dummy_source.sync_state_with_parent().unwrap();
+            let dummy_srcpad = source.static_pad("src").unwrap();
+            let dummy_sinkpad = switch.request_pad_simple("sink_%u").unwrap();
+            dummy_sinkpad.set_property("priority", 2u32);
+            dummy_srcpad
+                .link_full(
+                    &dummy_sinkpad,
+                    gst::PadLinkCheck::all() & !gst::PadLinkCheck::CAPS,
+                )
+                .unwrap();
 
-        let dummy_srcpad = dummy_source.static_pad("src").unwrap();
-        let dummy_sinkpad = switch.request_pad_simple("sink_%u").unwrap();
-        dummy_sinkpad.set_property("priority", 2u32);
-        dummy_srcpad
-            .link_full(
-                &dummy_sinkpad,
-                gst::PadLinkCheck::all() & !gst::PadLinkCheck::CAPS,
-            )
-            .unwrap();
+            source
+        });
 
         let stream_clone = stream.clone();
         switch.connect_notify(Some("active-pad"), move |switch, _pspec| {
@@ -1447,8 +1477,15 @@ impl FallbackSrc {
                 Some(element) => element,
             };
 
-            let imp = element.imp();
-            imp.handle_switch_active_pad_change(&stream_clone);
+            let stream_clone = stream_clone.clone();
+
+            /* setup_output_branch() can hit this callback by requesting the first fallbackswitch pad
+             * (happens often with enable-dummy=false), which would cause a deadlock on the state mutex
+             * in handle_switch_active_pad_change(). Moving it call_async() helps for now. */
+            element.call_async(move |element| {
+                let imp = element.imp();
+                imp.handle_switch_active_pad_change(&stream_clone);
+            });
         });
 
         let srcpad = switch.static_pad("src").unwrap();
@@ -1548,8 +1585,10 @@ impl FallbackSrc {
         output.switch.set_state(gst::State::Null).unwrap();
         element.remove(&output.switch).unwrap();
 
-        output.dummy_source.set_state(gst::State::Null).unwrap();
-        element.remove(&output.dummy_source).unwrap();
+        if let Some(dummy_source) = output.dummy_source {
+            dummy_source.set_state(gst::State::Null).unwrap();
+            element.remove(&dummy_source).unwrap();
+        }
 
         let _ = output.srcpad.set_target(None::<&gst::Pad>);
         element.remove_pad(&output.srcpad).unwrap();
@@ -3732,6 +3771,7 @@ impl FallbackSrc {
                     &dummy_caps,
                     state.seqnum,
                     state.group_id,
+                    state.settings.enable_dummy,
                 );
                 state.flow_combiner.add_pad(&output.srcpad);
                 stream.output = Some(output);
