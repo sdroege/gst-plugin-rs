@@ -15573,6 +15573,18 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "do-rtsp-keep-alive": {
+                        "blurb": "Send RTSP keep alive packets, disable for old incompatible server.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "extra-http-request-headers": {
                         "blurb": "Extra HTTP headers to send with requests",
                         "conditionally-available": false,
