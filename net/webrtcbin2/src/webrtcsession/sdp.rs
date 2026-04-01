@@ -66,6 +66,7 @@ pub struct WebRTCSdp {
     pub fingerprints: Vec<Fingerprint>,
     pub setup: Option<DtlsSetup>,
     pub direction: Option<Direction>,
+    pub group_bundle: Vec<String>,
     pub media: Vec<WebRTCSdpMedia>,
 }
 
@@ -85,6 +86,7 @@ impl WebRTCSdp {
         let mut fingerprints = vec![];
         let mut setup = None;
         let mut direction = None;
+        let mut bundle = vec![];
         // TODO: bwtype and bandwidth
         for attr in session.attributes.iter() {
             match attr.attribute.as_str() {
@@ -160,7 +162,29 @@ impl WebRTCSdp {
                         Direction::Inactive,
                     )?)
                 }
-                // TODO: group, tls-id, identity, extmap, ice-options
+                "group" => {
+                    let Some(val) = attr.value.as_ref() else {
+                        continue;
+                    };
+                    if !val.starts_with("BUNDLE ") {
+                        continue;
+                    };
+                    if !bundle.is_empty() {
+                        return Err(ParseWebRTCSdpError::MultipleAttributes(
+                            "group:BUNDLE".to_string(),
+                        ));
+                    }
+                    let ids = val["BUNDLE ".len()..].split(" ");
+                    for id in ids {
+                        if !id.is_ascii() {
+                            return Err(ParseWebRTCSdpError::InvalidAttribute(
+                                "group:BUNDLE".to_string(),
+                            ));
+                        }
+                        bundle.push(id.to_string());
+                    }
+                }
+                // TODO: tls-id, identity, extmap, ice-options
                 key => gst::fixme!(CAT, "unknown session attribute {key}"),
             }
         }
@@ -174,37 +198,51 @@ impl WebRTCSdp {
             fingerprints,
             setup,
             direction,
+            group_bundle: bundle,
             media: Vec::with_capacity(session.medias.len()),
         };
 
         for (idx, media) in session.medias.iter().enumerate() {
             let media = WebRTCSdpMedia::from_sdp_types(&ret, idx as u32, media)?;
-            // FIXME: bundle
-            if media.ice_ufrag.is_none() && ret.ice_ufrag.is_none() {
-                return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
-                    idx as u32,
-                    "ice-ufrag".to_string(),
-                ));
-            }
-            if media.ice_pwd.is_none() && ret.ice_pwd.is_none() {
-                return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
-                    idx as u32,
-                    "ice-pwd".to_string(),
-                ));
-            }
-            if media.setup.is_none() && ret.setup.is_none() {
-                return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
-                    idx as u32,
-                    "setup".to_string(),
-                ));
-            }
-            if media.fingerprints.is_empty() && ret.fingerprints.is_empty() {
-                return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
-                    idx as u32,
-                    "fingerprint".to_string(),
-                ));
+            if ret.bundle_idx().is_none_or(|bundle_idx| idx == bundle_idx) {
+                if media.ice_ufrag.is_none() && ret.ice_ufrag.is_none() {
+                    return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
+                        idx as u32,
+                        "ice-ufrag".to_string(),
+                    ));
+                }
+                if media.ice_pwd.is_none() && ret.ice_pwd.is_none() {
+                    return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
+                        idx as u32,
+                        "ice-pwd".to_string(),
+                    ));
+                }
+                if media.setup.is_none() && ret.setup.is_none() {
+                    return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
+                        idx as u32,
+                        "setup".to_string(),
+                    ));
+                }
+                if media.fingerprints.is_empty() && ret.fingerprints.is_empty() {
+                    return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
+                        idx as u32,
+                        "fingerprint".to_string(),
+                    ));
+                }
             }
             ret.media.push(media);
+        }
+
+        for bundle_tag in ret.group_bundle.iter() {
+            if !ret
+                .media
+                .iter()
+                .any(|media| media.mid.as_ref().is_some_and(|mid| mid == bundle_tag))
+            {
+                return Err(ParseWebRTCSdpError::InvalidAttribute(
+                    "group:BUNDLE".to_string(),
+                ));
+            }
         }
 
         Ok(ret)
@@ -269,6 +307,18 @@ impl WebRTCSdp {
                 value: Some(fingerprint.to_sdp_attribute_value()),
             });
         }
+        if !self.group_bundle.is_empty() {
+            let mut value = String::from("BUNDLE");
+
+            for bundle_tag in self.group_bundle.iter() {
+                value.push(' ');
+                value.push_str(bundle_tag);
+            }
+            session.attributes.push(sdp_types::Attribute {
+                attribute: "group".to_string(),
+                value: Some(value),
+            });
+        }
 
         let mut ret = vec![];
         session.write(&mut ret).unwrap();
@@ -281,9 +331,19 @@ impl WebRTCSdp {
         };
         rtp.direction
     }
+
+    pub fn bundle_idx(&self) -> Option<usize> {
+        if self.group_bundle.is_empty() {
+            None
+        } else {
+            self.media
+                .iter()
+                .position(|media| media.mid.as_ref() == Some(&self.group_bundle[0]))
+        }
+    }
 }
 
-static KNOWN_MEDIA_ATTRIBUTES: [&str; 8] = [
+static KNOWN_MEDIA_ATTRIBUTES: [&str; 9] = [
     "fingerprint",
     "ice-ufrag",
     "ice-pwd",
@@ -292,6 +352,7 @@ static KNOWN_MEDIA_ATTRIBUTES: [&str; 8] = [
     "end-of-candidates",
     "setup",
     "mid",
+    "bundle-only",
 ];
 
 static KNOWN_RTP_MEDIA_ATTRIBUTES: [&str; 11] = [
@@ -449,7 +510,7 @@ impl WebRTCSdpMedia {
                                 Ok(val.to_string())
                             }
                         },
-                    )?)
+                    )?);
                 }
                 "bundle-only" => {
                     bundle_only = Some(parse_unique_attribute_no_value(
@@ -475,6 +536,24 @@ impl WebRTCSdpMedia {
                 }
                 // TODO: ice-options,
                 _ => (),
+            }
+        }
+
+        if bundle_only.is_some_and(|b| b) {
+            let Some(mid) = mid.as_ref() else {
+                return Err(
+                    ParseWebRTCSdpError::InvalidAttribute("bundle-only".to_string())
+                        .with_mline(Some(mline)),
+                );
+            };
+            if !session.group_bundle.contains(mid) {
+                gst::warning!(
+                    CAT,
+                    "bundle group {:?} does not contain mid {mid} with a=bundle-only",
+                    session.group_bundle
+                );
+                return Err(ParseWebRTCSdpError::InvalidAttribute("mid".to_string())
+                    .with_mline(Some(mline)));
             }
         }
 
@@ -513,11 +592,16 @@ impl WebRTCSdpMedia {
         } else {
             String::new()
         };
+        let proto = if self.specifics.rtp().is_some() {
+            "UDP/TLS/RTP/SAVPF".to_string()
+        } else {
+            "UDP/DTLS/SCTP".to_string()
+        };
         let mut ret = sdp_types::Media {
             media: self.media.as_str().to_owned(),
             port: self.port,
             num_ports: None,
-            proto: "UDP/TLS/RTP/SAVPF".to_string(),
+            proto,
             fmt,
             media_title: None,
             connections: vec![sdp_types::Connection {
@@ -1041,6 +1125,31 @@ impl std::ops::BitOr for RtcpFb {
     }
 }
 
+impl std::ops::BitAnd for RtcpFb {
+    type Output = RtcpFb;
+    fn bitand(self, rhs: Self) -> Self::Output {
+        let mut other = self.other.clone();
+        for i in rhs.other {
+            if other.contains(&i) {
+                other.push(i);
+            }
+        }
+        RtcpFb {
+            nack: self.nack & rhs.nack,
+            nack_pli: self.nack_pli & rhs.nack_pli,
+            ccm_fir: self.ccm_fir & rhs.ccm_fir,
+            transport_cc: self.transport_cc & rhs.transport_cc,
+            other,
+        }
+    }
+}
+
+impl std::ops::BitAndAssign for RtcpFb {
+    fn bitand_assign(&mut self, rhs: Self) {
+        *self = self.clone() & rhs;
+    }
+}
+
 impl std::ops::BitOrAssign for RtcpFb {
     fn bitor_assign(&mut self, rhs: Self) {
         *self = self.clone() | rhs;
@@ -1048,6 +1157,17 @@ impl std::ops::BitOrAssign for RtcpFb {
 }
 
 impl RtcpFb {
+    fn all_supported() -> Self {
+        // TODO: support more rtcp-fb options
+        Self {
+            nack: false,
+            nack_pli: false,
+            ccm_fir: false,
+            transport_cc: false,
+            other: vec![],
+        }
+    }
+
     fn from_str(s: &str) -> Result<(Self, Option<u8>), ()> {
         let mut s = s.split(" ");
         let Some(pt_str) = s.next() else {
@@ -1379,6 +1499,46 @@ impl RtpMedia {
             fmtps,
             extmap,
         })
+    }
+
+    pub fn produce_answer_from_offer_and_source(offer: &RtpMedia, answer: &RtpMedia) -> RtpMedia {
+        let mut ret = answer.clone();
+        ret.direction = offer.direction.intersect_with_answer(answer.direction);
+        ret.rtcp_mux &= offer.rtcp_mux;
+        ret.rtcp_mux_only &= offer.rtcp_mux_only;
+        ret.rtcp_rsize &= offer.rtcp_rsize;
+        let mut supported_formats = vec![];
+        for fmt in answer.formats.iter() {
+            if !offer.formats.contains(fmt) {
+                continue;
+            }
+            let offer_rtpmap = offer.rtpmaps.get(fmt);
+            let answer_rtpmap = answer.rtpmaps.get(fmt);
+            if offer_rtpmap != answer_rtpmap {
+                continue;
+            }
+            if offer.fmtps.get(fmt) != answer.fmtps.get(fmt) {
+                // TODO: media-specific equivalence
+                continue;
+            }
+            supported_formats.push(fmt);
+        }
+        ret.formats.retain(|fmt| supported_formats.contains(&fmt));
+        ret.rtpmaps
+            .retain(|fmt, _val| supported_formats.contains(&fmt));
+        ret.fmtps
+            .retain(|fmt, _val| supported_formats.contains(&fmt));
+        ret.rtcp_fbs.retain(|fmt, fb| {
+            *fb &= RtcpFb::all_supported();
+            supported_formats.contains(&fmt)
+        });
+        if let Some(rtcp_fb) = ret.rtcp_fb.as_mut() {
+            *rtcp_fb &= offer.rtcp_fb.clone().unwrap_or_default() & RtcpFb::all_supported();
+        }
+        if !ret.extmap.is_empty() {
+            todo!("extmaps are not supported yet");
+        }
+        ret
     }
 }
 

@@ -371,8 +371,14 @@ impl ElementImpl for WebRTCSend {
         let mut state = self.state.lock().unwrap();
         let max_sinkpad_id = state.max_sinkpad_id;
 
+        gst::trace!(CAT, "request new pad with name: {name:?}");
+
         match templ.name_template() {
             "sink_%u" => parse_request_name_single_index(name, "sink_", max_sinkpad_id).map(|id| {
+                gst::trace!(
+                    CAT,
+                    "request new pad id {id} from name: {name:?}, max sinkpad {max_sinkpad_id}"
+                );
                 state.max_sinkpad_id = (id + 1).max(state.max_sinkpad_id);
                 let transceiver = if let Some(session) = state.session.as_mut() {
                     let session = session.session();
@@ -403,12 +409,19 @@ impl ElementImpl for WebRTCSend {
                         // TODO: check stopped, codec-preferences, kind
                         possible_transceiver = Some(transceiver.clone());
                     }
-                    mline_transceiver.or(possible_transceiver).unwrap()
+                    mline_transceiver
+                        .or(possible_transceiver)
+                        .unwrap_or_else(|| {
+                            let transceiver = glib::Object::new::<Transceiver>();
+                            session_state.add_transceiver(transceiver.clone());
+                            transceiver
+                        })
                 } else {
                     let transceiver = glib::Object::new::<Transceiver>();
                     state.pending_transceivers.push(transceiver.clone());
                     transceiver
                 };
+                gst::trace!(CAT, "found transceiver {transceiver:?} for id {id}");
 
                 let sinkpad = gst::Pad::builder_from_template(templ)
                     .flags(gst::PadFlags::PROXY_CAPS)
@@ -418,6 +431,8 @@ impl ElementImpl for WebRTCSend {
                         match event.view() {
                             gst::EventView::Caps(caps) => {
                                 gst::debug!(CAT, "have caps event {}", caps.caps());
+                                let pad = pad.downcast_ref::<WebRTCSendSinkPad>().unwrap();
+                                pad.imp().state().set_received_caps(caps.caps_owned());
                                 let Some(parent) = pad.parent() else {
                                     return false;
                                 };

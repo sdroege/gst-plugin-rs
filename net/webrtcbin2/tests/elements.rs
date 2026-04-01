@@ -512,3 +512,78 @@ fn audio_non_trickle() {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
 }
+
+const VP8_CAPS_STR: &str = "application/x-rtp, payload=96, media=video, encoding-name=VP8, clock-rate=90000, ssrc=(uint)3484078951";
+
+fn add_video_test_src_harness(h: &mut gst_check::Harness, ssrc: u32) {
+    let mut caps = gst::Caps::from_str(VP8_CAPS_STR).unwrap();
+    if ssrc != 0 {
+        let caps = caps.make_mut();
+        caps.set("ssrc", ssrc);
+    }
+    h.add_src_parse(
+        "videotestsrc is-live=true ! vp8enc deadline=1 ! rtpvp8pay ! capsfilter name=capsfilter ! identity",
+        true,
+    );
+    let capsfilter = h
+        .src_harness_mut()
+        .unwrap()
+        .element()
+        .unwrap()
+        .downcast::<gst::Bin>()
+        .unwrap()
+        .by_name("capsfilter")
+        .unwrap();
+    capsfilter.set_property("caps", caps.clone());
+    h.set_src_caps(caps);
+}
+
+#[test]
+fn audio_video_bundle() {
+    init();
+
+    if gst::Plugin::load_by_name("vpx").is_err() {
+        eprintln!("No vpx plugin available, skipping video-related test");
+        return;
+    }
+    let test = Test::new();
+    let mut audio = gst_check::Harness::with_element(&test.local_send, Some("sink_0"), None);
+    audio.play();
+    test.pipeline.set_state(gst::State::Playing).unwrap();
+    add_audio_test_src_harness(&mut audio, 0xDEADBEEF);
+    let mut video = gst_check::Harness::with_element(&test.local_send, Some("sink_1"), None);
+    video.play();
+    add_video_test_src_harness(&mut video, 0x12345678);
+    let (offer, answer) = negotiate_trickle_ice(&test);
+    let offer = sdp_types::Session::parse(offer.as_bytes()).unwrap();
+    assert_eq!(offer.medias.len(), 2);
+    let answer = sdp_types::Session::parse(answer.as_bytes()).unwrap();
+    assert_eq!(answer.medias.len(), 2);
+
+    let (tx, rx) = std::sync::mpsc::sync_channel(2);
+
+    test.remote_recv.connect_pad_added(move |element, pad| {
+        if pad.direction() != gst::PadDirection::Src {
+            return;
+        }
+        let mut h = gst_check::Harness::with_element(element, None, Some(pad.name().as_str()));
+        h.add_sink_parse("fakesink async=false sync=false");
+        h.play();
+        tx.send(h).unwrap();
+    });
+
+    // need to keep the srcpad harness alive otherwise flushing will be returned after the first
+    // srcpad harness is dropped and cause the test to never end.
+    let mut srcpad_harnesses = vec![];
+    loop {
+        audio.push_from_src().unwrap();
+        video.push_from_src().unwrap();
+        if let Ok(srcpad_harness) = rx.try_recv() {
+            srcpad_harnesses.push(srcpad_harness);
+            if srcpad_harnesses.len() >= 2 {
+                break;
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}

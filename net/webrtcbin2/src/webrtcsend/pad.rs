@@ -21,6 +21,7 @@ pub struct State {
     mline: Option<usize>,
     transceiver: Option<Transceiver>,
     block_id: Option<gst::PadProbeId>,
+    received_caps: Option<gst::Caps>,
 }
 
 impl State {
@@ -43,6 +44,12 @@ impl State {
     }
     pub fn take_block_id(&mut self) -> Option<gst::PadProbeId> {
         self.block_id.take()
+    }
+    pub fn set_received_caps(&mut self, caps: gst::Caps) {
+        self.received_caps = Some(caps);
+    }
+    pub fn received_caps(&self) -> Option<&gst::Caps> {
+        self.received_caps.as_ref()
     }
 }
 

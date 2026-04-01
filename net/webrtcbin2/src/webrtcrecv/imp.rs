@@ -154,7 +154,7 @@ impl ElementImpl for WebRTCRecv {
                     })?;
                 let weak_self = self.downgrade();
                 rtprecv.connect_pad_added(move |_rtprecv, pad| {
-                    gst::trace!(CAT, "have new receive pad with name {}", pad.name());
+                    gst::info!(CAT, "have new rtprecv pad with name {}", pad.name());
                     if pad.name().starts_with("rtp_src_") {
                         let Some(this) = weak_self.upgrade() else {
                             return;

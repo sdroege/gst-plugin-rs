@@ -10,6 +10,7 @@ use gst::glib::WeakRef;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
+use crate::webrtcsend::WebRTCSendSinkPad;
 use crate::webrtcsession::sdp::Direction;
 use crate::webrtcsession::sdp::MediaSpecifics;
 use crate::webrtcsession::sdp::MediaType;
@@ -109,6 +110,14 @@ impl State {
             }
         }
         self.current_direction = Some(new_dir);
+    }
+
+    pub fn send_caps(&self) -> Option<gst::Caps> {
+        self.codec_preferences().cloned().or_else(|| {
+            self.send_pad()
+                .and_downcast_ref::<WebRTCSendSinkPad>()
+                .and_then(|pad| pad.imp().state().received_caps().cloned())
+        })
     }
 }
 
