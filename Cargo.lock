@@ -5027,6 +5027,7 @@ dependencies = [
  "byte-slice-cast",
  "chrono",
  "clap",
+ "env_logger",
  "futures",
  "gio",
  "glib",

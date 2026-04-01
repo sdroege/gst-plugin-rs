@@ -37,7 +37,6 @@ pub struct JitterBuffer {
     base_times: Option<(Instant, u64)>,
     last_output_seqnum: Option<u64>,
     extended_seqnum: ExtendedSeqnum,
-    last_input_ts: Option<u64>,
     stats: Stats,
     flushing: bool,
     can_forward_packets_when_empty: bool,
@@ -65,7 +64,7 @@ pub enum QueueResult {
 struct Item {
     id: usize,
     // If not set, this is an event / query
-    pts: Option<u64>,
+    deadline: Option<Duration>,
     seqnum: u64,
 }
 
@@ -73,7 +72,7 @@ impl Ord for Item {
     fn cmp(&self, other: &Self) -> Ordering {
         self.seqnum
             .cmp(&other.seqnum)
-            .then(match (self.pts, other.pts) {
+            .then(match (self.deadline, other.deadline) {
                 (None, Some(_)) => Ordering::Greater,
                 (Some(_), None) => Ordering::Less,
                 _ => Ordering::Equal,
@@ -101,7 +100,6 @@ impl JitterBuffer {
             items: BTreeSet::new(),
             latency,
             base_times: None,
-            last_input_ts: None,
             last_output_seqnum: None,
             extended_seqnum: ExtendedSeqnum::default(),
             stats: Stats {
@@ -126,7 +124,7 @@ impl JitterBuffer {
         self.packet_counter += 1;
         let item = Item {
             id,
-            pts: None,
+            deadline: None,
             seqnum: (*self.seqnums.last().unwrap_or(&0)),
         };
         self.items.insert(item);
@@ -149,7 +147,7 @@ impl JitterBuffer {
         &mut self,
         origin: &str,
         rtp: &RtpPacket,
-        mut pts: u64,
+        pts: u64,
         now: Instant,
     ) -> QueueResult {
         if self.flushing {
@@ -158,18 +156,6 @@ impl JitterBuffer {
 
         // From this point on we always work with extended sequence numbers
         let seqnum = self.extended_seqnum.next(rtp.sequence_number());
-
-        if let Some(ts) = self.last_input_ts {
-            pts = pts.max(ts);
-        }
-
-        self.last_input_ts = Some(pts);
-
-        self.base_times.get_or_insert_with(|| {
-            debug!("{origin} Selected base times {now:?} {pts}");
-
-            (now, pts)
-        });
 
         // Maintain (and trim) our seqnum list for duplicate detection
         while self.seqnums.len() >= u16::MAX as usize {
@@ -187,6 +173,15 @@ impl JitterBuffer {
         }
 
         self.seqnums.insert(seqnum);
+
+        let (_, base_pts) = self.base_times.get_or_insert_with(|| {
+            debug!("{origin} Selected base times {now:?} {pts}");
+
+            (now, pts)
+        });
+
+        let deadline = (Duration::from_nanos(pts) + self.latency)
+            .saturating_sub(Duration::from_nanos(*base_pts));
 
         if let Some(last_output_seqnum) = self.last_output_seqnum
             && last_output_seqnum >= seqnum
@@ -245,7 +240,7 @@ impl JitterBuffer {
         self.packet_counter += 1;
         let item = Item {
             id,
-            pts: Some(pts),
+            deadline: Some(deadline),
             seqnum,
         };
 
@@ -277,7 +272,7 @@ impl JitterBuffer {
         };
 
         // If an event / query is at the top of the queue, it can be forwarded immediately
-        let Some(pts) = item.pts else {
+        let Some(deadline) = item.deadline else {
             let item = self.items.pop_first().unwrap();
             return PollResult::Forward {
                 id: item.id,
@@ -285,7 +280,7 @@ impl JitterBuffer {
             };
         };
 
-        let Some((base_instant, base_ts)) = self.base_times else {
+        let Some((base_instant, _)) = self.base_times else {
             return PollResult::Empty;
         };
 
@@ -293,14 +288,11 @@ impl JitterBuffer {
 
         trace!("{origin} Duration since base instant {duration_since_base_instant:?}");
 
-        let ts = pts.checked_sub(base_ts).unwrap();
-        let deadline = Duration::from_nanos(ts) + self.latency;
-
         trace!(
-            "{origin} Considering packet ID {} (seqnum {}, extended {}) with ts {ts}, deadline is {deadline:?}",
+            "{origin} Considering packet ID {} (seqnum {}, extended {}), deadline is {deadline:?}",
             item.id,
             item.seqnum & 0xffff,
-            item.seqnum
+            item.seqnum,
         );
 
         if deadline <= duration_since_base_instant {
@@ -361,6 +353,28 @@ impl JitterBuffer {
 mod tests {
     use super::*;
     use crate::rtpbin2::session::tests::generate_rtp_packet;
+
+    const SSRC: u32 = 0x12345678;
+
+    const PAYLOAD_LEN: usize = 4;
+    const LATENCY_MS: u64 = 1_000;
+    const LATENCY: Duration = Duration::from_millis(LATENCY_MS);
+    const CLOCK_RATE: u128 = 90000;
+
+    fn init() {
+        use std::sync::Once;
+        static INIT: Once = Once::new();
+
+        INIT.call_once(|| {
+            let _ = env_logger::try_init();
+        });
+    }
+
+    fn ts_to_rtpts(ts: Duration) -> u32 {
+        (CLOCK_RATE * 1_000)
+            .checked_div(ts.as_millis())
+            .unwrap_or(0) as u32
+    }
 
     #[test]
     fn empty() {
@@ -596,6 +610,194 @@ mod tests {
                 discont: false
             }
         );
+    }
+
+    #[test]
+    fn poll_misordered_packets() {
+        const ORIGIN: &str = "poll_misordered_packets";
+        const PACKET_INTERVAL: Duration = Duration::from_millis(LATENCY_MS / 2);
+
+        init();
+
+        let mut jb = JitterBuffer::new(LATENCY);
+        jb.set_flushing(ORIGIN, false);
+
+        let instant_ts0 = Instant::now();
+
+        info!("{ORIGIN} Enqeueing initial packet");
+        let packet_ts0 = Duration::ZERO;
+        let rtp_data = generate_rtp_packet(SSRC, 0, ts_to_rtpts(packet_ts0), PAYLOAD_LEN);
+        let packet = RtpPacket::parse(&rtp_data).unwrap();
+        let id0 = match jb.queue_packet(ORIGIN, &packet, packet_ts0.as_nanos() as u64, instant_ts0)
+        {
+            QueueResult::Queued(id0) => id0,
+            other => unreachable!("{other:?}"),
+        };
+        info!("{ORIGIN} First packet out is expected after LATENCY");
+        let deadline_packet0 = match jb.poll(ORIGIN, instant_ts0) {
+            PollResult::Timeout(deadline) => deadline,
+            other => unreachable!("{other:?}"),
+        };
+        assert_eq!(deadline_packet0, instant_ts0 + LATENCY);
+
+        info!("{ORIGIN} Skipping two packets (one of them will arrive later)");
+        let instant = instant_ts0 + 2 * PACKET_INTERVAL;
+        info!("{ORIGIN} First packet out is one with seqnum 0");
+        let id = match jb.poll(ORIGIN, instant) {
+            PollResult::Forward {
+                id,
+                discont: true, // first packet to be pulled out
+            } => id,
+            other => unreachable!("{other:?}"),
+        };
+        assert_eq!(id, id0);
+
+        info!("{ORIGIN} Pushing on-time packet 3");
+        let packet_ts3 = packet_ts0 + 3 * PACKET_INTERVAL;
+        let instant_ts3 = instant_ts0 + 3 * PACKET_INTERVAL;
+        let rtp_data = generate_rtp_packet(SSRC, 3, ts_to_rtpts(packet_ts3), PAYLOAD_LEN);
+        let packet = RtpPacket::parse(&rtp_data).unwrap();
+        let id3 = match jb.queue_packet(ORIGIN, &packet, packet_ts3.as_nanos() as u64, instant_ts3)
+        {
+            QueueResult::Queued(id3) => id3,
+            other => unreachable!("{other:?}"),
+        };
+        info!("{ORIGIN} Next packet out will be the one with seqnum 3");
+        let deadline = match jb.poll(ORIGIN, instant_ts3) {
+            PollResult::Timeout(deadline) => deadline,
+            other => unreachable!("{other:?}"),
+        };
+        assert_eq!(deadline, deadline_packet0 + 3 * PACKET_INTERVAL);
+
+        info!("{ORIGIN} Pushing earlier packet");
+        let packet_ts1 = PACKET_INTERVAL;
+        let instant_ts1 = instant_ts3 + PACKET_INTERVAL / 2;
+        let rtp_data = generate_rtp_packet(SSRC, 1, ts_to_rtpts(packet_ts1), PAYLOAD_LEN);
+        let packet = RtpPacket::parse(&rtp_data).unwrap();
+        let id1 = match jb.queue_packet(ORIGIN, &packet, packet_ts1.as_nanos() as u64, instant_ts1)
+        {
+            QueueResult::Queued(id1) => id1,
+            other => unreachable!("{other:?}"),
+        };
+        info!("{ORIGIN} Packet with seqnum 1 can be forwarded");
+        let id = match jb.poll(ORIGIN, instant_ts1) {
+            PollResult::Forward {
+                id,
+                discont: false, // Next packet after packet with seqnum 0
+            } => id,
+            other => unreachable!("{other:?}"),
+        };
+        assert_eq!(id, id1);
+
+        info!("{ORIGIN} Pushing on-time packet 4");
+        let packet_ts4 = packet_ts0 + 4 * PACKET_INTERVAL;
+        let instant_ts4 = instant_ts0 + 4 * PACKET_INTERVAL;
+        let rtp_data = generate_rtp_packet(SSRC, 4, ts_to_rtpts(packet_ts4), PAYLOAD_LEN);
+        let packet = RtpPacket::parse(&rtp_data).unwrap();
+        let id4 = match jb.queue_packet(ORIGIN, &packet, packet_ts4.as_nanos() as u64, instant_ts4)
+        {
+            QueueResult::Queued(id4) => id4,
+            other => unreachable!("{other:?}"),
+        };
+        info!("{ORIGIN} Next packet out is still the one with seqnum 3");
+        let deadline = match jb.poll(ORIGIN, instant_ts4) {
+            PollResult::Timeout(deadline) => deadline,
+            other => unreachable!("{other:?}"),
+        };
+        assert_eq!(deadline, deadline_packet0 + 3 * PACKET_INTERVAL);
+
+        info!("{ORIGIN} Pulling packet with seqnum 3 at its expected deadline");
+        let pulled_id = match jb.poll(ORIGIN, deadline_packet0 + 3 * PACKET_INTERVAL) {
+            PollResult::Forward {
+                id: pulled_id,
+                discont: true, // some packets are missing
+            } => pulled_id,
+            other => unreachable!("{other:?}"),
+        };
+        assert_eq!(pulled_id, id3);
+
+        let instant_after_pulling_ts3 =
+            deadline_packet0 + 3 * PACKET_INTERVAL + PACKET_INTERVAL / 4;
+        info!("{ORIGIN} Next packet out is now the one with seqnum 4");
+        let deadline = match jb.poll(ORIGIN, instant_after_pulling_ts3) {
+            PollResult::Timeout(deadline) => deadline,
+            other => unreachable!("{other:?}"),
+        };
+        assert_eq!(deadline, deadline_packet0 + 4 * PACKET_INTERVAL);
+
+        info!("{ORIGIN} Pulling packet with seqnum 4 at its expected deadline");
+        let pulled_id = match jb.poll(ORIGIN, deadline_packet0 + 4 * PACKET_INTERVAL) {
+            PollResult::Forward {
+                id: pulled_id,
+                discont: false, // not first packet to be pulled out
+            } => pulled_id,
+            other => unreachable!("{other:?}"),
+        };
+        assert_eq!(pulled_id, id4);
+    }
+
+    #[test]
+    fn poll_early_misordered_packets() {
+        const ORIGIN: &str = "poll_early_misordered_packets";
+        const PACKET_INTERVAL: Duration = Duration::from_millis(LATENCY_MS / 2);
+
+        init();
+
+        let mut jb = JitterBuffer::new(LATENCY);
+        jb.set_flushing(ORIGIN, false);
+
+        info!("{ORIGIN} Pushing first received & on-time packet 2");
+        let instant_ts2 = Instant::now();
+        let packet_ts2 = 2 * PACKET_INTERVAL;
+        let rtp_data = generate_rtp_packet(SSRC, 2, ts_to_rtpts(packet_ts2), PAYLOAD_LEN);
+        let packet = RtpPacket::parse(&rtp_data).unwrap();
+        match jb.queue_packet(ORIGIN, &packet, packet_ts2.as_nanos() as u64, instant_ts2) {
+            QueueResult::Queued(_) => (),
+            other => unreachable!("{other:?}"),
+        }
+        info!("{ORIGIN} So far, the first packet out is expected to be the one with seqnum 2");
+        let deadline_packet_ts2_out = match jb.poll(ORIGIN, instant_ts2) {
+            PollResult::Timeout(deadline) => deadline,
+            other => unreachable!("{other:?}"),
+        };
+        assert_eq!(deadline_packet_ts2_out, instant_ts2 + LATENCY);
+
+        info!("{ORIGIN} Earlier packet with seqnum 1 (on-time, but pushed after seqnum 2)");
+        let packet_ts1 = PACKET_INTERVAL;
+        let instant_ts1 = instant_ts2 + PACKET_INTERVAL / 8;
+        let rtp_data = generate_rtp_packet(SSRC, 1, ts_to_rtpts(packet_ts1), PAYLOAD_LEN);
+        let packet = RtpPacket::parse(&rtp_data).unwrap();
+        let id1 = match jb.queue_packet(ORIGIN, &packet, packet_ts1.as_nanos() as u64, instant_ts1)
+        {
+            QueueResult::Queued(id1) => id1,
+            other => unreachable!("{other:?}"),
+        };
+        info!("{ORIGIN} Now, first packet out is expected to be packet with seqnum 1");
+        let deadline_packet_ts1_out = match jb.poll(ORIGIN, instant_ts1) {
+            PollResult::Timeout(deadline) => deadline,
+            other => unreachable!("{other:?}"),
+        };
+        assert_eq!(
+            deadline_packet_ts1_out,
+            instant_ts2 + LATENCY - PACKET_INTERVAL
+        );
+
+        info!("{ORIGIN} Pulling packet with seqnum 1 at its expected deadline");
+        let pulled_id = match jb.poll(ORIGIN, deadline_packet_ts1_out) {
+            PollResult::Forward {
+                id: pulled_id,
+                discont: true, // first packet to be pulled out
+            } => pulled_id,
+            other => unreachable!("{other:?}"),
+        };
+        assert_eq!(pulled_id, id1);
+        let instant_after_pulling_ts1 = deadline_packet_ts1_out + PACKET_INTERVAL / 4;
+        info!("{ORIGIN} Next packet out is the one with seqnum 2");
+        let deadline = match jb.poll(ORIGIN, instant_after_pulling_ts1) {
+            PollResult::Timeout(deadline) => deadline,
+            other => unreachable!("{other:?}"),
+        };
+        assert_eq!(deadline, deadline_packet_ts2_out);
     }
 
     fn assert_stats(
