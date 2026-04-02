@@ -2363,7 +2363,6 @@ impl TranscriberBin {
             state.transcriber_latency
                 + settings.accumulate_time
                 + CEAX08MUX_LATENCY
-                + settings.translate_latency
                 + CCCOMBINER_LATENCY
                 + state
                     .framerate
