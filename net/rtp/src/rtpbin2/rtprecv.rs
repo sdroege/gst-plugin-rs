@@ -44,7 +44,7 @@ use std::ops::{ControlFlow, Deref};
 use std::pin::Pin;
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use std::task::{self, Poll, Waker};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Instant, SystemTime};
 
 use futures::channel::mpsc as async_mpsc;
 use futures::{StreamExt, stream};
@@ -98,7 +98,7 @@ impl Default for Settings {
 struct JitterBufferStream {
     semaphore: tokio_util::sync::PollSemaphore,
     recv_src_pad: RtpRecvSrcPad,
-    sleep: Pin<Box<tokio::time::Sleep>>,
+    timer: Option<Pin<Box<tokio::time::Sleep>>>,
 }
 
 impl JitterBufferStream {
@@ -106,7 +106,7 @@ impl JitterBufferStream {
         Self {
             semaphore: tokio_util::sync::PollSemaphore::new(recv_src_pad.semaphore.clone()),
             recv_src_pad: recv_src_pad.clone(),
-            sleep: Box::pin(tokio::time::sleep(Duration::from_secs(1))),
+            timer: None,
         }
     }
 }
@@ -125,142 +125,207 @@ impl futures::stream::Stream for JitterBufferStream {
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
-        let Poll::Ready(src_pad_permit) = self.semaphore.poll_acquire(cx) else {
-            return Poll::Pending;
-        };
-        let src_pad_permit = src_pad_permit.unwrap();
+        let Self {
+            ref mut semaphore,
+            ref recv_src_pad,
+            ref mut timer,
+            ..
+        } = *self.as_mut();
 
-        let now = Instant::now();
-        let mut lowest_wait = None;
-
-        let mut jitterbuffer_store = self.recv_src_pad.jitter_buffer_store.lock().unwrap();
-
-        let mut pending_items = JitterBufferPendingItems::new();
         loop {
-            let ret = jitterbuffer_store
-                .jitterbuffer
-                .poll(&self.recv_src_pad.pad.name(), now);
-            gst::trace!(
-                CAT,
-                obj = self.recv_src_pad.pad,
-                "JitterBuffer poll ret: {ret:?}",
-            );
-            match ret {
-                jitterbuffer::PollResult::Flushing => {
-                    return Poll::Ready(None);
-                }
-                jitterbuffer::PollResult::Drop(id) => {
-                    jitterbuffer_store
-                        .store
-                        .remove(&id)
-                        .unwrap_or_else(|| panic!("Buffer with id {id} not in store!"));
-                }
-                jitterbuffer::PollResult::Forward { id, discont } => {
-                    let mut item = jitterbuffer_store
-                        .store
-                        .remove(&id)
-                        .unwrap_or_else(|| panic!("Buffer with id {id} not in store!"));
-                    if let JitterBufferItem::Packet(ref mut packet) = item
-                        && discont
-                    {
-                        gst::debug!(
-                            CAT,
-                            obj = self.recv_src_pad.pad,
-                            "Forwarding discont buffer",
-                        );
-                        let packet_mut = packet.make_mut();
-                        packet_mut.set_flags(gst::BufferFlags::DISCONT);
-                    }
+            let Poll::Ready(src_pad_permit) = semaphore.poll_acquire(cx) else {
+                return Poll::Pending;
+            };
+            let src_pad_permit = src_pad_permit.unwrap();
 
+            let mut jitterbuffer_store = recv_src_pad.jitter_buffer_store.lock().unwrap();
+
+            if let Some(ref mut jb_waker) = jitterbuffer_store.waker {
+                if let Some(cur_timer) = timer.as_mut() {
+                    if cur_timer.is_elapsed()
+                        || std::future::Future::poll(cur_timer.as_mut(), cx).is_ready()
+                    {
+                        gst::trace!(
+                            CAT,
+                            obj = recv_src_pad.pad,
+                            "Elapsed deadline {:?}, now {:?}",
+                            cur_timer.deadline(),
+                            Instant::now(),
+                        );
+                        *timer = None;
+                    } else {
+                        gst::trace!(
+                            CAT,
+                            obj = recv_src_pad.pad,
+                            "Pending next deadline {:?}, now {:?}",
+                            cur_timer.deadline(),
+                            Instant::now()
+                        );
+
+                        return Poll::Pending;
+                    }
+                } else {
                     gst::trace!(
                         CAT,
-                        obj = self.recv_src_pad.pad,
-                        "Handling item {id}: {item:?}, pending {}",
-                        pending_items.len()
+                        obj = recv_src_pad.pad,
+                        "Not awaken by upstream, no current deadline, returning Pending now {:?}",
+                        Instant::now(),
                     );
 
-                    match item {
-                        // we don't currently push packet lists into the jitterbuffer
-                        JitterBufferItem::PacketList(_list) => unreachable!(),
-                        // forward events and queries as-is
-                        JitterBufferItem::Event(_) | JitterBufferItem::Query(_, _) => {
-                            pending_items.push(item);
-                            break;
+                    // Make sure upstream can wake us up
+                    jb_waker.clone_from(cx.waker());
+
+                    return Poll::Pending;
+                }
+            } else {
+                // We were woken up due to a new item
+                // being pushed to the JB, in which case we need to poll the JB to check
+                // if an earlier deadline should be considered.
+                gst::trace!(CAT, obj = recv_src_pad.pad, "Woken up by upstream");
+            }
+
+            let now = Instant::now();
+            let mut pending_items = JitterBufferPendingItems::new();
+            loop {
+                let ret = jitterbuffer_store
+                    .jitterbuffer
+                    .poll(&recv_src_pad.pad.name(), now);
+                gst::trace!(
+                    CAT,
+                    obj = recv_src_pad.pad,
+                    "JitterBuffer poll ret: {ret:?}",
+                );
+                match ret {
+                    jitterbuffer::PollResult::Flushing => {
+                        return Poll::Ready(None);
+                    }
+                    jitterbuffer::PollResult::Drop(id) => {
+                        jitterbuffer_store
+                            .store
+                            .remove(&id)
+                            .unwrap_or_else(|| panic!("Buffer with id {id} not in store!"));
+                    }
+                    jitterbuffer::PollResult::Forward { id, discont } => {
+                        let mut item = jitterbuffer_store
+                            .store
+                            .remove(&id)
+                            .unwrap_or_else(|| panic!("Buffer with id {id} not in store!"));
+                        if let JitterBufferItem::Packet(ref mut packet) = item
+                            && discont
+                        {
+                            gst::debug!(CAT, obj = recv_src_pad.pad, "Forwarding discont buffer",);
+                            let packet_mut = packet.make_mut();
+                            packet_mut.set_flags(gst::BufferFlags::DISCONT);
                         }
-                        JitterBufferItem::Packet(ref packet) => {
-                            // Group consecutive buffers
-                            match pending_items.pop() {
-                                Some(
-                                    JitterBufferItem::Event(_) | JitterBufferItem::Query(_, _),
-                                ) => unreachable!(),
-                                Some(JitterBufferItem::Packet(pending_buffer)) => {
-                                    let mut list = gst::BufferList::new();
-                                    let list_mut = list.make_mut();
-                                    list_mut.add(pending_buffer);
-                                    list_mut.add(packet.clone());
-                                    pending_items.push(JitterBufferItem::PacketList(list));
-                                }
-                                Some(JitterBufferItem::PacketList(mut pending_list)) => {
-                                    let list_mut = pending_list.make_mut();
-                                    list_mut.add(packet.clone());
-                                    pending_items.push(JitterBufferItem::PacketList(pending_list));
-                                }
-                                None => {
-                                    pending_items.push(item);
-                                }
+
+                        gst::trace!(
+                            CAT,
+                            obj = recv_src_pad.pad,
+                            "Handling item {id}: {item:?}, pending {}",
+                            pending_items.len()
+                        );
+
+                        match item {
+                            // we don't currently push packet lists into the jitterbuffer
+                            JitterBufferItem::PacketList(_list) => unreachable!(),
+                            // forward events and queries as-is
+                            JitterBufferItem::Event(_) | JitterBufferItem::Query(_, _) => {
+                                pending_items.push(item);
+                                break;
                             }
-                            continue;
+                            JitterBufferItem::Packet(ref packet) => {
+                                // Group consecutive buffers
+                                match pending_items.pop() {
+                                    Some(
+                                        JitterBufferItem::Event(_) | JitterBufferItem::Query(_, _),
+                                    ) => unreachable!(),
+                                    Some(JitterBufferItem::Packet(pending_buffer)) => {
+                                        let mut list = gst::BufferList::new();
+                                        let list_mut = list.make_mut();
+                                        list_mut.add(pending_buffer);
+                                        list_mut.add(packet.clone());
+                                        pending_items.push(JitterBufferItem::PacketList(list));
+                                    }
+                                    Some(JitterBufferItem::PacketList(mut pending_list)) => {
+                                        let list_mut = pending_list.make_mut();
+                                        list_mut.add(packet.clone());
+                                        pending_items
+                                            .push(JitterBufferItem::PacketList(pending_list));
+                                    }
+                                    None => {
+                                        pending_items.push(item);
+                                    }
+                                }
+                                continue;
+                            }
                         }
                     }
-                }
-                jitterbuffer::PollResult::Timeout(timeout) => {
-                    if lowest_wait.is_none_or(|lowest_wait| timeout < lowest_wait) {
-                        lowest_wait = Some(timeout);
+                    jitterbuffer::PollResult::Timeout(timeout) => {
+                        // Init the timer for next deadline
+                        // If no items are pending, it will be polled immediately,
+                        // otherwise, it will be polled on next poll_next
+                        // after the pending items are pushed downstream.
+                        *timer = Some(Box::pin(tokio::time::sleep_until(timeout.into())));
+                        break;
                     }
-                    break;
+                    jitterbuffer::PollResult::Empty => {
+                        // Will be woken up when necessary
+                        break;
+                    }
                 }
-                // Will be woken up when necessary
-                jitterbuffer::PollResult::Empty => break,
             }
-        }
 
-        jitterbuffer_store.waker = Some(cx.waker().clone());
-        let store_is_empty = jitterbuffer_store.store.is_empty();
-        drop(jitterbuffer_store);
+            let store_is_empty = jitterbuffer_store.store.is_empty();
 
-        if !pending_items.is_empty() {
-            gst::trace!(
-                CAT,
-                obj = self.recv_src_pad.pad,
-                "Returning {} items, store is empty: {store_is_empty}",
-                pending_items.len(),
-            );
+            if !pending_items.is_empty() {
+                gst::trace!(
+                    CAT,
+                    obj = recv_src_pad.pad,
+                    "Returning {} items, store is empty: {store_is_empty}",
+                    pending_items.len(),
+                );
 
-            // No need to hold the src pad semaphore if the JB store is not empty
-            return Poll::Ready(Some((
-                self.recv_src_pad.pad.clone(),
-                if store_is_empty {
-                    Some(src_pad_permit)
+                // No need to hold the src pad semaphore if the JB store is not empty
+                return Poll::Ready(Some((
+                    recv_src_pad.pad.clone(),
+                    if store_is_empty {
+                        Some(src_pad_permit)
+                    } else {
+                        None
+                    },
+                    pending_items,
+                )));
+            }
+
+            if let Some(cur_timer) = timer {
+                if std::future::Future::poll(cur_timer.as_mut(), cx).is_pending() {
+                    gst::trace!(
+                        CAT,
+                        obj = recv_src_pad.pad,
+                        "Returning Pending deadline {:?}, now {:?}",
+                        cur_timer.deadline(),
+                        Instant::now(),
+                    );
                 } else {
-                    None
-                },
-                pending_items,
-            )));
-        }
-
-        drop(src_pad_permit);
-        gst::trace!(CAT, obj = self.recv_src_pad.pad, "Will return Pending");
-
-        if let Some(timeout) = lowest_wait {
-            let this = self.get_mut();
-            this.sleep.as_mut().reset(timeout.into());
-            if !std::future::Future::poll(this.sleep.as_mut(), cx).is_pending() {
-                gst::trace!(CAT, obj = this.recv_src_pad.pad, "Waking up due to timeout");
-                cx.waker().wake_by_ref();
+                    gst::trace!(
+                        CAT,
+                        obj = recv_src_pad.pad,
+                        "Reached deadline {:?}",
+                        cur_timer.deadline(),
+                    );
+                    *timer = None;
+                    // check JitterBuffer again now
+                    continue;
+                }
+            } else {
+                gst::trace!(CAT, obj = recv_src_pad.pad, "Returning Pending");
             }
-        }
 
-        Poll::Pending
+            // Make sure upstream can wake us up
+            jitterbuffer_store.waker = Some(cx.waker().clone());
+
+            return Poll::Pending;
+        }
     }
 }
 
@@ -2704,11 +2769,12 @@ mod tests {
     use crate::rtpbin2::{self, jitterbuffer::QueueResult};
     use RecvSessionSrcTaskCommand::*;
     use rtp_types::RtpPacket;
-    use std::{sync::mpsc, thread::sleep};
+    use std::{sync::mpsc, thread::sleep, time::Duration};
 
-    const LATENCY: Duration = Duration::from_millis(20);
-    const PACKET_DURATION: Duration = Duration::from_millis(10);
+    const LATENCY: Duration = Duration::from_millis(40);
+    const PACKET_DURATION: Duration = Duration::from_millis(20);
 
+    #[derive(Debug)]
     enum BufferOrList {
         Buffer(gst::Buffer),
         BufferList(gst::BufferList),
@@ -2721,6 +2787,7 @@ mod tests {
         INIT.call_once(|| {
             gst::init().unwrap();
             rtpbin2::get_or_init_runtime().unwrap();
+            let _ = env_logger::try_init();
         });
     }
 
@@ -2738,12 +2805,16 @@ mod tests {
             .chain_function({
                 let buf_tx = buf_tx.clone();
                 move |_, _, buf| {
-                    buf_tx.send(BufferOrList::Buffer(buf)).unwrap();
+                    if buf_tx.send(BufferOrList::Buffer(buf)).is_err() {
+                        return Err(gst::FlowError::Flushing);
+                    }
                     Ok(gst::FlowSuccess::Ok)
                 }
             })
             .chain_list_function(move |_, _, list| {
-                buf_tx.send(BufferOrList::BufferList(list)).unwrap();
+                if buf_tx.send(BufferOrList::BufferList(list)).is_err() {
+                    return Err(gst::FlowError::Flushing);
+                }
                 Ok(gst::FlowSuccess::Ok)
             })
             .build();
@@ -2820,7 +2891,7 @@ mod tests {
     }
 
     #[track_caller]
-    fn queue_packet(rspad: &RtpRecvSrcPad, seq_no: u16, now: Instant) -> u64 {
+    fn queue_packet(rspad: &RtpRecvSrcPad, seq_no: u16, now: Instant) -> Result<u64, QueueResult> {
         let mut jb_store = rspad.jitter_buffer_store.lock().unwrap();
 
         let pts = PACKET_DURATION.as_nanos() as u64 * seq_no as u64;
@@ -2828,12 +2899,12 @@ mod tests {
         let rtp_data =
             crate::rtpbin2::session::tests::generate_rtp_packet(rspad.ssrc, seq_no, rtp_ts, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        let QueueResult::Queued(id) =
-            jb_store
-                .jitterbuffer
-                .queue_packet(&rspad.pad.name(), &packet, pts, now)
-        else {
-            unreachable!()
+        let id = match jb_store
+            .jitterbuffer
+            .queue_packet(&rspad.pad.name(), &packet, pts, now)
+        {
+            QueueResult::Queued(id) => id,
+            other => return Err(other),
         };
 
         let mut buf = gst::Buffer::from_mut_slice(rtp_data);
@@ -2845,7 +2916,7 @@ mod tests {
             waker.wake()
         }
 
-        pts
+        Ok(pts)
     }
 
     #[test]
@@ -2866,9 +2937,9 @@ mod tests {
         push_initial_events(SESSION_ID, &rspad);
 
         let mut now = Instant::now();
-        let pts0 = queue_packet(&rspad, 0, now);
+        let pts0 = queue_packet(&rspad, 0, now).unwrap();
         now += PACKET_DURATION;
-        let pts1 = queue_packet(&rspad, 1, now);
+        let pts1 = queue_packet(&rspad, 1, now).unwrap();
 
         match buf_rx.recv().unwrap() {
             BufferOrList::Buffer(buf) => {
@@ -2928,12 +2999,12 @@ mod tests {
         push_initial_events(SESSION_ID, &rspad2);
 
         let mut now = Instant::now();
-        let pts10 = queue_packet(&rspad1, 0, now);
-        let pts20 = queue_packet(&rspad2, 0, now);
+        let pts10 = queue_packet(&rspad1, 0, now).unwrap();
+        let pts20 = queue_packet(&rspad2, 0, now).unwrap();
 
         now += PACKET_DURATION;
-        let pts11 = queue_packet(&rspad1, 1, now);
-        let pts21 = queue_packet(&rspad2, 1, now);
+        let pts11 = queue_packet(&rspad1, 1, now).unwrap();
+        let pts21 = queue_packet(&rspad2, 1, now).unwrap();
 
         match buf_rx1.recv().unwrap() {
             BufferOrList::Buffer(buf) => {
@@ -2967,12 +3038,12 @@ mod tests {
         // rspad1 jb is empty => skip one packet for packets to be queued again
         // otherwise the jitter buffer will consider packet 2 can be forwarded
         now += 2 * PACKET_DURATION;
-        let pts13 = queue_packet(&rspad1, 3, now);
-        let pts23 = queue_packet(&rspad2, 3, now);
+        let pts13 = queue_packet(&rspad1, 3, now).unwrap();
+        let pts23 = queue_packet(&rspad2, 3, now).unwrap();
 
         now += PACKET_DURATION;
-        let _pts14 = queue_packet(&rspad1, 4, now);
-        let pts24 = queue_packet(&rspad2, 4, now);
+        let _pts14 = queue_packet(&rspad1, 4, now).unwrap();
+        let pts24 = queue_packet(&rspad2, 4, now).unwrap();
 
         // wait for packets 3 to reach their deadlines
         sleep(LATENCY);
@@ -3023,6 +3094,127 @@ mod tests {
             unreachable!();
         };
 
+        cmd_tx.unbounded_send(Stop).unwrap();
+
+        futures::executor::block_on(task_hdl).unwrap();
+    }
+
+    #[test]
+    // Because it involves the JitterBufferStream, this test heavily relies on timers
+    // which don't play well on CI
+    #[ignore]
+    fn jitterbuffer_stream_deadline() {
+        const SESSION_ID: usize = 0;
+
+        init();
+
+        let (task, cmd_tx) =
+            RecvSessionSrcTask::new(Arc::new(Mutex::new(gst_base::UniqueFlowCombiner::new())));
+
+        let task_hdl = runtime().spawn(task.start());
+
+        let (rspad, _peer, buf_rx) = make_link_recv_src_pad(SESSION_ID, 96, 1234);
+        assert_eq!(Arc::strong_count(&rspad.0), 1);
+        gst::info!(super::CAT, "Add Pad command => init task + poll_next");
+        cmd_tx.unbounded_send(AddRecvSrcPad(rspad.clone())).unwrap();
+
+        std::thread::sleep(Duration::from_millis(20));
+
+        gst::info!(super::CAT, "Pushing initial events");
+        push_initial_events(SESSION_ID, &rspad);
+        match buf_rx.try_recv() {
+            Err(mpsc::TryRecvError::Empty) => (),
+            other => unreachable!("{other:?}"),
+        };
+
+        let instant_packet0 = Instant::now();
+
+        gst::info!(super::CAT, "Queuing seqnum 0 and waiting for deadline");
+        let pts0 = queue_packet(&rspad, 0, instant_packet0).unwrap();
+
+        let buf = match buf_rx.recv().unwrap() {
+            BufferOrList::Buffer(buf) => buf,
+            other => unreachable!("{other:?}"),
+        };
+        assert!((LATENCY..(LATENCY + PACKET_DURATION)).contains(&instant_packet0.elapsed()));
+        assert_eq!(buf.pts().unwrap().nseconds(), pts0);
+        match buf_rx.try_recv() {
+            Err(mpsc::TryRecvError::Empty) => (),
+            other => unreachable!("{other:?}"),
+        };
+        // note: didn't push seqnum 1 & 2 while waiting for seqnum 0 to be pushed out
+        gst::info!(super::CAT, "=> got one packet with expected delay");
+
+        std::thread::sleep(2 * PACKET_DURATION + PACKET_DURATION / 4);
+        // note: didn't push seqnum 3 while sleeping for 3 * PACKET_DURATION
+        gst::info!(
+            super::CAT,
+            "Queuing early seqnum 4 => jb stream should wake up and set its deadline"
+        );
+        let instant_packet4 = Instant::now();
+        let pts4 = queue_packet(&rspad, 4, instant_packet4).unwrap();
+        std::thread::sleep(Duration::from_millis(1));
+        gst::info!(
+            super::CAT,
+            "Queuing earlier seqnum 3 => jb stream should wake up and update its deadline"
+        );
+        match buf_rx.try_recv() {
+            Err(mpsc::TryRecvError::Empty) => (),
+            other => unreachable!("{other:?}"),
+        };
+        let instant_packet3 = Instant::now();
+        let pts3 = queue_packet(&rspad, 3, instant_packet3).unwrap();
+
+        std::thread::sleep(PACKET_DURATION / 8);
+        gst::info!(
+            super::CAT,
+            "Pushing earlier packets still on time to get accepted and pushed out immediately"
+        );
+        let pts1 = queue_packet(&rspad, 1, Instant::now()).unwrap();
+        let pts2 = queue_packet(&rspad, 2, Instant::now()).unwrap();
+
+        let buf_list = match buf_rx.recv().unwrap() {
+            BufferOrList::BufferList(buf_list) => buf_list,
+            other => unreachable!("{other:?}"),
+        };
+        assert_eq!(buf_list.len(), 2);
+        assert_eq!(buf_list.get(0).unwrap().pts().unwrap().nseconds(), pts1);
+        assert_eq!(buf_list.get(1).unwrap().pts().unwrap().nseconds(), pts2);
+
+        std::thread::sleep(PACKET_DURATION / 8);
+        let buf = match buf_rx.recv().unwrap() {
+            BufferOrList::Buffer(buf) => buf,
+            other => unreachable!("{other:?}"),
+        };
+        assert_eq!(buf.pts().unwrap().nseconds(), pts3);
+        assert!(
+            ((3 * PACKET_DURATION + LATENCY)..(4 * PACKET_DURATION + LATENCY))
+                .contains(&instant_packet0.elapsed()),
+            "{:?}",
+            instant_packet0.elapsed()
+        );
+
+        let buf = match buf_rx.recv().unwrap() {
+            BufferOrList::Buffer(buf) => buf,
+            other => unreachable!("{other:?}"),
+        };
+        assert_eq!(buf.pts().unwrap().nseconds(), pts4);
+        assert!(
+            ((4 * PACKET_DURATION + LATENCY)..(5 * PACKET_DURATION + LATENCY))
+                .contains(&instant_packet0.elapsed()),
+            "{:?}",
+            instant_packet0.elapsed()
+        );
+        gst::info!(super::CAT, "=> got packets in expected order");
+
+        match buf_rx.try_recv() {
+            Err(mpsc::TryRecvError::Empty) => (),
+            other => unreachable!("{other:?}"),
+        };
+
+        cmd_tx
+            .unbounded_send(RemoveRecvSrcPad(rspad.clone()))
+            .unwrap();
         cmd_tx.unbounded_send(Stop).unwrap();
 
         futures::executor::block_on(task_hdl).unwrap();
