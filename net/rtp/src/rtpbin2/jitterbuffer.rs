@@ -174,15 +174,6 @@ impl JitterBuffer {
 
         self.seqnums.insert(seqnum);
 
-        let (_, base_pts) = self.base_times.get_or_insert_with(|| {
-            debug!("{origin} Selected base times {now:?} {pts}");
-
-            (now, pts)
-        });
-
-        let deadline = (Duration::from_nanos(pts) + self.latency)
-            .saturating_sub(Duration::from_nanos(*base_pts));
-
         if let Some(last_output_seqnum) = self.last_output_seqnum
             && last_output_seqnum >= seqnum
         {
@@ -235,6 +226,15 @@ impl JitterBuffer {
 
         // TODO: if the segnum base is known (i.e. first seqnum in RTSP)
         //       we could also Forward the initial Packet.
+
+        let (_, base_pts) = self.base_times.get_or_insert_with(|| {
+            debug!("{origin} Selected base times {now:?} {pts}");
+
+            (now, pts)
+        });
+
+        let deadline = (Duration::from_nanos(pts) + self.latency)
+            .saturating_sub(Duration::from_nanos(*base_pts));
 
         let id = self.packet_counter;
         self.packet_counter += 1;
