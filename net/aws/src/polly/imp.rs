@@ -32,7 +32,7 @@ static AWS_BEHAVIOR_VERSION: LazyLock<aws_config::BehaviorVersion> =
     LazyLock::new(aws_config::BehaviorVersion::v2023_11_09);
 
 const DEFAULT_REGION: &str = "us-east-1";
-const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(2);
+const DEFAULT_LATENCY_MS: u32 = 2_000;
 const DEFAULT_ENGINE: AwsPollyEngine = AwsPollyEngine::Neural;
 const DEFAULT_LANGUAGE_CODE: AwsPollyLanguageCode = AwsPollyLanguageCode::None;
 const DEFAULT_VOICE_ID: AwsPollyVoiceId = AwsPollyVoiceId::Aria;
@@ -42,7 +42,7 @@ const DEFAULT_MAX_OVERFLOW: gst::ClockTime = gst::ClockTime::from_seconds(0);
 
 #[derive(Debug, Clone)]
 pub(super) struct Settings {
-    latency: gst::ClockTime,
+    latency_ms: u32,
     access_key: Option<String>,
     secret_access_key: Option<String>,
     session_token: Option<String>,
@@ -58,7 +58,7 @@ pub(super) struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            latency: DEFAULT_LATENCY,
+            latency_ms: DEFAULT_LATENCY_MS,
             access_key: None,
             secret_access_key: None,
             session_token: None,
@@ -154,18 +154,42 @@ impl Polly {
                 ret
             }
             Segment(e) => {
-                let segment = match e.segment().clone().downcast::<gst::ClockTime>() {
-                    Err(segment) => {
-                        gst::element_imp_error!(
-                            self,
-                            gst::StreamError::Format,
-                            ["Only Time segments supported, got {:?}", segment.format(),]
-                        );
-                        return false;
-                    }
-                    Ok(segment) => segment,
+                let event = {
+                    let desynchronized = self.settings.lock().unwrap().latency_ms == u32::MAX;
+                    let upstream_latency = self.upstream_latency();
+
+                    let mut state = self.state.lock().unwrap();
+
+                    let segment = if desynchronized
+                        && upstream_latency.map(|ul| ul.0).unwrap_or(false)
+                    {
+                        let mut segment = gst::FormattedSegment::new();
+
+                        if let Some(position) = self.obj().current_running_time() {
+                            segment.set_position(position);
+                        }
+
+                        segment
+                    } else {
+                        match e.segment().clone().downcast::<gst::ClockTime>() {
+                            Err(segment) => {
+                                gst::element_imp_error!(
+                                    self,
+                                    gst::StreamError::Format,
+                                    ["Only Time segments supported, got {:?}", segment.format(),]
+                                );
+                                return false;
+                            }
+                            Ok(segment) => segment,
+                        }
+                    };
+
+                    state.out_segment = segment.clone();
+
+                    gst::debug!(CAT, imp = self, "stored segment {:?}", state.out_segment);
+                    gst::event::Segment::new(&segment)
                 };
-                self.state.lock().unwrap().out_segment = segment;
+
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             Caps(c) => {
@@ -192,12 +216,22 @@ impl Polly {
                 self.srcpad.push_event(event)
             }
             Gap(g) => {
+                let desynchronized = self.settings.lock().unwrap().latency_ms == u32::MAX;
+                let upstream_latency = self.upstream_latency();
                 let (pts, duration) = g.get();
 
                 let mut state = self.state.lock().unwrap();
 
                 let new_gap_event = if let Some(position) = state.out_segment.position() {
-                    if let Some(duration) = duration {
+                    if desynchronized && upstream_latency.map(|ul| ul.0).unwrap_or(false) {
+                        self.obj().current_running_time().and_then(|now| {
+                            if position < now {
+                                Some(gst::event::Gap::new(position, now - position))
+                            } else {
+                                None
+                            }
+                        })
+                    } else if let Some(duration) = duration {
                         let end_pts = pts + duration;
 
                         if end_pts > position {
@@ -274,11 +308,17 @@ impl Polly {
             (client, in_format, state.out_segment.clone())
         };
 
-        let our_latency = self.settings.lock().unwrap().latency;
+        let our_latency_ms = self.settings.lock().unwrap().latency_ms;
+        let desynchronized = our_latency_ms == u32::MAX;
+        let our_latency = gst::ClockTime::from_mseconds(our_latency_ms as u64);
 
         let upstream_latency = self.upstream_latency();
 
-        gst::debug!(CAT, imp = self, "synthesizing speech from text {content}");
+        gst::debug!(
+            CAT,
+            imp = self,
+            "synthesizing speech from text {content} with pts {pts}"
+        );
 
         let job = {
             let settings = self.settings.lock().unwrap();
@@ -345,6 +385,22 @@ impl Polly {
             );
 
             bytes.truncate(max_expected_bytes as usize);
+        }
+
+        if desynchronized {
+            if upstream_latency.map(|ul| ul.0).unwrap_or(false)
+                && let Some(current_rtime) = self.obj().current_running_time()
+            {
+                pts = current_rtime;
+
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "adjusted pts for text {content} to {pts}, now is {current_rtime}"
+                );
+            } else {
+                gst::debug!(CAT, imp = self, "no current running time to adjust to");
+            }
         }
 
         #[cfg(feature = "signalsmith_stretch")]
@@ -429,7 +485,7 @@ impl Polly {
         let mut state = self.state.lock().unwrap();
 
         if let Some(position) = state.out_segment.position()
-            && matches!(overflow, AwsOverflow::Shift)
+            && (matches!(overflow, AwsOverflow::Shift) || desynchronized)
             && pts < position
         {
             gst::debug!(
@@ -448,15 +504,12 @@ impl Polly {
             return Ok(None);
         };
 
-        if let Some(upstream_latency) = upstream_latency {
+        if let Some(upstream_latency) = upstream_latency
+            && !desynchronized
+        {
             let (upstream_live, upstream_min, _) = upstream_latency;
 
-            if upstream_live {
-                let current_rtime = self
-                    .obj()
-                    .current_running_time()
-                    .expect("upstream is live and should have provided a clock");
-
+            if upstream_live && let Some(current_rtime) = self.obj().current_running_time() {
                 let deadline = buffer_rtime + upstream_min + our_latency;
 
                 if deadline < current_rtime {
@@ -780,7 +833,13 @@ impl Polly {
 
                 if ret {
                     let (live, min, max) = peer_query.result();
-                    let our_latency = self.settings.lock().unwrap().latency;
+                    let latency_ms = self.settings.lock().unwrap().latency_ms;
+
+                    let (live, our_latency) = if latency_ms == u32::MAX {
+                        (true, gst::ClockTime::ZERO)
+                    } else {
+                        (live, gst::ClockTime::from_mseconds(latency_ms as u64))
+                    };
 
                     if live {
                         q.set(true, min + our_latency, max.map(|max| max + our_latency));
@@ -869,7 +928,7 @@ impl ObjectImpl for Polly {
                 glib::ParamSpecUInt::builder("latency")
                     .nick("Latency")
                     .blurb("Amount of milliseconds to allow AWS Polly")
-                    .default_value(DEFAULT_LATENCY.mseconds() as u32)
+                    .default_value(DEFAULT_LATENCY_MS)
                     .mutable_ready()
                     .deprecated()
                     .build(),
@@ -950,9 +1009,7 @@ impl ObjectImpl for Polly {
         match pspec.name() {
             "latency" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.latency = gst::ClockTime::from_mseconds(
-                    value.get::<u32>().expect("type checked upstream").into(),
-                );
+                settings.latency_ms = value.get::<u32>().expect("type checked upstream");
             }
             "access-key" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -1010,7 +1067,7 @@ impl ObjectImpl for Polly {
         match pspec.name() {
             "latency" => {
                 let settings = self.settings.lock().unwrap();
-                (settings.latency.mseconds() as u32).to_value()
+                settings.latency_ms.to_value()
             }
             "access-key" => {
                 let settings = self.settings.lock().unwrap();
@@ -1130,7 +1187,23 @@ impl ElementImpl for Polly {
             _ => (),
         }
 
-        self.parent_change_state(transition)
+        let mut success = self.parent_change_state(transition)?;
+
+        let desynchronized = self.settings.lock().unwrap().latency_ms == u32::MAX;
+
+        if desynchronized {
+            match transition {
+                gst::StateChange::ReadyToPaused => {
+                    success = gst::StateChangeSuccess::NoPreroll;
+                }
+                gst::StateChange::PlayingToPaused => {
+                    success = gst::StateChangeSuccess::NoPreroll;
+                }
+                _ => (),
+            }
+        }
+
+        Ok(success)
     }
 
     fn provide_clock(&self) -> Option<gst::Clock> {
