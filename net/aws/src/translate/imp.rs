@@ -29,7 +29,7 @@ use std::sync::{Mutex, MutexGuard};
 static AWS_BEHAVIOR_VERSION: LazyLock<aws_config::BehaviorVersion> =
     LazyLock::new(aws_config::BehaviorVersion::v2023_11_09);
 
-const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(2);
+const DEFAULT_LATENCY_MS: u32 = 2_000;
 const DEFAULT_LATENESS: gst::ClockTime = gst::ClockTime::from_seconds(0);
 const DEFAULT_REGION: &str = "us-east-1";
 const DEFAULT_INPUT_LANG_CODE: &str = "en-US";
@@ -43,7 +43,7 @@ const FRENCH_JOINABLE_PUNCTUATION: &str = ".,";
 
 #[derive(Debug, Clone)]
 struct Settings {
-    latency: gst::ClockTime,
+    latency_ms: u32,
     accumulator_lateness: gst::ClockTime,
     input_language_code: String,
     output_language_code: String,
@@ -57,7 +57,7 @@ struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            latency: DEFAULT_LATENCY,
+            latency_ms: DEFAULT_LATENCY_MS,
             accumulator_lateness: DEFAULT_LATENESS,
             input_language_code: String::from(DEFAULT_INPUT_LANG_CODE),
             output_language_code: String::from(DEFAULT_OUTPUT_LANG_CODE),
@@ -197,25 +197,41 @@ impl Translate {
                 self.srcpad.push_event(event)
             }
             Segment(e) => {
-                {
+                let event = {
+                    let desynchronized = self.settings.lock().unwrap().latency_ms == u32::MAX;
+                    let upstream_latency = self.upstream_latency();
+
                     let mut state = self.state.lock().unwrap();
 
-                    let segment = match e.segment().clone().downcast::<gst::ClockTime>() {
-                        Err(segment) => {
-                            gst::element_imp_error!(
-                                self,
-                                gst::StreamError::Format,
-                                ["Only Time segments supported, got {:?}", segment.format(),]
-                            );
-                            return false;
+                    let segment = if desynchronized
+                        && upstream_latency.map(|ul| ul.0).unwrap_or(false)
+                    {
+                        let mut segment = gst::FormattedSegment::new();
+
+                        if let Some(position) = self.obj().current_running_time() {
+                            segment.set_position(position);
                         }
-                        Ok(segment) => segment,
+
+                        segment
+                    } else {
+                        match e.segment().clone().downcast::<gst::ClockTime>() {
+                            Err(segment) => {
+                                gst::element_imp_error!(
+                                    self,
+                                    gst::StreamError::Format,
+                                    ["Only Time segments supported, got {:?}", segment.format(),]
+                                );
+                                return false;
+                            }
+                            Ok(segment) => segment,
+                        }
                     };
 
-                    state.segment = Some(segment);
+                    state.segment = Some(segment.clone());
 
                     gst::debug!(CAT, imp = self, "stored segment {:?}", state.segment);
-                }
+                    gst::event::Segment::new(&segment)
+                };
 
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
@@ -231,22 +247,67 @@ impl Translate {
 
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
+            Gap(_) => {
+                let desynchronized = self.settings.lock().unwrap().latency_ms == u32::MAX;
+                let upstream_latency = self.upstream_latency();
+
+                if let Some(new_gap_event) =
+                    if desynchronized && upstream_latency.map(|ul| ul.0).unwrap_or(false) {
+                        let state = self.state.lock().unwrap();
+                        let position = state.segment.as_ref().unwrap().position().unwrap();
+                        self.obj().current_running_time().and_then(|now| {
+                            if position < now {
+                                Some(gst::event::Gap::new(position, now - position))
+                            } else {
+                                None
+                            }
+                        })
+                    } else {
+                        Some(event)
+                    }
+                {
+                    let Gap(gap) = new_gap_event.view() else {
+                        unreachable!()
+                    };
+                    let (new_pts, new_duration) = gap.get();
+
+                    gst::log!(
+                        CAT,
+                        imp = self,
+                        "pushing gap with pts {new_pts} and duration {new_duration:?}"
+                    );
+
+                    self.state
+                        .lock()
+                        .unwrap()
+                        .segment
+                        .as_mut()
+                        .unwrap()
+                        .set_position(new_pts + new_duration.unwrap_or(gst::ClockTime::ZERO));
+
+                    gst::Pad::event_default(pad, Some(&*self.obj()), new_gap_event)
+                } else {
+                    true
+                }
+            }
             _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
     }
 
     async fn send(&self, to_translate: InputItems) -> Result<Vec<TranslateOutput>, Error> {
-        let (input_lang, output_lang, latency, tokenization_method, lateness, brevity_on) = {
+        let (input_lang, output_lang, latency_ms, tokenization_method, lateness, brevity_on) = {
             let settings = self.settings.lock().unwrap();
             (
                 settings.input_language_code.clone(),
                 settings.output_language_code.clone(),
-                settings.latency,
+                settings.latency_ms,
                 settings.tokenization_method,
                 settings.accumulator_lateness,
                 settings.brevity_on,
             )
         };
+
+        let desynchronized = latency_ms == u32::MAX;
 
         let (client, segment, speaker) = {
             let state = self.state.lock().unwrap();
@@ -377,19 +438,35 @@ impl Translate {
 
         let mut translated_items_builder = gst::Structure::builder("awstranslate/items");
 
+        let mut start_pts: Option<gst::ClockTime> = None;
         let mut end_pts: Option<gst::ClockTime> = None;
+        let now = self.obj().current_running_time();
 
         for mut item in translated_items.drain(..) {
             translated_items_builder = translated_items_builder.field(&item.content, item.pts);
 
             item.pts += lateness;
 
-            if let Some((upstream_live, upstream_min, _)) = upstream_latency
+            if desynchronized && upstream_latency.map(|ul| ul.0).unwrap_or(false) {
+                let Some(now) = now else {
+                    return Ok(vec![]);
+                };
+
+                if let Some(start_pts) = start_pts {
+                    item.pts = now.max(segment.position().unwrap_or(gst::ClockTime::ZERO))
+                        + item.pts
+                        - start_pts;
+                } else {
+                    start_pts = Some(item.pts);
+                    item.pts = now.max(segment.position().unwrap_or(gst::ClockTime::ZERO));
+                }
+            } else if let Some((upstream_live, upstream_min, _)) = upstream_latency
                 && upstream_live
-                && let Some(now) = self.obj().current_running_time()
+                && let Some(now) = now
             {
                 let start_rtime = segment.to_running_time(item.pts).unwrap();
-                let deadline = start_rtime + upstream_min + latency;
+                let deadline =
+                    start_rtime + upstream_min + gst::ClockTime::from_mseconds(latency_ms as u64);
 
                 if deadline < now {
                     let adjusted_pts = item.pts + now - deadline;
@@ -415,7 +492,7 @@ impl Translate {
                 }
             }
 
-            end_pts = Some(item.pts);
+            end_pts = Some(item.pts + item.duration);
 
             output.push(TranslateOutput::Item(buf));
         }
@@ -719,7 +796,13 @@ impl Translate {
 
                 if let Some(upstream_latency) = self.upstream_latency() {
                     let (live, min, max) = upstream_latency;
-                    let our_latency = self.settings.lock().unwrap().latency;
+                    let latency_ms = self.settings.lock().unwrap().latency_ms;
+
+                    let (live, our_latency) = if latency_ms == u32::MAX {
+                        (true, gst::ClockTime::ZERO)
+                    } else {
+                        (live, gst::ClockTime::from_mseconds(latency_ms as u64))
+                    };
 
                     if live {
                         q.set(true, min + our_latency, max.map(|max| max + our_latency));
@@ -797,7 +880,7 @@ impl ObjectImpl for Translate {
                 glib::ParamSpecUInt::builder("latency")
                     .nick("Latency")
                     .blurb("Amount of milliseconds to allow AWS translate")
-                    .default_value(DEFAULT_LATENCY.mseconds() as u32)
+                    .default_value(DEFAULT_LATENCY_MS)
                     .mutable_ready()
                     .deprecated()
                     .build(),
@@ -883,9 +966,7 @@ impl ObjectImpl for Translate {
         match pspec.name() {
             "latency" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.latency = gst::ClockTime::from_mseconds(
-                    value.get::<u32>().expect("type checked upstream").into(),
-                );
+                settings.latency_ms = value.get::<u32>().expect("type checked upstream");
             }
             "accumulator-lateness" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -927,7 +1008,7 @@ impl ObjectImpl for Translate {
         match pspec.name() {
             "latency" => {
                 let settings = self.settings.lock().unwrap();
-                (settings.latency.mseconds() as u32).to_value()
+                settings.latency_ms.to_value()
             }
             "accumulator-lateness" => {
                 let settings = self.settings.lock().unwrap();
@@ -1025,7 +1106,23 @@ impl ElementImpl for Translate {
             _ => (),
         }
 
-        self.parent_change_state(transition)
+        let mut success = self.parent_change_state(transition)?;
+
+        let desynchronized = self.settings.lock().unwrap().latency_ms == u32::MAX;
+
+        if desynchronized {
+            match transition {
+                gst::StateChange::ReadyToPaused => {
+                    success = gst::StateChangeSuccess::NoPreroll;
+                }
+                gst::StateChange::PlayingToPaused => {
+                    success = gst::StateChangeSuccess::NoPreroll;
+                }
+                _ => (),
+            }
+        }
+
+        Ok(success)
     }
 
     fn provide_clock(&self) -> Option<gst::Clock> {
