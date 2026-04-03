@@ -172,7 +172,7 @@ impl futures::stream::Stream for JitterBufferStream {
                         Instant::now(),
                     );
 
-                    // Make sure upstream can wake us up
+                    // Update waker if necessary
                     jb_waker.clone_from(cx.waker());
 
                     return Poll::Pending;
@@ -182,6 +182,8 @@ impl futures::stream::Stream for JitterBufferStream {
                 // being pushed to the JB, in which case we need to poll the JB to check
                 // if an earlier deadline should be considered.
                 gst::trace!(CAT, obj = recv_src_pad.pad, "Woken up by upstream");
+
+                jitterbuffer_store.waker = Some(cx.waker().clone());
             }
 
             let now = Instant::now();
@@ -321,8 +323,12 @@ impl futures::stream::Stream for JitterBufferStream {
                 gst::trace!(CAT, obj = recv_src_pad.pad, "Returning Pending");
             }
 
-            // Make sure upstream can wake us up
-            jitterbuffer_store.waker = Some(cx.waker().clone());
+            // Update waker if necessary
+            jitterbuffer_store
+                .waker
+                .as_mut()
+                .expect("checked / inserted above")
+                .clone_from(cx.waker());
 
             return Poll::Pending;
         }
