@@ -472,6 +472,9 @@ fn test_receive_flush() {
         unreachable!();
     };
     assert_eq!(fs.seqnum(), seqnum);
+
+    // No buffers should get pulled
+    assert!(inner.try_pull_event().is_none());
 }
 
 #[test]
