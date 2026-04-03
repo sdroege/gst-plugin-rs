@@ -42,7 +42,7 @@ use std::fmt;
 use std::net::SocketAddr;
 use std::ops::{ControlFlow, Deref};
 use std::pin::Pin;
-use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
+use std::sync::{Arc, LazyLock, Mutex, MutexGuard, mpsc as sync_mpsc};
 use std::task::{self, Poll, Waker};
 use std::time::{Instant, SystemTime};
 
@@ -381,6 +381,7 @@ struct RtpRecvSrcPadInner {
     pad: gst::Pad,
     semaphore: Arc<Semaphore>,
     jitter_buffer_store: Arc<Mutex<JitterBufferStore>>,
+    removed_sender: Arc<Mutex<Option<sync_mpsc::Sender<()>>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -394,6 +395,7 @@ impl RtpRecvSrcPad {
             pad,
             semaphore: Arc::new(Semaphore::new(1)),
             jitter_buffer_store: Arc::new(Mutex::new(jb_store)),
+            removed_sender: Default::default(),
         }))
     }
 }
@@ -577,11 +579,30 @@ impl RecvSession {
             .unwrap()
             .update_flow(Err(gst::FlowError::Flushing));
 
+        let (removed_tx, removed_rx) = sync_mpsc::channel();
+        {
+            let mut removed_sender = recv_pad.removed_sender.lock().unwrap();
+            if removed_sender.is_some() {
+                gst::debug!(
+                    CAT,
+                    obj = pad,
+                    "Deactivating rtp recv src pad already in progress?"
+                );
+                return;
+            }
+
+            *removed_sender = Some(removed_tx);
+        }
+
         self.rtp_task_cmd_tx
             .unbounded_send(RecvSessionSrcTaskCommand::RemoveRecvSrcPad(
                 recv_pad.clone(),
             ))
             .expect("cmd chan valid until RecvSession is dropped");
+
+        // Wait for the pad to be effectively removed
+        // this is to prevent race conditions, e.g. at rapid FlushStart then FlushStop
+        let _ = removed_rx.recv();
     }
 
     fn get_or_create_rtp_src(
@@ -773,6 +794,9 @@ impl RecvSessionSrcTask {
                 }
 
                 gst::debug!(CAT, obj = recv_src_pad.pad, "deactivated");
+                if let Some(removed_tx) = recv_src_pad.removed_sender.lock().unwrap().take() {
+                    let _ = removed_tx.send(());
+                }
             }
             Stop => {
                 return ControlFlow::Break(());
