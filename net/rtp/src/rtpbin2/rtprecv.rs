@@ -1008,7 +1008,7 @@ impl RtpRecv {
     }
 
     pub fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
-        gst::log!(CAT, obj = pad, "Handling query {query:?}");
+        gst::log!(CAT, obj = pad, "Handling {query:?}");
 
         use gst::QueryViewMut::*;
         match query.view_mut() {
@@ -1917,7 +1917,7 @@ impl RtpRecv {
     }
 
     pub fn rtp_sink_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef, id: usize) -> bool {
-        gst::log!(CAT, obj = pad, "Handling query {query:?}");
+        gst::log!(CAT, obj = pad, "Handling {query:?}");
 
         if query.is_serialized() {
             let state = self.state.lock().unwrap();
@@ -2082,6 +2082,8 @@ impl RtpRecv {
     }
 
     fn rtp_sink_event(&self, pad: &gst::Pad, mut event: gst::Event, id: usize) -> bool {
+        gst::log!(CAT, obj = pad, "Handling {event:?}");
+
         match event.view() {
             gst::EventView::StreamStart(stream_start) => {
                 let mut state = self.state.lock().unwrap();
@@ -2226,6 +2228,8 @@ impl RtpRecv {
         pt: u8,
         ssrc: u32,
     ) -> bool {
+        gst::log!(CAT, obj = pad, "Handling {event:?}");
+
         match event.view() {
             gst::EventView::CustomUpstream(custom) => {
                 if let Ok(fku) = gst_video::UpstreamForceKeyUnitEvent::parse(custom) {
