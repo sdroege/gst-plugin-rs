@@ -791,7 +791,20 @@ impl RecvSessionSrcTask {
         loop {
             gst::trace!(CAT, "RecvSessionSrcTask iter");
 
-            let all_pad_items = futures::select! {
+            // In case both the jb stream & command are ready,
+            // always poll the jb stream first, so as to make sure
+            // items are dropped when flushing.
+            let all_pad_items = futures::select_biased! {
+                all_pad_items = combined_jb_stream.next() => {
+                    let Some(all_pad_items) = all_pad_items else {
+                        continue;
+                    };
+                    if all_pad_items.is_empty() {
+                        gst::debug!(CAT, "rtp stream task: all pad items is empty");
+                        continue;
+                    }
+                    all_pad_items
+                }
                 cmd = self.cmd_rx.next() => {
                     drop(combined_jb_stream);
                     if Self::handle_cmd(
@@ -802,16 +815,6 @@ impl RecvSessionSrcTask {
 
                     combined_jb_stream = Self::combine_jb_streams(&mut jb_streams);
                     continue;
-                }
-                all_pad_items = combined_jb_stream.next() => {
-                    let Some(all_pad_items) = all_pad_items else {
-                        continue;
-                    };
-                    if all_pad_items.is_empty() {
-                        gst::debug!(CAT, "rtp stream task: all pad items is empty");
-                        continue;
-                    }
-                    all_pad_items
                 }
             };
 
