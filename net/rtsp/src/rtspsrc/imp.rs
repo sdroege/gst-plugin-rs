@@ -763,7 +763,7 @@ impl URIHandlerImpl for RtspSrc {
     const URI_TYPE: gst::URIType = gst::URIType::Src;
 
     fn protocols() -> &'static [&'static str] {
-        &["rtsp", "rtspu", "rtspt"]
+        &["rtsp", "rtspu", "rtspt", "rtsph"]
     }
 
     fn uri(&self) -> Option<String> {
