@@ -14,6 +14,7 @@
 use crate::rtspsrc::http_tunnel::TunnelStream;
 use crate::utils::create_tls_connector;
 use rand::distr::{Alphanumeric, Distribution};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, btree_set::BTreeSet};
 use std::convert::TryFrom;
 use std::fmt;
@@ -295,11 +296,86 @@ enum Commands {
     KeepAlive,
 }
 
+#[derive(Debug, Clone)]
+struct RtspGstStream {
+    stream: gst::Stream,
+    media_idx: usize,
+}
+
+#[derive(Debug, Default)]
+struct State {
+    streams_aware: bool,
+    selection_seqnum: Option<gst::Seqnum>,
+    streams: Vec<RtspGstStream>,
+    stream_collection: Option<gst::StreamCollection>,
+    selected_streams: Option<Vec<RtspGstStream>>,
+    stream_selection_done: bool,
+}
+
+impl State {
+    fn default_streams(&self) -> Vec<RtspGstStream> {
+        if !self.streams_aware {
+            // Not STREAMS_AWARE, expose all streams.
+            self.streams.clone()
+        } else {
+            // STREAMS_AWARE, expose one audio and one video stream.
+            [gst::StreamType::VIDEO, gst::StreamType::AUDIO]
+                .iter()
+                .flat_map(|&t| self.streams.iter().find(|s| s.stream.stream_type() == t))
+                .cloned()
+                .collect::<Vec<_>>()
+        }
+    }
+
+    fn all_gst_streams(&self) -> Vec<gst::Stream> {
+        self.streams
+            .iter()
+            .map(|s| s.stream.clone())
+            .collect::<Vec<gst::Stream>>()
+    }
+
+    fn set_selected_streams(&mut self, selected_stream_ids: Option<Vec<glib::GString>>) {
+        match selected_stream_ids {
+            Some(ids) => {
+                let selected_streams = self
+                    .streams
+                    .iter()
+                    .filter(|s| {
+                        let id = s.stream.stream_id().unwrap();
+                        ids.contains(&id)
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                self.selected_streams = Some(selected_streams);
+            }
+            None => {
+                self.selected_streams = Some(self.default_streams());
+            }
+        }
+    }
+
+    fn retrieve_selected_streams(&mut self) -> Vec<gst::Stream> {
+        self.selected_streams
+            .iter()
+            .flat_map(|streams| streams.iter().map(|s| s.stream.clone()))
+            .collect()
+    }
+
+    // Returns `true` if active streams is equal to the number of source pads
+    fn should_post_stream_selection(&self, num_src_pads: usize) -> bool {
+        self.selected_streams
+            .as_ref()
+            .map(|streams| streams.len() == num_src_pads)
+            .unwrap_or(false)
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct RtspSrc {
     settings: Mutex<Settings>,
     task_handle: Mutex<Option<JoinHandle<()>>>,
     command_queue: Mutex<Option<mpsc::Sender<Commands>>>,
+    state: Mutex<State>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -438,6 +514,57 @@ impl RtspSrc {
         };
 
         Ok(())
+    }
+
+    fn is_parent_streams_aware(&self) -> bool {
+        if let Some(parent) = self
+            .obj()
+            .parent()
+            .and_then(|parent| parent.downcast::<gst::Bin>().ok())
+        {
+            return parent.bin_flags().contains(gst::BinFlags::STREAMS_AWARE);
+        }
+
+        false
+    }
+
+    fn handle_event(&self, pad: &gst::GhostPad, event: gst::Event) -> bool {
+        use gst::EventView;
+
+        match event.view() {
+            EventView::SelectStreams(select_streams) => {
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "Handling stream selection event on {pad:?}"
+                );
+                self.handle_select_streams_event(select_streams)
+            }
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
+        }
+    }
+
+    fn post_streams_selected(&self, num_src_pads: usize) {
+        let mut state = self.state.lock().unwrap();
+
+        if state.should_post_stream_selection(num_src_pads) {
+            let Some(collection) = state.stream_collection.take() else {
+                return;
+            };
+            let selected = state.retrieve_selected_streams();
+
+            drop(state);
+
+            if !selected.is_empty() {
+                gst::debug!(CAT, imp = self, "Posting StreamsSelected {selected:?}");
+
+                let msg = gst::message::StreamsSelected::builder(&collection)
+                    .streams(&selected)
+                    .src(&*self.obj())
+                    .build();
+                let _ = self.obj().post_message(msg);
+            }
+        }
     }
 }
 
@@ -660,6 +787,7 @@ impl ObjectImpl for RtspSrc {
         let obj = self.obj();
         obj.set_suppressed_flags(gst::ElementFlags::SINK | gst::ElementFlags::SOURCE);
         obj.set_element_flags(gst::ElementFlags::SOURCE);
+        obj.set_bin_flags(gst::BinFlags::STREAMS_AWARE);
     }
 }
 
@@ -705,6 +833,10 @@ impl ElementImpl for RtspSrc {
                     self.post_error_message(err_msg);
                     gst::StateChangeError
                 })?;
+            }
+            gst::StateChange::ReadyToPaused => {
+                let mut state = self.state.lock().unwrap();
+                state.streams_aware = self.is_parent_streams_aware();
             }
             gst::StateChange::PausedToPlaying => {
                 let cmd_queue = self.cmd_queue();
@@ -754,6 +886,26 @@ impl ElementImpl for RtspSrc {
         }
 
         Ok(ret)
+    }
+
+    fn query(&self, query: &mut gst::QueryRef) -> bool {
+        use gst::QueryViewMut;
+
+        match query.view_mut() {
+            QueryViewMut::Selectable(selectable) => {
+                gst::debug!(CAT, imp = self, "Handling selectable query");
+                selectable.set_selectable(true);
+                true
+            }
+            _ => self.parent_query(query),
+        }
+    }
+
+    fn send_event(&self, event: gst::Event) -> bool {
+        match event.view() {
+            gst::EventView::SelectStreams(e) => self.handle_select_streams_event(e),
+            _ => self.parent_send_event(event),
+        }
     }
 }
 
@@ -1069,6 +1221,13 @@ impl RtspSrc {
         let templ = obj.pad_template("stream_%u").unwrap();
         let ghostpad = gst::GhostPad::builder_from_template(&templ)
             .name(format!("stream_{rtpsession_n}"))
+            .event_function(move |pad, parent, event| {
+                RtspSrc::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |imp| imp.handle_event(pad, event),
+                )
+            })
             .build();
         gst::info!(CAT, "Adding ghost srcpad {}", ghostpad.name());
         obj.add_pad(&ghostpad)
@@ -1158,7 +1317,7 @@ impl RtspSrc {
 
     async fn rtsp_task(
         &self,
-        state: &mut RtspTaskState,
+        task_state: &mut RtspTaskState,
         mut cmd_rx: mpsc::Receiver<Commands>,
     ) -> Result<()> {
         let cmd_tx = self.cmd_queue();
@@ -1166,17 +1325,31 @@ impl RtspSrc {
         let settings = { self.settings.lock().unwrap().clone() };
 
         // OPTIONS
-        state.options().await?;
+        task_state.options().await?;
 
         // DESCRIBE
-        state.describe().await?;
+        task_state.describe().await?;
 
+        task_state.set_aggregate_control();
+
+        let streams_aware = {
+            let streams = task_state.create_streams();
+
+            let mut state = self.state.lock().unwrap();
+            state.streams = streams;
+            state.streams_aware
+        };
+        self.post_initial_collection();
+
+        let self_weak = self.obj().downgrade();
         let mut session: Option<Session> = None;
         let mut session_timeout: Option<Duration> = None;
+
         // SETUP streams (TCP interleaved)
-        state.setup_params = {
-            state
+        task_state.setup_params = {
+            task_state
                 .setup(
+                    self_weak,
                     &mut session,
                     &mut session_timeout,
                     settings.port_start,
@@ -1189,10 +1362,11 @@ impl RtspSrc {
         if settings.do_rtsp_keep_alive
             && let Some((_, timeout)) = session.as_ref().zip(session_timeout)
         {
-            state.start_keep_alive_task(cmd_tx.clone(), timeout)
+            task_state.start_keep_alive_task(cmd_tx.clone(), timeout)
         }
 
-        let manager = RtspManager::new(std::env::var("USE_RTP2").is_ok_and(|s| s == "1"));
+        let using_rtp2 = std::env::var("USE_RTP2").is_ok_and(|s| s == "1");
+        let manager = RtspManager::new(using_rtp2);
 
         let obj = self.obj();
         manager
@@ -1200,7 +1374,7 @@ impl RtspSrc {
             .expect("Adding the manager cannot fail");
 
         let mut tcp_interleave_appsrcs = HashMap::new();
-        for (rtpsession_n, p) in state.setup_params.iter_mut().enumerate() {
+        for (rtpsession_n, p) in task_state.setup_params.iter_mut().enumerate() {
             let (tx, rx) = mpsc::channel(1);
             let on_rtcp = move |appsink: &_| on_rtcp_udp(appsink, tx.clone());
             match &mut p.transport {
@@ -1261,7 +1435,7 @@ impl RtspSrc {
                     let rtp_appsrc = self.make_rtp_appsrc(rtpsession_n, &p.caps, &manager)?;
                     p.rtp_appsrc = Some(rtp_appsrc.clone());
                     // Spawn RTP udp receive task
-                    state.handles.push(RUNTIME.spawn(async move {
+                    task_state.handles.push(RUNTIME.spawn(async move {
                         udp_rtp_task(
                             &rtp_socket,
                             rtp_appsrc,
@@ -1277,7 +1451,7 @@ impl RtspSrc {
                         let rtcp_dest = rtcp_port.and_then(|p| Some(SocketAddr::new(*dest, p)));
                         let rtcp_appsrc = self.make_rtcp_appsrc(rtpsession_n, &manager)?;
                         self.make_rtcp_appsink(rtpsession_n, &manager, on_rtcp)?;
-                        state.handles.push(RUNTIME.spawn(async move {
+                        task_state.handles.push(RUNTIME.spawn(async move {
                             udp_rtcp_task(&rtcp_socket, rtcp_appsrc, rtcp_dest, true, rx).await
                         }));
                     }
@@ -1313,7 +1487,7 @@ impl RtspSrc {
                     // Spawn RTP udp receive task
                     let rtp_appsrc = self.make_rtp_appsrc(rtpsession_n, &p.caps, &manager)?;
                     p.rtp_appsrc = Some(rtp_appsrc.clone());
-                    state.handles.push(RUNTIME.spawn(async move {
+                    task_state.handles.push(RUNTIME.spawn(async move {
                         udp_rtp_task(
                             &rtp_socket,
                             rtp_appsrc,
@@ -1328,7 +1502,7 @@ impl RtspSrc {
                     if let Some(rtcp_socket) = rtcp_socket {
                         let rtcp_appsrc = self.make_rtcp_appsrc(rtpsession_n, &manager)?;
                         self.make_rtcp_appsink(rtpsession_n, &manager, on_rtcp)?;
-                        state.handles.push(RUNTIME.spawn(async move {
+                        task_state.handles.push(RUNTIME.spawn(async move {
                             udp_rtcp_task(&rtcp_socket, rtcp_appsrc, rtcp_sender_addr, false, rx)
                                 .await
                         }));
@@ -1356,58 +1530,78 @@ impl RtspSrc {
             }
         }
 
-        obj.no_more_pads();
+        if !streams_aware {
+            obj.no_more_pads();
+        }
 
         // Expose RTP srcpads
-        manager.recv.connect_pad_added(|manager, pad| {
-            if pad.direction() != gst::PadDirection::Src {
-                return;
-            }
-            let Some(obj) = manager
-                .parent()
-                .and_then(|o| o.downcast::<gst::Element>().ok())
-            else {
-                return;
-            };
-            let name = pad.name();
-            match *name.split('_').collect::<Vec<_>>() {
-                // rtpbin and rtp2
-                ["recv", "rtp", "src", stream_id, ssrc, pt]
-                | ["rtp", "src", stream_id, ssrc, pt] => {
-                    if stream_id.parse::<u32>().is_err() {
-                        gst::info!(CAT, "Ignoring srcpad with invalid stream id: {name}");
-                        return;
-                    };
-                    gst::info!(CAT, "Setting rtpbin pad {} as ghostpad target", name);
-                    let srcpad = obj
-                        .static_pad(&format!("stream_{stream_id}"))
-                        .expect("ghostpad should've been available already");
-                    let ghostpad = srcpad
-                        .downcast::<gst::GhostPad>()
-                        .expect("rtspsrc src pads are ghost pads");
-                    if let Err(err) = ghostpad.set_target(Some(pad)) {
-                        gst::element_error!(
-                            obj,
-                            gst::ResourceError::Failed,
-                            (
-                                "Failed to set ghostpad {} target {}: {err:?}",
-                                ghostpad.name(),
-                                name
-                            ),
-                            ["pt: {pt}, ssrc: {ssrc}"]
-                        );
+        manager.recv.connect_pad_added(glib::clone!(
+            #[weak(rename_to = self_)]
+            self,
+            move |manager, pad| {
+                if pad.direction() != gst::PadDirection::Src {
+                    return;
+                }
+                let Some(obj) = manager
+                    .parent()
+                    .and_then(|o| o.downcast::<gst::Element>().ok())
+                else {
+                    return;
+                };
+                let name = pad.name();
+                match *name.split('_').collect::<Vec<_>>() {
+                    // rtpbin and rtp2
+                    ["recv", "rtp", "src", stream_id, ssrc, pt]
+                    | ["rtp", "src", stream_id, ssrc, pt] => {
+                        if stream_id.parse::<u32>().is_err() {
+                            gst::info!(CAT, "Ignoring srcpad with invalid stream id: {name}");
+                            return;
+                        };
+                        gst::info!(CAT, "Setting rtpbin pad {} as ghostpad target", name);
+                        let srcpad = obj
+                            .static_pad(&format!("stream_{stream_id}"))
+                            .expect("ghostpad should've been available already");
+                        let ghostpad = srcpad
+                            .downcast::<gst::GhostPad>()
+                            .expect("rtspsrc src pads are ghost pads");
+                        if let Err(err) = ghostpad.set_target(Some(pad)) {
+                            gst::element_error!(
+                                obj,
+                                gst::ResourceError::Failed,
+                                (
+                                    "Failed to set ghostpad {} target {}: {err:?}",
+                                    ghostpad.name(),
+                                    name
+                                ),
+                                ["pt: {pt}, ssrc: {ssrc}"]
+                            );
+                        }
+                    }
+                    _ => {
+                        gst::info!(CAT, "Ignoring unknown srcpad: {name}");
                     }
                 }
-                _ => {
-                    gst::info!(CAT, "Ignoring unknown srcpad: {name}");
-                }
+
+                let num_src_pads = manager
+                    .src_pads()
+                    .into_iter()
+                    .filter(|p| {
+                        if using_rtp2 {
+                            p.name().starts_with("rtp_src")
+                        } else {
+                            p.name().starts_with("recv_rtp_src")
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .len();
+                self_.post_streams_selected(num_src_pads);
             }
-        });
+        ));
 
         let mut expected_response: Option<(Method, u32)> = None;
         loop {
             tokio::select! {
-                msg = state.stream.next() => match msg {
+                msg = task_state.stream.next() => match msg {
                     Some(Ok(rtsp_types::Message::Data(data))) => {
                         let Some(appsrc) = tcp_interleave_appsrcs.get(&data.channel_id()) else {
                             gst::warning!(CAT,
@@ -1444,8 +1638,8 @@ impl RtspSrc {
                             return Err(RtspError::Fatal(format!("Can't handle {expected:?} response, no SETUP")).into());
                         };
                         let (resp_type, res) = match expected {
-                            Method::Play => (Method::Play, state.play_response(&rsp, *cseq, s).await),
-                            Method::Teardown => (Method::Teardown, state.teardown_response(&rsp, *cseq, s).await),
+                            Method::Play => (Method::Play, task_state.play_response(&rsp, *cseq, s).await),
+                            Method::Teardown => (Method::Teardown, task_state.teardown_response(&rsp, *cseq, s).await),
                             m => unreachable!("BUG: unexpected response method: {m:?}"),
                         };
 
@@ -1454,14 +1648,14 @@ impl RtspSrc {
                                 self.post_complete("request", format!("{:?} response received", resp_type).as_str());
                             }
                             Err(RtspError::AuthChallenge(method, challenge)) => {
-                                state.auth_method = Some(method.clone());
+                                task_state.auth_method = Some(method.clone());
 
-                                if let Some(c) = challenge.as_ref() { state.update_digest(parse_digest_params(c)) }
+                                if let Some(c) = challenge.as_ref() { task_state.update_digest(parse_digest_params(c)) }
 
                                 // Retry the request with proper authentication
                                 let cseq = match resp_type {
-                                    Method::Play => state.play(s).await?,
-                                    Method::Teardown => state.teardown(s).await?,
+                                    Method::Play => task_state.play(s).await?,
+                                    Method::Teardown => task_state.teardown(s).await?,
                                     _ => unreachable!("BUG: unexpected response method: {s:?}"),
                                 };
                                 expected_response = Some((resp_type, cseq));
@@ -1486,7 +1680,7 @@ impl RtspSrc {
                             return Err(RtspError::InvalidMessage("Can't PLAY, no SETUP").into());
                         };
                         self.post_start("request", "PLAY request sent");
-                        let cseq = state.play(s).await.inspect_err(|_err| {
+                        let cseq = task_state.play(s).await.inspect_err(|_err| {
                             self.post_cancelled("request", "PLAY request cancelled");
                         })?;
                         expected_response = Some((Method::Play, cseq));
@@ -1496,7 +1690,7 @@ impl RtspSrc {
                         let Some(s) = &session else {
                             return Err(RtspError::InvalidMessage("Can't TEARDOWN, no SETUP").into());
                         };
-                        let _ = state.teardown(s).await;
+                        let _ = task_state.teardown(s).await;
                         if let Some(tx) = tx {
                             let _ = tx.send(());
                         }
@@ -1505,12 +1699,12 @@ impl RtspSrc {
                     Commands::Data(data) => {
                         // We currently only send RTCP RR as data messages, this will change when
                         // we support TCP ONVIF backchannels
-                        state.sink.send(Message::Data(data)).await?;
+                        task_state.sink.send(Message::Data(data)).await?;
                         gst::debug!(CAT, "Sent RTCP RR over TCP");
                     }
                     Commands::KeepAlive => {
                         if let Some(s) = &session {
-                            state.keep_alive(s).await?;
+                            task_state.keep_alive(s).await?;
                             expected_response = None;
                         };
                     }
@@ -1522,6 +1716,104 @@ impl RtspSrc {
             }
         }
         Ok(())
+    }
+
+    fn handle_select_streams_event(&self, e: &gst::event::SelectStreams) -> bool {
+        let mut state = self.state.lock().unwrap();
+        if !state.streams_aware {
+            gst::warning!(CAT, imp = self, "Ignoring stream selection {e:?}");
+            return false;
+        }
+
+        // TODO: Handle stream selection after SETUP.
+        if state.stream_selection_done {
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Stream selection not supported after RTSP SETUP"
+            );
+            return false;
+        }
+
+        let seqnum = e.seqnum();
+
+        if state.selection_seqnum == Some(seqnum) {
+            gst::debug!(
+                CAT,
+                imp = self,
+                "select-streams with {seqnum:?} already handled"
+            );
+            return true;
+        }
+        state.selection_seqnum = Some(seqnum);
+
+        let selected_stream_ids = e
+            .streams()
+            .into_iter()
+            .map(glib::GString::from)
+            .collect::<Vec<_>>();
+
+        if selected_stream_ids.iter().any(|id| {
+            !state
+                .streams
+                .iter()
+                .any(|s| *id == s.stream.stream_id().unwrap())
+        }) {
+            gst::warning!(
+                CAT,
+                imp = self,
+                "Got unknown stream in select-streams event"
+            );
+            return false;
+        }
+
+        gst::debug!(
+            CAT,
+            imp = self,
+            "Got select-streams event with streams {selected_stream_ids:?}",
+        );
+
+        state.set_selected_streams(Some(selected_stream_ids));
+
+        true
+    }
+
+    fn post_initial_collection(&self) {
+        let mut state = self.state.lock().unwrap();
+
+        if !state.streams_aware {
+            gst::debug!(CAT, imp = self, "Parent is not STREAMS_AWARE");
+            state.set_selected_streams(None);
+            return;
+        }
+
+        let our_seqnum = gst::Seqnum::next();
+        state.selection_seqnum = Some(our_seqnum);
+        let s = state.all_gst_streams();
+        drop(state);
+
+        gst::debug!(CAT, imp = self, "Posting initial StreamCollection");
+
+        let collection = gst::StreamCollection::builder(None).streams(s).build();
+        let _ = self.obj().post_message(
+            gst::message::StreamCollection::builder(&collection)
+                .src(&*self.obj())
+                .build(),
+        );
+
+        state = self.state.lock().unwrap();
+        state.stream_collection = Some(collection);
+
+        if state.selection_seqnum == Some(our_seqnum) {
+            gst::debug!(CAT, imp = self, "Using default selection");
+            state.set_selected_streams(None);
+        } else {
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Stream selection handled while posting default StreamCollection"
+            );
+        }
     }
 }
 
@@ -1614,6 +1906,7 @@ impl RtspManager {
 }
 
 struct RtspTaskState {
+    stream_id_prefix: String,
     cseq: u32,
     url: Url,
     version: Version,
@@ -1645,11 +1938,20 @@ struct RtspSetupParams {
 
 impl RtspTaskState {
     fn new(url: Url, stream: RtspStream, sink: RtspSink) -> Self {
+        let stream_id_prefix = {
+            // Ensure the hash is deterministic over the URL
+            let mut hasher = Sha256::new();
+            hasher.update(url.as_str().as_bytes());
+            let finalize_result = hasher.finalize();
+            let hash_128_bytes = &finalize_result[..16];
+            hex::encode(hash_128_bytes)
+        };
         let username = url.username().to_string();
         let password = url.password().unwrap_or("").to_string();
         let url = rtsp_url(url);
 
         RtspTaskState {
+            stream_id_prefix,
             cseq: 0u32,
             url,
             version: Version::V1_0,
@@ -1929,26 +2231,43 @@ impl RtspTaskState {
         Err(last_error)
     }
 
-    async fn setup(
-        &mut self,
-        session: &mut Option<Session>,
-        session_timeout: &mut Option<Duration>,
-        port_start: u16,
-        protocols: &[RtspProtocol],
-        mode: TransportMode,
-    ) -> Result<Vec<RtspSetupParams>, RtspError> {
+    fn create_stream(&mut self, s: gst::Structure, media_idx: usize, media: &str) -> gst::Stream {
+        let stream_type = match media {
+            "audio" => gst::StreamType::AUDIO,
+            "video" => gst::StreamType::VIDEO,
+            "application" => {
+                #[cfg(feature = "v1_28")]
+                {
+                    let encoding = s.get::<&str>("encoding-name").unwrap_or_default();
+                    match encoding.to_ascii_lowercase().as_str() {
+                        "vnd.onvif.metadata" | "smpte291" => gst::StreamType::METADATA,
+                        _ => gst::StreamType::UNKNOWN,
+                    }
+                }
+                #[cfg(not(feature = "v1_28"))]
+                gst::StreamType::UNKNOWN
+            }
+            _ => gst::StreamType::UNKNOWN,
+        };
+
+        let stream_id = format!("{}/{}", self.stream_id_prefix, media_idx);
+        let caps = gst::Caps::from(s);
+
+        gst::debug!(
+            CAT,
+            "Creating stream with id: {stream_id}, media index: {media_idx}, caps: {caps:?}, type: {stream_type}"
+        );
+
+        gst::Stream::new(
+            Some(&stream_id),
+            Some(&caps),
+            stream_type,
+            gst::StreamFlags::empty(),
+        )
+    }
+
+    fn create_streams(&mut self) -> Vec<RtspGstStream> {
         let sdp = self.sdp.clone().expect("Must have SDP by now");
-        let base = self
-            .content_base_or_location
-            .as_ref()
-            .and_then(|s| Url::parse(s).ok())
-            .unwrap_or_else(|| self.url.clone());
-        self.aggregate_control = sdp
-            .get_first_attribute_value("control")
-            // No attribute and no value have the same meaning for us
-            .ok()
-            .flatten()
-            .and_then(|v| sdp::parse_control_path(v, &base));
         let mut b = gst::Structure::builder("application/x-rtp");
 
         // TODO: parse range for VOD
@@ -1961,47 +2280,19 @@ impl RtspTaskState {
         }
         // TODO: parse global extmap
 
-        let message_structure = b.build();
+        let structure = b.build();
+        let mut streams: Vec<RtspGstStream> = Vec::new();
 
-        let conn_source = sdp
-            .connection
-            .as_ref()
-            .map(|c| c.connection_address.as_str())
-            .filter(|c| !c.is_empty())
-            .unwrap_or_else(|| base.host_str().unwrap());
-        let mut port_next = port_start;
-        let mut stream_num = 0;
-        let mut setup_params: Vec<RtspSetupParams> = Vec::new();
-        for m in &sdp.medias {
-            if !["audio", "video"].contains(&m.media.as_str()) {
-                gst::info!(CAT, "Ignoring unsupported media {}", m.media);
-                continue;
-            }
-            let media_control = m
-                .get_first_attribute_value("control")
-                // No attribute and no value have the same meaning for us
-                .ok()
-                .flatten()
-                .and_then(|v| sdp::parse_control_path(v, &base));
-            let aggregate_control = self.aggregate_control.clone();
-            let Some(control_url) = media_control.as_ref().or(aggregate_control.as_ref()) else {
-                gst::warning!(
-                    CAT,
-                    "No session control or media control for {} fmt {}, ignoring",
-                    m.media,
-                    m.fmt
-                );
-                continue;
-            };
-
+        for (media_idx, m) in sdp.medias.iter().enumerate() {
             // RTP caps
             let Ok(pt) = m.fmt.parse::<u8>() else {
                 gst::error!(CAT, "Could not parse pt: {}, ignoring media", m.fmt);
                 continue;
             };
 
-            let mut s = message_structure.clone();
+            let mut s = structure.clone();
             let media = m.media.to_ascii_lowercase();
+
             s.set("media", &media);
             s.set("payload", pt as i32);
 
@@ -2014,6 +2305,85 @@ impl RtspTaskState {
                 );
                 continue;
             }
+
+            streams.push(RtspGstStream {
+                stream: self.create_stream(s, media_idx, &media),
+                media_idx,
+            });
+        }
+
+        streams
+    }
+
+    fn set_aggregate_control(&mut self) {
+        let sdp = self.sdp.as_ref().expect("Must have SDP by now");
+        let base = self
+            .content_base_or_location
+            .as_ref()
+            .and_then(|s| Url::parse(s).ok())
+            .unwrap_or_else(|| self.url.clone());
+
+        self.aggregate_control = sdp
+            .get_first_attribute_value("control")
+            // No attribute and no value have the same meaning for us
+            .ok()
+            .flatten()
+            .and_then(|v| sdp::parse_control_path(v, &base));
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn setup(
+        &mut self,
+        rtsp_src: gst::glib::WeakRef<super::RtspSrc>,
+        session: &mut Option<Session>,
+        session_timeout: &mut Option<Duration>,
+        port_start: u16,
+        protocols: &[RtspProtocol],
+        mode: TransportMode,
+    ) -> Result<Vec<RtspSetupParams>, RtspError> {
+        let Some(self_) = rtsp_src.upgrade() else {
+            return Err(RtspError::Fatal("Invalid reference".to_string()));
+        };
+
+        let streams = {
+            let mut state = self_.imp().state.lock().unwrap();
+            state.stream_selection_done = true;
+            state.selected_streams.as_ref().unwrap().clone()
+        };
+
+        let base = self
+            .content_base_or_location
+            .as_ref()
+            .and_then(|s| Url::parse(s).ok())
+            .unwrap_or_else(|| self.url.clone());
+
+        let mut port_next = port_start;
+        let mut stream_num = 0;
+        let mut setup_params: Vec<RtspSetupParams> = Vec::new();
+        let sdp = self.sdp.clone().expect("Must have SDP by now");
+
+        for stream in &streams {
+            let m: &sdp_types::Media = sdp.medias.get(stream.media_idx).unwrap();
+            let caps = stream.stream.caps().unwrap();
+            let mut s = caps.structure(0).unwrap().to_owned();
+
+            let media_control = m
+                .get_first_attribute_value("control")
+                // No attribute and no value have the same meaning for us
+                .ok()
+                .flatten()
+                .and_then(|v| sdp::parse_control_path(v, &base));
+            let aggregate_control = self.aggregate_control.clone();
+
+            let Some(control_url) = media_control.as_ref().or(aggregate_control.as_ref()) else {
+                gst::warning!(
+                    CAT,
+                    "No session control or media control for {} fmt {}, ignoring",
+                    m.media,
+                    m.fmt
+                );
+                continue;
+            };
 
             // SETUP
             let mut rtp_socket: Option<UdpSocket> = None;
@@ -2095,7 +2465,6 @@ impl RtspTaskState {
             // RTSP 2 supports pipelining of SETUP requests, so this
             // ping-pong would have to be reworked if we want to support it.
             let rsp = self.send_request_with_auth(req).await?;
-            gst::debug!(CAT, "<<-- {rsp:#?}");
 
             let new_session = rsp
                 .typed_header::<Session>()?
@@ -2132,6 +2501,14 @@ impl RtspTaskState {
                     ))
                 }
             }?;
+
+            let conn_source = sdp
+                .connection
+                .as_ref()
+                .map(|c| c.connection_address.as_str())
+                .filter(|c| !c.is_empty())
+                .unwrap_or_else(|| base.host_str().unwrap());
+
             match &mut parsed_transport {
                 RtspTransportInfo::UdpMulticast { .. } => {}
                 RtspTransportInfo::Udp {
@@ -2185,6 +2562,7 @@ impl RtspTaskState {
                 }
             };
             let caps = gst::Caps::from(s);
+            stream.stream.set_caps(Some(&caps));
             setup_params.push(RtspSetupParams {
                 control_url: control_url.clone(),
                 transport: parsed_transport,

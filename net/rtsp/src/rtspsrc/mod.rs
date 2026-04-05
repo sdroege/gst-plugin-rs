@@ -25,6 +25,7 @@
  * * TLS/TCP support
  * * HTTP tunnelling
  * * Keep-alive
+ * * Support for stream selection at the start
  *
  * Some missing features:
  * * SET_PARAMETER/GET_PARAMETER messages
