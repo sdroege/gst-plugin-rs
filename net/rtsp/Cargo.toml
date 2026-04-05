@@ -13,7 +13,7 @@ anyhow = "1"
 atomic_refcell = "0.1"
 data-encoding = "2.4"
 futures = "0.3"
-gst = { workspace = true, features = ["v1_20"] }
+gst = { workspace = true, features = ["v1_22"] }
 gst-app = { workspace = true, features = ["v1_20"] }
 gst-net = { workspace = true, features = ["v1_20"] }
 gst-pbutils = { workspace = true, features = ["v1_20"] }
@@ -37,6 +37,11 @@ base64 = "0.22"
 bytes = "1"
 tokio-util = "0.7"
 
+[dev-dependencies]
+ctrlc = "3.4"
+clap = { version = "4", features = ["derive"] }
+glib.workspace = true
+
 [lib]
 name = "gstrsrtsp"
 crate-type = ["cdylib", "rlib"]
@@ -49,6 +54,7 @@ gst-plugin-version-helper.workspace = true
 static = []
 capi = []
 doc = ["gst/v1_18"]
+v1_28 = ["gst/v1_28"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

@@ -26,14 +26,14 @@ architecture of rtspsrc. There are some major problems with rtspsrc:
 * TLS/TCP support
 * HTTP tunnelling
 * Keep-alive
+* Support for stream selection at the start
 
 ## Missing features
 
 Roughly in order of priority:
 
 * NAT hole punching
-* Allow ignoring specific streams (SDP medias)
-  - Currently all available source pads must be linked
+* Handle stream selection after SETUP.
 * SRTP support
 * Proxy support
 * `GET_PARAMETER` / `SET_PARAMETER`
