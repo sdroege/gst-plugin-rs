@@ -12,7 +12,7 @@ rust-version.workspace = true
 gst = { workspace = true, features = ["v1_18"] }
 gst-base.workspace = true
 flate2 = { version = "1.0", optional = true }
-brotli = { version = "7", optional = true }
+brotli = { version = "8", optional = true }
 
 
 [lib]
