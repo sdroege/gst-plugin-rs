@@ -77,21 +77,21 @@ struct FFI {
         Symbol<fn(p_instance: NDIlib_send_instance_t, p_metadata: *const NDIlib_metadata_frame_t)>,
 }
 
-pub type NDIlib_find_instance_t = *mut ::std::os::raw::c_void;
+pub type NDIlib_find_instance_t = *mut ::std::ffi::c_void;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct NDIlib_find_create_t {
     pub show_local_sources: bool,
-    pub p_groups: *const ::std::os::raw::c_char,
-    pub p_extra_ips: *const ::std::os::raw::c_char,
+    pub p_groups: *const ::std::ffi::c_char,
+    pub p_extra_ips: *const ::std::ffi::c_char,
 }
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct NDIlib_source_t {
-    pub p_ndi_name: *const ::std::os::raw::c_char,
-    pub p_url_address: *const ::std::os::raw::c_char,
+    pub p_ndi_name: *const ::std::ffi::c_char,
+    pub p_url_address: *const ::std::ffi::c_char,
 }
 
 #[repr(i32)]
@@ -236,21 +236,21 @@ pub struct NDIlib_recv_create_v3_t {
     pub color_format: NDIlib_recv_color_format_e,
     pub bandwidth: NDIlib_recv_bandwidth_e,
     pub allow_video_fields: bool,
-    pub p_ndi_recv_name: *const ::std::os::raw::c_char,
+    pub p_ndi_recv_name: *const ::std::ffi::c_char,
 }
 
-pub type NDIlib_recv_instance_t = *mut ::std::os::raw::c_void;
+pub type NDIlib_recv_instance_t = *mut ::std::ffi::c_void;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct NDIlib_send_create_t {
-    pub p_ndi_name: *const ::std::os::raw::c_char,
-    pub p_groups: *const ::std::os::raw::c_char,
+    pub p_ndi_name: *const ::std::ffi::c_char,
+    pub p_groups: *const ::std::ffi::c_char,
     pub clock_video: bool,
     pub clock_audio: bool,
 }
 
-pub type NDIlib_send_instance_t = *mut ::std::os::raw::c_void;
+pub type NDIlib_send_instance_t = *mut ::std::ffi::c_void;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -270,39 +270,39 @@ pub struct NDIlib_recv_queue_t {
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct NDIlib_metadata_frame_t {
-    pub length: ::std::os::raw::c_int,
+    pub length: ::std::ffi::c_int,
     pub timecode: i64,
-    pub p_data: *const ::std::os::raw::c_char,
+    pub p_data: *const ::std::ffi::c_char,
 }
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct NDIlib_video_frame_v2_t {
-    pub xres: ::std::os::raw::c_int,
-    pub yres: ::std::os::raw::c_int,
+    pub xres: ::std::ffi::c_int,
+    pub yres: ::std::ffi::c_int,
     pub FourCC: NDIlib_FourCC_video_type_e,
-    pub frame_rate_N: ::std::os::raw::c_int,
-    pub frame_rate_D: ::std::os::raw::c_int,
-    pub picture_aspect_ratio: ::std::os::raw::c_float,
+    pub frame_rate_N: ::std::ffi::c_int,
+    pub frame_rate_D: ::std::ffi::c_int,
+    pub picture_aspect_ratio: ::std::ffi::c_float,
     pub frame_format_type: NDIlib_frame_format_type_e,
     pub timecode: i64,
-    pub p_data: *const ::std::os::raw::c_char,
-    pub line_stride_or_data_size_in_bytes: ::std::os::raw::c_int,
-    pub p_metadata: *const ::std::os::raw::c_char,
+    pub p_data: *const ::std::ffi::c_char,
+    pub line_stride_or_data_size_in_bytes: ::std::ffi::c_int,
+    pub p_metadata: *const ::std::ffi::c_char,
     pub timestamp: i64,
 }
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct NDIlib_audio_frame_v3_t {
-    pub sample_rate: ::std::os::raw::c_int,
-    pub no_channels: ::std::os::raw::c_int,
-    pub no_samples: ::std::os::raw::c_int,
+    pub sample_rate: ::std::ffi::c_int,
+    pub no_channels: ::std::ffi::c_int,
+    pub no_samples: ::std::ffi::c_int,
     pub timecode: i64,
     pub FourCC: NDIlib_FourCC_audio_type_e,
-    pub p_data: *const ::std::os::raw::c_float,
-    pub channel_stride_or_data_size_in_bytes: ::std::os::raw::c_int,
-    pub p_metadata: *const ::std::os::raw::c_char,
+    pub p_data: *const ::std::ffi::c_float,
+    pub channel_stride_or_data_size_in_bytes: ::std::ffi::c_int,
+    pub p_metadata: *const ::std::ffi::c_char,
     pub timestamp: i64,
 }
 

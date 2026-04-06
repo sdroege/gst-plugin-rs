@@ -82,7 +82,7 @@ mod imp {
         *TYPE.get_or_init(|| unsafe {
             let t = glib::Type::from_glib(gst::ffi::gst_meta_api_type_register(
                 c"QuinnQuicMetaAPI".as_ptr() as *const _,
-                [ptr::null::<std::os::raw::c_int>()].as_ptr() as *mut *const _,
+                [ptr::null::<std::ffi::c_int>()].as_ptr() as *mut *const _,
             ));
 
             assert_ne!(t, glib::Type::INVALID);
