@@ -189,11 +189,7 @@ pub fn compute_digest_response(
     cnonce: &str,
     nc: &str,
 ) -> String {
-    use md5::{
-        Digest,
-        digest::{OutputSizeUser, generic_array::ArrayLength},
-    };
-    use std::ops::Add;
+    use md5::Digest;
 
     fn compute_digest<D: Digest>(
         params: &DigestParams,
@@ -203,49 +199,44 @@ pub fn compute_digest_response(
         password: &str,
         cnonce: &str,
         nc: &str,
-    ) -> String
-    where
-        <D as OutputSizeUser>::OutputSize: Add,
-        <<D as OutputSizeUser>::OutputSize as Add>::Output: ArrayLength<u8>,
-    {
+    ) -> String {
         let ha1 = {
             let mut hasher = D::new();
             hasher.update(format!("{}:{}:{}", username, params.realm, password));
-            format!("{:x}", hasher.finalize())
+            hex::encode(hasher.finalize())
         };
 
         let ha2 = {
             let mut hasher = D::new();
             hasher.update(format!("{}:{}", <&str>::from(method), uri));
-            format!("{:x}", hasher.finalize())
+            hex::encode(hasher.finalize())
         };
 
-        if let Some(qop) = &params.qop {
+        let response_hash = if let Some(qop) = &params.qop {
             let mut hasher = D::new();
             hasher.update(format!(
                 "{}:{}:{}:{}:{}:{}",
                 ha1, params.nonce, nc, cnonce, qop, ha2
             ));
-            format!("{:x}", hasher.finalize())
+            hasher.finalize()
         } else {
             let mut hasher = D::new();
             hasher.update(format!("{}:{}:{}", ha1, params.nonce, ha2));
-            format!("{:x}", hasher.finalize())
-        }
+            hasher.finalize()
+        };
+
+        hex::encode(response_hash)
     }
 
     match params.algorithm {
         DigestAlgorithm::Md5 => {
-            use md5::Md5;
-            compute_digest::<Md5>(params, method, uri, username, password, cnonce, nc)
+            compute_digest::<md5::Md5>(params, method, uri, username, password, cnonce, nc)
         }
         DigestAlgorithm::Sha256 => {
-            use sha2::Sha256;
-            compute_digest::<Sha256>(params, method, uri, username, password, cnonce, nc)
+            compute_digest::<sha2::Sha256>(params, method, uri, username, password, cnonce, nc)
         }
         DigestAlgorithm::Sha512 => {
-            use sha2::Sha512_256;
-            compute_digest::<Sha512_256>(params, method, uri, username, password, cnonce, nc)
+            compute_digest::<sha2::Sha512_256>(params, method, uri, username, password, cnonce, nc)
         }
     }
 }
