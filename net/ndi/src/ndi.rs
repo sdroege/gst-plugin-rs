@@ -78,7 +78,7 @@ impl<'a> FindBuilder<'a> {
 }
 
 #[derive(Debug)]
-pub struct FindInstance(ptr::NonNull<::std::os::raw::c_void>);
+pub struct FindInstance(ptr::NonNull<::std::ffi::c_void>);
 
 unsafe impl Send for FindInstance {}
 
@@ -258,7 +258,7 @@ impl RecvBuilder<'_> {
 }
 
 #[derive(Debug)]
-struct RecvInstancePtr(ptr::NonNull<::std::os::raw::c_void>);
+struct RecvInstancePtr(ptr::NonNull<::std::ffi::c_void>);
 
 impl Drop for RecvInstancePtr {
     fn drop(&mut self) {
@@ -267,7 +267,7 @@ impl Drop for RecvInstancePtr {
 }
 
 impl RecvInstancePtr {
-    fn as_ptr(&self) -> *mut ::std::os::raw::c_void {
+    fn as_ptr(&self) -> *mut ::std::ffi::c_void {
         self.0.as_ptr()
     }
 }
@@ -397,7 +397,7 @@ impl SendBuilder<'_> {
 }
 
 #[derive(Debug)]
-pub struct SendInstance(ptr::NonNull<::std::os::raw::c_void>);
+pub struct SendInstance(ptr::NonNull<::std::ffi::c_void>);
 
 unsafe impl Send for SendInstance {}
 
@@ -869,7 +869,7 @@ impl VideoFrame {
             picture_aspect_ratio,
             frame_format_type,
             timecode,
-            p_data: frame.plane_data(0).unwrap().as_ptr() as *const ::std::os::raw::c_char,
+            p_data: frame.plane_data(0).unwrap().as_ptr() as *const ::std::ffi::c_char,
             line_stride_or_data_size_in_bytes: frame.plane_stride()[0],
             p_metadata: metadata.as_ref().map_or(ptr::null(), |meta| meta.as_ptr()),
             timestamp: 0,

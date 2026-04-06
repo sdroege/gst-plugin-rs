@@ -71,7 +71,7 @@ mod imp {
         static TYPE: LazyLock<glib::Type> = LazyLock::new(|| unsafe {
             let t = from_glib(gst::ffi::gst_meta_api_type_register(
                 c"GstNdiSinkAudioMetaAPI".as_ptr() as *const _,
-                [ptr::null::<std::os::raw::c_char>()].as_ptr() as *mut *const _,
+                [ptr::null::<std::ffi::c_char>()].as_ptr() as *mut *const _,
             ));
 
             assert_ne!(t, glib::Type::INVALID);
