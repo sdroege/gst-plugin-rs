@@ -148,7 +148,7 @@ impl JitterBuffer {
         origin: &str,
         rtp: &RtpPacket,
         pts: u64,
-        now: Instant,
+        arrival_time: Instant,
     ) -> QueueResult {
         if self.flushing {
             return QueueResult::Flushing;
@@ -228,9 +228,9 @@ impl JitterBuffer {
         //       we could also Forward the initial Packet.
 
         let (_, base_pts) = self.base_times.get_or_insert_with(|| {
-            debug!("{origin} Selected base times {now:?} {pts}");
+            debug!("{origin} Selected base times {arrival_time:?} {pts}");
 
-            (now, pts)
+            (arrival_time, pts)
         });
 
         let deadline = (Duration::from_nanos(pts) + self.latency)
