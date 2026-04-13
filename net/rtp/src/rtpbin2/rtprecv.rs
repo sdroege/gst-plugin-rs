@@ -959,6 +959,24 @@ struct State {
     pads_session_id_map: HashMap<gst::Pad, usize>,
 }
 
+#[derive(Debug, Copy, Clone)]
+struct InstantAndRunningTime {
+    instant: Instant,
+    running_time: gst::ClockTime,
+}
+
+impl InstantAndRunningTime {
+    fn now(elem: &RtpRecv, pad: &gst::Pad) -> Result<Self, gst::FlowError> {
+        Ok(InstantAndRunningTime {
+            running_time: elem.obj().current_running_time().ok_or_else(|| {
+                gst::error!(CAT, obj = pad, "Failed to get current time");
+                gst::FlowError::Error
+            })?,
+            instant: Instant::now(),
+        })
+    }
+}
+
 enum RecvRtpBuffer {
     IsRtcp(gst::Buffer),
     SsrcCollision(u32),
@@ -1097,14 +1115,12 @@ impl RtpRecv {
         gst::Iterator::from_vec(vec![])
     }
 
-    #[expect(clippy::too_many_arguments)]
     fn handle_buffer_locked<const H: usize, const P: usize>(
         &self,
         pad: &gst::Pad,
         session: &mut RecvSession,
         mut buffer: gst::Buffer,
-        arrival_running_time: gst::ClockTime,
-        arrival_time: Instant,
+        arrival_time: InstantAndRunningTime,
         items_to_pre_push: &mut smallvec::SmallVec<[HeldRecvItem; P]>,
         held_buffers: &mut smallvec::SmallVec<[HeldRecvBuffer; H]>,
     ) -> Result<RecvRtpBuffer, gst::FlowError> {
@@ -1144,7 +1160,13 @@ impl RtpRecv {
             }
         };
 
-        gst::trace!(CAT, obj = pad, "using arrival time {arrival_time:?}");
+        gst::trace!(
+            CAT,
+            obj = pad,
+            "using arrival time {:?}, running time {}",
+            arrival_time.instant,
+            arrival_time.running_time,
+        );
 
         let internal_session = session.internal_session.clone();
         let mut session_inner = internal_session.inner.lock().unwrap();
@@ -1191,7 +1213,7 @@ impl RtpRecv {
             let (pts, _ntp_time) = sync_context.calculate_pts(
                 rtp.ssrc(),
                 rtp.timestamp(),
-                arrival_running_time.nseconds(),
+                arrival_time.running_time.nseconds(),
             );
             pts
         };
@@ -1203,7 +1225,9 @@ impl RtpRecv {
         gst::debug!(CAT, obj = pad, "Calculated PTS: {pts}");
 
         loop {
-            let recv_ret = session_inner.session.handle_recv(&rtp, addr, arrival_time);
+            let recv_ret = session_inner
+                .session
+                .handle_recv(&rtp, addr, arrival_time.instant);
             gst::trace!(CAT, obj = pad, "session handle_recv ret: {recv_ret:?}");
             match recv_ret {
                 RecvReply::SsrcCollision(ssrc) => return Ok(RecvRtpBuffer::SsrcCollision(ssrc)),
@@ -1228,7 +1252,7 @@ impl RtpRecv {
                     }
                     held_buffers.push(HeldRecvBuffer {
                         hold_id: Some(hold_id),
-                        arrival_time,
+                        arrival_time: arrival_time.instant,
                         buffer,
                         recv_src_pad,
                     });
@@ -1625,17 +1649,16 @@ impl RtpRecv {
         &self,
         pad: &gst::Pad,
         session: &RecvSession,
-        handling_running_time: gst::ClockTime,
-        handling_instant: Instant,
+        handling_time: InstantAndRunningTime,
         packet: &gst::BufferRef,
-    ) -> Result<(gst::ClockTime, Instant), gst::FlowError> {
+    ) -> Result<InstantAndRunningTime, gst::FlowError> {
         // TODO: this is different from the old C implementation, where we
         // simply used the RTP timestamps as they were instead of doing any
         // sort of skew calculations.
         //
         // Check if this makes sense or if this leads to issue with eg interleaved
         // TCP.
-        let (arrival_running_time, arrival_time) = match packet.dts() {
+        let arrival_time = match packet.dts() {
             Some(dts) => {
                 let segment = session.rtp_recv_sink_segment.as_ref().unwrap();
                 // TODO: use running_time_full if we care to support that
@@ -1651,33 +1674,41 @@ impl RtpRecv {
                     }
                 };
 
-                let handling_delay = handling_running_time
+                let handling_delay = handling_time.running_time
                     .checked_sub(arrival_running_time)
                     .ok_or_else(|| {
                         gst::error!(
                             CAT,
                             obj = pad,
-                            "arrival_running_time {arrival_running_time} > handling_running_time {handling_running_time} {packet:?}"
+                            "arrival_running_time {arrival_running_time} > handling_running_time {} {packet:?}",
+                            handling_time.running_time,
                         );
                         gst::FlowError::Error
                     })?;
 
-                let arrival_time = handling_instant.checked_sub(Duration::from_nanos(handling_delay.nseconds())).ok_or_else(||
+                let arrival_time = handling_time.instant.checked_sub(Duration::from_nanos(handling_delay.nseconds())).ok_or_else(||
                 {
                     gst::error!(
                         CAT,
                         obj = pad,
-                        "Failed to compute arrival time, handling_instant {handling_instant:?}, handling_delay: {handling_delay} {packet:?}"
+                        "Failed to compute arrival time, handling_instant {:?}, handling_delay: {handling_delay} {packet:?}",
+                        handling_time.instant,
                     );
                     gst::FlowError::Error
                 })?;
 
-                (arrival_running_time, arrival_time)
+                InstantAndRunningTime {
+                    instant: arrival_time,
+                    running_time: arrival_running_time,
+                }
             }
-            None => (handling_running_time, handling_instant),
+            None => InstantAndRunningTime {
+                instant: handling_time.instant,
+                running_time: handling_time.running_time,
+            },
         };
 
-        Ok((arrival_running_time, arrival_time))
+        Ok(arrival_time)
     }
 
     fn rtp_sink_chain_list(
@@ -1686,11 +1717,7 @@ impl RtpRecv {
         id: usize,
         mut list: gst::BufferList,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let Some(handling_running_time) = self.obj().current_running_time() else {
-            gst::error!(CAT, obj = pad, "Failed to get current time");
-            return Err(gst::FlowError::Error);
-        };
-        let handling_instant = Instant::now();
+        let handling_time = InstantAndRunningTime::now(self, pad)?;
 
         let mut state = self.state.lock().unwrap();
         let Some(session) = state.mut_session_by_id(id) else {
@@ -1704,18 +1731,12 @@ impl RtpRecv {
             .unwrap()
             .update_flow(Ok(gst::FlowSuccess::Ok))?;
 
-        let (arrival_running_time, arrival_time) = {
+        let arrival_time = {
             let Some(first_packet) = list.get(0) else {
                 gst::debug!(CAT, obj = pad, "Skipping empty list");
                 return Ok(gst::FlowSuccess::Ok);
             };
-            self.get_arrival_times(
-                pad,
-                session,
-                handling_running_time,
-                handling_instant,
-                first_packet,
-            )?
+            self.get_arrival_times(pad, session, handling_time, first_packet)?
         };
 
         let mut ssrc_collision: smallvec::SmallVec<[u32; 4]> = Default::default();
@@ -1731,7 +1752,6 @@ impl RtpRecv {
                 pad,
                 session,
                 buffer,
-                arrival_running_time,
                 arrival_time,
                 &mut items_to_pre_push,
                 &mut held_buffers,
@@ -1793,7 +1813,7 @@ impl RtpRecv {
                     id,
                     [HeldRecvItem::Buffer(HeldRecvBuffer {
                         hold_id: None,
-                        arrival_time,
+                        arrival_time: arrival_time.instant,
                         buffer,
                         recv_src_pad: previous_recv_src_pad.clone(),
                     })],
@@ -1815,7 +1835,7 @@ impl RtpRecv {
                 state,
                 id,
                 [HeldRecvItem::BufferList(HeldRecvBufferList {
-                    arrival_time,
+                    arrival_time: arrival_time.instant,
                     list,
                     recv_src_pad: previous_recv_src_pad.unwrap(),
                 })],
@@ -1832,11 +1852,7 @@ impl RtpRecv {
         id: usize,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let Some(handling_running_time) = self.obj().current_running_time() else {
-            gst::error!(CAT, obj = pad, "Failed to get current time");
-            return Err(gst::FlowError::Error);
-        };
-        let handling_instant = Instant::now();
+        let handling_time = InstantAndRunningTime::now(self, pad)?;
 
         let mut state = self.state.lock().unwrap();
         let Some(session) = state.mut_session_by_id(id) else {
@@ -1850,13 +1866,7 @@ impl RtpRecv {
             .unwrap()
             .update_flow(Ok(gst::FlowSuccess::Ok))?;
 
-        let (arrival_running_time, arrival_time) = self.get_arrival_times(
-            pad,
-            session,
-            handling_running_time,
-            handling_instant,
-            buffer.as_ref(),
-        )?;
+        let arrival_time = self.get_arrival_times(pad, session, handling_time, buffer.as_ref())?;
 
         let mut items_to_pre_push: smallvec::SmallVec<[HeldRecvItem; 4]> = Default::default();
         let mut held_buffers: smallvec::SmallVec<[HeldRecvBuffer; 4]> = Default::default();
@@ -1864,7 +1874,6 @@ impl RtpRecv {
             pad,
             session,
             buffer,
-            arrival_running_time,
             arrival_time,
             &mut items_to_pre_push,
             &mut held_buffers,
@@ -1890,7 +1899,7 @@ impl RtpRecv {
                 id,
                 [HeldRecvItem::Buffer(HeldRecvBuffer {
                     hold_id: None,
-                    arrival_time,
+                    arrival_time: arrival_time.instant,
                     buffer,
                     recv_src_pad,
                 })],
