@@ -653,10 +653,12 @@ fn recv_release_sink_pad() {
 
     let id = next_element_counter();
 
+    let clock = gst::SystemClock::obtain();
     let elem = gst::ElementFactory::make("rtprecv")
         .property("rtp-id", id.to_string())
         .build()
         .unwrap();
+    elem.set_clock(Some(&clock)).unwrap();
     elem.set_state(gst::State::Playing).unwrap();
     let sinkpad = elem.request_pad_simple("rtp_sink_0").unwrap();
     let stream_start = gst::event::StreamStart::new("random");
