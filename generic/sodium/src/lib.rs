@@ -50,7 +50,7 @@ fn typefind_register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         None,
         Some(&Caps::builder("application/x-sodium-encrypted").build()),
         |typefind| {
-            if let Some(data) = typefind.peek(0, TYPEFIND_HEADER_SIZE as u32)
+            if let Some(data) = typefind.peek::<TYPEFIND_HEADER_SIZE>(0)
                 && data == TYPEFIND_HEADER
             {
                 typefind.suggest(

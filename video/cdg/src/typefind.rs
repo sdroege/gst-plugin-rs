@@ -24,8 +24,8 @@ fn cdg_packets_ratio(typefind: &mut TypeFind, start: i64, len: i64) -> i64 {
     let mut count = 0;
     let total = len / CDG_PACKET_SIZE as i64;
 
-    for offset in (start..len).step_by(CDG_PACKET_SIZE as usize) {
-        match typefind.peek(offset, CDG_PACKET_SIZE as u32) {
+    for offset in (start..len).step_by(CDG_PACKET_SIZE) {
+        match typefind.peek::<CDG_PACKET_SIZE>(offset) {
             Some(data) => {
                 if data[0] & CDG_MASK == CDG_COMMAND {
                     count += 1;

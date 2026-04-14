@@ -8,7 +8,7 @@
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-pub(crate) const CDG_PACKET_SIZE: i32 = 24;
+pub(crate) const CDG_PACKET_SIZE: usize = 24;
 
 // 75 sectors/sec * 4 packets/sector = 300 packets/sec
 pub(crate) const CDG_PACKET_PERIOD: u64 = 300;
