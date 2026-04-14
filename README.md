@@ -228,6 +228,9 @@ You will find the following plugins in this repository:
        - `hsvdetector`: Mark pixels that are close to a configured color in HSV format.
        - `hsvfilter`: Apply various transformations in the HSV colorspace.
 
+    - `imagers`: multi-format plugin based on the [image](https://github.com/image-rs/image) crate
+       - `imagersoverlay`: Overlays an image on top of a video stream. It is a reimplementation of `gdkpixbufoverlay` entirely in Rust.
+
     - `png`: PNG encoder based on the [png](https://github.com/image-rs/image-png) library.
 
     - `rav1e`: AV1 encoder based on the [rav1e](https://github.com/xiph/rav1e) library.

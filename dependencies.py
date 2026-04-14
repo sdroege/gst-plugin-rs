@@ -47,6 +47,7 @@ RENAMES = {
     'textahead': 'ahead',
     'textwrap': 'wrap',
     'textaccumulate': 'accumulate',
+    'imagers': 'image',
 }
 
 class CargoAnalyzer:

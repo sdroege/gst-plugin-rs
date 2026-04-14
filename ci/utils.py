@@ -36,6 +36,7 @@ OVERRIDE = {
     'flavors': 'rsflv',
     'wrap': 'textwrap',
     'accumulate': 'textaccumulate',
+    'image': 'imagers',
 }
 
 

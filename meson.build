@@ -186,6 +186,7 @@ plugins = {
   # gtk4 is re added below
   'gtk4': {},
   'hsv': {'library': 'libgsthsv'},
+  'imagers': {'library': 'libgstimagers'},
   'png': {
     'library': 'libgstrspng',
     'examples': ['pngenc'],
