@@ -843,7 +843,14 @@ impl RtspSrc {
                 gst::info!(CAT, "Using session id: {session_id}");
 
                 let http_url = rtsp_http_url(url.clone());
-                let tunnel = match TunnelStream::new(http_url, &extra_headers, session_id).await {
+                let tunnel = match TunnelStream::new(
+                    http_url,
+                    &extra_headers,
+                    session_id,
+                    DEFAULT_USER_AGENT,
+                )
+                .await
+                {
                     Ok(s) => s,
                     Err(err) => {
                         gst::element_imp_error!(
