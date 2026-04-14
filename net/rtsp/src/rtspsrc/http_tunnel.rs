@@ -97,8 +97,10 @@ async fn parse_http_response(stream: &mut TcpStream) -> Result<u16, TunnelError>
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_http_request(
     method: &str,
+    user_agent: &str,
     path: &str,
     session_id: &str,
     hostname: &str,
@@ -110,6 +112,7 @@ fn build_http_request(
     let mut request = format!(
         "{method} {path} HTTP/1.1\r\n\
          Host: {hostname}:{port}\r\n\
+         User-Agent: {user_agent}\r\n\
          x-sessioncookie: {session_id}\r\n\
          Accept: application/x-rtsp-tunnelled\r\n\
          Cache-Control: no-cache\r\n"
@@ -145,6 +148,7 @@ impl TunnelStream {
         url: url::Url,
         extra_headers: &[(String, String)],
         session_id: String,
+        user_agent: &str,
     ) -> Result<Self, TunnelError> {
         let hostname = url
             .host_str()
@@ -162,6 +166,7 @@ impl TunnelStream {
 
         let get_request = build_http_request(
             "GET",
+            user_agent,
             &path,
             &session_id,
             &hostname,
@@ -188,6 +193,7 @@ impl TunnelStream {
 
         let post_request = build_http_request(
             "POST",
+            user_agent,
             &path,
             &session_id,
             &hostname,
