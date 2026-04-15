@@ -26,13 +26,15 @@ impl fmt::Display for NtpOutOfRangeError {
 impl std::error::Error for NtpOutOfRangeError {}
 
 impl NtpTime {
-    /// Converts from a duration relative to the UNIX epoch to an NTP timestamp.
-    pub fn from_duration(dur: Duration) -> Result<Self, NtpOutOfRangeError> {
-        let nanos = u64::try_from(dur.as_nanos()).map_err(|_| NtpOutOfRangeError)?;
-        let ntp = nanos
+    pub fn from_duration(dur: Duration) -> Self {
+        let seconds = dur.as_secs();
+        let fractional = (dur.subsec_nanos() as u64)
             .mul_div_ceil(1 << 32, 1_000_000_000)
-            .ok_or(NtpOutOfRangeError)?;
-        Ok(Self(ntp))
+            .unwrap();
+
+        let ntp = seconds << 32 | fractional;
+
+        Self(ntp)
     }
 
     /// Converts to a duration relative to the UNIX epoch.
@@ -75,11 +77,36 @@ pub fn system_time_to_ntp_time_u64(time: SystemTime) -> NtpTime {
         .expect("time is before unix epoch?!")
         + NTP_OFFSET;
 
-    NtpTime::from_duration(dur).expect("Year 2036 called")
+    NtpTime::from_duration(dur)
 }
 
 impl From<u64> for NtpTime {
     fn from(value: u64) -> Self {
         NtpTime(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::prelude::*;
+
+    #[test]
+    fn ntp_rollover() {
+        let st: SystemTime = chrono::DateTime::parse_from_rfc3339("2036-02-07T06:28:15+00:00")
+            .unwrap()
+            .into();
+
+        let ntpt = system_time_to_ntp_time_u64(st);
+
+        assert_eq!(ntpt.as_u64(), (std::u32::MAX as u64) << 32);
+
+        let st: SystemTime = chrono::DateTime::parse_from_rfc3339("2036-02-07T06:28:16+00:00")
+            .unwrap()
+            .into();
+
+        let ntpt = system_time_to_ntp_time_u64(st);
+
+        assert_eq!(ntpt.as_u64(), 0);
     }
 }

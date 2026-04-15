@@ -309,7 +309,7 @@ impl Context {
                     .as_duration()
                     .ok()
                     .and_then(|dur| dur.checked_add(rtp_range_ns))
-                    .and_then(|dur| NtpTime::from_duration(dur).ok())
+                    .map(|dur| NtpTime::from_duration(dur))
             } else {
                 let rtp_range_ns = Duration::from_nanos(last_sr_rtp_ext_ns - rtp_ext_ns);
 
@@ -317,7 +317,7 @@ impl Context {
                     .as_duration()
                     .ok()
                     .and_then(|dur| dur.checked_sub(rtp_range_ns))
-                    .and_then(|dur| NtpTime::from_duration(dur).ok())
+                    .map(|dur| NtpTime::from_duration(dur))
             };
         }
 

@@ -13,7 +13,7 @@ anyhow = "1"
 atomic_refcell = "0.1"
 bitstream-io = "4"
 byte-slice-cast = "1.2"
-chrono = { version = "0.4", default-features = false }
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 gst       = { workspace = true, features = ["v1_20"] }
 gst-audio = { workspace = true, features = ["v1_20"] }
 gst-base  = { workspace = true, features = ["v1_20"] }

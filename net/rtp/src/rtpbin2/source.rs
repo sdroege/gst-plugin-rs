@@ -788,20 +788,19 @@ impl RemoteSendSource {
         let (last_sr, delay_since_last_sr) = self
             .last_received_sr
             .as_ref()
-            .and_then(|t| {
-                Some((
+            .map(|t| {
+                (
                     t.remote_time,
                     NtpTime::from_duration(
                         ntp_time
                             .duration_since(t.local_time)
                             .unwrap_or(Duration::from_secs(0)),
-                    )
-                    .ok()?,
-                ))
+                    ),
+                )
             })
             .unwrap_or((
-                NtpTime::from_duration(Duration::from_secs(0)).unwrap(),
-                NtpTime::from_duration(Duration::from_secs(0)).unwrap(),
+                NtpTime::from_duration(Duration::from_secs(0)),
+                NtpTime::from_duration(Duration::from_secs(0)),
             ));
 
         let lost = self.packets_lost();
