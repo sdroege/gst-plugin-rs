@@ -76,10 +76,10 @@ async fn run() {
                     let depay_queue = gst::ElementFactory::make("queue")
                         .name("video-depay-queue")
                         .property("max-size-bytes", 0u32)
-                        .property("max-size-time", 2.seconds() + 50.mseconds())
-                        .property("max-size-time", gst::ClockTime::ZERO)
+                        // Add enough buffering to cope with differences in branch latency
+                        // and transitions
+                        .property("max-size-time", 250.mseconds())
                         .property("max-size-buffers", 0u32)
-                        .property_from_str("leaky", "downstream")
                         .build()
                         .unwrap();
                     let depay = gst::ElementFactory::make("rtpvp8depay2").build().unwrap();
@@ -93,6 +93,16 @@ async fn run() {
                         .build()
                         .unwrap();
                     let sink = gst::ElementFactory::make("autovideosink").build().unwrap();
+                    // Make sure this branch doesn't block the other
+                    // if it can't produce its first buffer immediately
+                    // e.g. waiting for a keyframe
+                    sink.downcast_ref::<gst::Bin>()
+                        .expect("autovideosink is a bin")
+                        .connect_deep_element_added(|_sink, _sub_bin, elem| {
+                            if elem.has_property("async") {
+                                elem.set_property("async", false);
+                            }
+                        });
                     let elems = [&depay_queue, &depay, &dec, &conv, &sink_queue, &sink];
                     parent.add_many(elems).unwrap();
                     pad.link(&depay_queue.static_pad("sink").unwrap()).unwrap();
@@ -109,17 +119,10 @@ async fn run() {
                     let depay_queue = gst::ElementFactory::make("queue")
                         .name("audio-depay-queue")
                         .property("max-size-bytes", 0u32)
-                        // This queue needs to be big enough for holding enough
-                        // audio until a keyframe is decoded on the video branch
-                        // or otherwise the pipeline might get stuck prerolling.
-                        //
-                        // Make it twice the keyframe interval for safety.
-                        //
-                        // The alternative would be to use a leaky queue or to use
-                        // async=false on the sink, or a combination of that.
-                        .property("max-size-time", 2.seconds() + 50.mseconds())
+                        // Add enough buffering to cope with differences in branch latency
+                        // and transitions
+                        .property("max-size-time", 250.mseconds())
                         .property("max-size-buffers", 0u32)
-                        .property_from_str("leaky", "downstream")
                         .build()
                         .unwrap();
                     let depay = gst::ElementFactory::make("rtpopusdepay2").build().unwrap();
@@ -133,6 +136,15 @@ async fn run() {
                         .build()
                         .unwrap();
                     let sink = gst::ElementFactory::make("autoaudiosink").build().unwrap();
+                    // Make sure this branch doesn't block the other
+                    // if it can't produce its first buffer immediately
+                    sink.downcast_ref::<gst::Bin>()
+                        .expect("autoaudiosink is a bin")
+                        .connect_deep_element_added(|_sink, _sub_bin, elem| {
+                            if elem.has_property("async") {
+                                elem.set_property("async", false);
+                            }
+                        });
 
                     let elems = [&depay_queue, &depay, &dec, &conv, &sink_queue, &sink];
                     parent.add_many(elems).unwrap();
