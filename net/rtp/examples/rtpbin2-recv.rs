@@ -135,6 +135,16 @@ async fn run() {
                     .build()
                     .unwrap();
                 let sink = gst::ElementFactory::make("autovideosink").build().unwrap();
+                // Make sure this branch doesn't block the other
+                // if it can't produce its first buffer immediately
+                // e.g. waiting for a keyframe
+                sink.downcast_ref::<gst::Bin>()
+                    .expect("autovideosink is a bin")
+                    .connect_deep_element_added(|_sink, _sub_bin, elem| {
+                        if elem.has_property("async") {
+                            elem.set_property("async", false);
+                        }
+                    });
 
                 let elems = [&depay, &dec, &conv, &sink_queue, &sink];
                 pipeline.add_many(elems).unwrap();
@@ -172,6 +182,15 @@ async fn run() {
                     .build()
                     .unwrap();
                 let sink = gst::ElementFactory::make("autoaudiosink").build().unwrap();
+                // Make sure this branch doesn't block the other
+                // if it can't produce its first buffer immediately
+                sink.downcast_ref::<gst::Bin>()
+                    .expect("autoaudiosink is a bin")
+                    .connect_deep_element_added(|_sink, _sub_bin, elem| {
+                        if elem.has_property("async") {
+                            elem.set_property("async", false);
+                        }
+                    });
 
                 let elems = [&depay, &dec, &conv, &sink_queue, &sink];
                 pipeline.add_many(elems).unwrap();
