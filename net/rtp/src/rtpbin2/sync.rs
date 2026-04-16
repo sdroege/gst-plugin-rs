@@ -175,7 +175,7 @@ impl Context {
 
         debug!(
             "{ssrc_val:#08x} ({ssrc_val}) Latest NTP time: {:?}",
-            NtpTime::from(ntp_timestamp).as_duration().unwrap()
+            NtpTime::from(ntp_timestamp).as_duration()
         );
 
         ssrc.add_sender_report(rtp_timestamp, ntp_timestamp)
@@ -265,11 +265,11 @@ impl Context {
                 if let Some(base_ntp_time) = if base_rtp_ext_ns > last_sr_rtp_ext_ns {
                     let rtp_range_ns = base_rtp_ext_ns - last_sr_rtp_ext_ns;
 
-                    (last_sr_ntp.as_duration().unwrap().as_nanos() as u64).checked_add(rtp_range_ns)
+                    (last_sr_ntp.as_duration().as_nanos() as u64).checked_add(rtp_range_ns)
                 } else {
                     let rtp_range_ns = last_sr_rtp_ext_ns - base_rtp_ext_ns;
 
-                    (last_sr_ntp.as_duration().unwrap().as_nanos() as u64).checked_sub(rtp_range_ns)
+                    (last_sr_ntp.as_duration().as_nanos() as u64).checked_sub(rtp_range_ns)
                 } {
                     trace!(
                         "{ssrc_val:#08x} ({ssrc_val}) Base NTP time on first packet after new SR is {:?} ({:?})",
@@ -307,17 +307,15 @@ impl Context {
 
                 last_sr_ntp
                     .as_duration()
-                    .ok()
-                    .and_then(|dur| dur.checked_add(rtp_range_ns))
-                    .map(|dur| NtpTime::from_duration(dur))
+                    .checked_add(rtp_range_ns)
+                    .map(NtpTime::from_duration)
             } else {
                 let rtp_range_ns = Duration::from_nanos(last_sr_rtp_ext_ns - rtp_ext_ns);
 
                 last_sr_ntp
                     .as_duration()
-                    .ok()
-                    .and_then(|dur| dur.checked_sub(rtp_range_ns))
-                    .map(|dur| NtpTime::from_duration(dur))
+                    .checked_sub(rtp_range_ns)
+                    .map(NtpTime::from_duration)
             };
         }
 

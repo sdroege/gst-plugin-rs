@@ -1256,7 +1256,7 @@ impl RtpRecv {
                                 buf_mut,
                                 &TIMESTAMP_NTP_CAPS,
                                 gst::ClockTime::from_nseconds(
-                                    ntp_time.as_duration().unwrap().as_nanos() as u64,
+                                    ntp_time.as_duration().as_nanos() as u64
                                 ),
                                 None,
                             );
@@ -1316,7 +1316,7 @@ impl RtpRecv {
                                 buf_mut,
                                 &TIMESTAMP_NTP_CAPS,
                                 gst::ClockTime::from_nseconds(
-                                    ntp_time.as_duration().unwrap().as_nanos() as u64,
+                                    ntp_time.as_duration().as_nanos() as u64
                                 ),
                                 None,
                             );

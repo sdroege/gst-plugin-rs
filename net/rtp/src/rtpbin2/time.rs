@@ -1,29 +1,33 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    fmt,
     ops::{Add, Sub},
     time::{Duration, SystemTime},
 };
 
 use gst::prelude::MulDiv as _;
 
+use std::sync::OnceLock;
+
 // time between the NTP time at 1900-01-01 and the unix EPOCH (1970-01-01)
 const NTP_OFFSET: Duration = Duration::from_secs((365 * 70 + 17) * 24 * 60 * 60);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct NtpTime(u64);
+static CURRENT_TIME: OnceLock<SystemTime> = OnceLock::new();
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct NtpOutOfRangeError;
-
-impl fmt::Display for NtpOutOfRangeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("value out of range for NTP timestamps")
-    }
+pub fn get_or_init_current_time<'a>() -> &'a SystemTime {
+    CURRENT_TIME.get_or_init(SystemTime::now)
 }
 
-impl std::error::Error for NtpOutOfRangeError {}
+pub fn ntp_era_from_system_time(st: &SystemTime) -> u64 {
+    st.duration_since(SystemTime::UNIX_EPOCH)
+        .expect("NTP time is before unix epoch?!")
+        .add(NTP_OFFSET)
+        .as_secs()
+        / (1 << 32)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct NtpTime(u64);
 
 impl NtpTime {
     pub fn from_duration(dur: Duration) -> Self {
@@ -37,13 +41,28 @@ impl NtpTime {
         Self(ntp)
     }
 
-    /// Converts to a duration relative to the UNIX epoch.
-    pub fn as_duration(&self) -> Result<Duration, NtpOutOfRangeError> {
+    /// Converts to a duration relative to the prime epoch (1900-01-01 at 00:00).
+    pub fn as_duration(&self) -> Duration {
+        self.as_duration_with_current_time(get_or_init_current_time())
+    }
+
+    /// Converts to a duration relative to the prime epoch (1900-01-01 at 00:00).
+    pub fn as_duration_with_current_time(&self, current_time: &SystemTime) -> Duration {
+        let current_ntp_time = system_time_to_ntp_time_u64(*current_time);
+        let mut timestamp_era = ntp_era_from_system_time(current_time);
+
+        if current_ntp_time.0 > self.0 && current_ntp_time.0 - self.0 > 1 << 63 {
+            timestamp_era += 1;
+        } else if current_ntp_time.0 < self.0 && self.0 - current_ntp_time.0 > 1 << 63 {
+            timestamp_era -= 1;
+        }
+
         let nanos = self
             .0
             .mul_div_ceil(1_000_000_000, 1 << 32)
-            .ok_or(NtpOutOfRangeError)?;
-        Ok(Duration::from_nanos(nanos))
+            .expect("result doesn't fit?!");
+
+        Duration::from_nanos(nanos) + Duration::from_secs(timestamp_era << 32)
     }
 
     /// Middle 32 bit of the NTP timestamp (16.16 seconds).
@@ -89,7 +108,6 @@ impl From<u64> for NtpTime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::prelude::*;
 
     #[test]
     fn ntp_rollover() {
@@ -99,7 +117,7 @@ mod tests {
 
         let ntpt = system_time_to_ntp_time_u64(st);
 
-        assert_eq!(ntpt.as_u64(), (std::u32::MAX as u64) << 32);
+        assert_eq!(ntpt.as_u64(), (u32::MAX as u64) << 32);
 
         let st: SystemTime = chrono::DateTime::parse_from_rfc3339("2036-02-07T06:28:16+00:00")
             .unwrap()
@@ -108,5 +126,65 @@ mod tests {
         let ntpt = system_time_to_ntp_time_u64(st);
 
         assert_eq!(ntpt.as_u64(), 0);
+    }
+
+    #[test]
+    fn ntp_time_as_duration_before_rollover() {
+        let current_time: SystemTime =
+            chrono::DateTime::parse_from_rfc3339("2036-02-07T06:28:15+00:00")
+                .unwrap()
+                .into();
+
+        let st: SystemTime = chrono::DateTime::parse_from_rfc3339("2036-02-07T06:28:15+00:00")
+            .unwrap()
+            .into();
+
+        let ntpt = system_time_to_ntp_time_u64(st);
+
+        assert_eq!(
+            ntpt.as_duration_with_current_time(&current_time).as_secs(),
+            4294967295
+        );
+
+        let st: SystemTime = chrono::DateTime::parse_from_rfc3339("2036-02-07T06:28:16+00:00")
+            .unwrap()
+            .into();
+
+        let ntpt = system_time_to_ntp_time_u64(st);
+
+        assert_eq!(
+            ntpt.as_duration_with_current_time(&current_time).as_secs(),
+            4294967296
+        );
+    }
+
+    #[test]
+    fn ntp_time_as_duration_after_rollover() {
+        let current_time: SystemTime =
+            chrono::DateTime::parse_from_rfc3339("2036-02-07T06:28:16+00:00")
+                .unwrap()
+                .into();
+
+        let st: SystemTime = chrono::DateTime::parse_from_rfc3339("2036-02-07T06:28:15+00:00")
+            .unwrap()
+            .into();
+
+        let ntpt = system_time_to_ntp_time_u64(st);
+
+        assert_eq!(
+            ntpt.as_duration_with_current_time(&current_time).as_secs(),
+            4294967295
+        );
+
+        let st: SystemTime = chrono::DateTime::parse_from_rfc3339("2036-02-07T06:28:16+00:00")
+            .unwrap()
+            .into();
+
+        let ntpt = system_time_to_ntp_time_u64(st);
+
+        assert_eq!(
+            ntpt.as_duration_with_current_time(&current_time).as_secs(),
+            4294967296
+        );
     }
 }
