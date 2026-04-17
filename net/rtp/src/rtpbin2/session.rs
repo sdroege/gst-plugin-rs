@@ -411,9 +411,14 @@ impl Session {
 
     /// Handle sending a RTP packet.  The [`SendReply`] return value indicates what the caller
     /// must do with this packet.
-    pub fn handle_send(&mut self, rtp: &RtpPacket, now: Instant) -> SendReply {
+    pub fn handle_send(
+        &mut self,
+        rtp: &RtpPacket,
+        now: Instant,
+        capture_time: Instant,
+    ) -> SendReply {
         trace!(
-            "sending at {now:?} ssrc: {:#08x} ({}), pt:{}, seqno:{}, rtp ts:{}, bytes:{}",
+            "sending packet at {now:?} captured at {capture_time:?} ssrc: {:#08x} ({}), pt:{}, seqno:{}, rtp ts:{}, bytes:{}",
             rtp.ssrc(),
             rtp.ssrc(),
             rtp.payload_type(),
@@ -454,7 +459,7 @@ impl Session {
             if let Some(_clock_rate) = self.pt_map.get(&rtp.payload_type()) {
                 source.sent_packet(
                     rtp.payload().len(),
-                    now,
+                    capture_time,
                     rtp.sequence_number(),
                     rtp.timestamp(),
                     rtp.payload_type(),
@@ -1814,10 +1819,13 @@ pub(crate) mod tests {
         let rtp_data = generate_rtp_packet(0x12345678, 100, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
         assert_eq!(
-            session.handle_send(&packet, now),
+            session.handle_send(&packet, now, now),
             SendReply::NewSsrc(0x12345678, TEST_PT)
         );
-        assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
+        assert_eq!(
+            session.handle_send(&packet, now, now),
+            SendReply::Passthrough
+        );
     }
 
     fn session_recv_first_packet_disable_probation(
@@ -1958,18 +1966,24 @@ pub(crate) mod tests {
         let rtp_data = generate_rtp_packet(ssrcs[0], 100, 4, 1024);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
         assert_eq!(
-            session.handle_send(&packet, now),
+            session.handle_send(&packet, now, now),
             SendReply::NewSsrc(ssrcs[0], 96)
         );
-        assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
+        assert_eq!(
+            session.handle_send(&packet, now, now),
+            SendReply::Passthrough
+        );
 
         let rtp_data = generate_rtp_packet(ssrcs[1], 200, 4, 1024);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
         assert_eq!(
-            session.handle_send(&packet, now),
+            session.handle_send(&packet, now, now),
             SendReply::NewSsrc(ssrcs[1], TEST_PT)
         );
-        assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
+        assert_eq!(
+            session.handle_send(&packet, now, now),
+            SendReply::Passthrough
+        );
 
         let rtcp_data = session.poll_rtcp_send(now, ntp_now).unwrap();
         let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
@@ -1992,6 +2006,67 @@ pub(crate) mod tests {
                         system_time_to_ntp_time_u64(ntp_now).as_u64()
                     );
                     assert_eq!(sr.rtp_timestamp(), 4);
+                }
+                Ok(Packet::Sdes(_)) => (),
+                _ => unreachable!(),
+            }
+        }
+        assert_eq!(n_rb_ssrcs, ssrcs.len());
+    }
+
+    #[test]
+    fn send_one_sr_offseted_capture_time() {
+        init_logs();
+        let mut session = Session::new("cname");
+        session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
+
+        let now = Instant::now();
+        let ntp_now = SystemTime::now();
+        let ssrcs = [0x12345678];
+
+        let (now, ntp_now) =
+            increment_rtcp_times(now, session.poll_rtcp_send_timeout(now).unwrap(), ntp_now);
+        // ensure that timer reconsideration will not suppress
+        let (now, ntp_now) = increment_rtcp_times(now, now + RTCP_MIN_REPORT_INTERVAL, ntp_now);
+
+        // Tell session that this packet was captured 40 milliseconds ago,
+        // which will cause the generated SR to contain an RTP timestamp
+        // that matches "now" with the RTP timestamp of this packet + 3_600
+        // at clock rate 90_000
+        let capture_time = now - std::time::Duration::from_millis(40);
+
+        let rtp_data = generate_rtp_packet(ssrcs[0], 100, 0, 1024);
+        let packet = RtpPacket::parse(&rtp_data).unwrap();
+        assert_eq!(
+            session.handle_send(&packet, now, capture_time),
+            SendReply::NewSsrc(ssrcs[0], 96)
+        );
+        assert_eq!(
+            session.handle_send(&packet, now, capture_time),
+            SendReply::Passthrough
+        );
+
+        let rtcp_data = session.poll_rtcp_send(now, ntp_now).unwrap();
+        let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
+            unreachable!();
+        };
+        let rtcp = Compound::parse(&rtcp_data).unwrap();
+        let mut n_rb_ssrcs = 0;
+        for p in rtcp {
+            match p {
+                Ok(Packet::Sr(sr)) => {
+                    assert_eq!(sr.n_reports(), 0);
+                    if ssrcs.contains(&sr.ssrc()) {
+                        n_rb_ssrcs += 1;
+                    }
+                    // we sent 1 packet on each ssrc, rtcp should reflect that
+                    assert_eq!(sr.packet_count(), 1);
+                    assert_eq!(sr.octet_count() as usize, 1024);
+                    assert_eq!(
+                        sr.ntp_timestamp(),
+                        system_time_to_ntp_time_u64(ntp_now).as_u64()
+                    );
+                    assert_eq!(sr.rtp_timestamp(), 3_600);
                 }
                 Ok(Packet::Sdes(_)) => (),
                 _ => unreachable!(),
@@ -2126,18 +2201,24 @@ pub(crate) mod tests {
         let rtp_data = generate_rtp_packet(ssrcs[0], 100, 0, 1024);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
         assert_eq!(
-            session.handle_send(&packet, now),
+            session.handle_send(&packet, now, now),
             SendReply::NewSsrc(ssrcs[0], TEST_PT)
         );
-        assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
+        assert_eq!(
+            session.handle_send(&packet, now, now),
+            SendReply::Passthrough
+        );
 
         let rtp_data = generate_rtp_packet(ssrcs[1], 200, 0, 1024);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
         assert_eq!(
-            session.handle_send(&packet, now),
+            session.handle_send(&packet, now, now),
             SendReply::NewSsrc(ssrcs[1], TEST_PT)
         );
-        assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
+        assert_eq!(
+            session.handle_send(&packet, now, now),
+            SendReply::Passthrough
+        );
 
         let rtcp_data = session.poll_rtcp_send(now, ntp_now).unwrap();
         let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
@@ -2260,10 +2341,13 @@ pub(crate) mod tests {
         let rtp_data = generate_rtp_packet(ssrc, 200, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
         assert_eq!(
-            session.handle_send(&packet, now),
+            session.handle_send(&packet, now, now),
             SendReply::NewSsrc(ssrc, TEST_PT)
         );
-        assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
+        assert_eq!(
+            session.handle_send(&packet, now, now),
+            SendReply::Passthrough
+        );
 
         let (rtcp_data, now, ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
         let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
@@ -2321,10 +2405,13 @@ pub(crate) mod tests {
         let rtp_data = generate_rtp_packet(ssrc, 500, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
         assert_eq!(
-            session.handle_send(&packet, now),
+            session.handle_send(&packet, now, now),
             SendReply::NewSsrc(ssrc, TEST_PT)
         );
-        assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
+        assert_eq!(
+            session.handle_send(&packet, now, now),
+            SendReply::Passthrough
+        );
 
         let (rtcp_data, now, ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
         let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
@@ -2402,10 +2489,10 @@ pub(crate) mod tests {
         let rtp_data = generate_rtp_packet(ssrc, 500, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
         assert_eq!(
-            session.handle_send(&packet, now),
+            session.handle_send(&packet, now, now),
             SendReply::SsrcCollision(ssrc)
         );
-        assert_eq!(session.handle_send(&packet, now), SendReply::Drop);
+        assert_eq!(session.handle_send(&packet, now, now), SendReply::Drop);
 
         // add ssrc as if our packets are being looped.  As we have already discovered the
         // conflicting address, these looped packets should be dropped.
@@ -2435,7 +2522,7 @@ pub(crate) mod tests {
 
         let rtp_data = generate_rtp_packet(new_ssrc, 510, 10, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
-        assert_eq!(session.handle_send(&packet, now), SendReply::Drop);
+        assert_eq!(session.handle_send(&packet, now, now), SendReply::Drop);
     }
 
     #[test]
@@ -2450,10 +2537,13 @@ pub(crate) mod tests {
         let rtp_data = generate_rtp_packet(ssrc, 500, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
         assert_eq!(
-            session.handle_send(&packet, now),
+            session.handle_send(&packet, now, now),
             SendReply::NewSsrc(ssrc, TEST_PT)
         );
-        assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
+        assert_eq!(
+            session.handle_send(&packet, now, now),
+            SendReply::Passthrough
+        );
 
         let mut data = vec![0; 128];
         let len = Compound::builder()
@@ -2556,10 +2646,13 @@ pub(crate) mod tests {
         let rtp_data = generate_rtp_packet(ssrc, 500, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
         assert_eq!(
-            session.handle_send(&packet, now),
+            session.handle_send(&packet, now, now),
             SendReply::NewSsrc(ssrc, TEST_PT)
         );
-        assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
+        assert_eq!(
+            session.handle_send(&packet, now, now),
+            SendReply::Passthrough
+        );
 
         // send initial rtcp
         let (rtcp_data, now, ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
@@ -2572,7 +2665,7 @@ pub(crate) mod tests {
         assert_eq!(source.state(), SourceState::Bye);
 
         // data after bye should be dropped
-        assert_eq!(session.handle_send(&packet, now), SendReply::Drop);
+        assert_eq!(session.handle_send(&packet, now, now), SendReply::Drop);
 
         let (rtcp_data, now, ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
         let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
@@ -2626,18 +2719,24 @@ pub(crate) mod tests {
         let rtp_data = generate_rtp_packet(send_ssrc, 500, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
         assert_eq!(
-            session.handle_send(&packet, now),
+            session.handle_send(&packet, now, now),
             SendReply::NewSsrc(send_ssrc, TEST_PT)
         );
-        assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
+        assert_eq!(
+            session.handle_send(&packet, now, now),
+            SendReply::Passthrough
+        );
 
         let rtp_data = generate_rtp_packet(send2_ssrc, 500, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
         assert_eq!(
-            session.handle_send(&packet, now),
+            session.handle_send(&packet, now, now),
             SendReply::NewSsrc(send2_ssrc, TEST_PT)
         );
-        assert_eq!(session.handle_send(&packet, now), SendReply::Passthrough);
+        assert_eq!(
+            session.handle_send(&packet, now, now),
+            SendReply::Passthrough
+        );
 
         // complete first regular rtcp
         let (rtcp_data, now, _ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);

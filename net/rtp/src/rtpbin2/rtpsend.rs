@@ -380,7 +380,41 @@ impl RtpSend {
         internal_session: &SharedSession,
         buffer: gst::Buffer,
         now: Instant,
+        current_running_time: Option<gst::ClockTime>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let mut capture_time = now;
+
+        // The capture time of the packet is different from the current system time,
+        // apply an offset to now derived from the buffer timestamp and the current
+        // element running time.
+        let buffer_running_time = buffer.pts().map(|pts| {
+            srcpad
+                .sticky_event::<gst::event::Segment>(0)
+                .expect("RTP src pad doesn't have a segment?!")
+                .segment()
+                .to_running_time(pts)
+        });
+
+        if let Some((current_running_time, buffer_running_time)) =
+            current_running_time.zip(buffer_running_time)
+            && let gst::GenericFormattedValue::Time(Some(t)) = buffer_running_time
+        {
+            let buffer_running_time_ns = t.nseconds();
+            let current_running_time_ns = current_running_time.nseconds();
+
+            if buffer_running_time_ns > current_running_time_ns {
+                // The packet was captured in the future, that should not happen
+                // but we accept it
+                capture_time += std::time::Duration::from_nanos(
+                    buffer_running_time_ns - current_running_time_ns,
+                );
+            } else {
+                capture_time -= std::time::Duration::from_nanos(
+                    current_running_time_ns - buffer_running_time_ns,
+                );
+            }
+        }
+
         let mapped = buffer.map_readable().map_err(|e| {
             gst::error!(CAT, obj = sinkpad, "Failed to map input buffer {e:?}");
             gst::FlowError::Error
@@ -401,7 +435,7 @@ impl RtpSend {
 
         let mut ssrc_collision: smallvec::SmallVec<[u32; 4]> = smallvec::SmallVec::new();
         loop {
-            match session_inner.session.handle_send(&rtp, now) {
+            match session_inner.session.handle_send(&rtp, now, capture_time) {
                 SendReply::SsrcCollision(ssrc) => {
                     if !ssrc_collision.contains(&ssrc) {
                         ssrc_collision.push(ssrc);
@@ -455,8 +489,17 @@ impl RtpSend {
         drop(state);
 
         let now = Instant::now();
+        let current_running_time = self.obj().current_running_time();
+
         for buffer in list.iter_owned() {
-            self.handle_buffer(pad, &srcpad, &internal_session, buffer, now)?;
+            self.handle_buffer(
+                pad,
+                &srcpad,
+                &internal_session,
+                buffer,
+                now,
+                current_running_time,
+            )?;
         }
         Ok(gst::FlowSuccess::Ok)
     }
@@ -478,7 +521,16 @@ impl RtpSend {
         drop(state);
 
         let now = Instant::now();
-        self.handle_buffer(pad, &srcpad, &internal_session, buffer, now)
+        let current_running_time = self.obj().current_running_time();
+
+        self.handle_buffer(
+            pad,
+            &srcpad,
+            &internal_session,
+            buffer,
+            now,
+            current_running_time,
+        )
     }
 
     fn rtp_sink_event(&self, pad: &gst::Pad, event: gst::Event, id: usize) -> bool {

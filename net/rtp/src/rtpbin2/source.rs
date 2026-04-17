@@ -171,6 +171,7 @@ impl ReceivedRb {
 pub struct LocalSendSource {
     source: Source,
     ext_seqnum: ExtendedSeqnum,
+    // RTP timestamp, corresponding capture time
     last_rtp_sent: Option<(u32, Instant)>,
     sent_bytes: u64,
     sent_packets: u64,
