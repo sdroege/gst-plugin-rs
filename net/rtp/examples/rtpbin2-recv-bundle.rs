@@ -107,13 +107,9 @@ async fn run() {
                     parent.add_many(elems).unwrap();
                     pad.link(&depay_queue.static_pad("sink").unwrap()).unwrap();
                     gst::Element::link_many(elems).unwrap();
-
-                    sink.sync_state_with_parent().unwrap();
-                    sink_queue.sync_state_with_parent().unwrap();
-                    conv.sync_state_with_parent().unwrap();
-                    dec.sync_state_with_parent().unwrap();
-                    depay.sync_state_with_parent().unwrap();
-                    depay_queue.sync_state_with_parent().unwrap();
+                    for elem in elems.into_iter().rev() {
+                        elem.sync_state_with_parent().unwrap();
+                    }
                 }
                 AUDIO_PT => {
                     let depay_queue = gst::ElementFactory::make("queue")
@@ -150,13 +146,9 @@ async fn run() {
                     parent.add_many(elems).unwrap();
                     pad.link(&depay_queue.static_pad("sink").unwrap()).unwrap();
                     gst::Element::link_many(elems).unwrap();
-
-                    sink.sync_state_with_parent().unwrap();
-                    sink_queue.sync_state_with_parent().unwrap();
-                    conv.sync_state_with_parent().unwrap();
-                    dec.sync_state_with_parent().unwrap();
-                    depay.sync_state_with_parent().unwrap();
-                    depay_queue.sync_state_with_parent().unwrap();
+                    for elem in elems.into_iter().rev() {
+                        elem.sync_state_with_parent().unwrap();
+                    }
                 }
                 other => eprintln!("Unexpected PT {other:?} in pad name {pad_name}"),
             }
