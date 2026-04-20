@@ -43,10 +43,32 @@ fn add_rtp_recv(
         .build()
         .unwrap();
     pipeline.add(&rtp_src).unwrap();
+    // Up to GStreamer 1.28 included, udpsrc/2 used the default basesrc behaviour
+    // that triggers an Allocation query when a Reconfigure event is sent by a branch.
+    // Since the query is serialized and depending on scheduling,
+    // the streaming thread could be locked while the query was being handled,
+    // preventing udpsrc from handling incoming packets and affecting accuracy
+    // of arrival timestamps, then causing disturbances and offsets downstream.
+    // This is solved for newer udpsrc/2 versions, but the workaround
+    // is kept here as an illustration & to ensure proper behaviour for all.
+    rtp_src.static_pad("src").unwrap().add_probe(
+        gst::PadProbeType::QUERY_DOWNSTREAM | gst::PadProbeType::PUSH,
+        |_pad, info| {
+            let Some(gst::PadProbeData::Query(query)) = info.data.as_ref() else {
+                unreachable!();
+            };
+            if query.type_() == gst::QueryType::Allocation {
+                return gst::PadProbeReturn::Drop;
+            }
+            gst::PadProbeReturn::Ok
+        },
+    );
+    // Decouple downstream & add enough buffering
+    // so udpsrc handles & timestamps packets immediately as they arrive
     let queue_rtp = gst::ElementFactory::make("queue")
         .name(format!("queue-rtp-{}-{}", params.session_id, params.pt))
         .property("max-size-bytes", 0u32)
-        .property("max-size-time", LATENCY + 50.mseconds())
+        .property("max-size-time", 50.mseconds())
         .property("max-size-buffers", 0u32)
         .build()
         .unwrap();
