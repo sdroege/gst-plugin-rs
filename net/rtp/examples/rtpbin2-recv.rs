@@ -146,6 +146,15 @@ async fn run() {
             rtcp_recv_port: 5005,
             rtcp_send_port: 5007,
             on_pad_added: Box::new(|pipeline, pad| {
+                let depay_queue = gst::ElementFactory::make("queue")
+                    .name("video-depay-queue")
+                    .property("max-size-bytes", 0u32)
+                    // Add enough buffering to cope with differences in branch latency
+                    // and transitions
+                    .property("max-size-time", 250.mseconds())
+                    .property("max-size-buffers", 0u32)
+                    .build()
+                    .unwrap();
                 let depay = gst::ElementFactory::make("rtpvp8depay2").build().unwrap();
                 let dec = gst::ElementFactory::make("vp8dec").build().unwrap();
                 let conv = gst::ElementFactory::make("videoconvert").build().unwrap();
@@ -168,16 +177,13 @@ async fn run() {
                         }
                     });
 
-                let elems = [&depay, &dec, &conv, &sink_queue, &sink];
+                let elems = [&depay_queue, &depay, &dec, &conv, &sink_queue, &sink];
                 pipeline.add_many(elems).unwrap();
-                pad.link(&depay.static_pad("sink").unwrap()).unwrap();
+                pad.link(&depay_queue.static_pad("sink").unwrap()).unwrap();
                 gst::Element::link_many(elems).unwrap();
-
-                sink.sync_state_with_parent().unwrap();
-                sink_queue.sync_state_with_parent().unwrap();
-                conv.sync_state_with_parent().unwrap();
-                dec.sync_state_with_parent().unwrap();
-                depay.sync_state_with_parent().unwrap();
+                for elem in elems.into_iter().rev() {
+                    elem.sync_state_with_parent().unwrap();
+                }
             }),
         },
         SessionParameters {
@@ -193,6 +199,15 @@ async fn run() {
             rtcp_recv_port: 5009,
             rtcp_send_port: 5011,
             on_pad_added: Box::new(|pipeline, pad| {
+                let depay_queue = gst::ElementFactory::make("queue")
+                    .name("audio-depay-queue")
+                    .property("max-size-bytes", 0u32)
+                    // Add enough buffering to cope with differences in branch latency
+                    // and transitions
+                    .property("max-size-time", 250.mseconds())
+                    .property("max-size-buffers", 0u32)
+                    .build()
+                    .unwrap();
                 let depay = gst::ElementFactory::make("rtpopusdepay2").build().unwrap();
                 let dec = gst::ElementFactory::make("opusdec").build().unwrap();
                 let conv = gst::ElementFactory::make("audioconvert").build().unwrap();
@@ -214,16 +229,13 @@ async fn run() {
                         }
                     });
 
-                let elems = [&depay, &dec, &conv, &sink_queue, &sink];
+                let elems = [&depay_queue, &depay, &dec, &conv, &sink_queue, &sink];
                 pipeline.add_many(elems).unwrap();
-                pad.link(&depay.static_pad("sink").unwrap()).unwrap();
+                pad.link(&depay_queue.static_pad("sink").unwrap()).unwrap();
                 gst::Element::link_many(elems).unwrap();
-
-                sink.sync_state_with_parent().unwrap();
-                sink_queue.sync_state_with_parent().unwrap();
-                conv.sync_state_with_parent().unwrap();
-                dec.sync_state_with_parent().unwrap();
-                depay.sync_state_with_parent().unwrap();
+                for elem in elems.into_iter().rev() {
+                    elem.sync_state_with_parent().unwrap();
+                }
             }),
         },
     ];
