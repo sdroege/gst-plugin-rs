@@ -80,7 +80,6 @@ pub struct Session {
     remote_senders: HashMap<u32, RemoteSendSource>,
     timed_out_ssrcs: VecDeque<u32>,
     average_rtcp_size: usize,
-    last_sent_data: Option<Instant>,
     hold_buffer_counter: usize,
     sdes: HashMap<u8, String>,
     pt_map: HashMap<u8, u32>,
@@ -196,7 +195,6 @@ impl Session {
                 p_members: 0,
             },
             average_rtcp_size: 100,
-            last_sent_data: None,
             hold_buffer_counter: 0,
             sdes,
             pt_map: HashMap::new(),
@@ -426,7 +424,6 @@ impl Session {
             rtp.timestamp(),
             rtp.payload().len()
         );
-        self.last_sent_data = Some(now);
 
         // handle possible collision
         if let Some(source) = self.remote_senders.get(&rtp.ssrc()) {
