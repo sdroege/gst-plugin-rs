@@ -358,16 +358,16 @@ impl State {
                     );
                     return true;
                 }
-                WebRTCSdpType::Answer => {
-                    if remote_dir.intersect_with_answer(trans_state.direction()) != local_dir {
-                        gst::log!(
-                            CAT,
-                            "transceiver direction({:?}) doesn't match the new description intersected direction {:?} (prev local {local_dir:?} remote {remote_dir:?}",
-                            trans_state.direction(),
-                            remote_dir.intersect_with_answer(trans_state.direction())
-                        );
-                        return true;
-                    }
+                WebRTCSdpType::Answer
+                    if trans_state.direction().intersect_with_remote(remote_dir) != local_dir =>
+                {
+                    gst::log!(
+                        CAT,
+                        "transceiver direction({:?}) doesn't match the new description intersected direction {:?} (prev local {local_dir:?} remote {remote_dir:?}",
+                        trans_state.direction(),
+                        trans_state.direction().intersect_with_remote(remote_dir)
+                    );
+                    return true;
                 }
                 _ => (),
             }

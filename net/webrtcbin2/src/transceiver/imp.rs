@@ -96,7 +96,7 @@ impl State {
 
         let new_dir = local_rtp
             .direction
-            .intersect_with_answer(remote_rtp.direction);
+            .intersect_with_remote(remote_rtp.direction);
 
         if self.current_direction != Some(new_dir) {
             gst::debug!(

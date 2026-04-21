@@ -1503,7 +1503,7 @@ impl RtpMedia {
 
     pub fn produce_answer_from_offer_and_source(offer: &RtpMedia, answer: &RtpMedia) -> RtpMedia {
         let mut ret = answer.clone();
-        ret.direction = offer.direction.intersect_with_answer(answer.direction);
+        ret.direction = answer.direction.intersect_with_remote(offer.direction);
         ret.rtcp_mux &= offer.rtcp_mux;
         ret.rtcp_mux_only &= offer.rtcp_mux_only;
         ret.rtcp_rsize &= offer.rtcp_rsize;
@@ -1578,15 +1578,17 @@ impl Direction {
         }
     }
 
-    pub fn intersect_with_answer(self, answer: Self) -> Self {
-        match (self, answer) {
+    pub fn intersect_with_remote(self, remote: Self) -> Self {
+        match (self, remote) {
             (Self::Inactive, _)
             | (_, Self::Inactive)
             | (Self::RecvOnly, Self::RecvOnly)
             | (Self::SendOnly, Self::SendOnly) => Self::Inactive,
             (Self::SendRecv, Self::SendRecv) => Self::SendRecv,
-            (Self::SendOnly | Self::SendRecv, Self::SendRecv | Self::RecvOnly) => Self::RecvOnly,
-            (Self::RecvOnly | Self::SendRecv, Self::SendRecv | Self::SendOnly) => Self::SendOnly,
+            (Self::SendOnly, Self::RecvOnly | Self::SendRecv)
+            | (Self::SendRecv, Self::RecvOnly) => Self::SendOnly,
+            (Self::RecvOnly, Self::SendRecv | Self::SendOnly)
+            | (Self::SendRecv, Self::SendOnly) => Self::RecvOnly,
         }
     }
 }
@@ -1706,7 +1708,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_direction_answer_intersection() {
+    fn test_direction_remote_intersection() {
         let directions = [
             Direction::SendRecv,
             Direction::SendOnly,
@@ -1715,44 +1717,44 @@ mod tests {
         ];
         for dir in directions {
             assert_eq!(
-                Direction::Inactive.intersect_with_answer(dir),
+                Direction::Inactive.intersect_with_remote(dir),
                 Direction::Inactive
             );
             assert_eq!(
-                dir.intersect_with_answer(Direction::Inactive),
+                dir.intersect_with_remote(Direction::Inactive),
                 Direction::Inactive
             );
         }
         assert_eq!(
-            Direction::SendOnly.intersect_with_answer(Direction::SendOnly),
+            Direction::SendOnly.intersect_with_remote(Direction::SendOnly),
             Direction::Inactive
         );
         assert_eq!(
-            Direction::RecvOnly.intersect_with_answer(Direction::RecvOnly),
+            Direction::RecvOnly.intersect_with_remote(Direction::RecvOnly),
             Direction::Inactive
         );
 
         assert_eq!(
-            Direction::SendRecv.intersect_with_answer(Direction::SendRecv),
+            Direction::SendRecv.intersect_with_remote(Direction::SendRecv),
             Direction::SendRecv
         );
 
         assert_eq!(
-            Direction::SendRecv.intersect_with_answer(Direction::SendOnly),
-            Direction::SendOnly
+            Direction::SendRecv.intersect_with_remote(Direction::SendOnly),
+            Direction::RecvOnly
         );
         assert_eq!(
-            Direction::RecvOnly.intersect_with_answer(Direction::SendRecv),
-            Direction::SendOnly
+            Direction::RecvOnly.intersect_with_remote(Direction::SendRecv),
+            Direction::RecvOnly
         );
 
         assert_eq!(
-            Direction::SendRecv.intersect_with_answer(Direction::RecvOnly),
-            Direction::RecvOnly
+            Direction::SendRecv.intersect_with_remote(Direction::RecvOnly),
+            Direction::SendOnly
         );
         assert_eq!(
-            Direction::SendOnly.intersect_with_answer(Direction::SendRecv),
-            Direction::RecvOnly
+            Direction::SendOnly.intersect_with_remote(Direction::SendRecv),
+            Direction::SendOnly
         );
     }
 
