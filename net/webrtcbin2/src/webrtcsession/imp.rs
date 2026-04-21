@@ -744,8 +744,8 @@ impl WebRTCSession {
                         let mut ret = remote_rtp.clone();
                         ret.direction = Direction::RecvOnly;
                         ret.rtcp_mux = true;
-                        ret.rtcp_mux_only = true;
-                        MediaSpecifics::Rtp(ret)
+                        ret.rtcp_mux_only = false;
+                        MediaSpecifics::Rtp(crate::webrtcsession::sdp::RtpMedia::produce_answer_from_offer_and_source(remote_rtp, &ret))
                     }
                 }
                 MediaSpecifics::Datachannel(data) => MediaSpecifics::Datachannel(data.clone()),
@@ -1169,7 +1169,7 @@ impl WebRTCSession {
                             let caps = gst::Caps::builder("application/x-rtp")
                                 .field("payload", *format as i32)
                                 .field("clock-rate", rtpmap.clock_rate as i32)
-                                .field("encoding-name", &rtpmap.name)
+                                .field("encoding-name", rtpmap.name.to_ascii_uppercase())
                                 .field("media", media_str)
                                 .build();
                             pt_map = pt_map.field(format.to_string(), caps);

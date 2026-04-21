@@ -85,6 +85,44 @@ struct App(Arc<AppInner>);
 #[derive(Debug)]
 struct AppWeak(Weak<AppInner>);
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct RtpMap {
+    pub name: String,
+    pub clock_rate: u32,
+    pub params: Option<String>,
+}
+
+impl RtpMap {
+    fn from_str(s: &str) -> Result<(u8, Self), ()> {
+        let mut s = s.splitn(2, " ");
+        let pt = s.next().and_then(parse_payload).ok_or(())?;
+        let params = s.next().ok_or(())?;
+        let mut s = params.split("/");
+        let enc_name = s.next().ok_or(())?;
+        let clock_rate = s.next().and_then(|cr| cr.parse::<u32>().ok()).ok_or(())?;
+        let enc_params = s.next().map(|s| s.to_string());
+        if s.next().is_some() {
+            return Err(());
+        }
+        Ok((
+            pt,
+            RtpMap {
+                name: enc_name.to_string(),
+                clock_rate,
+                params: enc_params,
+            },
+        ))
+    }
+}
+
+fn parse_payload(s: &str) -> Option<u8> {
+    let pt = s.parse::<u8>().ok()?;
+    if pt > 127 {
+        return None;
+    }
+    Some(pt)
+}
+
 // To be able to access the App's fields directly
 impl std::ops::Deref for App {
     type Target = AppInner;
@@ -425,90 +463,84 @@ impl App {
         Ok(())
     }
 
-    /*
-        fn configure_pipeline_on_offer(
-            &self,
-            offer: &str,
-        ) -> Result<(), anyhow::Error> {
-            // Extract audio/video payload types from the SDP and configure accordingly on the
-            // pipeline as these have to match with the offer
-            let mut opus_id = None;
-            let mut vp8_id = None;
-            for media in offer.medias() {
-                for fmt in media.formats() {
-                    if fmt == "webrtc-datachannel" {
-                        continue;
+    fn configure_pipeline_on_offer(&self, offer: &sdp_types::Session) -> Result<(), anyhow::Error> {
+        // Extract audio/video payload types from the SDP and configure accordingly on the
+        // pipeline as these have to match with the offer
+        let mut opus_id = None;
+        let mut vp8_id = None;
+        for media in &offer.medias {
+            for fmt in media.fmt.split(" ") {
+                if fmt == "webrtc-datachannel" {
+                    continue;
+                }
+
+                let pt = match fmt.parse::<u8>() {
+                    Ok(pt) => pt,
+                    Err(_) => continue,
+                };
+
+                /*
+                let twcc_id = media.attributes().find_map(|attr| {
+                    let key = attr.key();
+                    let value = attr.value();
+                    if key != "extmap" || !value.is_some_and(|value| value.ends_with(TWCC_URI)) {
+                        return None;
                     }
+                    let value = value.unwrap();
 
-                    let pt = match fmt.parse::<u8>() {
-                        Ok(pt) => pt,
-                        Err(_) => continue,
-                    };
+                    let id = value
+                        .strip_suffix(TWCC_URI)
+                        .and_then(|id| id.trim().parse::<u8>().ok());
 
-                    let caps = match media.caps_from_media(pt as i32) {
-                        Some(caps) if caps.size() > 0 => caps,
-                        _ => continue,
-                    };
+                    id
+                });
+                */
+                let twcc_id = None::<u8>;
 
-                    let s = caps.structure(0).unwrap();
-                    let encoding_name = match s.get::<&str>("encoding-name") {
-                        Ok(encoding_name) => encoding_name,
-                        Err(_) => continue,
-                    };
-
-                    /*
-                    let twcc_id = media.attributes().find_map(|attr| {
-                        let key = attr.key();
-                        let value = attr.value();
-                        if key != "extmap" || !value.is_some_and(|value| value.ends_with(TWCC_URI)) {
-                            return None;
+                for a in &media.attributes {
+                    if a.attribute == "rtpmap" {
+                        let rtpmap = a.value.as_ref().expect("No rtpmap value!");
+                        let (map_pt, rtpmap) =
+                            RtpMap::from_str(rtpmap).expect("Failed to parse rtpmap");
+                        if map_pt == pt {
+                            if rtpmap.name == "VP8" && vp8_id.is_none() {
+                                vp8_id = Some((pt, twcc_id));
+                            } else if rtpmap.name.eq_ignore_ascii_case("opus") && opus_id.is_none()
+                            {
+                                opus_id = Some((pt, twcc_id));
+                            }
                         }
-                        let value = value.unwrap();
-
-                        let id = value
-                            .strip_suffix(TWCC_URI)
-                            .and_then(|id| id.trim().parse::<u8>().ok());
-
-                        id
-                    });
-                    */
-                    let twcc_id = None;
-
-                    if encoding_name == "VP8" && vp8_id.is_none() {
-                        vp8_id = Some((pt, twcc_id));
-                    } else if encoding_name == "OPUS" && opus_id.is_none() {
-                        opus_id = Some((pt, twcc_id));
                     }
                 }
             }
-
-            if let (Some(opus_id), Some(vp8_id)) = (opus_id, vp8_id) {
-                let apay = self.pipeline.by_name("apay").unwrap();
-                let vpay = self.pipeline.by_name("vpay").unwrap();
-
-                for (pay, (pt, twcc_id)) in [(apay, opus_id), (vpay, vp8_id)] {
-                    pay.set_property("pt", pt as u32);
-
-                    /*
-                    if let Some(twcc_id) = twcc_id {
-                        let twcc = gst_rtp::RTPHeaderExtension::create_from_uri(TWCC_URI).unwrap();
-                        twcc.set_id(twcc_id as u32);
-                        pay.emit_by_name::<()>("add-extension", &[&twcc]);
-                    }
-                    */
-                }
-            } else {
-                gst::element_error!(
-                    self.pipeline,
-                    gst::LibraryError::Failed,
-                    ("Not all streams found in the offer")
-                );
-                bail!("Not all streams found in the offer");
-            }
-
-            Ok(())
         }
-    */
+
+        if let (Some(opus_id), Some(vp8_id)) = (opus_id, vp8_id) {
+            let apay = self.pipeline.by_name("apay").unwrap();
+            let vpay = self.pipeline.by_name("vpay").unwrap();
+
+            for (pay, (pt, _twcc_id)) in [(apay, opus_id), (vpay, vp8_id)] {
+                pay.set_property("pt", pt as u32);
+
+                /*
+                if let Some(twcc_id) = twcc_id {
+                    let twcc = gst_rtp::RTPHeaderExtension::create_from_uri(TWCC_URI).unwrap();
+                    twcc.set_id(twcc_id as u32);
+                    pay.emit_by_name::<()>("add-extension", &[&twcc]);
+                }
+                */
+            }
+        } else {
+            gst::element_error!(
+                self.pipeline,
+                gst::LibraryError::Failed,
+                ("Not all streams found in the offer")
+            );
+            bail!("Not all streams found in the offer");
+        }
+
+        Ok(())
+    }
 
     // Handle incoming SDP answers from the peer
     fn handle_sdp(&self, type_: &str, sdp: &str) -> Result<(), anyhow::Error> {
@@ -528,15 +560,16 @@ impl App {
             // pipeline needs to be started before we can create an answer
             let app_clone = self.downgrade();
             let type_ = type_.to_string();
-            let sdp = sdp.to_string();
+            let sdp_str = sdp.to_string();
             self.pipeline.call_async(move |_pipeline| {
                 let app = upgrade_weak!(app_clone);
 
-                /*
+                let sdp =
+                    sdp_types::Session::parse(sdp_str.as_bytes()).expect("Failed to parse SDP");
+
                 if app.configure_pipeline_on_offer(&sdp).is_err() {
                     return;
                 }
-                */
 
                 // If this fails, post an error on the bus so we exit
                 if app.pipeline.set_state(gst::State::Playing).is_err() {
@@ -550,7 +583,7 @@ impl App {
 
                 app.0.session.emit_by_name::<()>(
                     "set-remote-description",
-                    &[&type_, &sdp, &None::<gst::Promise>],
+                    &[&type_, &sdp_str, &None::<gst::Promise>],
                 );
 
                 let app_clone = app.downgrade();

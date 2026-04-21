@@ -1517,6 +1517,12 @@ impl RtpMedia {
             if offer_rtpmap != answer_rtpmap {
                 continue;
             }
+            // TODO: ignore red/rtx/ulpfec as they are not supported yet.
+            if let Some(rtpmap) = offer_rtpmap
+                && ["rtx", "red", "ulpfec"].contains(&rtpmap.name.as_str())
+            {
+                continue;
+            }
             if offer.fmtps.get(fmt) != answer.fmtps.get(fmt) {
                 // TODO: media-specific equivalence
                 continue;
