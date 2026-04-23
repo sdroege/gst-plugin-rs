@@ -34,14 +34,18 @@ pub enum DataQueueItem {
 }
 
 impl DataQueueItem {
-    fn size(&self) -> (u32, u32) {
+    fn sizes(&self) -> (u32, u32, Option<gst::ClockTime>) {
         match *self {
-            DataQueueItem::Buffer(ref buffer) => (1, buffer.size() as u32),
-            DataQueueItem::BufferList(ref list) => (
-                list.len() as u32,
-                list.iter().map(|b| b.size() as u32).sum::<u32>(),
-            ),
-            DataQueueItem::Event(_) => (0, 0),
+            DataQueueItem::Buffer(ref buffer) => (1, buffer.size() as u32, buffer.dts_or_pts()),
+            DataQueueItem::BufferList(ref list) => {
+                let (size, ts) = list
+                    .iter()
+                    .fold((0, gst::ClockTime::NONE), |(size, first_ts), buf| {
+                        (size + buf.size(), first_ts.or(buf.dts_or_pts()))
+                    });
+                (list.len() as u32, size as u32, ts)
+            }
+            DataQueueItem::Event(_) => (0, 0, None),
         }
     }
 
@@ -49,6 +53,14 @@ impl DataQueueItem {
         match *self {
             DataQueueItem::Buffer(ref buffer) => buffer.dts_or_pts(),
             DataQueueItem::BufferList(ref list) => list.iter().find_map(|b| b.dts_or_pts()),
+            DataQueueItem::Event(_) => None,
+        }
+    }
+
+    fn last_timestamp(&self) -> Option<gst::ClockTime> {
+        match *self {
+            DataQueueItem::Buffer(ref buffer) => buffer.dts_or_pts(),
+            DataQueueItem::BufferList(ref list) => list.iter().rev().find_map(|b| b.dts_or_pts()),
             DataQueueItem::Event(_) => None,
         }
     }
@@ -104,6 +116,21 @@ impl DataQueueInner {
             pending_handle.abort();
         }
     }
+
+    fn update_cur_time_level(&mut self) {
+        if let Some((first_ts, last_ts)) = Option::zip(
+            self.queue.iter().find_map(|i| i.timestamp()),
+            self.queue.iter().rev().find_map(|i| i.last_timestamp()),
+        ) {
+            self.cur_level_time = if last_ts >= first_ts {
+                last_ts - first_ts
+            } else {
+                first_ts - last_ts
+            };
+        } else {
+            self.cur_level_time = gst::ClockTime::ZERO;
+        }
+    }
 }
 
 impl DataQueue {
@@ -129,6 +156,10 @@ impl DataQueue {
 
     pub fn cur_level_time(&self) -> gst::ClockTime {
         self.0.lock().unwrap().cur_level_time
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.lock().unwrap().queue.is_empty()
     }
 
     pub fn start(&self) {
@@ -203,58 +234,51 @@ impl DataQueue {
             return Err(item);
         }
 
-        gst::debug!(DATA_QUEUE_CAT, obj = obj, "Pushing item {item:?}");
+        let (buffer_count, bytes, ts) = item.sizes();
 
-        let (count, bytes) = item.size();
-        let queue_ts = inner.queue.iter().find_map(|i| i.timestamp());
-        let ts = item.timestamp();
-
-        if let Some(max) = inner.max_size_buffers
-            && max <= inner.cur_level_buffers
-        {
-            gst::debug!(
-                DATA_QUEUE_CAT,
-                obj = obj,
-                "Queue is full (buffers): {max} <= {}",
-                inner.cur_level_buffers
-            );
-            return Err(item);
-        }
-
-        if let Some(max) = inner.max_size_bytes
-            && max <= inner.cur_level_bytes
-        {
-            gst::debug!(
-                DATA_QUEUE_CAT,
-                obj = obj,
-                "Queue is full (bytes): {max} <= {}",
-                inner.cur_level_bytes
-            );
-            return Err(item);
-        }
-
-        // FIXME: Use running time
-        let level = if let (Some(queue_ts), Some(ts)) = (queue_ts, ts) {
-            let level = if queue_ts > ts {
-                queue_ts - ts
-            } else {
-                ts - queue_ts
-            };
-
-            if inner.max_size_time.opt_le(level).unwrap_or(false) {
+        if buffer_count > 0 {
+            if let Some(max) = inner.max_size_buffers
+                && max <= inner.cur_level_buffers
+            {
                 gst::debug!(
                     DATA_QUEUE_CAT,
                     obj = obj,
-                    "Queue is full (time): {} <= {level}",
-                    inner.max_size_time.display(),
+                    "Queue is full (buffers): {max} <= {}, {item:?}",
+                    inner.cur_level_buffers,
                 );
                 return Err(item);
             }
 
-            level
-        } else {
-            gst::ClockTime::ZERO
-        };
+            if let Some(max) = inner.max_size_bytes
+                && max <= inner.cur_level_bytes
+            {
+                gst::debug!(
+                    DATA_QUEUE_CAT,
+                    obj = obj,
+                    "Queue is full (bytes): {max} <= {}, {item:?}",
+                    inner.cur_level_bytes,
+                );
+                return Err(item);
+            }
+
+            if ts.is_some() {
+                // FIXME: Use running time
+                if let Some(max) = inner.max_size_time
+                    && max <= inner.cur_level_time
+                {
+                    gst::debug!(
+                        DATA_QUEUE_CAT,
+                        obj = obj,
+                        "Queue is full (time): {max} <= {}, {item:?}",
+                        inner.cur_level_time,
+                    );
+
+                    return Err(item);
+                }
+            }
+        }
+
+        gst::debug!(DATA_QUEUE_CAT, obj = obj, "Pushing item {item:?}");
 
         use PushedStatus::*;
         match inner.pushed_status {
@@ -269,9 +293,12 @@ impl DataQueue {
         }
 
         inner.queue.push_back(item);
-        inner.cur_level_buffers += count;
+
+        inner.cur_level_buffers += buffer_count;
         inner.cur_level_bytes += bytes;
-        inner.cur_level_time = level;
+        if ts.is_some() {
+            inner.update_cur_time_level();
+        }
 
         inner.wake();
 
@@ -297,9 +324,15 @@ impl DataQueue {
                                 item
                             );
 
-                            let (count, bytes) = item.size();
-                            inner.cur_level_buffers -= count;
-                            inner.cur_level_bytes -= bytes;
+                            let (buffer_count, bytes, ts) = item.sizes();
+                            if buffer_count > 0 {
+                                inner.cur_level_buffers -= buffer_count;
+                                inner.cur_level_bytes -= bytes;
+
+                                if ts.is_some() {
+                                    inner.update_cur_time_level();
+                                }
+                            }
 
                             return Some(item);
                         }
@@ -360,5 +393,254 @@ impl DataQueueBuilder {
 
     pub fn build(self) -> DataQueue {
         DataQueue(Arc::new(Mutex::new(self.0)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn init(test: &str) -> (gst::Element, gst::Pad) {
+        use std::sync::Once;
+        static INIT: Once = Once::new();
+
+        INIT.call_once(|| {
+            gst::init().unwrap();
+        });
+
+        let elem = gst::ElementFactory::make("fakesrc")
+            .name(test)
+            .build()
+            .unwrap();
+        let src_pad = elem.static_pad("src").unwrap();
+
+        (elem, src_pad)
+    }
+
+    #[track_caller]
+    fn push_initial_events(elem: &gst::Element, dq: &DataQueue) {
+        dq.push(
+            elem.upcast_ref(),
+            DataQueueItem::Event(
+                gst::event::Caps::builder(&gst::Caps::new_empty_simple("test/raw")).build(),
+            ),
+        )
+        .unwrap();
+        dq.push(
+            elem.upcast_ref(),
+            DataQueueItem::Event(gst::event::StreamStart::builder(&elem.name()).build()),
+        )
+        .unwrap();
+        dq.push(
+            elem.upcast_ref(),
+            DataQueueItem::Event(
+                gst::event::Segment::builder(&gst::FormattedSegment::<gst::format::Time>::new())
+                    .build(),
+            ),
+        )
+        .unwrap();
+    }
+
+    #[track_caller]
+    fn push_segment_done(elem: &gst::Element, dq: &DataQueue) {
+        dq.push(
+            elem.upcast_ref(),
+            DataQueueItem::Event(gst::event::SegmentDone::builder(2.seconds()).build()),
+        )
+        .unwrap();
+    }
+
+    fn pop_item(dq: &mut DataQueue) -> Option<DataQueueItem> {
+        futures::executor::block_on(dq.next())
+    }
+
+    #[track_caller]
+    fn pop_event(dq: &mut DataQueue) -> gst::Event {
+        match pop_item(dq) {
+            Some(DataQueueItem::Event(evt)) => evt,
+            other => panic!("Unexpected {other:?}"),
+        }
+    }
+
+    #[track_caller]
+    fn pop_intial_events(dq: &mut DataQueue) {
+        assert_eq!(pop_event(dq).type_(), gst::EventType::Caps);
+        assert_eq!(pop_event(dq).type_(), gst::EventType::StreamStart);
+        assert_eq!(pop_event(dq).type_(), gst::EventType::Segment);
+    }
+
+    #[track_caller]
+    fn pop_segment_done(dq: &mut DataQueue) {
+        assert_eq!(pop_event(dq).type_(), gst::EventType::SegmentDone);
+    }
+
+    fn push_buffer(
+        elem: &gst::Element,
+        dq: &DataQueue,
+        ts: gst::ClockTime,
+    ) -> Result<PushedStatus, DataQueueItem> {
+        let mut buf = gst::Buffer::from_slice([0u8]);
+        {
+            let buf_mut = buf.make_mut();
+            buf_mut.set_pts(ts);
+        }
+
+        dq.push(elem.upcast_ref(), DataQueueItem::Buffer(buf))
+    }
+
+    #[track_caller]
+    fn pop_buffer(dq: &mut DataQueue) -> gst::Buffer {
+        match pop_item(dq) {
+            Some(DataQueueItem::Buffer(buf)) => buf,
+            other => panic!("Unexpected {other:?}"),
+        }
+    }
+
+    fn push_buffer_list(
+        elem: &gst::Element,
+        dq: &DataQueue,
+        ts: gst::ClockTime,
+    ) -> Result<PushedStatus, DataQueueItem> {
+        let mut buf1 = gst::Buffer::from_slice([0u8]);
+        {
+            let buf_mut = buf1.make_mut();
+            buf_mut.set_pts(ts);
+        }
+        let mut buf2 = gst::Buffer::from_slice([0u8]);
+        {
+            let buf_mut = buf2.make_mut();
+            buf_mut.set_pts(ts + 1.seconds());
+        }
+
+        dq.push(
+            elem.upcast_ref(),
+            DataQueueItem::BufferList(gst::BufferList::from([buf1, buf2])),
+        )
+    }
+
+    #[track_caller]
+    fn pop_buffer_list(dq: &mut DataQueue) -> gst::BufferList {
+        match pop_item(dq) {
+            Some(DataQueueItem::BufferList(buf_list)) => buf_list,
+            other => panic!("Unexpected {other:?}"),
+        }
+    }
+
+    fn test_not_leaky(elem: &gst::Element, dq: &mut DataQueue) {
+        dq.start();
+
+        // Buffers
+        push_initial_events(elem, dq);
+        assert_eq!(dq.cur_level_buffers(), 0);
+        assert_eq!(dq.cur_level_bytes(), 0);
+        assert_eq!(dq.cur_level_time(), 0.seconds());
+
+        push_buffer(elem, dq, 0.seconds()).unwrap();
+        push_buffer(elem, dq, 1.seconds()).unwrap();
+        assert_eq!(dq.cur_level_buffers(), 2);
+        assert_eq!(dq.cur_level_bytes(), 2);
+        assert_eq!(dq.cur_level_time(), 1.seconds());
+        let rejected_buf = match push_buffer(elem, dq, 2.seconds()).unwrap_err() {
+            DataQueueItem::Buffer(buf) => buf,
+            other => panic!("Unexpected {other:?}"),
+        };
+        assert_eq!(rejected_buf.pts(), Some(2.seconds()));
+        assert_eq!(dq.cur_level_buffers(), 2);
+        assert_eq!(dq.cur_level_bytes(), 2);
+        assert_eq!(dq.cur_level_time(), 1.seconds());
+        push_segment_done(elem, dq);
+
+        pop_intial_events(dq);
+        let buf = pop_buffer(dq);
+        assert_eq!(buf.pts(), Some(0.seconds()));
+        assert_eq!(dq.cur_level_buffers(), 1);
+        assert_eq!(dq.cur_level_bytes(), 1);
+        assert_eq!(dq.cur_level_time(), 0.seconds());
+        let buf = pop_buffer(dq);
+        assert_eq!(buf.pts(), Some(1.seconds()));
+        assert_eq!(dq.cur_level_buffers(), 0);
+        assert_eq!(dq.cur_level_bytes(), 0);
+        assert_eq!(dq.cur_level_time(), 0.seconds());
+        pop_segment_done(dq);
+        assert!(dq.is_empty());
+
+        // Buffer list
+        push_initial_events(elem, dq);
+        assert_eq!(dq.cur_level_buffers(), 0);
+        assert_eq!(dq.cur_level_bytes(), 0);
+        assert_eq!(dq.cur_level_time(), 0.seconds());
+
+        push_buffer_list(elem, dq, 0.seconds()).unwrap();
+        assert_eq!(dq.cur_level_buffers(), 2);
+        assert_eq!(dq.cur_level_bytes(), 2);
+        assert_eq!(dq.cur_level_time(), 1.seconds());
+
+        let rejected_buf_list = match push_buffer_list(elem, dq, 2.seconds()).unwrap_err() {
+            DataQueueItem::BufferList(buf_list) => buf_list,
+            other => panic!("Unexpected {other:?}"),
+        };
+        assert_eq!(rejected_buf_list.len(), 2);
+        let buf = rejected_buf_list.get(0).unwrap();
+        assert_eq!(buf.pts(), Some(2.seconds()));
+
+        let rejected_buf = match push_buffer(elem, dq, 2.seconds()).unwrap_err() {
+            DataQueueItem::Buffer(buf) => buf,
+            other => panic!("Unexpected {other:?}"),
+        };
+        assert_eq!(rejected_buf.pts(), Some(2.seconds()));
+        assert_eq!(dq.cur_level_buffers(), 2);
+        assert_eq!(dq.cur_level_bytes(), 2);
+        assert_eq!(dq.cur_level_time(), 1.seconds());
+
+        push_segment_done(elem, dq);
+
+        pop_intial_events(dq);
+        let buf_list = pop_buffer_list(dq);
+        let buf = buf_list.get(0).unwrap();
+        assert_eq!(buf.pts(), Some(0.seconds()));
+        assert_eq!(dq.cur_level_buffers(), 0);
+        assert_eq!(dq.cur_level_bytes(), 0);
+        assert_eq!(dq.cur_level_time(), 0.seconds());
+        pop_segment_done(dq);
+        assert!(dq.is_empty());
+    }
+
+    #[test]
+    fn not_leaky_max_size_buffers() {
+        let (elem, src_pad) = init("not_leaky - max_size_buffers");
+
+        let mut dq = DataQueueBuilder::new(&elem, &src_pad)
+            .max_size_buffers(2)
+            .max_size_bytes(0)
+            .max_size_time(gst::ClockTime::ZERO)
+            .build();
+
+        test_not_leaky(&elem, &mut dq);
+    }
+
+    #[test]
+    fn not_leaky_max_size_bytes() {
+        let (elem, src_pad) = init("not_leaky - max_size_bytes");
+
+        let mut dq = DataQueueBuilder::new(&elem, &src_pad)
+            .max_size_buffers(0)
+            .max_size_bytes(2)
+            .max_size_time(gst::ClockTime::ZERO)
+            .build();
+
+        test_not_leaky(&elem, &mut dq);
+    }
+
+    #[test]
+    fn not_leaky_max_size_time() {
+        let (elem, src_pad) = init("not_leaky - max_size_time");
+
+        let mut dq = DataQueueBuilder::new(&elem, &src_pad)
+            .max_size_buffers(0)
+            .max_size_bytes(0)
+            .max_size_time(1.seconds())
+            .build();
+
+        test_not_leaky(&elem, &mut dq);
     }
 }
