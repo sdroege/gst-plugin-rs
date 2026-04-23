@@ -1190,7 +1190,19 @@ impl SessionInner {
         let desc_type = desc.type_();
         let webrtcbin = self.webrtcbin();
 
-        let request_src_pads = element.src_pads().clone();
+        let request_src_pads = element
+            .src_pads()
+            .iter()
+            .filter_map(|p| {
+                p.pad_template().and_then(|t| {
+                    if t.presence() == gst::PadPresence::Request {
+                        Some(p.clone())
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect::<Vec<gst::Pad>>();
 
         for (i, media) in sdp.medias().enumerate() {
             if media.attributes().any(|attr| attr.key() == "inactive") {
