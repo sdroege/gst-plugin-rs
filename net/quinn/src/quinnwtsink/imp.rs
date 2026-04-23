@@ -15,7 +15,8 @@ use crate::quinnconnection::*;
 use crate::quinnquicmeta::*;
 use crate::quinnquicquery::*;
 use crate::utils::{
-    CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG, WaitError, get_stats, make_socket_addr, wait,
+    CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG, RUNTIME, WaitError, get_stats, make_socket_addr,
+    wait,
 };
 use crate::{common::*, utils};
 use bytes::Bytes;
@@ -484,9 +485,12 @@ impl BaseSinkImpl for QuinnWebTransportSink {
                 self.close_stream(&mut stream, timeout);
             }
 
-            state
-                .session
-                .close(CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG.as_bytes());
+            RUNTIME.block_on(async {
+                state
+                    .session
+                    .close(CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG.as_bytes());
+                state.session.closed().await;
+            });
 
             SharedConnection::remove(state.socket_addr);
         }

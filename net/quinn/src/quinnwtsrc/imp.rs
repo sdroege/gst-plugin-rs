@@ -479,9 +479,12 @@ impl BaseSrcImpl for QuinnWebTransportSrc {
                 }
             }
 
-            state
-                .session
-                .close(CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG.as_bytes());
+            RUNTIME.block_on(async {
+                state
+                    .session
+                    .close(CONNECTION_CLOSE_CODE, CONNECTION_CLOSE_MSG.as_bytes());
+                state.session.closed().await;
+            });
 
             SharedConnection::remove(state.socket_addr);
         }
