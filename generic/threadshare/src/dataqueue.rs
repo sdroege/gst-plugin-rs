@@ -7,7 +7,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use futures::future::{self, AbortHandle, abortable};
+use smallvec::SmallVec;
 
+use gst::glib;
 use gst::prelude::*;
 
 use std::sync::LazyLock;
@@ -25,6 +27,25 @@ static DATA_QUEUE_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
         Some("Thread-sharing queue"),
     )
 });
+
+#[derive(Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
+#[repr(u32)]
+#[enum_type(name = "GstTsQueueLeakyMode")]
+pub enum QueueLeakyMode {
+    #[default]
+    #[enum_value(name = "Not Leaky", nick = "no")]
+    NotLeaky,
+    #[enum_value(name = "Leaky on upstream (new buffers)", nick = "upstream")]
+    Upstream,
+    #[enum_value(name = "Leaky on downstream (old buffers)", nick = "downstream")]
+    Downstream,
+}
+
+impl QueueLeakyMode {
+    pub fn is_leaky(self) -> bool {
+        !matches!(self, QueueLeakyMode::NotLeaky)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum DataQueueItem {
@@ -100,6 +121,7 @@ struct DataQueueInner {
 
     pushed_status: PushedStatus,
 
+    leaky_mode: QueueLeakyMode,
     cur_level_buffers: u32,
     cur_level_bytes: u32,
     cur_level_time: gst::ClockTime,
@@ -130,6 +152,47 @@ impl DataQueueInner {
         } else {
             self.cur_level_time = gst::ClockTime::ZERO;
         }
+    }
+
+    /// Dequeues oldest buffer or buffer list, keeping events if any.
+    ///
+    /// Updates current levels.
+    ///
+    /// # Panic
+    ///
+    /// Panics if called when leaky_mode is not Downstream.
+    #[track_caller]
+    fn dequeue_oldest_buffer_or_list(&mut self, obj: &gst::glib::Object) {
+        assert_eq!(self.leaky_mode, QueueLeakyMode::Downstream);
+
+        let mut items_to_restore = SmallVec::<[DataQueueItem; 4]>::new();
+
+        let oldest_buf_or_list = loop {
+            let item = self.queue.pop_front();
+            if let Some(DataQueueItem::Event(evt)) = item {
+                items_to_restore.push(DataQueueItem::Event(evt));
+            } else {
+                break item.expect("if queue is full, there ought to be a buffer to dequeue");
+            }
+        };
+
+        items_to_restore
+            .drain(..)
+            .rev()
+            .for_each(|item| self.queue.push_front(item));
+
+        let (count, bytes, ts) = oldest_buf_or_list.sizes();
+        self.cur_level_buffers = self.cur_level_buffers.saturating_sub(count);
+        self.cur_level_bytes = self.cur_level_bytes.saturating_sub(bytes);
+        if ts.is_some() {
+            self.update_cur_time_level();
+        }
+
+        gst::debug!(
+            DATA_QUEUE_CAT,
+            obj = obj,
+            "Dropped oldest item {oldest_buf_or_list:?}",
+        );
     }
 }
 
@@ -222,6 +285,8 @@ impl DataQueue {
         obj: &gst::glib::Object,
         item: DataQueueItem,
     ) -> Result<PushedStatus, DataQueueItem> {
+        use QueueLeakyMode::*;
+
         let mut inner = self.0.lock().unwrap();
 
         if inner.state == DataQueueState::Stopped {
@@ -243,10 +308,16 @@ impl DataQueue {
                 gst::debug!(
                     DATA_QUEUE_CAT,
                     obj = obj,
-                    "Queue is full (buffers): {max} <= {}, {item:?}",
+                    "Queue is full (buffers): {max} <= {} (leaky mode {:?}), {item:?}",
                     inner.cur_level_buffers,
+                    inner.leaky_mode,
                 );
-                return Err(item);
+
+                match inner.leaky_mode {
+                    NotLeaky => return Err(item),
+                    Upstream => return Ok(inner.pushed_status),
+                    Downstream => inner.dequeue_oldest_buffer_or_list(obj),
+                }
             }
 
             if let Some(max) = inner.max_size_bytes
@@ -255,10 +326,16 @@ impl DataQueue {
                 gst::debug!(
                     DATA_QUEUE_CAT,
                     obj = obj,
-                    "Queue is full (bytes): {max} <= {}, {item:?}",
+                    "Queue is full (bytes): {max} <= {} (leaky mode {:?}), {item:?}",
                     inner.cur_level_bytes,
+                    inner.leaky_mode,
                 );
-                return Err(item);
+
+                match inner.leaky_mode {
+                    NotLeaky => return Err(item),
+                    Upstream => return Ok(inner.pushed_status),
+                    Downstream => inner.dequeue_oldest_buffer_or_list(obj),
+                }
             }
 
             if ts.is_some() {
@@ -269,11 +346,16 @@ impl DataQueue {
                     gst::debug!(
                         DATA_QUEUE_CAT,
                         obj = obj,
-                        "Queue is full (time): {max} <= {}, {item:?}",
+                        "Queue is full (time): {max} <= {} (leaky mode {:?}), {item:?}",
                         inner.cur_level_time,
+                        inner.leaky_mode,
                     );
 
-                    return Err(item);
+                    match inner.leaky_mode {
+                        NotLeaky => return Err(item),
+                        Upstream => return Ok(inner.pushed_status),
+                        Downstream => inner.dequeue_oldest_buffer_or_list(obj),
+                    }
                 }
             }
         }
@@ -366,6 +448,7 @@ impl DataQueueBuilder {
             state: DataQueueState::Stopped,
             queue: VecDeque::new(),
             pushed_status: PushedStatus::default(),
+            leaky_mode: QueueLeakyMode::NotLeaky,
             cur_level_buffers: 0,
             cur_level_bytes: 0,
             cur_level_time: gst::ClockTime::ZERO,
@@ -374,6 +457,11 @@ impl DataQueueBuilder {
             max_size_time: None,
             pending_handle: None,
         })
+    }
+
+    pub fn leaky_mode(mut self, leaky_mode: QueueLeakyMode) -> Self {
+        self.0.leaky_mode = leaky_mode;
+        self
     }
 
     pub fn max_size_buffers(mut self, max_size_buffers: u32) -> Self {
@@ -642,5 +730,221 @@ mod tests {
             .build();
 
         test_not_leaky(&elem, &mut dq);
+    }
+
+    fn test_leaky_upstream(elem: &gst::Element, dq: &mut DataQueue) {
+        dq.start();
+
+        // Buffers
+        push_initial_events(elem, dq);
+
+        push_buffer(elem, dq, 0.seconds()).unwrap();
+        assert_eq!(dq.cur_level_buffers(), 1);
+        assert_eq!(dq.cur_level_bytes(), 1);
+        assert_eq!(dq.cur_level_time(), 0.seconds());
+        push_buffer(elem, dq, 1.seconds()).unwrap();
+        assert_eq!(dq.cur_level_buffers(), 2);
+        assert_eq!(dq.cur_level_bytes(), 2);
+        assert_eq!(dq.cur_level_time(), 1.seconds());
+        push_buffer(elem, dq, 2.seconds()).unwrap();
+        assert_eq!(dq.cur_level_buffers(), 2);
+        assert_eq!(dq.cur_level_bytes(), 2);
+        assert_eq!(dq.cur_level_time(), 1.seconds());
+        push_segment_done(elem, dq);
+
+        pop_intial_events(dq);
+        let buf = pop_buffer(dq);
+        assert_eq!(buf.pts(), Some(0.seconds()));
+        let buf = pop_buffer(dq);
+        assert_eq!(buf.pts(), Some(1.seconds()));
+        assert_eq!(dq.cur_level_buffers(), 0);
+        assert_eq!(dq.cur_level_bytes(), 0);
+        assert_eq!(dq.cur_level_time(), 0.seconds());
+        pop_segment_done(dq);
+        assert!(dq.is_empty());
+
+        // Buffer list
+        push_initial_events(elem, dq);
+
+        push_buffer_list(elem, dq, 0.seconds()).unwrap();
+        assert_eq!(dq.cur_level_buffers(), 2);
+        assert_eq!(dq.cur_level_bytes(), 2);
+        assert_eq!(dq.cur_level_time(), 1.seconds());
+
+        push_buffer_list(elem, dq, 2.seconds()).unwrap();
+        assert_eq!(dq.cur_level_buffers(), 2);
+        assert_eq!(dq.cur_level_bytes(), 2);
+        assert_eq!(dq.cur_level_time(), 1.seconds());
+
+        push_buffer(elem, dq, 4.seconds()).unwrap();
+        assert_eq!(dq.cur_level_buffers(), 2);
+        assert_eq!(dq.cur_level_bytes(), 2);
+        assert_eq!(dq.cur_level_time(), 1.seconds());
+
+        push_segment_done(elem, dq);
+
+        pop_intial_events(dq);
+        let buf_list = pop_buffer_list(dq);
+        let buf = buf_list.get(0).unwrap();
+        assert_eq!(buf.pts(), Some(0.seconds()));
+        assert_eq!(dq.cur_level_buffers(), 0);
+        assert_eq!(dq.cur_level_bytes(), 0);
+        assert_eq!(dq.cur_level_time(), 0.seconds());
+        pop_segment_done(dq);
+        assert!(dq.is_empty());
+    }
+
+    #[test]
+    fn leaky_upstream_max_size_buffers() {
+        let (elem, src_pad) = init("leaky_upstream - max_size_buffers");
+
+        let mut dq = DataQueueBuilder::new(&elem, &src_pad)
+            .leaky_mode(QueueLeakyMode::Upstream)
+            .max_size_buffers(2)
+            .max_size_bytes(0)
+            .max_size_time(gst::ClockTime::ZERO)
+            .build();
+
+        test_leaky_upstream(&elem, &mut dq);
+    }
+
+    #[test]
+    fn leaky_upstream_max_size_bytes() {
+        let (elem, src_pad) = init("leaky_upstream - max_size_bytes");
+
+        let mut dq = DataQueueBuilder::new(&elem, &src_pad)
+            .leaky_mode(QueueLeakyMode::Upstream)
+            .max_size_buffers(0)
+            .max_size_bytes(2)
+            .max_size_time(gst::ClockTime::ZERO)
+            .build();
+
+        test_leaky_upstream(&elem, &mut dq);
+    }
+
+    #[test]
+    fn leaky_upstream_max_size_time() {
+        let (elem, src_pad) = init("leaky_upstream - max_size_time");
+
+        let mut dq = DataQueueBuilder::new(&elem, &src_pad)
+            .leaky_mode(QueueLeakyMode::Upstream)
+            .max_size_buffers(0)
+            .max_size_bytes(0)
+            .max_size_time(1.seconds())
+            .build();
+
+        test_leaky_upstream(&elem, &mut dq);
+    }
+
+    fn test_leaky_downstream(elem: &gst::Element, dq: &mut DataQueue) {
+        dq.start();
+
+        // Buffers
+        push_initial_events(elem, dq);
+
+        push_buffer(elem, dq, 0.seconds()).unwrap();
+        assert_eq!(dq.cur_level_buffers(), 1);
+        assert_eq!(dq.cur_level_bytes(), 1);
+        assert_eq!(dq.cur_level_time(), 0.seconds());
+        push_buffer(elem, dq, 1.seconds()).unwrap();
+        assert_eq!(dq.cur_level_buffers(), 2);
+        assert_eq!(dq.cur_level_bytes(), 2);
+        assert_eq!(dq.cur_level_time(), 1.seconds());
+        push_buffer(elem, dq, 2.seconds()).unwrap();
+        assert_eq!(dq.cur_level_buffers(), 2);
+        assert_eq!(dq.cur_level_bytes(), 2);
+        assert_eq!(dq.cur_level_time(), 1.seconds());
+        push_segment_done(elem, dq);
+
+        pop_intial_events(dq);
+        let buf = pop_buffer(dq);
+        assert_eq!(buf.pts(), Some(1.seconds()));
+        let buf = pop_buffer(dq);
+        assert_eq!(buf.pts(), Some(2.seconds()));
+        assert_eq!(dq.cur_level_buffers(), 0);
+        assert_eq!(dq.cur_level_bytes(), 0);
+        assert_eq!(dq.cur_level_time(), 0.seconds());
+        pop_segment_done(dq);
+        assert!(dq.is_empty());
+
+        // Buffer list
+        push_initial_events(elem, dq);
+
+        push_buffer(elem, dq, 0.seconds()).unwrap();
+        push_buffer(elem, dq, 1.seconds()).unwrap();
+        // The next list causes previously enqueued first buffers to be dequeued
+        push_buffer_list(elem, dq, 2.seconds()).unwrap();
+        assert_eq!(dq.cur_level_buffers(), 3);
+        assert_eq!(dq.cur_level_bytes(), 3);
+        assert_eq!(dq.cur_level_time(), 2.seconds());
+        // The next list causes previously enqueued second buffer to be dequeued
+        push_buffer_list(elem, dq, 4.seconds()).unwrap();
+        assert_eq!(dq.cur_level_buffers(), 4);
+        assert_eq!(dq.cur_level_bytes(), 4);
+        assert_eq!(dq.cur_level_time(), 3.seconds());
+        // The next buffer causes previously enqueued first buffer list to be dequeued
+        push_buffer(elem, dq, 6.seconds()).unwrap();
+        assert_eq!(dq.cur_level_buffers(), 3);
+        assert_eq!(dq.cur_level_bytes(), 3);
+        assert_eq!(dq.cur_level_time(), 2.seconds());
+
+        push_segment_done(elem, dq);
+
+        pop_intial_events(dq);
+        let buf_list = pop_buffer_list(dq);
+        let buf = buf_list.get(0).unwrap();
+        assert_eq!(buf.pts(), Some(4.seconds()));
+        assert_eq!(dq.cur_level_buffers(), 1);
+        assert_eq!(dq.cur_level_bytes(), 1);
+        assert_eq!(dq.cur_level_time(), 0.seconds());
+        let buf = pop_buffer(dq);
+        assert_eq!(buf.pts(), Some(6.seconds()));
+        assert_eq!(dq.cur_level_buffers(), 0);
+        assert_eq!(dq.cur_level_bytes(), 0);
+        assert_eq!(dq.cur_level_time(), 0.seconds());
+        pop_segment_done(dq);
+        assert!(dq.is_empty());
+    }
+
+    #[test]
+    fn leaky_downstream_max_size_buffers() {
+        let (elem, src_pad) = init("leaky_downstream - max_size_buffers");
+
+        let mut dq = DataQueueBuilder::new(&elem, &src_pad)
+            .leaky_mode(QueueLeakyMode::Downstream)
+            .max_size_buffers(2)
+            .max_size_bytes(0)
+            .max_size_time(gst::ClockTime::ZERO)
+            .build();
+
+        test_leaky_downstream(&elem, &mut dq);
+    }
+
+    #[test]
+    fn leaky_downstream_max_size_bytes() {
+        let (elem, src_pad) = init("leaky_downstream - max_size_bytes");
+
+        let mut dq = DataQueueBuilder::new(&elem, &src_pad)
+            .leaky_mode(QueueLeakyMode::Downstream)
+            .max_size_buffers(0)
+            .max_size_bytes(2)
+            .max_size_time(gst::ClockTime::ZERO)
+            .build();
+
+        test_leaky_downstream(&elem, &mut dq);
+    }
+
+    #[test]
+    fn leaky_downstream_max_size_time() {
+        let (elem, src_pad) = init("leaky_downstream - max_size_time");
+
+        let mut dq = DataQueueBuilder::new(&elem, &src_pad)
+            .leaky_mode(QueueLeakyMode::Downstream)
+            .max_size_buffers(0)
+            .max_size_bytes(0)
+            .max_size_time(1.seconds())
+            .build();
+
+        test_leaky_downstream(&elem, &mut dq);
     }
 }
