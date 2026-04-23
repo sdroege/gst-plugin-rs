@@ -33,6 +33,10 @@ impl WebRTCSrcPad {
         stream_id.as_ref().unwrap().clone()
     }
 
+    pub fn try_stream_id(&self) -> Option<String> {
+        self.stream_id.lock().unwrap().clone()
+    }
+
     pub fn set_webrtc_pad(&self, pad: glib::object::WeakRef<gst::Pad>) {
         *self.webrtcbin_pad.lock().unwrap() = Some(pad);
     }
