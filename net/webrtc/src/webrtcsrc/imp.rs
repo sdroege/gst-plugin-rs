@@ -1918,6 +1918,22 @@ impl BaseWebRTCSrc {
         gst::log!(CAT, "Creating pad for {caps:?}, stream: {stream_id}");
 
         let obj = self.obj();
+
+        if obj.iterate_src_pads().into_iter().any(|p| {
+            p.ok()
+                .and_then(|p| p.downcast::<WebRTCSrcPad>().ok())
+                .and_then(|p| p.imp().try_stream_id())
+                .as_deref()
+                == Some(stream_id)
+        }) {
+            gst::log!(
+                CAT,
+                imp = self,
+                "Src pad already exists for stream {stream_id}, skipping creation"
+            );
+            return true;
+        }
+
         let media_type = caps
             .structure(0)
             .expect("Passing empty caps is invalid")

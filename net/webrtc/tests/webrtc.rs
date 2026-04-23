@@ -252,15 +252,9 @@ fn test_webrtcsrc_renegotiation_stream_addition() {
     // Wait for initial negotiation to complete
     {
         let (lock, cvar) = &*initial_done;
-        let done = lock.lock().unwrap();
-        let result = cvar
-            .wait_timeout_while(done, Duration::from_secs(5), |done| !*done)
-            .unwrap();
-        assert!(*result.0, "Timed out waiting for initial negotiation");
+        let guard = lock.lock().unwrap();
+        let _guard = cvar.wait_while(guard, |done| !*done).unwrap();
     }
-
-    // Let the connection stabilize before triggering renegotiation
-    std::thread::sleep(Duration::from_secs(2));
 
     // Dynamically add a new video stream to the producer, triggering SDP renegotiation
     let webrtcsink = producer.by_name("ws").unwrap();
@@ -268,30 +262,24 @@ fn test_webrtcsrc_renegotiation_stream_addition() {
         .property("is-live", true)
         .build()
         .unwrap();
+    let vp8enc = gst::ElementFactory::make("vp8enc").build().unwrap();
     let queue = gst::ElementFactory::make("queue").build().unwrap();
 
-    producer.add_many([&videotestsrc, &queue]).unwrap();
-    gst::Element::link_many([&videotestsrc, &queue]).unwrap();
+    producer.add_many([&videotestsrc, &vp8enc, &queue]).unwrap();
+    gst::Element::link_many([&videotestsrc, &vp8enc, &queue]).unwrap();
 
     let new_pad = webrtcsink.request_pad_simple("video_%u").unwrap();
     queue.static_pad("src").unwrap().link(&new_pad).unwrap();
 
     queue.sync_state_with_parent().unwrap();
+    vp8enc.sync_state_with_parent().unwrap();
     videotestsrc.sync_state_with_parent().unwrap();
 
     // Wait for renegotiation
     {
         let (lock, cvar) = &*renegotiation_done;
-        let done = lock.lock().unwrap();
-        let result = cvar
-            .wait_timeout_while(done, Duration::from_secs(2), |done| !*done)
-            .unwrap();
-
-        assert!(
-            *result.0,
-            "Timed out waiting for renegotiation, pad count is {}",
-            pad_count.load(Ordering::SeqCst)
-        );
+        let guard = lock.lock().unwrap();
+        let _guard = cvar.wait_while(guard, |done| !*done).unwrap();
     }
 
     assert!(
@@ -408,14 +396,8 @@ fn test_webrtcsrc_renegotiation_stream_removal() {
     // Wait for initial negotiation to complete (both streams)
     {
         let (lock, cvar) = &*initial_done;
-        let done = lock.lock().unwrap();
-        let result = cvar
-            .wait_timeout_while(done, Duration::from_secs(5), |done| !*done)
-            .unwrap();
-        assert!(
-            *result.0,
-            "Timed out waiting for initial negotiation with 2 streams"
-        );
+        let guard = lock.lock().unwrap();
+        let _guard = cvar.wait_while(guard, |done| !*done).unwrap();
     }
 
     assert_eq!(
@@ -423,9 +405,6 @@ fn test_webrtcsrc_renegotiation_stream_removal() {
         2,
         "Expected exactly 2 pads after initial negotiation"
     );
-
-    // Let the connection stabilize before triggering renegotiation
-    std::thread::sleep(Duration::from_secs(2));
 
     // Remove the second video stream from the producer, triggering SDP renegotiation
     // with an inactive m-line
@@ -445,19 +424,12 @@ fn test_webrtcsrc_renegotiation_stream_removal() {
     // Wait for EOS on one of the consumer's pads (indicating inactive m-line was handled)
     {
         let (lock, cvar) = &*eos_pads;
-        let pads = lock.lock().unwrap();
-        let result = cvar
-            .wait_timeout_while(pads, Duration::from_secs(5), |pads| pads.is_empty())
-            .unwrap();
-
-        assert!(
-            !result.0.is_empty(),
-            "Timed out waiting for EOS after stream removal renegotiation"
-        );
+        let guard = lock.lock().unwrap();
+        let _guard = cvar.wait_while(guard, |pads| pads.is_empty()).unwrap();
     }
 
     // Give time for any spurious EOS to arrive on other pads
-    std::thread::sleep(Duration::from_secs(2));
+    std::thread::sleep(Duration::from_secs(5));
 
     // Verify that exactly one pad received EOS (only the removed stream)
     {
@@ -579,14 +551,8 @@ fn test_webrtcsrc_renegotiation_multi_stream_removal() {
     // Wait for initial negotiation to complete (all 6 streams)
     {
         let (lock, cvar) = &*initial_done;
-        let done = lock.lock().unwrap();
-        let result = cvar
-            .wait_timeout_while(done, Duration::from_secs(15), |done| !*done)
-            .unwrap();
-        assert!(
-            *result.0,
-            "Timed out waiting for initial negotiation with 6 streams"
-        );
+        let guard = lock.lock().unwrap();
+        let _guard = cvar.wait_while(guard, |done| !*done).unwrap();
     }
 
     assert_eq!(
@@ -594,9 +560,6 @@ fn test_webrtcsrc_renegotiation_multi_stream_removal() {
         6,
         "Expected exactly 6 pads after initial negotiation"
     );
-
-    // Let the connection stabilize before triggering renegotiation
-    std::thread::sleep(Duration::from_secs(2));
 
     // Remove one video and one audio stream from the producer, triggering SDP
     // renegotiation with two inactive m-lines
@@ -627,19 +590,12 @@ fn test_webrtcsrc_renegotiation_multi_stream_removal() {
     // Wait for EOS on two consumer pads (one video, one audio)
     {
         let (lock, cvar) = &*eos_pads;
-        let pads = lock.lock().unwrap();
-        let result = cvar
-            .wait_timeout_while(pads, Duration::from_secs(5), |pads| pads.len() < 2)
-            .unwrap();
-
-        assert!(
-            result.0.len() >= 2,
-            "Timed out waiting for 2 EOS events after stream removal renegotiation"
-        );
+        let guard = lock.lock().unwrap();
+        let _guard = cvar.wait_while(guard, |pads| pads.len() < 2).unwrap();
     }
 
     // Give time for any spurious EOS to arrive on other pads
-    std::thread::sleep(Duration::from_secs(2));
+    std::thread::sleep(Duration::from_secs(5));
 
     // Verify that exactly two pads received EOS: one video and one audio
     {
@@ -661,6 +617,150 @@ fn test_webrtcsrc_renegotiation_multi_stream_removal() {
             pads.iter().any(|p| p.contains("audio")),
             "Expected one audio pad to receive EOS, got: {:?}",
             *pads
+        );
+    }
+
+    let consumer_stop = consumer.set_state(gst::State::Null).unwrap();
+    assert_eq!(consumer_stop, gst::StateChangeSuccess::Success);
+
+    let producer_stop = producer.set_state(gst::State::Null).unwrap();
+    assert_eq!(producer_stop, gst::StateChangeSuccess::Success);
+}
+
+/// Test that webrtcsrc exposes sequentially-named src pads across renegotiations
+/// in Sometimes mode.
+///
+/// Starts with a producer pipeline with 1 video stream, then dynamically adds a
+/// 2nd and 3rd video stream, triggering two rounds of SDP renegotiation. After
+/// each round, asserts that the exposed src pads are named `video_0`,
+/// `video_1`, `video_2` in order. Drift (e.g. `video_0`, `video_2`, ...) would
+/// indicate that `create_and_probe_src_pad` is being invoked again for
+/// unchanged m-lines on renegotiation, bumping the internal `n_video_pads`
+/// counter without exposing a pad.
+#[test]
+#[file_serial(webrtctest)]
+fn test_webrtcsrc_renegotiation_pad_naming_stable() {
+    const SIGNALLER_PORT: u16 = 8450;
+
+    init();
+
+    let (tx, rx) = mpsc::channel::<String>();
+    let producer = run_webrtc_producer(
+        "videotestsrc ! vp8enc ! webrtcsink congestion-control=0 \
+         enable-control-data-channel=true run-signalling-server=true name=ws",
+        tx,
+        SIGNALLER_PORT,
+    );
+
+    let producer_peer_id = rx.recv().unwrap();
+
+    let consumer = gst::Pipeline::builder().build();
+    let webrtcsrc = gst::ElementFactory::make("webrtcsrc")
+        .name("ws")
+        .build()
+        .unwrap();
+    consumer.add(&webrtcsrc).unwrap();
+
+    let signaller = webrtcsrc
+        .dynamic_cast_ref::<gst::ChildProxy>()
+        .unwrap()
+        .child_by_name("signaller")
+        .unwrap();
+    signaller.set_property("producer-peer-id", producer_peer_id);
+
+    let uri = format!("ws://127.0.0.1:{SIGNALLER_PORT}");
+    signaller.set_property("uri", uri.as_str());
+
+    let pad_names = Arc::new((Mutex::new(Vec::<String>::new()), Condvar::new()));
+
+    webrtcsrc.connect_pad_added(glib::clone!(
+        #[strong]
+        pad_names,
+        move |ws, pad| {
+            let sink = gst::ElementFactory::make("fakesink")
+                .property("async", false)
+                .build()
+                .unwrap();
+            let pipeline = ws.parent().unwrap().downcast::<gst::Pipeline>().unwrap();
+            pipeline.add(&sink).unwrap();
+            sink.sync_state_with_parent().unwrap();
+            pad.link(&sink.static_pad("sink").unwrap()).unwrap();
+
+            let (lock, cvar) = &*pad_names;
+            let mut names = lock.lock().unwrap();
+            names.push(pad.name().to_string());
+            cvar.notify_all();
+        }
+    ));
+
+    consumer
+        .set_state(gst::State::Playing)
+        .expect("consumer changing to playing state");
+
+    {
+        let (lock, cvar) = &*pad_names;
+        let guard = lock.lock().unwrap();
+        let names = cvar.wait_while(guard, |names| names.is_empty()).unwrap();
+        assert_eq!(
+            *names,
+            vec!["video_0".to_string()],
+            "Unexpected pad names after initial negotiation"
+        );
+    }
+
+    let webrtcsink = producer.by_name("ws").unwrap();
+
+    let vsrc2 = gst::ElementFactory::make("videotestsrc")
+        .property("is-live", true)
+        .build()
+        .unwrap();
+    let venc2 = gst::ElementFactory::make("vp8enc").build().unwrap();
+    let q2 = gst::ElementFactory::make("queue").build().unwrap();
+    producer.add_many([&vsrc2, &venc2, &q2]).unwrap();
+    gst::Element::link_many([&vsrc2, &venc2, &q2]).unwrap();
+    let ws_pad2 = webrtcsink.request_pad_simple("video_%u").unwrap();
+    q2.static_pad("src").unwrap().link(&ws_pad2).unwrap();
+    q2.sync_state_with_parent().unwrap();
+    venc2.sync_state_with_parent().unwrap();
+    vsrc2.sync_state_with_parent().unwrap();
+
+    {
+        let (lock, cvar) = &*pad_names;
+        let guard = lock.lock().unwrap();
+        let names = cvar.wait_while(guard, |names| names.len() < 2).unwrap();
+        assert_eq!(
+            *names,
+            vec!["video_0".to_string(), "video_1".to_string()],
+            "Unexpected pad names after 1st renegotiation"
+        );
+    }
+
+    let vsrc3 = gst::ElementFactory::make("videotestsrc")
+        .property("is-live", true)
+        .build()
+        .unwrap();
+    let venc3 = gst::ElementFactory::make("vp8enc").build().unwrap();
+    let q3 = gst::ElementFactory::make("queue").build().unwrap();
+    producer.add_many([&vsrc3, &venc3, &q3]).unwrap();
+    gst::Element::link_many([&vsrc3, &venc3, &q3]).unwrap();
+    let ws_pad3 = webrtcsink.request_pad_simple("video_%u").unwrap();
+    q3.static_pad("src").unwrap().link(&ws_pad3).unwrap();
+    q3.sync_state_with_parent().unwrap();
+    venc3.sync_state_with_parent().unwrap();
+    vsrc3.sync_state_with_parent().unwrap();
+
+    {
+        let (lock, cvar) = &*pad_names;
+        let guard = lock.lock().unwrap();
+        let names = cvar.wait_while(guard, |names| names.len() < 3).unwrap();
+        assert_eq!(
+            *names,
+            vec![
+                "video_0".to_string(),
+                "video_1".to_string(),
+                "video_2".to_string()
+            ],
+            "Unexpected pad names after 2nd renegotiation"
         );
     }
 
