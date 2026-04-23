@@ -143,7 +143,7 @@ use crate::runtime::executor::block_on_or_add_subtask;
 use crate::runtime::prelude::*;
 use crate::runtime::{Context, PadSrc, Task};
 
-use crate::dataqueue::{DataQueue, DataQueueItem};
+use crate::dataqueue::{DataQueue, DataQueueItem, QueueLeakyMode};
 
 use crate::inter::{
     DEFAULT_CONTEXT, DEFAULT_CONTEXT_WAIT, DEFAULT_INTER_CONTEXT, INTER_CONTEXTS, InterContext,
@@ -169,6 +169,7 @@ const DEFAULT_MAX_SIZE_TIME: gst::ClockTime = gst::ClockTime::SECOND;
 
 #[derive(Debug, Clone)]
 struct Settings {
+    leaky_mode: QueueLeakyMode,
     max_size_buffers: u32,
     max_size_bytes: u32,
     max_size_time: gst::ClockTime,
@@ -181,6 +182,7 @@ struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
+            leaky_mode: Default::default(),
             max_size_buffers: DEFAULT_MAX_SIZE_BUFFERS,
             max_size_bytes: DEFAULT_MAX_SIZE_BYTES,
             max_size_time: DEFAULT_MAX_SIZE_TIME,
@@ -684,6 +686,7 @@ impl InterSrc {
         *self.ts_ctx.lock().unwrap() = Some(ts_ctx.clone());
 
         let dataqueue = DataQueue::builder(self.obj().upcast_ref(), self.srcpad.gst_pad())
+            .leaky_mode(settings.leaky_mode)
             .max_size_buffers(settings.max_size_buffers)
             .max_size_bytes(settings.max_size_bytes)
             .max_size_time(settings.max_size_time)
@@ -832,6 +835,10 @@ impl ObjectImpl for InterSrc {
                     .default_value(Some(DEFAULT_INTER_CONTEXT))
                     .readwrite()
                     .build(),
+                glib::ParamSpecEnum::builder::<QueueLeakyMode>("leaky")
+                    .nick("Leaky")
+                    .blurb("Where the queue leaks, if at all")
+                    .build(),
                 glib::ParamSpecUInt::builder("max-size-buffers")
                     .nick("Max Size Buffers")
                     .blurb("Maximum number of buffers to queue (0=unlimited)")
@@ -877,6 +884,9 @@ impl ObjectImpl for InterSrc {
 
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
+            "leaky" => {
+                self.settings.lock().unwrap().leaky_mode = value.get::<QueueLeakyMode>().unwrap();
+            }
             "max-size-buffers" => {
                 self.settings.lock().unwrap().max_size_buffers =
                     value.get().expect("type checked upstream");
@@ -926,6 +936,7 @@ impl ObjectImpl for InterSrc {
 
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
+            "leaky" => self.settings.lock().unwrap().leaky_mode.to_value(),
             "max-size-buffers" => self.settings.lock().unwrap().max_size_buffers.to_value(),
             "max-size-bytes" => self.settings.lock().unwrap().max_size_bytes.to_value(),
             "max-size-time" => self

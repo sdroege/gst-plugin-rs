@@ -19,7 +19,7 @@ use std::time::Duration;
 use crate::runtime::prelude::*;
 use crate::runtime::{Context, PadSink, PadSinkWeak, PadSrc, PadSrcWeak, Task};
 
-use crate::dataqueue::{DataQueue, DataQueueItem};
+use crate::dataqueue::{DataQueue, DataQueueItem, QueueLeakyMode};
 
 static PROXY_CONTEXTS: LazyLock<Mutex<HashMap<String, Weak<Mutex<ProxyContextInner>>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -51,6 +51,7 @@ impl Default for SettingsSink {
 
 #[derive(Debug, Clone)]
 struct SettingsSrc {
+    leaky_mode: QueueLeakyMode,
     max_size_buffers: u32,
     max_size_bytes: u32,
     max_size_time: gst::ClockTime,
@@ -62,6 +63,7 @@ struct SettingsSrc {
 impl Default for SettingsSrc {
     fn default() -> Self {
         SettingsSrc {
+            leaky_mode: Default::default(),
             max_size_buffers: DEFAULT_MAX_SIZE_BUFFERS,
             max_size_bytes: DEFAULT_MAX_SIZE_BYTES,
             max_size_time: DEFAULT_MAX_SIZE_TIME,
@@ -1118,6 +1120,7 @@ impl ProxySrc {
         *self.ts_ctx.lock().unwrap() = Some(ts_ctx.clone());
 
         let dataqueue = DataQueue::builder(self.obj().upcast_ref(), self.src_pad.gst_pad())
+            .leaky_mode(settings.leaky_mode)
             .max_size_buffers(settings.max_size_buffers)
             .max_size_bytes(settings.max_size_bytes)
             .max_size_time(settings.max_size_time)
@@ -1231,6 +1234,10 @@ impl ObjectImpl for ProxySrc {
                     .blurb("Context name of the proxy to share with")
                     .default_value(Some(DEFAULT_PROXY_CONTEXT))
                     .build(),
+                glib::ParamSpecEnum::builder::<QueueLeakyMode>("leaky")
+                    .nick("Leaky")
+                    .blurb("Where the queue leaks, if at all")
+                    .build(),
                 glib::ParamSpecUInt::builder("max-size-buffers")
                     .nick("Max Size Buffers")
                     .blurb("Maximum number of buffers to queue (0=unlimited)")
@@ -1271,6 +1278,9 @@ impl ObjectImpl for ProxySrc {
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let mut settings = self.settings.lock().unwrap();
         match pspec.name() {
+            "leaky" => {
+                settings.leaky_mode = value.get::<QueueLeakyMode>().unwrap();
+            }
             "max-size-buffers" => {
                 settings.max_size_buffers = value.get().expect("type checked upstream");
             }
@@ -1303,6 +1313,7 @@ impl ObjectImpl for ProxySrc {
 
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
+            "leaky" => self.settings.lock().unwrap().leaky_mode.to_value(),
             "max-size-buffers" => self.settings.lock().unwrap().max_size_buffers.to_value(),
             "max-size-bytes" => self.settings.lock().unwrap().max_size_bytes.to_value(),
             "max-size-time" => self
