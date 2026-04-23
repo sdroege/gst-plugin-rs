@@ -20344,6 +20344,18 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "leaky": {
+                        "blurb": "Where the queue leaks, if at all",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "no (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstTsQueueLeakyMode",
+                        "writable": true
+                    },
                     "max-size-buffers": {
                         "blurb": "Maximum number of buffers to queue (0=unlimited)",
                         "conditionally-available": false,
@@ -20650,6 +20662,18 @@
                         "type": "guint64",
                         "writable": false
                     },
+                    "leaky": {
+                        "blurb": "Where the queue leaks, if at all",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "no (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstTsQueueLeakyMode",
+                        "writable": true
+                    },
                     "max-size-buffers": {
                         "blurb": "Maximum number of buffers to queue (0=unlimited)",
                         "conditionally-available": false,
@@ -20799,6 +20823,18 @@
                         "readable": true,
                         "type": "guint64",
                         "writable": false
+                    },
+                    "leaky": {
+                        "blurb": "Where the queue leaks, if at all",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "no (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstTsQueueLeakyMode",
+                        "writable": true
                     },
                     "max-size-buffers": {
                         "blurb": "Maximum number of buffers to queue (0=unlimited)",
@@ -21589,7 +21625,28 @@
         },
         "filename": "gstthreadshare",
         "license": "MPL",
-        "other-types": {},
+        "other-types": {
+            "GstTsQueueLeakyMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Not Leaky",
+                        "name": "no",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Leaky on upstream (new buffers)",
+                        "name": "upstream",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Leaky on downstream (old buffers)",
+                        "name": "downstream",
+                        "value": "2"
+                    }
+                ]
+            }
+        },
         "package": "gst-plugin-threadshare",
         "source": "gst-plugin-threadshare",
         "tracers": {},
