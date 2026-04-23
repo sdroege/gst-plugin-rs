@@ -5156,6 +5156,7 @@ dependencies = [
  "rtp-types",
  "rustix 1.1.4",
  "slab",
+ "smallvec",
  "socket2 0.6.3",
  "thiserror 2.0.18",
  "waker-fn",

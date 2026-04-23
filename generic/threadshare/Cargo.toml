@@ -17,10 +17,10 @@ concurrent-queue = "2.2.0"
 flume = "0.12"
 futures = "0.3.28"
 gio.workspace = true
-gst.workspace = true
-gst-audio.workspace = true
-gst-net.workspace = true
-gst-rtp.workspace = true
+gst = { workspace = true, features = ["v1_18"] }
+gst-audio = { workspace = true, features = ["v1_18"] }
+gst-net = { workspace = true, features = ["v1_18"] }
+gst-rtp = { workspace = true, features = ["v1_18"] }
 num-traits = "0.2"
 pin-project-lite = "0.2.0"
 polling = "3.1.0"
@@ -28,6 +28,7 @@ rand = "0.10"
 rtp-types = "0.1"
 rustix = { version = "1.0", default-features = false, features = ["std", "fs", "net"] }
 slab = "0.4.7"
+smallvec = "1.0"
 socket2 = {features = ["all"], version = "0.6"}
 thiserror = "2"
 waker-fn = "1.1"

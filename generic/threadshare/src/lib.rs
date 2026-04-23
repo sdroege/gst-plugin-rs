@@ -35,8 +35,10 @@ mod udpsrc;
 pub mod net;
 
 use gst::glib;
+use gst::prelude::*;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    dataqueue::QueueLeakyMode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     appsrc::register(plugin)?;
     audiotestsrc::register(plugin)?;
     blocking_adapter::register(plugin)?;
