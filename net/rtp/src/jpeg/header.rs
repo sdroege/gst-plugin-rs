@@ -677,7 +677,7 @@ impl FromByteStream for JpegHeader {
                         };
                     }
 
-                    components.sort_by(|a, b| a.id.cmp(&b.id));
+                    components.sort_by_key(|a| a.id);
                 }
                 // DQT
                 0xff_db => {

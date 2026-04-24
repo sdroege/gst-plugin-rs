@@ -111,13 +111,11 @@ fn run_pipeline(pipeline: gst::Pipeline) -> Result<(), Error> {
             gst::MessageView::Latency(_) => {
                 let _ = pipeline.recalculate_latency();
             }
-            gst::MessageView::StateChanged(sc) => {
-                if sc.src() == Some(pipeline.upcast_ref()) {
-                    pipeline.debug_to_dot_file_with_ts(
-                        gst::DebugGraphDetails::ALL,
-                        format!("{}-{:?}-{:?}", pipeline.name(), sc.old(), sc.current()),
-                    );
-                }
+            gst::MessageView::StateChanged(sc) if sc.src() == Some(pipeline.upcast_ref()) => {
+                pipeline.debug_to_dot_file_with_ts(
+                    gst::DebugGraphDetails::ALL,
+                    format!("{}-{:?}-{:?}", pipeline.name(), sc.old(), sc.current()),
+                );
             }
             _ => (),
         }

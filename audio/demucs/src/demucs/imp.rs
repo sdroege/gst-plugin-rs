@@ -727,7 +727,7 @@ impl Demucs {
 
         // Start pad tasks and add pads
         assert_eq!(srcpads.len(), receivers.len());
-        for (pad, mut receiver) in Iterator::zip(srcpads.into_iter(), receivers.into_iter()) {
+        for (pad, mut receiver) in Iterator::zip(srcpads.into_iter(), receivers) {
             if add_pads {
                 let _ = self.obj().add_pad(&pad);
             }

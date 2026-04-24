@@ -460,11 +460,8 @@ impl GopBuffer {
             gst::Signed::Positive(newest_gop.end_pts)
         };
 
-        loop {
-            // check stored times as though the oldest GOP doesn't exist.
-            let Some(second_oldest_gop) = stream.peek_second_oldest_gop() else {
-                break;
-            };
+        // check stored times as though the oldest GOP doesn't exist.
+        while let Some(second_oldest_gop) = stream.peek_second_oldest_gop() {
             // we are looking for the oldest pts here (with the largest value).  This is our potentially
             // new end time.
             let oldest_ts = if stream.delta_frames.requires_dts() {

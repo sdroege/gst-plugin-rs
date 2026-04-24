@@ -505,21 +505,17 @@ impl Accumulate {
                 };
 
                 let drain = match s.name().as_str() {
-                    "rstranscribe/final-transcript" => {
-                        if self.settings.lock().unwrap().drain_on_final_transcripts {
-                            gst::log!(CAT, imp = self, "transcript is final, draining");
-                            true
-                        } else {
-                            false
-                        }
+                    "rstranscribe/final-transcript"
+                        if self.settings.lock().unwrap().drain_on_final_transcripts =>
+                    {
+                        gst::log!(CAT, imp = self, "transcript is final, draining");
+                        true
                     }
-                    "rstranscribe/speaker-change" => {
-                        if self.settings.lock().unwrap().drain_on_speaker_change {
-                            gst::log!(CAT, imp = self, "speaker change, draining");
-                            true
-                        } else {
-                            false
-                        }
+                    "rstranscribe/speaker-change"
+                        if self.settings.lock().unwrap().drain_on_speaker_change =>
+                    {
+                        gst::log!(CAT, imp = self, "speaker change, draining");
+                        true
                     }
                     _ => false,
                 };

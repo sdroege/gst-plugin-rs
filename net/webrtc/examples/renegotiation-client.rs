@@ -75,10 +75,8 @@ fn main() -> Result<(), Error> {
                 println!("EOS");
                 break;
             }
-            MessageView::Latency(l) => {
-                if l.src() == Some(pipeline.upcast_ref()) {
-                    let _ = pipeline.recalculate_latency();
-                }
+            MessageView::Latency(l) if l.src() == Some(pipeline.upcast_ref()) => {
+                let _ = pipeline.recalculate_latency();
             }
             MessageView::Error(err) => {
                 eprintln!(
