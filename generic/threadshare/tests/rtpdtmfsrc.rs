@@ -347,8 +347,8 @@ fn nominal() {
                     msg = bus_stream.next() => {
                         let Some(msg) = msg else { continue };
                         match msg.view() {
-                            Element(_) => {
-                                if msg.src().is_some_and(|obj| *obj == src) {
+                            Element(_)
+                                if msg.src().is_some_and(|obj| *obj == src) => {
                                     let mut step = step.lock().unwrap();
                                     match *step {
                                         START_4_SENT | START_4_BUFFER_RECEIVED => {
@@ -402,7 +402,6 @@ fn nominal() {
                                         _ => panic!("Unexpected ts-rtpdtmfsrc msg {msg:?}"),
                                     }
                                 }
-                            }
                             Latency(_) => {
                                 let _ = pipe.recalculate_latency();
                             }

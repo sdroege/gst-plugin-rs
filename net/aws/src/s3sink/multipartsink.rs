@@ -337,9 +337,7 @@ impl S3Sink {
         &self,
         started_state: &mut Started,
     ) -> CompleteMultipartUploadFluentBuilder {
-        started_state
-            .completed_parts
-            .sort_by(|a, b| a.part_number.cmp(&b.part_number));
+        started_state.completed_parts.sort_by_key(|a| a.part_number);
 
         let parts = Some(std::mem::take(&mut started_state.completed_parts));
 

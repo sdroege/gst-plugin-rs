@@ -70,10 +70,8 @@ fn main() -> Result<(), Error> {
                 println!("EOS");
                 break;
             }
-            MessageView::Latency(l) => {
-                if l.src() == Some(pipeline.upcast_ref()) {
-                    let _ = pipeline.recalculate_latency();
-                }
+            MessageView::Latency(l) if l.src() == Some(pipeline.upcast_ref()) => {
+                let _ = pipeline.recalculate_latency();
             }
             MessageView::Error(err) => {
                 eprintln!(
@@ -88,58 +86,57 @@ fn main() -> Result<(), Error> {
                 pipeline.set_state(gst::State::Null)?;
                 break;
             }
-            MessageView::Application(m) => {
+            MessageView::Application(m)
                 if m.structure()
                     .map(|s| s.has_name("application/timeout"))
-                    .unwrap_or(false)
-                {
-                    eprintln!("Timeout !");
+                    .unwrap_or(false) =>
+            {
+                eprintln!("Timeout !");
 
-                    match dynamic_stream.take() {
-                        Some(stream) => {
-                            let tail = stream.elements.back().unwrap();
-                            let old_pad = tail.static_pad("src").unwrap().peer().unwrap();
-                            for element in &stream.elements {
-                                element.set_locked_state(true);
-                                let _ = element.set_state(gst::State::Null);
-                            }
-
-                            tail.static_pad("src").unwrap().unlink(&old_pad).unwrap();
-
-                            old_pad
-                                .parent()
-                                .unwrap()
-                                .downcast_ref::<gst::Element>()
-                                .unwrap()
-                                .release_request_pad(&old_pad);
-
-                            for element in &stream.elements {
-                                pipeline.remove(element).unwrap();
-                            }
+                match dynamic_stream.take() {
+                    Some(stream) => {
+                        let tail = stream.elements.back().unwrap();
+                        let old_pad = tail.static_pad("src").unwrap().peer().unwrap();
+                        for element in &stream.elements {
+                            element.set_locked_state(true);
+                            let _ = element.set_state(gst::State::Null);
                         }
-                        _ => {
-                            let videotestsrc = gst::ElementFactory::make("videotestsrc")
-                                .property_from_str("pattern", "snow")
-                                .property("is-live", true)
-                                .build()
-                                .unwrap();
-                            let queue = gst::ElementFactory::make("queue").build().unwrap();
 
-                            pipeline.add_many([&videotestsrc, &queue]).unwrap();
+                        tail.static_pad("src").unwrap().unlink(&old_pad).unwrap();
 
-                            videotestsrc.link(&queue).unwrap();
+                        old_pad
+                            .parent()
+                            .unwrap()
+                            .downcast_ref::<gst::Element>()
+                            .unwrap()
+                            .release_request_pad(&old_pad);
 
-                            let new_pad = webrtcsink.request_pad_simple("video_%u").unwrap();
-
-                            queue.static_pad("src").unwrap().link(&new_pad).unwrap();
-
-                            queue.sync_state_with_parent().unwrap();
-                            videotestsrc.sync_state_with_parent().unwrap();
-
-                            dynamic_stream = Some(DynamicStream {
-                                elements: VecDeque::from([videotestsrc, queue]),
-                            });
+                        for element in &stream.elements {
+                            pipeline.remove(element).unwrap();
                         }
+                    }
+                    _ => {
+                        let videotestsrc = gst::ElementFactory::make("videotestsrc")
+                            .property_from_str("pattern", "snow")
+                            .property("is-live", true)
+                            .build()
+                            .unwrap();
+                        let queue = gst::ElementFactory::make("queue").build().unwrap();
+
+                        pipeline.add_many([&videotestsrc, &queue]).unwrap();
+
+                        videotestsrc.link(&queue).unwrap();
+
+                        let new_pad = webrtcsink.request_pad_simple("video_%u").unwrap();
+
+                        queue.static_pad("src").unwrap().link(&new_pad).unwrap();
+
+                        queue.sync_state_with_parent().unwrap();
+                        videotestsrc.sync_state_with_parent().unwrap();
+
+                        dynamic_stream = Some(DynamicStream {
+                            elements: VecDeque::from([videotestsrc, queue]),
+                        });
                     }
                 }
             }

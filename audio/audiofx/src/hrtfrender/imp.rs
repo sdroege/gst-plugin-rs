@@ -761,15 +761,13 @@ impl BaseTransformImpl for HrtfRender {
                     state.reset_processors();
                 }
             }
-            EventView::Eos(_) => {
-                if self.drain().is_err() {
-                    gst::warning!(CAT, "Failed to drain internal buffer");
-                    gst::element_imp_warning!(
-                        self,
-                        gst::CoreError::Event,
-                        ["Failed to drain internal buffer"]
-                    );
-                }
+            EventView::Eos(_) if self.drain().is_err() => {
+                gst::warning!(CAT, "Failed to drain internal buffer");
+                gst::element_imp_warning!(
+                    self,
+                    gst::CoreError::Event,
+                    ["Failed to drain internal buffer"]
+                );
             }
             _ => {}
         }

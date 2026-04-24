@@ -491,7 +491,7 @@ pub fn run_test_pipeline_full_and_validate_data<
     let mut initial_timestamp = None;
 
     for (i, (expected_list, sample)) in
-        Iterator::zip(expected_pay.into_iter(), pay_samples.into_iter()).enumerate()
+        Iterator::zip(expected_pay.into_iter(), pay_samples).enumerate()
     {
         let mut iter_a;
         let mut iter_b;
@@ -606,7 +606,7 @@ pub fn run_test_pipeline_full_and_validate_data<
     }
 
     for (i, (expected_list, sample)) in
-        Iterator::zip(expected_depay.into_iter(), depay_samples.into_iter()).enumerate()
+        Iterator::zip(expected_depay.into_iter(), depay_samples).enumerate()
     {
         let mut iter_a;
         let mut iter_b;

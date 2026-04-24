@@ -3461,49 +3461,47 @@ impl BaseWebRTCSink {
                         );
                         let _ = this.remove_session(&session_id_clone, true);
                     }
-                    gst::MessageView::Element(m) => {
+                    gst::MessageView::Element(m)
                         if m.structure()
                             .map(|s| s.has_name("webrtcsink/renegotiate"))
-                            .unwrap_or(false)
-                        {
-                            gst::debug!(
-                                CAT,
-                                imp = this,
-                                "renegotiating session {session_id_clone} now!"
-                            );
-                            this.negotiate(&session_id_clone, None);
-                        }
+                            .unwrap_or(false) =>
+                    {
+                        gst::debug!(
+                            CAT,
+                            imp = this,
+                            "renegotiating session {session_id_clone} now!"
+                        );
+                        this.negotiate(&session_id_clone, None);
                     }
-                    gst::MessageView::StateChanged(state_changed) => {
+                    gst::MessageView::StateChanged(state_changed)
                         if state_changed.src() == Some(pipeline.upcast_ref())
                             && state_changed.old() == gst::State::Ready
-                            && state_changed.current() == gst::State::Paused
-                        {
-                            gst::info!(
-                                CAT,
-                                obj = pipeline,
-                                "{peer_id_clone} pipeline reached PAUSED, negotiating"
-                            );
-                            // We don't connect to on-negotiation-needed, this in order to call the above
-                            // signal without holding the state lock:
-                            //
-                            // Going to Ready triggers synchronous emission of the on-negotiation-needed
-                            // signal, during which time the application may add a data channel, causing
-                            // renegotiation, which we do not support at this time.
-                            //
-                            // This is completely safe, as we know that by now all conditions are gathered:
-                            // webrtcbin is in the Paused state, and all its transceivers have codec_preferences.
-                            this.negotiate(&session_id_clone, offer_clone.as_ref());
+                            && state_changed.current() == gst::State::Paused =>
+                    {
+                        gst::info!(
+                            CAT,
+                            obj = pipeline,
+                            "{peer_id_clone} pipeline reached PAUSED, negotiating"
+                        );
+                        // We don't connect to on-negotiation-needed, this in order to call the above
+                        // signal without holding the state lock:
+                        //
+                        // Going to Ready triggers synchronous emission of the on-negotiation-needed
+                        // signal, during which time the application may add a data channel, causing
+                        // renegotiation, which we do not support at this time.
+                        //
+                        // This is completely safe, as we know that by now all conditions are gathered:
+                        // webrtcbin is in the Paused state, and all its transceivers have codec_preferences.
+                        this.negotiate(&session_id_clone, offer_clone.as_ref());
 
-                            if let Err(err) = pipeline.set_state(gst::State::Playing) {
-                                gst::warning!(
-                                    CAT,
-                                    obj = element,
-                                    "Failed to bring {peer_id_clone} pipeline to PLAYING: {}",
-                                    err
-                                );
-                                let _ = this.remove_session(&session_id_clone, true);
-                            }
+                        if let Err(err) = pipeline.set_state(gst::State::Playing) {
+                            gst::warning!(
+                                CAT,
+                                obj = element,
+                                "Failed to bring {peer_id_clone} pipeline to PLAYING: {}",
+                                err
+                            );
+                            let _ = this.remove_session(&session_id_clone, true);
                         }
                     }
                     _ => (),

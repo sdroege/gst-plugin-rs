@@ -108,16 +108,15 @@ fn run() -> Result<(), Error> {
         use gst::MessageView;
 
         match msg.view() {
-            MessageView::StateChanged(state_changed) => {
+            MessageView::StateChanged(state_changed)
                 if state_changed.src().map(|s| s == &pipeline).unwrap_or(false)
-                    && state_changed.current() == gst::State::Playing
-                {
-                    let (lock, cvar) = &*state_cond;
-                    let mut state = lock.lock().unwrap();
+                    && state_changed.current() == gst::State::Playing =>
+            {
+                let (lock, cvar) = &*state_cond;
+                let mut state = lock.lock().unwrap();
 
-                    *state = gst::State::Playing;
-                    cvar.notify_one();
-                }
+                *state = gst::State::Playing;
+                cvar.notify_one();
             }
             MessageView::Eos(..) => break,
             MessageView::Error(err) => {

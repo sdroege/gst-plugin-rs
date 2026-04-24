@@ -290,13 +290,11 @@ fn main() {
                     );
                     break;
                 }
-                MessageView::StateChanged(sc) => {
-                    if msg.src() == Some(pipeline.upcast_ref()) {
-                        pipeline.debug_to_dot_file(
-                            gst::DebugGraphDetails::all(),
-                            format!("{}-{:?}-{:?}", pipeline.name(), sc.old(), sc.current()),
-                        );
-                    }
+                MessageView::StateChanged(sc) if msg.src() == Some(pipeline.upcast_ref()) => {
+                    pipeline.debug_to_dot_file(
+                        gst::DebugGraphDetails::all(),
+                        format!("{}-{:?}-{:?}", pipeline.name(), sc.old(), sc.current()),
+                    );
                 }
                 MessageView::Error(err) => {
                     pipeline.debug_to_dot_file(gst::DebugGraphDetails::ALL, "fallbacksrc-error");

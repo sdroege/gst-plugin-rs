@@ -513,8 +513,8 @@ impl OnvifMeta2RelationMeta {
                                     "Object detected with label : {}, likelihood: {}, bounding box: {}x{} at ({},{})",
                                     tag,
                                     likelihood,
-                                    (x2 - x1),
-                                    (y2 - y1),
+                                    x2 - x1,
+                                    y2 - y1,
                                     x1,
                                     y1
                                 );
@@ -523,10 +523,10 @@ impl OnvifMeta2RelationMeta {
                                 let quark = glib::Quark::from_str(tag);
                                 let _ = arm.add_od_mtd(
                                     quark,
-                                    x1 as i32,
-                                    y1 as i32,
-                                    (y2 - y1) as i32,
-                                    (x2 - x1) as i32,
+                                    x1,
+                                    y1,
+                                    y2 - y1,
+                                    x2 - x1,
                                     likelihood as f32,
                                 );
                                 let _ = arm.add_one_cls_mtd(likelihood as f32, quark);

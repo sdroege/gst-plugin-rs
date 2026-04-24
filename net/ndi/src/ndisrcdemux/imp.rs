@@ -551,15 +551,13 @@ impl NdiSrcDemux {
             EventView::Caps(_) => {
                 return true;
             }
-            EventView::Eos(_) => {
-                if self.obj().num_src_pads() == 0 {
-                    // error out on EOS if no src pad are available
-                    gst::element_imp_error!(
-                        self,
-                        gst::StreamError::Demux,
-                        ["EOS without available srcpad(s)"]
-                    );
-                }
+            EventView::Eos(_) if self.obj().num_src_pads() == 0 => {
+                // error out on EOS if no src pad are available
+                gst::element_imp_error!(
+                    self,
+                    gst::StreamError::Demux,
+                    ["EOS without available srcpad(s)"]
+                );
             }
             _ => (),
         }

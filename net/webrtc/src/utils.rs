@@ -647,23 +647,19 @@ impl Codec {
                         && s.get::<gst::List>("encoding-name").map_or_else(
                             |_| {
                                 match s.get::<&str>("encoding-name") {
-                                    Ok(encoding_name) => {
-                                        if encoding_name == codec {
-                                            if s.has_field("clock-rate") {
-                                                match s.get_optional::<i32>("clock-rate") {
-                                                    Ok(Some(rate)) => {
-                                                        *clock_rate = Some(rate);
-                                                    }
-                                                    _ => {
-                                                        // if None or Err or IntRange
-                                                        *clock_rate = None;
-                                                    }
-                                                };
-                                            }
-                                            true
-                                        } else {
-                                            false
+                                    Ok(encoding_name) if encoding_name == codec => {
+                                        if s.has_field("clock-rate") {
+                                            match s.get_optional::<i32>("clock-rate") {
+                                                Ok(Some(rate)) => {
+                                                    *clock_rate = Some(rate);
+                                                }
+                                                _ => {
+                                                    // if None or Err or IntRange
+                                                    *clock_rate = None;
+                                                }
+                                            };
                                         }
+                                        true
                                     }
                                     _ => false,
                                 }
