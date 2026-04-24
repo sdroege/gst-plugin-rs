@@ -264,14 +264,10 @@ struct InputStream {
     producer: Option<StreamProducer>,
     /// The (fixed) caps coming in
     in_caps: Option<gst::Caps>,
-    /// The caps we will offer, as a set of fixed structures
-    out_caps: Option<gst::Caps>,
     /// Pace input data
     clocksync: Option<gst::Element>,
     /// Whether the input stream is video or not
     is_video: bool,
-    /// Whether initial discovery has started
-    initial_discovery_started: bool,
 }
 
 /// Wrapper around webrtcbin pads
@@ -1500,7 +1496,7 @@ impl State {
     fn should_start_signaller(&mut self, element: &super::BaseWebRTCSink) -> bool {
         self.signaller_state == SignallerState::Stopped
             && element.current_state() >= gst::State::Paused
-            && self.codec_discovery_done
+            && self.streams.values().all(|stream| stream.in_caps.is_some())
     }
 
     fn queue_discovery(&mut self, stream_name: &str, discovery_info: DiscoveryInfo) {
@@ -2222,7 +2218,7 @@ impl BaseWebRTCSink {
         webrtc_pads: &mut HashMap<u32, WebRTCPad>,
         codecs: &mut BTreeMap<i32, Codec>,
         last_sdp: Option<gst_sdp::SDPMessage>,
-    ) {
+    ) -> Result<(), Error> {
         let ssrc = self.generate_ssrc(webrtc_pads);
 
         let last_sdp_n_media = last_sdp.as_ref().map(|sdp| sdp.medias_len()).unwrap_or(0);
@@ -2262,7 +2258,44 @@ impl BaseWebRTCSink {
                     }
                 }
             }
-            None => stream.out_caps.as_ref().unwrap().to_owned(),
+            None => {
+                let discovery_info = stream.create_discovery();
+                let stream_name = stream.sink_pad.name().to_string();
+
+                let codecs = Codecs::from_map(&self.state.lock().unwrap().codecs);
+
+                let (fut, handle) = futures::future::abortable(self.lookup_caps(
+                    discovery_info.clone(),
+                    stream_name.clone(),
+                    gst::Caps::new_any(),
+                    &codecs,
+                ));
+
+                let (codecs_done_sender, codecs_done_receiver) =
+                    futures::channel::oneshot::channel();
+
+                {
+                    let mut state = self.state.lock().unwrap();
+                    state.codecs_abort_handles.push(handle);
+                    state.codecs_done_receivers.push(codecs_done_receiver);
+                }
+
+                let caps = match fut.await {
+                    Ok(Err(err)) => {
+                        gst::error!(CAT, imp = self, "Error running discovery: {err:?}");
+                        return Err(anyhow!("Error running discovery: {err:?}"));
+                    }
+                    Ok(Ok(caps)) => caps,
+                    _ => {
+                        // Codec discovery aborted, exit quietly
+                        return Ok(());
+                    }
+                };
+
+                let _ = codecs_done_sender.send(());
+
+                caps
+            }
         };
 
         if payloader_caps.is_empty() {
@@ -2335,12 +2368,7 @@ impl BaseWebRTCSink {
 
             let Some(pad) = webrtcbin.request_pad_simple(&format!("sink_{media_idx}")) else {
                 gst::error!(CAT, imp = self, "Failed to request pad from webrtcbin");
-                gst::element_imp_error!(
-                    self,
-                    gst::StreamError::Failed,
-                    ["Failed to request pad from webrtcbin"]
-                );
-                return;
+                return Err(anyhow!("Failed to request pad from webrtcbin"));
             };
 
             if let Some(msid) = stream.msid() {
@@ -2381,6 +2409,8 @@ impl BaseWebRTCSink {
                 },
             );
         }
+
+        Ok(())
     }
 
     async fn renegotiate(
@@ -2416,16 +2446,25 @@ impl BaseWebRTCSink {
         let mut codecs: BTreeMap<i32, Codec> = BTreeMap::new();
 
         for stream in streams.drain(..) {
-            self.request_webrtcbin_pad(
-                &webrtcbin,
-                &stream,
-                None,
-                settings_clone,
-                &mut webrtc_pads,
-                &mut codecs,
-                Some(last_sdp.clone()),
-            )
-            .await;
+            if let Err(err) = self
+                .request_webrtcbin_pad(
+                    &webrtcbin,
+                    &stream,
+                    None,
+                    settings_clone,
+                    &mut webrtc_pads,
+                    &mut codecs,
+                    Some(last_sdp.clone()),
+                )
+                .await
+            {
+                let _ = self.remove_session(
+                    &session_id,
+                    true,
+                    Some(anyhow!("Failed to request webrtcbin pad: {err:?}")),
+                );
+                return;
+            }
         }
 
         gst::debug!(
@@ -2538,12 +2577,17 @@ impl BaseWebRTCSink {
     fn prepare(&self) -> Result<(), Error> {
         gst::debug!(CAT, imp = self, "preparing");
 
+        let settings = self.settings.lock().unwrap();
+        let mut state = self.state.lock().unwrap();
+
+        state.codecs = Codecs::list_encoders_and_payloaders(
+            settings.video_caps.iter().chain(settings.audio_caps.iter()),
+        )
+        .to_map();
+
         #[cfg(feature = "web_server")]
         {
-            let settings = self.settings.lock().unwrap();
-
             if settings.run_web_server {
-                let mut state = self.state.lock().unwrap();
                 let (web_shutdown_tx, web_join_handle) =
                     BaseWebRTCSink::spawn_web_server(&settings)?;
                 state.web_shutdown_tx = Some(web_shutdown_tx);
@@ -3798,16 +3842,25 @@ impl BaseWebRTCSink {
                             media_is_video == stream_is_video
                         }) {
                             let stream = streams.remove(idx);
-                            this.request_webrtcbin_pad(
-                                &webrtcbin,
-                                &stream,
-                                Some(media),
-                                &settings_clone,
-                                &mut webrtc_pads,
-                                &mut codecs,
-                                None,
-                            )
-                            .await;
+                            if let Err(err) = this
+                                .request_webrtcbin_pad(
+                                    &webrtcbin,
+                                    &stream,
+                                    Some(media),
+                                    &settings_clone,
+                                    &mut webrtc_pads,
+                                    &mut codecs,
+                                    None,
+                                )
+                                .await
+                            {
+                                let _ = this.remove_session(
+                                    &session_id,
+                                    true,
+                                    Some(anyhow!("Failed to request webrtcbin pad: {err:?}")),
+                                );
+                                return;
+                            }
                         } else {
                             this.request_inactive_webrtcbin_pad(
                                 &webrtcbin,
@@ -3819,16 +3872,25 @@ impl BaseWebRTCSink {
                     }
                 } else {
                     for stream in streams {
-                        this.request_webrtcbin_pad(
-                            &webrtcbin,
-                            &stream,
-                            None,
-                            &settings_clone,
-                            &mut webrtc_pads,
-                            &mut codecs,
-                            None,
-                        )
-                        .await;
+                        if let Err(err) = this
+                            .request_webrtcbin_pad(
+                                &webrtcbin,
+                                &stream,
+                                None,
+                                &settings_clone,
+                                &mut webrtc_pads,
+                                &mut codecs,
+                                None,
+                            )
+                            .await
+                        {
+                            let _ = this.remove_session(
+                                &session_id,
+                                true,
+                                Some(anyhow!("Failed to request webrtcbin pad: {err:?}")),
+                            );
+                            return;
+                        }
                     }
                 }
 
@@ -4710,7 +4772,7 @@ impl BaseWebRTCSink {
         name: String,
         output_caps: gst::Caps,
         codecs: &Codecs,
-    ) -> Result<(), Error> {
+    ) -> Result<gst::Caps, Error> {
         let futs = if has_raw_caps(&discovery_info.caps) {
             let codecs = codecs.list_encoders();
             if codecs.is_empty() {
@@ -4790,16 +4852,11 @@ impl BaseWebRTCSink {
             }
         }
 
-        let mut state = self.state.lock().unwrap();
-        if let Some(stream) = state.streams.get_mut(&name) {
-            stream.out_caps = Some(payloader_caps.clone());
-        }
-
         if payloader_caps.is_empty() {
             anyhow::bail!("No caps found for stream {name}");
         }
 
-        Ok(())
+        Ok(payloader_caps)
     }
 
     fn gather_stats(&self) -> gst::Structure {
@@ -5020,8 +5077,9 @@ impl BaseWebRTCSink {
             gst::info!(CAT, obj = pad, "Received caps event {:?}", e);
 
             let mut state = self.state.lock().unwrap();
+            let mut pad_stream = None;
 
-            state.streams.iter_mut().for_each(|(_, stream)| {
+            for stream in state.streams.values_mut() {
                 if stream.sink_pad.upcast_ref::<gst::Pad>() == pad {
                     // We do not want VideoInfo to consider max-framerate
                     // when computing fps, so we strip it away here
@@ -5035,8 +5093,10 @@ impl BaseWebRTCSink {
                         }
                     }
                     stream.in_caps = Some(caps.to_owned());
+                    pad_stream = Some(stream.clone());
+                    break;
                 }
-            });
+            }
 
             if e.caps().structure(0).unwrap().name().starts_with("video/")
                 && let Ok(video_info) = gst_video::VideoInfo::from_caps(e.caps())
@@ -5052,6 +5112,29 @@ impl BaseWebRTCSink {
                             encoder.video_info = video_info.clone();
                         }
                     }
+                }
+            }
+
+            // We received caps for a stream while we already had sessions established,
+            // we need to call renegotiate for all sessions
+            if let Some(stream) = pad_stream {
+                for session in state.sessions.values() {
+                    let session_clone = session.0.clone();
+                    RUNTIME.spawn(glib::clone!(
+                        #[to_owned(rename_to = this)]
+                        self,
+                        #[strong]
+                        stream,
+                        async move {
+                            let settings_clone = this.settings.lock().unwrap().clone();
+                            this.renegotiate(
+                                &settings_clone,
+                                &Session(session_clone),
+                                vec![stream],
+                            )
+                            .await;
+                        }
+                    ));
                 }
             }
         }
@@ -5073,118 +5156,14 @@ impl BaseWebRTCSink {
         }
     }
 
-    fn start_stream_discovery_if_needed(&self, stream_name: &str) {
-        let (codecs, discovery_info) = {
-            let mut state = self.state.lock().unwrap();
-
-            let discovery_info = {
-                let stream = state.streams.get_mut(stream_name).unwrap();
-
-                // Initial discovery already happened... nothing to do here.
-                if stream.initial_discovery_started {
-                    return;
-                }
-
-                stream.initial_discovery_started = true;
-
-                stream.create_discovery()
-            };
-
-            let codecs = if !state.codecs.is_empty() {
-                Codecs::from_map(&state.codecs)
-            } else {
-                drop(state);
-                let settings = self.settings.lock().unwrap();
-                let codecs = Codecs::list_encoders_and_payloaders(
-                    settings.video_caps.iter().chain(settings.audio_caps.iter()),
-                );
-
-                state = self.state.lock().unwrap();
-                state.codecs = codecs.to_map();
-                codecs
-            };
-
-            (codecs, discovery_info)
-        };
-
-        let stream_name_clone = stream_name.to_owned();
-        RUNTIME.spawn(glib::clone!(
-            #[to_owned(rename_to = this)]
-            self,
-            #[strong]
-            discovery_info,
-            async move {
-                let (fut, handle) = futures::future::abortable(this.lookup_caps(
-                    discovery_info.clone(),
-                    stream_name_clone.clone(),
-                    gst::Caps::new_any(),
-                    &codecs,
-                ));
-
-                let (codecs_done_sender, codecs_done_receiver) =
-                    futures::channel::oneshot::channel();
-
-                // Compiler isn't budged by dropping state before await,
-                // so let's make a new scope instead.
-                {
-                    let mut state = this.state.lock().unwrap();
-                    state.codecs_abort_handles.push(handle);
-                    state.codecs_done_receivers.push(codecs_done_receiver);
-                }
-
-                match fut.await {
-                    Ok(Err(err)) => {
-                        gst::error!(CAT, imp = this, "Error running discovery: {err:?}");
-                        gst::element_error!(
-                            this.obj(),
-                            gst::StreamError::CodecNotFound,
-                            ["Failed to look up output caps: {err:?}"]
-                        );
-                    }
-                    Ok(Ok(_)) => {
-                        let settings_clone = this.settings.lock().unwrap().clone();
-
-                        let (sessions, stream) = {
-                            let mut state = this.state.lock().unwrap();
-
-                            state.codec_discovery_done = state
-                                .streams
-                                .values()
-                                .all(|stream| stream.out_caps.is_some());
-
-                            (
-                                state.sessions.clone(),
-                                state.streams.get(&stream_name_clone).cloned(),
-                            )
-                        };
-
-                        if let Some(stream) = stream {
-                            for session in sessions.values() {
-                                gst::debug!(
-                                    CAT,
-                                    imp = this,
-                                    "renegotiating session {} from discovery done",
-                                    session.0.lock().unwrap().id
-                                );
-                                this.renegotiate(&settings_clone, session, vec![stream.clone()])
-                                    .await;
-                            }
-                        }
-
-                        let mut state = this.state.lock().unwrap();
-
-                        if state.should_start_signaller(&this.obj()) {
-                            state.signaller_state = SignallerState::Started;
-                            drop(state);
-                            settings_clone.signaller.start();
-                        }
-                    }
-                    _ => (),
-                }
-
-                let _ = codecs_done_sender.send(());
-            }
-        ));
+    fn start_signaller_if_needed(&self) {
+        let mut state = self.state.lock().unwrap();
+        if state.should_start_signaller(&self.obj()) {
+            state.signaller_state = SignallerState::Started;
+            drop(state);
+            let signaller = self.settings.lock().unwrap().signaller.clone();
+            signaller.start();
+        }
     }
 
     fn dye_buffer(&self, mut buffer: gst::Buffer, stream_name: &str) -> Result<gst::Buffer, Error> {
@@ -5208,7 +5187,7 @@ impl BaseWebRTCSink {
                 gst::error!(CAT, obj = pad, "Failed to dye buffer: {err}");
                 gst::FlowError::Error
             })?;
-        self.start_stream_discovery_if_needed(pad.name().as_str());
+        self.start_signaller_if_needed();
         self.feed_discoveries(pad.name().as_str(), &buffer);
 
         gst::ProxyPad::chain_default(pad, Some(&*self.obj()), buffer)
@@ -6156,10 +6135,8 @@ impl ElementImpl for BaseWebRTCSink {
             sink_pad: sink_pad.clone(),
             producer: None,
             in_caps: None,
-            out_caps: None,
             clocksync: None,
             is_video,
-            initial_discovery_started: false,
         };
 
         drop(state);
