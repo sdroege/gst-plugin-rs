@@ -17520,7 +17520,7 @@
                         "mutable": "ready",
                         "readable": true,
                         "type": "GstRSWebRTCSignallableIface",
-                        "writable": false
+                        "writable": true
                     },
                     "start-bitrate": {
                         "blurb": "Start bitrate to use (in bit/sec)",
