@@ -21,7 +21,7 @@ getifaddrs = "0.6"
 socket2 = { version = "0.6", features = ["all"] }
 anyhow = "1"
 itertools = "0.14"
-lru = "0.16"
+lru = "0.18"
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true

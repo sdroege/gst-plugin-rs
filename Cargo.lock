@@ -598,7 +598,7 @@ dependencies = [
  "http 0.2.12",
  "http 1.4.0",
  "http-body 1.0.1",
- "lru",
+ "lru 0.16.4",
  "percent-encoding",
  "regex-lite",
  "sha2 0.11.0",
@@ -5296,7 +5296,7 @@ dependencies = [
  "gstreamer-pbutils",
  "hex",
  "httparse",
- "lru",
+ "lru 0.18.0",
  "md-5",
  "rand 0.10.1",
  "rtsp-types",
@@ -5535,7 +5535,7 @@ dependencies = [
  "gstreamer-net",
  "itertools 0.14.0",
  "libc",
- "lru",
+ "lru 0.18.0",
  "mio",
  "socket2 0.6.3",
 ]
@@ -6412,6 +6412,11 @@ name = "hashbrown"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
+dependencies = [
+ "allocator-api2",
+ "equivalent",
+ "foldhash 0.2.0",
+]
 
 [[package]]
 name = "headers"
@@ -7711,6 +7716,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f66e8d5d03f609abc3a39e6f08e4164ebf1447a732906d39eb9b99b7919ef39"
 dependencies = [
  "hashbrown 0.16.1",
+]
+
+[[package]]
+name = "lru"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a860605968fce16869fd239cf4237a82f3ac470723415db603b0e8b6c8d4fb9"
+dependencies = [
+ "hashbrown 0.17.0",
 ]
 
 [[package]]
@@ -9798,7 +9812,7 @@ checksum = "ffbe87d9e8db95652c25ded2418150e00b08c2fde09e23ec15896d2c470c6631"
 dependencies = [
  "g2p",
  "image",
- "lru",
+ "lru 0.16.4",
 ]
 
 [[package]]
