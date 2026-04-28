@@ -75,6 +75,8 @@ bytes = "1"
 indexmap = "2.13.0"
 
 [dev-dependencies]
+gst-audio = { workspace = true, features = ["v1_20"] }
+gst-check = { workspace = true, features = ["v1_20"] }
 gst-plugin-rtp.workspace = true
 tokio = { version = "1", features = ["signal"] }
 clap = { version = "4", features = ["derive"] }
