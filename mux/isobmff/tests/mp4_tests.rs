@@ -1304,7 +1304,6 @@ fn test_video_caps_change_with_encoder(
     let capsfilter = gst::ElementFactory::make("capsfilter")
         .name("capsf")
         .property("caps", get_caps(320, 240))
-        .property_from_str("caps-change-mode", "delayed")
         .build()
         .unwrap();
 
@@ -1316,7 +1315,6 @@ fn test_video_caps_change_with_encoder(
     let caps_for_mux = gst::ElementFactory::make("capsfilter")
         .name("capsf-mux")
         .property("caps", mux_caps)
-        .property_from_str("caps-change-mode", "delayed")
         .build()
         .unwrap();
 
@@ -1349,13 +1347,12 @@ fn test_video_caps_change_with_encoder(
     ])
     .unwrap();
 
-    let pipeline_weak = pipeline.downgrade();
     let buffer_count = Arc::new(Mutex::new(1u32));
     let next_resolutions = [(640, 480), (1080, 720), (1920, 1080)];
 
-    videotestsrc.static_pad("src").unwrap().add_probe(
+    capsfilter.static_pad("src").unwrap().add_probe(
         gst::PadProbeType::BUFFER,
-        move |_pad, _info| {
+        move |pad, _info| {
             let mut buffer_count = buffer_count.lock().unwrap();
 
             // Check if we need to change resolution (every 10 buffers)
@@ -1363,8 +1360,10 @@ fn test_video_caps_change_with_encoder(
                 let resolution_index = (*buffer_count / 10 - 1) as usize;
 
                 if let Some(&(w, h)) = next_resolutions.get(resolution_index) {
-                    let pipeline = pipeline_weak.upgrade().unwrap();
-                    let capsfilter = pipeline.by_name("capsf").unwrap();
+                    let capsfilter = pad
+                        .parent()
+                        .and_then(|p| p.downcast::<gst::Element>().ok())
+                        .unwrap();
                     let caps = get_caps(w, h);
 
                     capsfilter.set_property("caps", caps);
