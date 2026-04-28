@@ -5104,7 +5104,7 @@ impl ObjectImpl for BaseWebRTCSink {
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecObject::builder::<Signallable>("signaller")
-                    .flags(glib::ParamFlags::READABLE | gst::PARAM_FLAG_MUTABLE_READY)
+                    .flags(glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY)
                     .blurb("The Signallable object to use to handle WebRTC Signalling")
                     .build(),
                 /**
@@ -5312,6 +5312,9 @@ impl ObjectImpl for BaseWebRTCSink {
                 settings.ice_transport_policy = value
                     .get::<WebRTCICETransportPolicy>()
                     .expect("type checked upstream");
+            }
+            "signaller" => {
+                self.set_signaller(value.get().unwrap()).unwrap();
             }
             #[cfg(feature = "web_server")]
             "run-web-server" => {
