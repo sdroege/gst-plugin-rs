@@ -13,6 +13,7 @@ anyhow = "1"
 atomic_refcell = "0.1"
 data-encoding = "2.4"
 futures = "0.3"
+glib = { workspace = true }
 gst = { workspace = true, features = ["v1_22"] }
 gst-app = { workspace = true, features = ["v1_20"] }
 gst-base = { workspace = true, features = ["v1_20"] }
@@ -37,6 +38,7 @@ httparse = "1.10"
 base64 = "0.22"
 bytes = "1"
 tokio-util = "0.7"
+mykey = "1"
 
 [dev-dependencies]
 ctrlc = "3.4"
