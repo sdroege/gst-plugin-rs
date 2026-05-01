@@ -11,6 +11,9 @@
 use super::imp::CAT;
 use super::imp::RtspError;
 use super::imp::RtspProtocol;
+use gst::prelude::*;
+use mykey::{MikeyMessage, payload::Payload::Kemac};
+use rtsp_types::headers::RtpProfile;
 use sdp_types::Attribute;
 use sdp_types::Connection;
 use std::collections::BTreeSet;
@@ -362,8 +365,9 @@ pub fn parse_media_attributes(
     pt: u8,
     media: &str,
     s: &mut gst::structure::Structure,
+    has_mikey: &mut bool,
 ) -> Result<(), RtspError> {
-    let mut skip_attrs = vec!["control", "range", "ssrc"];
+    let mut skip_attrs = vec!["control", "range"];
 
     for Attribute { attribute, value } in attrs {
         let attr = attribute.as_str();
@@ -384,7 +388,8 @@ pub fn parse_media_attributes(
             "rtpmap" => parse_rtpmap(value, pt, media, s)?,
             "fmtp" => parse_fmtp(value, s),
             "framesize" => parse_framesize(value, s),
-            // TODO: extmap, key-mgmt, rid, rtcp-fb, source-filter, ssrc
+            "key-mgmt" => parse_key_mgmt(value, s, has_mikey),
+            // TODO: extmap, rid, rtcp-fb, source-filter, ssrc
             _ => s.set(format!("a-{attribute}"), value),
         };
         skip_attrs.push(attr);
@@ -430,4 +435,210 @@ pub fn parse_connections(conns: &Vec<Connection>) -> (BTreeSet<RtspProtocol>, bo
         }
     }
     (conn_protocols, is_ipv4)
+}
+
+pub fn parse_rtp_profile(media: &sdp_types::Media) -> RtpProfile {
+    match media.proto.as_str() {
+        "RTP/AVP" => RtpProfile::Avp,
+        "RTP/SAVP" => RtpProfile::SAvp,
+        "RTP/AVPF" => RtpProfile::AvpF,
+        "RTP/SAVPF" => RtpProfile::SAvpF,
+        _ => RtpProfile::Avp,
+    }
+}
+
+fn parse_key_mgmt(key_mgmt: &str, s: &mut gst::Structure, has_mikey: &mut bool) {
+    use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+
+    let Some((_, b64)) = key_mgmt.split_once(' ') else {
+        return;
+    };
+
+    let Ok(data) = BASE64.decode(b64.trim()) else {
+        return;
+    };
+
+    if let Ok(mikey) = MikeyMessage::from_bytes(&data) {
+        *has_mikey = mikey_to_caps(mikey, s);
+    }
+}
+
+// Adapted from `gst_mikey_message_to_caps` in `gstmikey.c`.
+fn mikey_to_caps(mikey: MikeyMessage, s: &mut gst::Structure) -> bool {
+    let mut srtp_cipher = "aes-128-icm";
+    let mut srtp_auth = "hmac-sha1-80";
+
+    // Look for first crypto session (SRTP-ID map entry)
+    let srtp = match mikey.header.cs_id_map.first() {
+        Some(id) => id,
+        None => return false,
+    };
+
+    // Extract cipher/auth from Security Policy payload matching the CS ID map entry
+    if let Some(sp_payload) = mikey.payloads.iter().find_map(|p| {
+        if let mykey::payload::Payload::Sp(sp) = p
+            && sp.policy_no == srtp.policy_no
+        {
+            return Some(sp);
+        }
+
+        None
+    }) {
+        // Only handle SRTP (proto_type = 0)
+        if sp_payload.proto_type != 0 {
+            return false;
+        }
+
+        for param in &sp_payload.params {
+            match param.param_type {
+                // Encryption algorithm (SrtpParamType::EncryptionAlg = 0)
+                0 => {
+                    if let Some(&enc_alg) = param.param_value.first() {
+                        match enc_alg {
+                            0 => srtp_cipher = "null",
+                            1 => srtp_cipher = "aes-128-icm",
+                            2 => srtp_cipher = "aes-128-icm",
+                            6 => srtp_cipher = "aes-128-gcm",
+                            enc_alg => {
+                                gst::warning!(
+                                    CAT,
+                                    "Unexpected encryption algorithm: {enc_alg}, using {srtp_cipher}"
+                                );
+                                break;
+                            }
+                        }
+                    }
+                }
+                // Encryption key length (SrtpParamType::SessionEncKeyLen = 1)
+                1 => {
+                    if let Some(&key_len) = param.param_value.first() {
+                        match key_len {
+                            16 => { /* already set correctly by enc_alg or default */ }
+                            32 => {
+                                if srtp_cipher == "aes-128-icm" {
+                                    srtp_cipher = "aes-256-icm";
+                                } else if srtp_cipher == "aes-128-gcm" {
+                                    srtp_cipher = "aes-256-gcm";
+                                }
+                            }
+                            enc_key_len => {
+                                gst::warning!(
+                                    CAT,
+                                    "Unexpected session encryption key length: {enc_key_len}"
+                                );
+                                break;
+                            }
+                        }
+                    }
+                }
+                // Authentication algorithm (SrtpParamType::AuthAlg = 2)
+                2 => {
+                    if let Some(&auth_alg) = param.param_value.first() {
+                        match auth_alg {
+                            0 => srtp_auth = "null",
+                            1 => srtp_auth = "hmac-sha1-80",
+                            auth_alg => {
+                                gst::warning!(
+                                    CAT,
+                                    "Unexpected authentication algorithm: {auth_alg}"
+                                );
+                                break;
+                            }
+                        }
+                    }
+                }
+                // Authentication key length (SrtpParamType::SessionAuthKeyLen = 3)
+                3 => {
+                    if let Some(&auth_key_len) = param.param_value.first() {
+                        match auth_key_len {
+                            4 => srtp_auth = "hmac-sha1-32",
+                            10 => srtp_auth = "hmac-sha1-80",
+                            auth_key_len => {
+                                gst::warning!(
+                                    CAT,
+                                    "Unexpected authentication key length: {auth_key_len}"
+                                );
+                                break;
+                            }
+                        }
+                    }
+                }
+                param_type => {
+                    gst::warning!(CAT, "Unexpected parameter type: {param_type}");
+                    break;
+                }
+            }
+        }
+    }
+
+    let mut srtp_key: Option<gst::Buffer> = None;
+    for payload in &mikey.payloads {
+        let Kemac(kemac) = payload else {
+            continue;
+        };
+
+        if kemac.enc_alg != mykey::payload::EncAlg::Null
+            || kemac.mac_alg != mykey::payload::MacAlg::Null
+        {
+            continue;
+        }
+
+        let enc_data = kemac.enc_data.as_slice();
+
+        // See Section 6.13 Key data sub-payload.
+        // Next Payload (1) + type (4-bits) + KV (4-bits) + Key data len (2)
+        //                        1                   2                   3
+        //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        // !  Next Payload ! Type  ! KV    ! Key data len                  !
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        // !                         Key data                              ~
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        // ! Salt len (optional)           ! Salt data (optional)          ~
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        // !                        KV data (optional)                     ~
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        //
+        if enc_data.len() >= 4 {
+            let key_data_len = u16::from_be_bytes([enc_data[2], enc_data[3]]) as usize;
+
+            // Verify we have enough data for the received key_data_len
+            if enc_data.len() >= 4 + key_data_len {
+                let mut key_data = enc_data[4..4 + key_data_len].to_vec();
+
+                // Append Salt if available
+                let salt_len_start = 4 + key_data_len;
+                if enc_data.len() >= salt_len_start + 2 {
+                    let salt_data_len = u16::from_be_bytes([
+                        enc_data[salt_len_start],
+                        enc_data[salt_len_start + 1],
+                    ]) as usize;
+
+                    if salt_data_len > 0 && enc_data.len() >= salt_len_start + 2 + salt_data_len {
+                        key_data.extend_from_slice(
+                            &enc_data[salt_len_start + 2..salt_len_start + 2 + salt_data_len],
+                        );
+                    }
+                }
+
+                srtp_key = Some(gst::Buffer::from_slice(key_data));
+                break;
+            }
+        }
+    }
+
+    s.set("srtp-cipher", srtp_cipher.to_send_value());
+    s.set("srtp-auth", srtp_auth.to_send_value());
+    s.set("srtcp-cipher", srtp_cipher.to_send_value());
+    s.set("srtcp-auth", srtp_auth.to_send_value());
+
+    match srtp_key {
+        Some(buf) => {
+            // TODO: Set `mki` when `client-managed-mikey` support gets added
+            s.set("srtp-key", &buf);
+            s.set("roc", srtp.roc);
+            true
+        }
+        None => false,
+    }
 }

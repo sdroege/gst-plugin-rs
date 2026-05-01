@@ -27,6 +27,7 @@
  * * Keep-alive
  * * Support for stream selection at the start
  * * Allow unlinked pads
+ * * Support for SRTP with `rtpbin`/`!USE_RTP2`
  *
  * Some missing features:
  * * SET_PARAMETER/GET_PARAMETER messages

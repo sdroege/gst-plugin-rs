@@ -80,6 +80,8 @@ const SIGNAL_TLS_CLIENT_AUTH: &str = "tls-client-auth";
 
 static RTCP_CAPS: LazyLock<gst::Caps> =
     LazyLock::new(|| gst::Caps::from(gst::Structure::new_empty("application/x-rtcp")));
+static SRTP_RTCP_CAPS: LazyLock<gst::Caps> =
+    LazyLock::new(|| gst::Caps::from(gst::Structure::new_empty("application/x-srtcp")));
 
 // Hardcoded for now
 const DEFAULT_USER_AGENT: &str = concat!(
@@ -258,6 +260,10 @@ where
     RtspTaskState::new(url, stream, sink)
 }
 
+fn is_secure_rtp_profile(profile: &RtpProfile) -> bool {
+    *profile == RtpProfile::SAvp || *profile == RtpProfile::SAvpF
+}
+
 #[derive(Debug, Clone)]
 struct Settings {
     location: Option<Url>,
@@ -300,6 +306,7 @@ enum Commands {
 struct RtspGstStream {
     stream: gst::Stream,
     media_idx: usize,
+    has_mikey: bool,
 }
 
 #[derive(Debug, Default)]
@@ -312,6 +319,8 @@ struct State {
     stream_selection_done: bool,
     flow_combiner: gst_base::UniqueFlowCombiner,
     emitted_no_more_pads: bool,
+    srtpdec: HashMap<u32, gst::Element>,
+    srtpenc: HashMap<u32, gst::Element>,
 }
 
 impl State {
@@ -473,7 +482,7 @@ impl RtspSrc {
             "rtspu" => &[RtspProtocol::UdpMulticast, RtspProtocol::Udp],
             "rtspt" => &[RtspProtocol::Tcp],
             "rtsp" => &settings.protocols,
-            "rtsps" => &[RtspProtocol::Tcp],
+            "rtsps" => &settings.protocols,
             "rtsph" => &[RtspProtocol::Tcp],
             scheme => {
                 return Err(glib::Error::new(
@@ -971,7 +980,7 @@ impl URIHandlerImpl for RtspSrc {
     const URI_TYPE: gst::URIType = gst::URIType::Src;
 
     fn protocols() -> &'static [&'static str] {
-        &["rtsp", "rtspu", "rtspt", "rtsph"]
+        &["rtsp", "rtspu", "rtspt", "rtsph", "rtsps"]
     }
 
     fn uri(&self) -> Option<String> {
@@ -1242,6 +1251,9 @@ impl RtspSrc {
         let mut state = self.state.lock().unwrap();
         state.flow_combiner.reset();
 
+        state.srtpdec.clear();
+        state.srtpenc.clear();
+
         gst::info!(CAT, imp = self, "Stopped");
 
         Ok(())
@@ -1334,12 +1346,17 @@ impl RtspSrc {
         &self,
         rtpsession_n: usize,
         manager: &RtspManager,
+        is_secure: bool,
     ) -> Result<gst_app::AppSrc> {
         let appsrc = gst_app::AppSrc::builder()
             .name(format!("rtcp_appsrc_{rtpsession_n}"))
             .format(gst::Format::Time)
             .handle_segment_change(true)
-            .caps(&RTCP_CAPS)
+            .caps(if is_secure {
+                &SRTP_RTCP_CAPS
+            } else {
+                &RTCP_CAPS
+            })
             .stream_type(gst_app::AppStreamType::Stream)
             .is_live(true)
             .build();
@@ -1462,6 +1479,110 @@ impl RtspSrc {
         let using_rtp2 = std::env::var("USE_RTP2").is_ok_and(|s| s == "1");
         let manager = RtspManager::new(using_rtp2);
 
+        if !manager.using_rtp2 {
+            for (rtpsession_n, p) in task_state
+                .setup_params
+                .iter_mut()
+                .enumerate()
+                .filter(|(_, p)| is_secure_rtp_profile(&p.profile))
+            {
+                let stream_caps = p.caps.clone();
+
+                gst::debug!(
+                    CAT,
+                    "Setting up RTP/RTCP decoder for SRTP for {rtpsession_n}"
+                );
+
+                for signal in ["request-rtp-decoder", "request-rtcp-decoder"] {
+                    let stream_caps = p.caps.clone();
+
+                    manager.recv.connect_closure(
+                        signal,
+                        false,
+                        glib::closure!(
+                            #[weak(rename_to = self_)]
+                            self,
+                            move |_rtpbin: gst::Element, session: u32| {
+                                let srtpdec = {
+                                    let mut state = self_.state.lock().unwrap();
+                                    state
+                                        .srtpdec
+                                        .entry(session)
+                                        .or_insert_with(|| {
+                                            gst::ElementFactory::make_with_name(
+                                                "srtpdec",
+                                                Some(format!("srtpdec_{session}").as_str()),
+                                            )
+                                            .unwrap_or_else(|_| panic!("srtpdec not found"))
+                                        })
+                                        .clone()
+                                };
+
+                                let stream_caps = stream_caps.clone();
+
+                                srtpdec.connect_closure(
+                                    "request-key",
+                                    false,
+                                    glib::closure!(move |_srtpdec: gst::Element, _ssrc: u32| {
+                                        stream_caps.clone()
+                                    }),
+                                );
+
+                                srtpdec
+                            }
+                        ),
+                    );
+                }
+
+                manager.recv.connect_closure(
+                    "request-rtcp-encoder",
+                    false,
+                    glib::closure!(
+                        #[weak(rename_to = self_)]
+                        self,
+                        move |_rtpbin: gst::Element, session: u32| {
+                            let srtpenc = {
+                                let mut state = self_.state.lock().unwrap();
+                                state
+                                    .srtpenc
+                                    .entry(session)
+                                    .or_insert_with(|| {
+                                        gst::ElementFactory::make_with_name(
+                                            "srtpenc",
+                                            Some(format!("srtpenc_{session}").as_str()),
+                                        )
+                                        .unwrap_or_else(|_| panic!("srtpenc not found"))
+                                    })
+                                    .clone()
+                            };
+
+                            let s = stream_caps.structure(0).unwrap();
+
+                            let srtp_key = s.get::<gst::Buffer>("srtp-key").unwrap();
+                            srtpenc.set_property("key", srtp_key);
+
+                            let srtp_auth = s.get::<String>("srtp-auth").unwrap();
+                            srtpenc.set_property_from_str("rtp-auth", srtp_auth.as_str());
+
+                            let srtp_cipher = s.get::<String>("srtp-cipher").unwrap();
+                            srtpenc.set_property_from_str("rtp-cipher", srtp_cipher.as_str());
+
+                            let srtcp_auth = s.get::<String>("srtcp-auth").unwrap();
+                            srtpenc.set_property_from_str("rtcp-auth", srtcp_auth.as_str());
+
+                            let srtcp_cipher = s.get::<String>("srtcp-cipher").unwrap();
+                            srtpenc.set_property_from_str("rtcp-cipher", srtcp_cipher.as_str());
+
+                            let _pad = srtpenc
+                                .request_pad_simple(format!("rtcp_sink_{}", session).as_str());
+
+                            srtpenc
+                        }
+                    ),
+                );
+            }
+        }
+
         let obj = self.obj();
         manager
             .add_to(obj.upcast_ref::<gst::Bin>())
@@ -1471,6 +1592,8 @@ impl RtspSrc {
         for (rtpsession_n, p) in task_state.setup_params.iter_mut().enumerate() {
             let (tx, rx) = mpsc::channel(1);
             let on_rtcp = move |appsink: &_| on_rtcp_udp(appsink, tx.clone());
+            let is_secure = is_secure_rtp_profile(&p.profile);
+
             match &mut p.transport {
                 RtspTransportInfo::UdpMulticast {
                     dest,
@@ -1543,7 +1666,8 @@ impl RtspSrc {
                     // Spawn RTCP udp send/recv task
                     if let Some(rtcp_socket) = rtcp_socket {
                         let rtcp_dest = rtcp_port.and_then(|p| Some(SocketAddr::new(*dest, p)));
-                        let rtcp_appsrc = self.make_rtcp_appsrc(rtpsession_n, &manager)?;
+                        let rtcp_appsrc =
+                            self.make_rtcp_appsrc(rtpsession_n, &manager, is_secure)?;
                         self.make_rtcp_appsink(rtpsession_n, &manager, on_rtcp)?;
                         task_state.handles.push(RUNTIME.spawn(async move {
                             udp_rtcp_task(&rtcp_socket, rtcp_appsrc, rtcp_dest, true, rx).await
@@ -1594,7 +1718,8 @@ impl RtspSrc {
 
                     // Spawn RTCP udp send/recv task
                     if let Some(rtcp_socket) = rtcp_socket {
-                        let rtcp_appsrc = self.make_rtcp_appsrc(rtpsession_n, &manager)?;
+                        let rtcp_appsrc =
+                            self.make_rtcp_appsrc(rtpsession_n, &manager, is_secure)?;
                         self.make_rtcp_appsink(rtpsession_n, &manager, on_rtcp)?;
                         task_state.handles.push(RUNTIME.spawn(async move {
                             udp_rtcp_task(&rtcp_socket, rtcp_appsrc, rtcp_sender_addr, false, rx)
@@ -1611,7 +1736,8 @@ impl RtspSrc {
 
                     if let Some(rtcp_channel) = rtcp_channel {
                         // RTCP SR
-                        let rtcp_appsrc = self.make_rtcp_appsrc(rtpsession_n, &manager)?;
+                        let rtcp_appsrc =
+                            self.make_rtcp_appsrc(rtpsession_n, &manager, is_secure)?;
                         tcp_interleave_appsrcs.insert(*rtcp_channel, rtcp_appsrc.clone());
                         // RTCP RR
                         let rtcp_channel = *rtcp_channel;
@@ -1619,6 +1745,28 @@ impl RtspSrc {
                         self.make_rtcp_appsink(rtpsession_n, &manager, move |appsink| {
                             on_rtcp_tcp(appsink, cmd_tx.clone(), rtcp_channel)
                         })?;
+                    }
+                }
+            }
+
+            if is_secure {
+                match manager.using_rtp2 {
+                    true => {
+                        return Err(RtspError::Fatal(
+                            "SRTP not supported with USING_RTP2".to_string(),
+                        )
+                        .into());
+                    }
+                    false => {
+                        let session = rtpsession_n as u32;
+                        let rtp_profile = p.profile.as_str().to_lowercase();
+
+                        if let Some(rtpsession) = manager
+                            .recv
+                            .emit_by_name::<Option<gst::Element>>("get-session", &[&session])
+                        {
+                            rtpsession.set_property_from_str("rtp-profile", &rtp_profile);
+                        }
                     }
                 }
             }
@@ -2035,6 +2183,7 @@ struct RtspSetupParams {
     transport: RtspTransportInfo,
     rtp_appsrc: Option<gst_app::AppSrc>,
     caps: gst::Caps,
+    profile: RtpProfile,
 }
 
 impl RtspTaskState {
@@ -2372,7 +2521,7 @@ impl RtspTaskState {
         let mut b = gst::Structure::builder("application/x-rtp");
 
         // TODO: parse range for VOD
-        let skip_attrs = ["control", "range"];
+        let skip_attrs = ["control", "range", "ssrc"];
         for sdp_types::Attribute { attribute, value } in &sdp.attributes {
             if skip_attrs.contains(&attribute.as_str()) {
                 continue;
@@ -2385,6 +2534,7 @@ impl RtspTaskState {
         let mut streams: Vec<RtspGstStream> = Vec::new();
 
         for (media_idx, m) in sdp.medias.iter().enumerate() {
+            let mut has_mikey = false;
             // RTP caps
             let Ok(pt) = m.fmt.parse::<u8>() else {
                 gst::error!(CAT, "Could not parse pt: {}, ignoring media", m.fmt);
@@ -2397,7 +2547,9 @@ impl RtspTaskState {
             s.set("media", &media);
             s.set("payload", pt as i32);
 
-            if let Err(err) = sdp::parse_media_attributes(&m.attributes, pt, &media, &mut s) {
+            if let Err(err) =
+                sdp::parse_media_attributes(&m.attributes, pt, &media, &mut s, &mut has_mikey)
+            {
                 gst::warning!(
                     CAT,
                     "Skipping media {} {}, no rtpmap: {err:?}",
@@ -2410,6 +2562,7 @@ impl RtspTaskState {
             streams.push(RtspGstStream {
                 stream: self.create_stream(s, media_idx, &media),
                 media_idx,
+                has_mikey,
             });
         }
 
@@ -2491,6 +2644,7 @@ impl RtspTaskState {
             let mut rtcp_socket: Option<UdpSocket> = None;
             let mut transports = Vec::new();
             let (conn_protocols, is_ipv4) = sdp::parse_connections(&m.connections);
+            let rtp_profile = sdp::parse_rtp_profile(m);
 
             let protocols = if !conn_protocols.is_empty() {
                 let p = protocols.iter().cloned().collect::<BTreeSet<_>>();
@@ -2511,7 +2665,7 @@ impl RtspTaskState {
                     ..Default::default()
                 };
                 transports.push(Transport::Rtp(RtpTransport {
-                    profile: RtpProfile::Avp,
+                    profile: rtp_profile.clone(),
                     lower_transport: Some(RtpLowerTransport::Udp),
                     params,
                 }));
@@ -2530,7 +2684,7 @@ impl RtspTaskState {
                     ..Default::default()
                 };
                 transports.push(Transport::Rtp(RtpTransport {
-                    profile: RtpProfile::Avp,
+                    profile: rtp_profile.clone(),
                     lower_transport: Some(RtpLowerTransport::Udp),
                     params,
                 }));
@@ -2542,8 +2696,7 @@ impl RtspTaskState {
                     ..Default::default()
                 };
                 transports.push(Transport::Rtp(RtpTransport {
-                    // RTSP 2.0 adds AVPF and more
-                    profile: RtpProfile::Avp,
+                    profile: rtp_profile.clone(),
                     lower_transport: Some(RtpLowerTransport::Tcp),
                     params,
                 }));
@@ -2662,13 +2815,31 @@ impl RtspTaskState {
                     }
                 }
             };
+
+            if is_secure_rtp_profile(&rtp_profile) {
+                if !stream.has_mikey {
+                    return Err(RtspError::Fatal("No MiKey".to_string()));
+                }
+
+                s.set_name("application/x-srtp");
+            }
+
             let caps = gst::Caps::from(s);
             stream.stream.set_caps(Some(&caps));
+
+            gst::debug!(
+                CAT,
+                "Caps for media {}: {caps}, secure: {}",
+                m.media,
+                stream.has_mikey
+            );
+
             setup_params.push(RtspSetupParams {
                 control_url: control_url.clone(),
                 transport: parsed_transport,
                 rtp_appsrc: None,
                 caps,
+                profile: rtp_profile,
             });
         }
         Ok(setup_params)

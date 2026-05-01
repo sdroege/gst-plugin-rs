@@ -5367,6 +5367,7 @@ dependencies = [
  "httparse",
  "lru 0.18.0",
  "md-5",
+ "mykey",
  "rand 0.10.1",
  "rtsp-types",
  "rustls-pki-types",
@@ -8068,6 +8069,22 @@ name = "multimap"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d87ecb2933e8aeadb3e3a02b828fed80a7528047e68b4f424523a0981a3a084"
+
+[[package]]
+name = "mykey"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "238a3040fa73be8aabde857ed01f83f55c722c37b386d668261f1d2da31aa13f"
+dependencies = [
+ "base64 0.22.1",
+ "hex",
+ "hmac 0.12.1",
+ "rand 0.9.4",
+ "rand_core 0.6.4",
+ "sha1 0.10.6",
+ "thiserror 1.0.69",
+ "x25519-dalek",
+]
 
 [[package]]
 name = "naga"
@@ -13461,6 +13478,18 @@ name = "writeable"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
+
+[[package]]
+name = "x25519-dalek"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7e468321c81fb07fa7f4c636c3972b9100f0346e5b6a9f2bd0603a52f7ed277"
+dependencies = [
+ "curve25519-dalek",
+ "rand_core 0.6.4",
+ "serde",
+ "zeroize",
+]
 
 [[package]]
 name = "x509-parser"
