@@ -33,7 +33,6 @@ const DEFAULT_OUTPUT_LANG_CODE: &str = "fr-FR";
 struct State {
     transcriber: Option<gst::Element>,
     tee: Option<gst::Element>,
-    queue: Option<gst::Element>,
     srcpads: HashSet<super::TranslationSrcPad>,
     pad_serial: u32,
 }
@@ -175,6 +174,12 @@ impl TranslationBin {
 
         transcriber.set_property("language-code", &language_code);
 
+        let transcript_tee = gst::ElementFactory::make("tee").build()?;
+
+        let transcript_queue = gst::ElementFactory::make("queue").build()?;
+
+        let accumulate_queue = gst::ElementFactory::make("queue").build()?;
+
         let accumulate = gst::ElementFactory::make("textaccumulate")
             .property("latency", textaccumulate_latency_ms)
             .build()?;
@@ -182,17 +187,27 @@ impl TranslationBin {
         let tee = gst::ElementFactory::make("tee")
             .property("allow-not-linked", true)
             .build()?;
-        let queue = gst::ElementFactory::make("queue").build()?;
 
         let obj = self.obj();
 
-        obj.add_many([&transcriber, &accumulate, &tee, &queue])?;
+        obj.add_many([
+            &transcriber,
+            &transcript_tee,
+            &transcript_queue,
+            &accumulate_queue,
+            &accumulate,
+            &tee,
+        ])?;
 
         transcriber.sync_state_with_parent()?;
+        transcript_tee.sync_state_with_parent()?;
+        transcript_queue.sync_state_with_parent()?;
+        accumulate_queue.sync_state_with_parent()?;
         accumulate.sync_state_with_parent()?;
         tee.sync_state_with_parent()?;
 
-        gst::Element::link_many([&transcriber, &accumulate, &tee, &queue])?;
+        gst::Element::link_many([&transcriber, &transcript_tee, &transcript_queue])?;
+        gst::Element::link_many([&transcript_tee, &accumulate_queue, &accumulate, &tee])?;
 
         self.audio_sinkpad.set_target(Some(
             &transcriber
@@ -201,7 +216,7 @@ impl TranslationBin {
         ))?;
 
         self.transcript_srcpad
-            .set_target(Some(&queue.static_pad("src").unwrap()))?;
+            .set_target(Some(&transcript_queue.static_pad("src").unwrap()))?;
 
         for srcpad in srcpads {
             self.prepare_translation_srcpad(
@@ -217,21 +232,12 @@ impl TranslationBin {
 
         state.transcriber = Some(transcriber);
         state.tee = Some(tee);
-        state.queue = Some(queue);
 
         Ok(())
     }
 
     fn unprepare(&self) -> Result<(), Error> {
-        let (transcriber, tee, queue) = {
-            let mut state = self.state.lock().unwrap();
-
-            (
-                state.transcriber.as_ref().unwrap().clone(),
-                state.tee.take().unwrap(),
-                state.queue.take().unwrap(),
-            )
-        };
+        let tee = self.state.lock().unwrap().tee.take().unwrap();
         let obj = self.obj();
 
         let srcpads = self.state.lock().unwrap().srcpads.clone();
@@ -240,16 +246,13 @@ impl TranslationBin {
             self.unprepare_translation_srcpad(&obj, &tee, &srcpad)?;
         }
 
-        transcriber.unlink(&tee);
-
-        obj.remove_many([&transcriber, &tee, &queue])?;
+        for child in obj.children() {
+            obj.remove(&child)?;
+            let _ = child.set_state(gst::State::Null);
+        }
 
         self.audio_sinkpad.set_target(None::<&gst::Pad>)?;
         self.transcript_srcpad.set_target(None::<&gst::Pad>)?;
-
-        let _ = transcriber.set_state(gst::State::Null);
-        let _ = tee.set_state(gst::State::Null);
-        let _ = queue.set_state(gst::State::Null);
 
         Ok(())
     }
@@ -272,7 +275,6 @@ impl ObjectSubclass for TranslationBin {
             state: Mutex::new(State {
                 transcriber: None,
                 tee: None,
-                queue: None,
                 srcpads: HashSet::new(),
                 pad_serial: 0,
             }),
