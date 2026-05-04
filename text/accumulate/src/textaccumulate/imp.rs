@@ -21,7 +21,7 @@ use std::sync::LazyLock;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Condvar, Mutex, mpsc};
 
-const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(3);
+const DEFAULT_LATENCY_MS: u32 = 3_000;
 const DEFAULT_LATENESS: gst::ClockTime = gst::ClockTime::from_seconds(0);
 const DEFAULT_TIMEOUT_TERMINATORS: &str = r"\,\s|\:\s|\;\s";
 const DEFAULT_DRAIN_ON_FINAL_TRANSCRIPTS: bool = true;
@@ -32,7 +32,7 @@ const DEFAULT_NO_TIMEOUT: bool = false;
 
 #[derive(Debug, Clone)]
 struct Settings {
-    latency: gst::ClockTime,
+    latency_ms: u32,
     lateness: gst::ClockTime,
     timeout_terminators: String,
     drain_on_final_transcripts: bool,
@@ -45,7 +45,7 @@ struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            latency: DEFAULT_LATENCY,
+            latency_ms: DEFAULT_LATENCY_MS,
             lateness: DEFAULT_LATENESS,
             timeout_terminators: DEFAULT_TIMEOUT_TERMINATORS.to_string(),
             drain_on_final_transcripts: DEFAULT_DRAIN_ON_FINAL_TRANSCRIPTS,
@@ -583,7 +583,10 @@ impl Accumulate {
 
         let (latency, lateness) = {
             let settings = self.settings.lock().unwrap();
-            (settings.latency, settings.lateness)
+            (
+                gst::ClockTime::from_mseconds(settings.latency_ms as u64),
+                settings.lateness,
+            )
         };
 
         loop {
@@ -610,7 +613,7 @@ impl Accumulate {
             return Ok(gst::FlowSuccess::Ok);
         }
 
-        if settings.no_timeout
+        if (settings.latency_ms == u32::MAX || settings.no_timeout)
             && let Some((upstream_latency, now)) = self
                 .upstream_latency()
                 .zip(self.obj().current_running_time())
@@ -625,7 +628,7 @@ impl Accumulate {
                 let min_pts = state
                     .segment
                     .position_from_running_time(
-                        now.saturating_sub(upstream_min + settings.latency + settings.lateness),
+                        now.saturating_sub(upstream_min + settings.lateness),
                     )
                     .unwrap_or(state.segment.start().unwrap_or(gst::ClockTime::ZERO))
                     .max(state.segment.position().unwrap_or(gst::ClockTime::ZERO));
@@ -770,14 +773,20 @@ impl Accumulate {
 
                 let timeout = match this.upstream_latency() {
                     Some((true, upstream_min, _max)) => {
-                        let (latency, lateness, no_timeout) = {
+                        let (latency_ms, lateness, no_timeout) = {
                             let settings = this.settings.lock().unwrap();
-                            (settings.latency, settings.lateness, settings.no_timeout)
+                            (settings.latency_ms, settings.lateness, settings.no_timeout)
                         };
 
-                        if no_timeout {
+                        if latency_ms == u32::MAX || no_timeout {
                             std::time::Duration::MAX
                         } else if let Some(now) = this.obj().current_running_time() {
+                            let latency = if latency_ms == u32::MAX {
+                                gst::ClockTime::ZERO
+                            } else {
+                                gst::ClockTime::from_mseconds(latency_ms as u64)
+                            };
+
                             match this
                                 .state
                                 .lock()
@@ -787,7 +796,11 @@ impl Accumulate {
                                 .and_then(|input| input.start_rtime())
                             {
                                 Some(next_rtime) => std::time::Duration::from_nanos(
-                                    (next_rtime + upstream_min + latency + lateness)
+                                    (next_rtime
+                                        + upstream_min
+                                        + gst::ClockTime::from_mseconds(latency_ms as u64)
+                                        + latency
+                                        + lateness)
                                         .saturating_sub(now)
                                         .nseconds(),
                                 ),
@@ -998,7 +1011,10 @@ impl Accumulate {
 
                 if let Some(upstream_latency) = self.upstream_latency() {
                     let (live, min, max) = upstream_latency;
-                    let our_latency = self.settings.lock().unwrap().latency;
+                    let our_latency = match self.settings.lock().unwrap().latency_ms {
+                        u32::MAX => gst::ClockTime::ZERO,
+                        latency_ms => gst::ClockTime::from_mseconds(latency_ms as u64),
+                    };
 
                     if live {
                         q.set(true, min + our_latency, max.map(|max| max + our_latency));
@@ -1103,8 +1119,8 @@ impl ObjectImpl for Accumulate {
             vec![
                 glib::ParamSpecUInt::builder("latency")
                     .nick("Latency")
-                    .blurb("Amount of milliseconds to allow for accumulating")
-                    .default_value(DEFAULT_LATENCY.mseconds() as u32)
+                    .blurb("Amount of milliseconds to allow for accumulating. A value of -1 will cause full-sentence accumulation and retimestamping.")
+                    .default_value(DEFAULT_LATENCY_MS)
                     .minimum(0u32)
                     .mutable_ready()
                     .build(),
@@ -1148,6 +1164,15 @@ impl ObjectImpl for Accumulate {
                     .default_value(DEFAULT_EXTENDED_DURATION_GAP.mseconds() as u32)
                     .mutable_ready()
                     .build(),
+                /**
+                 * textaccumulate:no-timeout
+                 *
+                 * Whether the element should only output full sentences instead of
+                 * timing out to push all items on time. This may result in timestamps being
+                 * shifted forward, thus affecting synchronization.
+                 *
+                 * Deprecated:plugins-rs-0.16.0: set textaccumulate:latency to -1 instead
+                 */
                 glib::ParamSpecBoolean::builder("no-timeout")
                     .nick("No Timeout")
                     .blurb("whether the element should only output full sentences instead of \
@@ -1174,9 +1199,7 @@ impl ObjectImpl for Accumulate {
         match pspec.name() {
             "latency" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.latency = gst::ClockTime::from_mseconds(
-                    value.get::<u32>().expect("type checked upstream").into(),
-                );
+                settings.latency_ms = value.get::<u32>().expect("type checked upstream");
             }
             "lateness" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -1221,7 +1244,7 @@ impl ObjectImpl for Accumulate {
         match pspec.name() {
             "latency" => {
                 let settings = self.settings.lock().unwrap();
-                (settings.latency.mseconds() as u32).to_value()
+                settings.latency_ms.to_value()
             }
             "lateness" => {
                 let settings = self.settings.lock().unwrap();
