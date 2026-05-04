@@ -220,32 +220,33 @@ fn query_latency(element: &gst::Element) -> Result<gst::ClockTime, Error> {
         .property("is-live", true)
         .build()?;
 
-    let Some(srcpad) = element.src_pads().first().cloned() else {
-        return Err(anyhow!(
-            "querying latency on element with no source pad unsupported"
-        ));
-    };
+    let srcpads = element.src_pads();
 
     fakesrc.link(element)?;
 
     // Ensure the element is internally linked (eg translationbin)
     element.set_state(gst::State::Paused)?;
 
-    let mut q = gst::query::Latency::new();
+    let mut min_max = gst::ClockTime::ZERO;
 
-    let handled = srcpad.query(&mut q);
+    for srcpad in srcpads {
+        let mut q = gst::query::Latency::new();
+
+        let handled = srcpad.query(&mut q);
+        if !handled {
+            return Err(anyhow!("impossible to query latency"));
+        }
+
+        let (_live, min, _max) = q.result();
+
+        min_max = min_max.max(min);
+    }
 
     fakesrc.unlink(element);
 
     element.set_state(gst::State::Null)?;
 
-    if !handled {
-        return Err(anyhow!("impossible to query latency"));
-    }
-
-    let (_live, min, _max) = q.result();
-
-    Ok(min)
+    Ok(min_max)
 }
 
 impl TranscriberBin {
@@ -380,6 +381,29 @@ impl TranscriberBin {
         tee_srcpad.link(&channel_bin.static_pad("sink").unwrap())?;
 
         Ok(())
+    }
+
+    fn transcriber_will_translate(&self, pad_state: &TranscriberSinkPadState) -> bool {
+        for language in itertools::chain!(
+            pad_state
+                .caption_channels
+                .values()
+                .map(|c| c.language.as_str()),
+            pad_state
+                .synthesis_channels
+                .values()
+                .map(|c| c.language.as_str()),
+            pad_state
+                .subtitle_channels
+                .values()
+                .map(|c| c.language.as_str()),
+        ) {
+            if language != "transcript" {
+                return true;
+            }
+        }
+
+        false
     }
 
     fn link_transcriber_to_channels(
@@ -642,7 +666,24 @@ impl TranscriberBin {
         if let Some(ref transcriber) = pad_state.transcriber {
             // Ensure the default settings are forwarded to the transcriber already
             self.configure_transcriber(transcriber);
+
+            // FIXME: remove this when we have a better solution for
+            // reporting the expected latency in passthrough mode
+            let pad = if self.transcriber_will_translate(pad_state) {
+                Some(
+                    transcriber
+                        .request_pad_simple("translate_src_%u")
+                        .ok_or(anyhow!("Failed to request translation source pad"))?,
+                )
+            } else {
+                None
+            };
             let transcriber_latency = query_latency(transcriber)?;
+
+            if let Some(pad) = pad {
+                transcriber.release_request_pad(&pad);
+            }
+
             gst::debug!(
                 CAT,
                 obj = transcriber,
@@ -1222,7 +1263,24 @@ impl TranscriberBin {
         }
 
         if let Some(ref transcriber) = pad_state.transcriber {
+            // FIXME: remove this when we have a better solution for
+            // reporting the expected latency in passthrough mode
+            let pad = if self.transcriber_will_translate(pad_state) {
+                Some(
+                    transcriber
+                        .request_pad_simple("translate_src_%u")
+                        .ok_or(anyhow!("Failed to request translation source pad"))?,
+                )
+            } else {
+                None
+            };
+
             let transcriber_latency = query_latency(transcriber)?;
+
+            if let Some(pad) = pad {
+                transcriber.release_request_pad(&pad);
+            }
+
             state.transcriber_latency = transcriber_latency;
             gst::debug!(
                 CAT,
