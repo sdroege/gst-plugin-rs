@@ -68,6 +68,7 @@ members = [
 
     "video/cdg",
     "video/closedcaption",
+    "video/colorlut",
     "video/dav1d",
     "video/ffv1",
     "video/gif",
@@ -177,6 +178,7 @@ gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gst
 gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
 gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
 gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-d3d12 = { package = "gstreamer-d3d12", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
 gst-gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
 gst-gl-egl = { package = "gstreamer-gl-egl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
 gst-gl-wayland = { package = "gstreamer-gl-wayland", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
