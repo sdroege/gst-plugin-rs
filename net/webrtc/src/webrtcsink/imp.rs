@@ -687,6 +687,31 @@ fn make_converter_for_video_caps(caps: &gst::Caps, codec: &Codec) -> Result<gst:
 
                 ret.add_many([&vapostproc])?;
                 (vapostproc.clone(), vapostproc)
+            } else if codec
+                .encoder_factory()
+                .is_some_and(|factory| factory.name() == "v4l2h264enc")
+            {
+                // V4L2 H.264 encoder works with standard video/x-raw memory
+                // but benefits from v4l2convert for hardware-accelerated format conversion
+                match make_element("v4l2convert", None) {
+                    Ok(v4l2convert) => {
+                        ret.add_many([&v4l2convert])?;
+                        (v4l2convert.clone(), v4l2convert)
+                    }
+                    _ => {
+                        gst::warning!(
+                            CAT,
+                            "No v4l2convert available, falling back to software conversion"
+                        );
+                        let convert = make_element("videoconvert", None)?;
+                        let scale = make_element("videoscale", None)?;
+
+                        ret.add_many([&convert, &scale])?;
+                        gst::Element::link_many([&convert, &scale])?;
+
+                        (convert, scale)
+                    }
+                }
             } else {
                 let convert = make_element("videoconvert", None)?;
                 let scale = make_element("videoscale", None)?;
@@ -891,6 +916,25 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property("idr-interval", 4294967295u32);
                 enc.set_property_from_str("control-rate", "constant");
             }
+            "v4l2h264enc" => {
+                if enc.has_property("bitrate") {
+                    // GStreamer 1.30+: proper GObject properties
+                    enc.set_property("bitrate", start_bitrate as i32);
+                    enc.set_property("gop-size", 2560i32);
+                    let extra_controls = gst::Structure::builder("controls")
+                        .field("repeat_sequence_header", 1i32)
+                        .build();
+                    enc.set_property("extra-controls", extra_controls);
+                } else {
+                    // Pre-1.30 fallback: bitrate/gop via extra-controls
+                    let extra_controls = gst::Structure::builder("extra-controls")
+                        .field("video_bitrate", start_bitrate as i32)
+                        .field("video_gop_size", 2560i32)
+                        .field("repeat_sequence_header", 1i32)
+                        .build();
+                    enc.set_property("extra-controls", extra_controls);
+                }
+            }
             _ => (),
         }
     }
@@ -1078,10 +1122,12 @@ impl PayloadChainBuilder {
         // Only force the profile when output caps were not specified, either
         // through input caps or because we are answering an offer
         let force_profile = self.output_caps.is_any() && needs_encoding;
+        let parser_caps = self.codec.parser_caps(force_profile);
+
         elements.push(
             gst::ElementFactory::make("capsfilter")
                 .name(with_stream_name("codec-parser-caps"))
-                .property("caps", self.codec.parser_caps(force_profile))
+                .property("caps", parser_caps)
                 .build()
                 .with_context(|| "Failed to make element capsfilter")?,
         );
@@ -1233,6 +1279,7 @@ impl VideoEncoder {
                 | "vah265lpenc"
                 | "vaav1enc"
                 | "vaav1lpenc"
+                | "v4l2h264enc"
         )
     }
 
@@ -1249,6 +1296,16 @@ impl VideoEncoder {
             "openh264enc" | "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "rav1enc"
             | "nvv4l2av1enc" => (self.element.property::<u32>("bitrate")) as i32,
             "qtic2venc" => (self.element.property::<u32>("target-bitrate")) as i32,
+            "v4l2h264enc" => {
+                if self.element.has_property("bitrate") {
+                    self.element.property::<i32>("bitrate")
+                } else {
+                    let extra_controls: gst::Structure = self.element.property("extra-controls");
+                    extra_controls
+                        .get::<i32>("video_bitrate")
+                        .map_err(|_| WebRTCSinkError::BitrateNotSupported)?
+                }
+            }
             _ => return Err(WebRTCSinkError::BitrateNotSupported),
         };
 
@@ -1288,10 +1345,22 @@ impl VideoEncoder {
                     .set_property("bitrate", (bitrate / 1000) as u32);
             }
             "openh264enc" | "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "nvv4l2av1enc" => {
-                self.element.set_property("bitrate", bitrate as u32)
+                self.element.set_property("bitrate", bitrate as u32);
+            }
+            "v4l2h264enc" => {
+                if self.element.has_property("bitrate") {
+                    self.element.set_property("bitrate", bitrate);
+                } else {
+                    let mut extra_controls: gst::Structure =
+                        self.element.property("extra-controls");
+                    extra_controls.set("video_bitrate", bitrate);
+                    self.element.set_property("extra-controls", extra_controls);
+                }
+            }
+            "rav1enc" => {
+                self.element.set_property("bitrate", bitrate);
             }
             "qtic2venc" => self.element.set_property("target-bitrate", bitrate as u32),
-            "rav1enc" => self.element.set_property("bitrate", bitrate),
             _ => return Err(WebRTCSinkError::BitrateNotSupported),
         }
 
