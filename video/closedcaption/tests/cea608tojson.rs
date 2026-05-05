@@ -25,7 +25,7 @@ fn test_parse() {
     let expected_data = include_bytes!("608-all-features-unbuffered.json").as_ref();
 
     let deserializer = serde_json::Deserializer::from_reader(expected_data);
-    let mut input_iter = deserializer
+    let input_iter = deserializer
         .into_iter::<serde_json::Value>()
         .map(|item| item.unwrap());
 
@@ -36,11 +36,7 @@ fn test_parse() {
     let buf = gst::Buffer::from_mut_slice(Vec::from(data));
     assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
 
-    loop {
-        let Some(input_item) = input_iter.next() else {
-            break;
-        };
-
+    for input_item in input_iter {
         let buf = h.pull().unwrap();
 
         let data = buf.map_readable().unwrap();
