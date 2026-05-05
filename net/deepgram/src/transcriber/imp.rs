@@ -292,10 +292,8 @@ impl Transcriber {
                             continue;
                         }
                     }
-                    DeepgramInterimStrategy::Index => {
-                        if idx < state.interim_index {
-                            continue;
-                        }
+                    DeepgramInterimStrategy::Index if idx < state.interim_index => {
+                        continue;
                     }
                     _ => (),
                 }

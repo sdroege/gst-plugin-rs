@@ -336,33 +336,30 @@ impl AggregatorImpl for St2038Combiner {
 
     fn sink_event(&self, pad: &gst_base::AggregatorPad, event: gst::Event) -> bool {
         match event.view() {
-            gst::EventView::Caps(ev) => {
-                if self.is_video_pad(pad) {
-                    let mut state = self.state.lock().unwrap();
+            gst::EventView::Caps(ev) if self.is_video_pad(pad) => {
+                let mut state = self.state.lock().unwrap();
 
-                    let caps = ev.caps_owned();
-                    let s = caps.structure(0).unwrap();
-                    let framerate = s.get::<gst::Fraction>("framerate").ok();
+                let caps = ev.caps_owned();
+                let s = caps.structure(0).unwrap();
+                let framerate = s.get::<gst::Fraction>("framerate").ok();
 
-                    let frame_duration = framerate
-                        .filter(|fr| fr.numer() > 0 && fr.denom() > 0)
-                        .and_then(|fr| {
-                            gst::ClockTime::SECOND
-                                .mul_div_round(fr.denom() as u64, fr.numer() as u64)
-                        })
-                        .unwrap_or(FALLBACK_FRAME_DURATION);
-                    self.obj().set_latency(frame_duration, frame_duration);
+                let frame_duration = framerate
+                    .filter(|fr| fr.numer() > 0 && fr.denom() > 0)
+                    .and_then(|fr| {
+                        gst::ClockTime::SECOND.mul_div_round(fr.denom() as u64, fr.numer() as u64)
+                    })
+                    .unwrap_or(FALLBACK_FRAME_DURATION);
+                self.obj().set_latency(frame_duration, frame_duration);
 
-                    state.framerate = framerate;
+                state.framerate = framerate;
 
-                    if state.current_video_buffer.is_some() {
-                        gst::debug!(CAT, imp = self, "Storing new caps {caps:?}");
-                        state.pending_video_caps = Some(caps);
-                    } else {
-                        state.current_video_caps = Some(caps.clone());
-                        drop(state);
-                        self.obj().set_src_caps(&caps);
-                    }
+                if state.current_video_buffer.is_some() {
+                    gst::debug!(CAT, imp = self, "Storing new caps {caps:?}");
+                    state.pending_video_caps = Some(caps);
+                } else {
+                    state.current_video_caps = Some(caps.clone());
+                    drop(state);
+                    self.obj().set_src_caps(&caps);
                 }
             }
             gst::EventView::Segment(e) => match e.segment().downcast_ref::<gst::ClockTime>() {
