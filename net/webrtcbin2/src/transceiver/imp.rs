@@ -205,7 +205,7 @@ static IGNORED_RTP_CAPS_FIELDS: [&str; 7] = [
     "clock-rate",
 ];
 
-fn rtp_caps_to_media(caps: &gst::Caps) -> Option<WebRTCSdpMedia> {
+pub(crate) fn rtp_caps_to_media(caps: &gst::Caps) -> Option<WebRTCSdpMedia> {
     gst::trace!(CAT, "converting caps to media: {caps}");
     let s = caps.structure(0)?;
     if !s.has_name("application/x-rtp") {
@@ -310,5 +310,6 @@ fn rtp_caps_to_media(caps: &gst::Caps) -> Option<WebRTCSdpMedia> {
             );
         }
     }
+    gst::trace!(CAT, "produced media {media:?}");
     Some(media)
 }

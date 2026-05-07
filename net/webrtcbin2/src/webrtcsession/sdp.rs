@@ -768,6 +768,32 @@ impl WebRTCSdpMedia {
 
         ret
     }
+
+    pub fn intersect(&self, other: &Self) -> Option<Self> {
+        if self.media != other.media {
+            return None;
+        }
+        gst::trace!(CAT, "attempting to intersect:");
+        gst::trace!(CAT, "                   ours: {self:?}");
+        gst::trace!(CAT, "                  other: {other:?}");
+        match (&self.specifics, &other.specifics) {
+            (MediaSpecifics::Rtp(rtp), MediaSpecifics::Rtp(other_rtp)) => {
+                let intersected = RtpMedia::produce_answer_from_offer_and_source(rtp, other_rtp);
+                gst::trace!(CAT, "                 result: {intersected:?}");
+                if intersected.formats.is_empty() {
+                    return None;
+                }
+                let mut ret = self.clone();
+                ret.specifics = MediaSpecifics::Rtp(intersected);
+                Some(ret)
+            }
+            (MediaSpecifics::Datachannel(_data), MediaSpecifics::Datachannel(_other_data)) => {
+                // FIXME
+                None
+            }
+            _ => None,
+        }
+    }
 }
 
 fn parse_media_type(media: &str) -> Result<MediaType, ParseWebRTCSdpError> {
@@ -1514,18 +1540,42 @@ impl RtpMedia {
             }
             let offer_rtpmap = offer.rtpmaps.get(fmt);
             let answer_rtpmap = answer.rtpmaps.get(fmt);
-            if offer_rtpmap != answer_rtpmap {
+            if offer_rtpmap.is_none() != answer_rtpmap.is_none()
+                && offer_rtpmap.is_some_and(|offer| {
+                    answer_rtpmap.is_some_and(|answer| {
+                        !offer.name.eq_ignore_ascii_case(&answer.name)
+                            || offer.clock_rate != answer.clock_rate
+                            || offer.params != answer.params
+                    })
+                })
+            {
+                gst::trace!(
+                    CAT,
+                    "offer rtpmap for format {fmt}: {offer_rtpmap:?}, does not match answer rtpmap {answer_rtpmap:?}"
+                );
                 continue;
             }
             // TODO: ignore red/rtx/ulpfec as they are not supported yet.
+            let is_supported_rtpmap = |name: &str| {
+                !name.eq_ignore_ascii_case("rtx")
+                    && !name.eq_ignore_ascii_case("red")
+                    && !name.eq_ignore_ascii_case("ulpfec")
+                    && !name.eq_ignore_ascii_case("telephone-event")
+            };
             if let Some(rtpmap) = offer_rtpmap
-                && ["rtx", "red", "ulpfec"].contains(&rtpmap.name.as_str())
+                && !is_supported_rtpmap(rtpmap.name.as_str())
             {
                 continue;
             }
-            if offer.fmtps.get(fmt) != answer.fmtps.get(fmt) {
+            let offer_fmtp = offer.fmtps.get(fmt);
+            let answer_fmtp = answer.fmtps.get(fmt);
+            if offer_fmtp != answer_fmtp {
+                gst::fixme!(
+                    CAT,
+                    "offer fmtp for format {fmt}: {offer_fmtp:?}, does not match answer fmtp {answer_fmtp:?}"
+                );
                 // TODO: media-specific equivalence
-                continue;
+                //continue;
             }
             supported_formats.push(fmt);
         }

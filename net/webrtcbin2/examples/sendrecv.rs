@@ -598,6 +598,9 @@ impl App {
                         );
                     }
                 });
+                // FIXME: sleep allows vp8 encoder to produce caps correctly
+                // Fix by supporting rengotation, or waiting for caps manually.
+                std::thread::sleep(core::time::Duration::from_secs(1));
 
                 app.0
                     .session

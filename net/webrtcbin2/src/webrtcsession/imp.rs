@@ -25,6 +25,7 @@ use tokio::task::JoinHandle;
 
 use crate::RUNTIME;
 use crate::transceiver::Transceiver;
+use crate::transceiver::imp::rtp_caps_to_media;
 use crate::webrtcsend::WebRTCSendSinkPad;
 use crate::webrtcsession::SignalingStatus;
 use crate::webrtcsession::dtls::DtlsEvent;
@@ -221,6 +222,7 @@ enum TransceiverSearch {
     Mid,
     PendingMid,
     MLine,
+    SendCaps,
 }
 
 impl State {
@@ -240,8 +242,7 @@ impl State {
         media: &WebRTCSdpMedia,
         idx: usize,
     ) -> Option<(TransceiverSearch, Transceiver)> {
-        let mut pending_mid = None;
-        let mut mline = None;
+        let mut send_caps = None;
         for transceiver in self.transceivers.iter() {
             let trans_state = transceiver.imp().state();
             if media
@@ -256,16 +257,27 @@ impl State {
                 .as_ref()
                 .is_some_and(|mid| trans_state.pending_mid() == Some(mid))
             {
-                pending_mid.get_or_insert(transceiver);
+                return Some((TransceiverSearch::PendingMid, transceiver.clone()));
             }
             if trans_state.mline() == Some(idx) {
-                mline.get_or_insert(transceiver);
+                return Some((TransceiverSearch::MLine, transceiver.clone()));
+            }
+            if trans_state.mline().is_none()
+                && let Some(caps) = trans_state.send_caps()
+            {
+                let Some(send_media) = rtp_caps_to_media(&caps) else {
+                    continue;
+                };
+                if send_media.intersect(media).is_none() {
+                    continue;
+                };
+                send_caps.get_or_insert(transceiver);
             }
         }
-        if let Some(transceiver) = pending_mid {
-            return Some((TransceiverSearch::PendingMid, transceiver.clone()));
+        if let Some(transceiver) = send_caps {
+            return Some((TransceiverSearch::SendCaps, transceiver.clone()));
         }
-        mline.map(|transceiver| (TransceiverSearch::MLine, transceiver.clone()))
+        None
     }
 
     fn update_negotiation_needed(&mut self) {
@@ -716,8 +728,13 @@ impl WebRTCSession {
                 new_dtls.push((idx, TlsImpl::new()));
                 new_dtls.last().map(|(_idx, dtls)| dtls).unwrap()
             };
+            gst::trace!(
+                CAT,
+                "creating answer media for idx {idx} transport {transport_idx} media: {media:?}"
+            );
             if media.specifics.rtp().is_none() {
                 // TODO: data channel not supported yet.
+                gst::fixme!(CAT, "data channels are not currently supported");
                 let new_media = WebRTCSdpMedia {
                     media: media.media,
                     port: 0,
@@ -1107,6 +1124,11 @@ impl WebRTCSession {
                             Some((_, transceiver)) => transceiver,
                             None => {
                                 let transceiver = glib::Object::new::<Transceiver>();
+                                gst::trace!(
+                                    CAT,
+                                    imp = self,
+                                    "Constructing new recvonly transceiver {transceiver:?}"
+                                );
                                 let mut trans_state = transceiver.imp().state();
                                 trans_state.set_direction(Direction::RecvOnly);
                                 pending_transceivers.push(transceiver.clone());

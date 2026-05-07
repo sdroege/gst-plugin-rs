@@ -2,7 +2,7 @@
 
 use gst::glib;
 
-mod imp;
+pub mod imp;
 
 glib::wrapper! {
     pub struct Transceiver(ObjectSubclass<imp::Transceiver>) @extends gst::Object;
