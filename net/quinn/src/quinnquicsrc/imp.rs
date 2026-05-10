@@ -32,6 +32,7 @@ use tokio::sync::oneshot;
 const DEFAULT_ROLE: QuinnQuicRole = QuinnQuicRole::Server;
 const DEFAULT_USE_DATAGRAM: bool = false;
 const DATA_HANDLER_THREAD: &str = "data-handler";
+const DEFAULT_IS_LIVE: bool = false;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -86,6 +87,7 @@ struct Settings {
     private_key_file: Option<PathBuf>,
     certificate_database_file: Option<PathBuf>,
     transport_config: QuinnQuicTransportConfig,
+    is_live: bool,
 }
 
 impl Default for Settings {
@@ -107,6 +109,7 @@ impl Default for Settings {
             private_key_file: None,
             certificate_database_file: None,
             transport_config: QuinnQuicTransportConfig::default(),
+            is_live: DEFAULT_IS_LIVE,
         }
     }
 }
@@ -191,8 +194,6 @@ impl ObjectImpl for QuinnQuicSrc {
     fn constructed(&self) {
         self.parent_constructed();
         self.obj().set_format(gst::Format::Time);
-        self.obj().set_do_timestamp(true);
-        self.obj().set_live(true);
     }
 
     fn properties() -> &'static [glib::ParamSpec] {
@@ -329,6 +330,13 @@ impl ObjectImpl for QuinnQuicSrc {
                     .maximum(VarInt::MAX.into())
                     .readwrite()
                     .build(),
+                glib::ParamSpecBoolean::builder("is-live")
+                    .nick("Is live")
+                    .blurb("Act like a live source")
+                    .default_value(DEFAULT_IS_LIVE)
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -439,6 +447,10 @@ impl ObjectImpl for QuinnQuicSrc {
                 settings.transport_config.stream_receive_window =
                     VarInt::from_u64(value.max(VarInt::MAX.into())).unwrap();
             }
+            "is-live" => {
+                settings.is_live = value.get::<bool>().expect("type checked upstream");
+                self.obj().set_live(settings.is_live);
+            }
             _ => unimplemented!(),
         }
     }
@@ -508,6 +520,7 @@ impl ObjectImpl for QuinnQuicSrc {
             "stream-receive-window" => {
                 u64::from(settings.transport_config.stream_receive_window).to_value()
             }
+            "is-live" => settings.is_live.to_value(),
             _ => unimplemented!(),
         }
     }

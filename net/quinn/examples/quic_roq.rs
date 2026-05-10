@@ -275,7 +275,11 @@ fn depay_bin(pipeline: &gst::Pipeline, bin_name: &str) -> gst::Bin {
 }
 
 fn receive_pipeline(pipeline: &gst::Pipeline, use_vp8: bool) {
-    let quicsrc = gst::ElementFactory::make("quinnquicsrc").build().unwrap();
+    let quicsrc = gst::ElementFactory::make("quinnquicsrc")
+        .property("do-timestamp", true)
+        .property("is-live", true)
+        .build()
+        .unwrap();
     let queue1 = gst::ElementFactory::make("queue").build().unwrap();
     let roq = gst::ElementFactory::make("quinnroqdemux")
         .name("roq-demux")

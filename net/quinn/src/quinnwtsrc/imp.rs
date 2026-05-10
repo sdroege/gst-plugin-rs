@@ -36,6 +36,7 @@ use web_transport_quinn::*;
 
 const DATA_HANDLER_THREAD: &str = "data-handler";
 const DEFAULT_ROLE: QuinnQuicRole = QuinnQuicRole::Server;
+const DEFAULT_IS_LIVE: bool = false;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -89,6 +90,7 @@ struct Settings {
     transport_config: QuinnQuicTransportConfig,
     role: QuinnQuicRole,
     url: String,
+    is_live: bool,
 }
 
 impl Default for Settings {
@@ -109,6 +111,7 @@ impl Default for Settings {
             transport_config,
             role: DEFAULT_ROLE,
             url: DEFAULT_ADDR.to_string(),
+            is_live: DEFAULT_IS_LIVE,
         }
     }
 }
@@ -190,8 +193,6 @@ impl ObjectImpl for QuinnWebTransportSrc {
     fn constructed(&self) {
         self.parent_constructed();
         self.obj().set_format(gst::Format::Time);
-        self.obj().set_live(true);
-        self.obj().set_do_timestamp(true);
     }
 
     fn properties() -> &'static [glib::ParamSpec] {
@@ -255,6 +256,13 @@ impl ObjectImpl for QuinnWebTransportSrc {
                     .default_value(DEFAULT_PORT as u32)
                     .readwrite()
                     .build(),
+                glib::ParamSpecBoolean::builder("is-live")
+                    .nick("Is live")
+                    .blurb("Act like a live source")
+                    .default_value(DEFAULT_IS_LIVE)
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -301,6 +309,10 @@ impl ObjectImpl for QuinnWebTransportSrc {
             "port" => {
                 settings.port = value.get::<u32>().expect("type checked upstream") as u16;
             }
+            "is-live" => {
+                settings.is_live = value.get::<bool>().expect("type checked upstream");
+                self.obj().set_live(settings.is_live);
+            }
             _ => unimplemented!(),
         }
     }
@@ -338,6 +350,7 @@ impl ObjectImpl for QuinnWebTransportSrc {
             "server-name" => settings.server_name.to_value(),
             "address" => settings.address.to_value(),
             "port" => (settings.port as u32).to_value(),
+            "is-live" => settings.is_live.to_value(),
             _ => unimplemented!(),
         }
     }
