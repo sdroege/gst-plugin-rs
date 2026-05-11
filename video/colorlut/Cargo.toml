@@ -13,6 +13,8 @@ gst.workspace = true
 gst-base.workspace = true
 gst-video.workspace = true
 byte-slice-cast = "1"
+
+[target.'cfg(target_os = "windows")'.dependencies]
 gst-d3d12.workspace = true
 windows = { version = ">= 0.61, <= 0.62", features=["Win32_Graphics_Direct3D12",
     "Win32_Graphics_Direct3D11", "Win32_Graphics_Dxgi", "Win32_Graphics_Direct3D",
@@ -46,4 +48,4 @@ versioning = false
 import_library = false
 
 [package.metadata.capi.pkg_config]
-requires_private = "gstreamer-1.0, gstreamer-base-1.0, gstreamer-video-1.0, gstreamer-d3d12-1.0, gobject-2.0, glib-2.0, gmodule-2.0"
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gstreamer-video-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

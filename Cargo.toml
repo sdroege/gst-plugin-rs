@@ -137,6 +137,7 @@ default-members = [
     "utils/uriplaylistbin",
 
     "video/cdg",
+    "video/colorlut",
     "video/ffv1",
     "video/gif",
     "video/hsv",

@@ -14,11 +14,15 @@
 use gst::glib;
 
 mod colorlut;
-mod d3d12colorlut;
 mod parser;
+
+#[cfg(target_os = "windows")]
+mod d3d12colorlut;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     colorlut::register(plugin)?;
+
+    #[cfg(target_os = "windows")]
     d3d12colorlut::register(plugin)?;
     Ok(())
 }
