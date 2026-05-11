@@ -43,6 +43,23 @@ fn run_webrtc_producer(pipeline_str: &str, signaller_server_port: u16) -> gst::P
     pipeline
 }
 
+fn run_producer_listener(signaller_server_port: u16) -> (Signaller, mpsc::Receiver<String>) {
+    let signaller = Signaller::new(WebRTCSignallerRole::Listener);
+    let uri = format!("ws://127.0.0.1:{signaller_server_port}");
+    signaller.set_property("uri", uri.as_str());
+
+    let (tx, rx) = mpsc::channel::<String>();
+    signaller.connect("producer-added", false, move |args| {
+        let peer_id = args[1].get::<String>().unwrap();
+        tx.send(peer_id).unwrap();
+        None
+    });
+
+    signaller.start();
+
+    (signaller, rx)
+}
+
 fn run_test(
     producer_pipeline_str: &str,
     consumer_pipeline_str: &str,
@@ -52,21 +69,8 @@ fn run_test(
 ) {
     init();
 
-    let signaller = Signaller::new(WebRTCSignallerRole::Listener);
-    let uri = format!("ws://127.0.0.1:{signaller_server_port}");
-    signaller.set_property("uri", uri.as_str());
-
     let producer = run_webrtc_producer(producer_pipeline_str, signaller_server_port);
-
-    signaller.start();
-
-    let (tx, rx) = mpsc::channel::<String>();
-
-    signaller.connect("producer-added", false, move |args| {
-        let peer_id = args[1].get::<String>().unwrap();
-        tx.send(peer_id).unwrap();
-        None
-    });
+    let (_producer_listener, rx) = run_producer_listener(signaller_server_port);
 
     let producer_peer_id = rx.recv().unwrap();
     let consumer = gst::parse::launch(consumer_pipeline_str)
@@ -181,13 +185,12 @@ fn test_webrtcsrc_renegotiation_stream_addition() {
 
     init();
 
-    let (tx, rx) = mpsc::channel::<String>();
     let producer = run_webrtc_producer(
         "videotestsrc ! vp8enc ! webrtcsink congestion-control=0 \
          enable-control-data-channel=true run-signalling-server=true name=ws",
-        tx,
         SIGNALLER_PORT,
     );
+    let (_producer_listener, rx) = run_producer_listener(SIGNALLER_PORT);
 
     let producer_peer_id = rx.recv().unwrap();
 
@@ -307,14 +310,13 @@ fn test_webrtcsrc_renegotiation_stream_removal() {
 
     init();
 
-    let (tx, rx) = mpsc::channel::<String>();
     let producer = run_webrtc_producer(
         "videotestsrc ! vp8enc ! webrtcsink congestion-control=0 \
          enable-control-data-channel=true run-signalling-server=true name=ws \
          videotestsrc name=src2 ! vp8enc name=enc2 ! ws.",
-        tx,
         SIGNALLER_PORT,
     );
+    let (_producer_listener, rx) = run_producer_listener(SIGNALLER_PORT);
 
     let producer_peer_id = rx.recv().unwrap();
 
@@ -458,7 +460,6 @@ fn test_webrtcsrc_renegotiation_multi_stream_removal() {
 
     init();
 
-    let (tx, rx) = mpsc::channel::<String>();
     let producer = run_webrtc_producer(
         "videotestsrc ! vp8enc ! webrtcsink congestion-control=0 \
          enable-control-data-channel=true run-signalling-server=true name=ws \
@@ -467,9 +468,9 @@ fn test_webrtcsrc_renegotiation_multi_stream_removal() {
          audiotestsrc ! opusenc ! ws. \
          audiotestsrc ! opusenc ! ws. \
          audiotestsrc name=asrc_rm ! opusenc name=aenc_rm ! ws.",
-        tx,
         SIGNALLER_PORT,
     );
+    let (_producer_listener, rx) = run_producer_listener(SIGNALLER_PORT);
 
     let producer_peer_id = rx.recv().unwrap();
 
@@ -644,13 +645,12 @@ fn test_webrtcsrc_renegotiation_pad_naming_stable() {
 
     init();
 
-    let (tx, rx) = mpsc::channel::<String>();
     let producer = run_webrtc_producer(
         "videotestsrc ! vp8enc ! webrtcsink congestion-control=0 \
          enable-control-data-channel=true run-signalling-server=true name=ws",
-        tx,
         SIGNALLER_PORT,
     );
+    let (_producer_listener, rx) = run_producer_listener(SIGNALLER_PORT);
 
     let producer_peer_id = rx.recv().unwrap();
 
