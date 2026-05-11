@@ -13,10 +13,12 @@
  */
 use gst::glib;
 
+mod colorlut;
 mod d3d12colorlut;
 mod parser;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    colorlut::register(plugin)?;
     d3d12colorlut::register(plugin)?;
     Ok(())
 }
