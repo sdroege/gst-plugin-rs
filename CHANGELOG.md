@@ -5,6 +5,38 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.15.2] - 2026-05-11
+### Fixed
+- fallbacksrc: Send select-streams to the actual stream collection source.
+- gtk4paintablesink: Error out in NULL->READY if no default GDK display exists.
+- quinnwt: Fix error when closing sessions.
+- rspngenc: Convert strides if necessary.
+- rtpbin2: Improve panic / error handling.
+- rtprecv: Fix deadline calculation on re-ordered packets.
+- rtprecv: Fix race condition on flush-start handling.
+- rtprecv: Improve jitter calculation.
+- speechmatics: Handle disconnects more gracefully.
+- textaccumulate: Improve behaviour on flushing.
+- threadshare: Some memory leaks were fixed, specifically around `ts-udpsink`
+  sockets.
+- ts-udpsink: Don't error out on packet send failure.
+- ts-udpsrc: Handle various packet receive failures more gracefully.
+- webrtcsink: Allow custom signaller to actually be set.
+- whisper: Fix compilation on ARM.
+
+### Changed
+- Various dependencies were updated.
+- Various new Rust 1.94 / 1.95 clippy warnings were fixed.
+- burn-yoloxinference: Restrict widths/heights to a multiple of 32.
+- rtprecv: Various performance improvements.
+
+### Added
+- fallbacksrc: Add property to disable dummy fallback source and to set
+  fallback source from a bin.
+- threadshare: Add leaky properties to queue-like elements.
+- ts-udpsink: Add reuse property.
+- webrtcsink: Add imx8 encoder support.
+
 ## [0.15.1] - 2026-02-28
 ### Fixed
 - Don't convert push_event() false returns into flow errors.
@@ -1032,7 +1064,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.15.1...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.15.2...HEAD
+[0.15.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.15.1...0.15.2
 [0.15.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.15.0...0.15.1
 [0.15.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.4...0.15.0
 [0.14.5]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.4...0.14.5
