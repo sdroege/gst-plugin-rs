@@ -31,3 +31,6 @@ rustls-pki-types = "1"
 [[bin]]
 name = "gst-webrtc-signalling-server"
 path = "src/bin/server.rs"
+
+[package.metadata.gstreamer]
+release_date = "2026-05-11"
