@@ -212,7 +212,6 @@ impl ObjectImpl for UdpSrc {
                     .nick("Address")
                     .blurb("IP Address to bind to")
                     .default_value("0.0.0.0")
-                    .mutable_ready()
                     .build(),
                 /**
                  * GstUdpSrc2:port:
@@ -227,13 +226,11 @@ impl ObjectImpl for UdpSrc {
                     .blurb("Port to bind to and receive packets from")
                     .default_value(Settings::default().port as u32)
                     .maximum(u16::MAX as u32)
-                    .mutable_ready()
                     .build(),
                 glib::ParamSpecString::builder("uri")
                     .nick("URI")
                     .blurb("URI in the form of udp://multicast_group:port")
                     .default_value("udp://0.0.0.0:5000")
-                    .mutable_ready()
                     .build(),
                 /**
                  * GstUdpSrc2:buffer-size:
@@ -253,7 +250,6 @@ impl ObjectImpl for UdpSrc {
                     .nick("Buffer Size")
                     .blurb("Socket receive buffer size")
                     .default_value(Settings::default().buffer_size)
-                    .mutable_ready()
                     .build(),
                 /**
                  * GstUdpSrc2:mtu:
@@ -268,7 +264,6 @@ impl ObjectImpl for UdpSrc {
                     .blurb("Maximum expected packet size")
                     .default_value(Settings::default().mtu)
                     .minimum(1)
-                    .mutable_ready()
                     .build(),
                 glib::ParamSpecBoxed::builder::<gst::Caps>("caps")
                     .nick("Caps")
@@ -296,19 +291,16 @@ impl ObjectImpl for UdpSrc {
                     .nick("Auto Multicast")
                     .blurb("Automatically join/leave multicast groups")
                     .default_value(Settings::default().auto_multicast)
-                    .mutable_ready()
                     .build(),
                 glib::ParamSpecBoolean::builder("loop")
                     .nick("Loop")
                     .blurb("Loop back multicast packets")
                     .default_value(Settings::default().loop_)
-                    .mutable_ready()
                     .build(),
                 glib::ParamSpecBoolean::builder("reuse")
                     .nick("Reuse")
                     .blurb("Allow port reuse")
                     .default_value(Settings::default().reuse)
-                    .mutable_ready()
                     .build(),
                /**
                 * GstUdpSrc2:batch-size:
@@ -326,7 +318,6 @@ impl ObjectImpl for UdpSrc {
                     .default_value(Settings::default().batch_size)
                     .minimum(1)
                     .maximum(1024)
-                    .mutable_ready()
                     .build(),
                /**
                 * GstUdpSrc2:allow-gro:
@@ -361,7 +352,6 @@ impl ObjectImpl for UdpSrc {
                     .nick("Allow GRO")
                     .blurb("Allow GRO")
                     .default_value(Settings::default().allow_gro)
-                    .mutable_ready()
                     .build(),
                /**
                 * GstUdpSrc2:preserve-packetization:
@@ -376,12 +366,10 @@ impl ObjectImpl for UdpSrc {
                     .nick("Preserve Packetization")
                     .blurb("Preserve UDP packetization instead of potentially outputting multiple packets in the same buffer")
                     .default_value(Settings::default().preserve_packetization)
-                    .mutable_ready()
                     .build(),
                 glib::ParamSpecObject::builder::<gio::Socket>("socket")
                     .nick("Socket")
                     .blurb("Socket to use for UDP reception. (None == allocate)")
-                    .mutable_ready()
                     .build(),
                 glib::ParamSpecObject::builder::<gio::Socket>("used-socket")
                     .nick("Used Socket")
@@ -392,7 +380,6 @@ impl ObjectImpl for UdpSrc {
                     .nick("Close Socket")
                     .blurb("Close socket on state change if passed as property")
                     .default_value(Settings::default().close_socket)
-                    .mutable_ready()
                     .build(),
                /**
                 * GstUdpSrc2:skip-first-bytes:
@@ -405,7 +392,6 @@ impl ObjectImpl for UdpSrc {
                     .nick("Skip First Bytes")
                     .blurb("Number of bytes to skip for each UDP packet")
                     .default_value(Settings::default().skip_first_bytes)
-                    .mutable_ready()
                     .build(),
                 glib::ParamSpecUInt64::builder("timeout")
                     .nick("Timeout")
@@ -824,10 +810,26 @@ impl ElementImpl for UdpSrc {
 
         PAD_TEMPLATES.as_ref()
     }
+
+    fn change_state(
+        &self,
+        transition: gst::StateChange,
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
+
+        if transition == gst::StateChange::NullToReady {
+            self.prepare().map_err(|err| {
+                self.post_error_message(err);
+                gst::StateChangeError
+            })?;
+        }
+
+        self.parent_change_state(transition)
+    }
 }
 
-impl BaseSrcImpl for UdpSrc {
-    fn start(&self) -> Result<(), gst::ErrorMessage> {
+impl UdpSrc {
+    fn prepare(&self) -> Result<(), gst::ErrorMessage> {
         let mut settings = self.settings.lock().unwrap();
 
         let mut state = self.state.borrow_mut();
@@ -924,13 +926,8 @@ impl BaseSrcImpl for UdpSrc {
         state.waker = Some(waker);
         state.socket = Some(socket);
 
-        let caps = settings.caps.clone();
         drop(state);
         drop(settings);
-
-        if let Some(ref caps) = caps {
-            let _ = self.obj().set_caps(caps);
-        }
 
         if notify_port {
             self.obj().notify("port");
@@ -939,6 +936,18 @@ impl BaseSrcImpl for UdpSrc {
             self.obj().notify("address");
         }
         self.obj().notify("used-socket");
+
+        Ok(())
+    }
+}
+
+impl BaseSrcImpl for UdpSrc {
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
+        let caps = self.settings.lock().unwrap().caps.clone();
+
+        if let Some(ref caps) = caps {
+            let _ = self.obj().set_caps(caps);
+        }
 
         gst::info!(CAT, imp = self, "Started");
 

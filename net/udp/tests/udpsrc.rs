@@ -356,7 +356,7 @@ fn test_udpsrc_used_socket() {
             .is_none()
     );
 
-    elem.set_state(gst::State::Playing).unwrap();
+    elem.set_state(gst::State::Ready).unwrap();
 
     let used_socket = elem.property::<Option<gio::Socket>>("used-socket").unwrap();
 
