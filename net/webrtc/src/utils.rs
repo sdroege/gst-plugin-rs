@@ -864,7 +864,10 @@ impl Codec {
                     if let Ok(profile) = gst_pbutils::codec_utils_h264_get_profile(sps) {
                         enc_s.set("profile", compat_profiles(&profile));
                     }
-                    if let Ok(level) = gst_pbutils::codec_utils_h264_get_level(sps) {
+
+                    if s.get::<&str>("level-asymmetry-allowed").unwrap_or("0") != "1"
+                        && let Ok(level) = gst_pbutils::codec_utils_h264_get_level(sps)
+                    {
                         enc_s.set("level", compat_levels(&level));
                     }
                 }
