@@ -29,6 +29,8 @@ const DEFAULT_DRAIN_ON_SPEAKER_CHANGE: bool = true;
 const DEFAULT_EXTEND_DURATION: bool = false;
 const DEFAULT_EXTENDED_DURATION_GAP: gst::ClockTime = gst::ClockTime::from_mseconds(500);
 const DEFAULT_NO_TIMEOUT: bool = false;
+const DEFAULT_INCOMPLETE_SENTENCE_THRESHOLD: Option<gst::ClockTime> = gst::ClockTime::NONE;
+const DEFAULT_INCOMPLETE_SENTENCE_LIMIT: Option<gst::ClockTime> = gst::ClockTime::NONE;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -40,6 +42,8 @@ struct Settings {
     extend_duration: bool,
     extended_duration_gap: gst::ClockTime,
     no_timeout: bool,
+    incomplete_sentence_threshold: Option<gst::ClockTime>,
+    incomplete_sentence_limit: Option<gst::ClockTime>,
 }
 
 impl Default for Settings {
@@ -53,6 +57,8 @@ impl Default for Settings {
             extend_duration: DEFAULT_EXTEND_DURATION,
             extended_duration_gap: DEFAULT_EXTENDED_DURATION_GAP,
             no_timeout: DEFAULT_NO_TIMEOUT,
+            incomplete_sentence_threshold: DEFAULT_INCOMPLETE_SENTENCE_THRESHOLD,
+            incomplete_sentence_limit: DEFAULT_INCOMPLETE_SENTENCE_LIMIT,
         }
     }
 }
@@ -90,6 +96,13 @@ impl Input {
 impl Input {
     fn start_rtime(&self) -> Option<gst::ClockTime> {
         self.items.front().map(|item| item.rtime)
+    }
+
+    fn duration(&self) -> Option<gst::ClockTime> {
+        self.items
+            .front()
+            .zip(self.items.back())
+            .map(|(front, back)| (back.pts + back.duration).saturating_sub(front.pts))
     }
 
     fn is_empty(&self) -> bool {
@@ -181,6 +194,44 @@ impl Input {
             self.drain_to_idx(idx.end())
         } else {
             self.drain_all()
+        }
+    }
+
+    fn drain_incomplete_sentence(
+        &mut self,
+        timeout_terminators_regex: &Regex,
+        threshold: Option<gst::ClockTime>,
+        limit: Option<gst::ClockTime>,
+    ) -> Option<Vec<Item>> {
+        let start_rtime = self.start_rtime()?;
+
+        let duration = self.duration()?;
+
+        if let Some(limit) = limit
+            && duration >= limit
+        {
+            return self.drain_all();
+        }
+
+        let threshold = threshold?;
+
+        let split_idx = self
+            .items
+            .iter()
+            .position(|item| item.rtime.saturating_sub(start_rtime) >= threshold)?;
+
+        let mut items = self.items.clone();
+        let items_after = items.split_off(split_idx);
+        let content_before = items.iter().map(|item| item.content.clone()).join(" ");
+        let content_after = items_after
+            .iter()
+            .map(|item| item.content.clone())
+            .join(" ");
+
+        if let Some(idx) = timeout_terminators_regex.find_iter(&content_after).last() {
+            self.drain_to_idx(content_before.len() + idx.end())
+        } else {
+            None
         }
     }
 
@@ -280,6 +331,24 @@ impl State {
         } else {
             None
         }
+    }
+
+    fn drain_incomplete_sentence(
+        &mut self,
+        threshold: Option<gst::ClockTime>,
+        limit: Option<gst::ClockTime>,
+    ) -> Option<Vec<Item>> {
+        if let Some(input) = self.input.as_mut() {
+            return input.drain_incomplete_sentence(
+                self.timeout_terminators_regex
+                    .as_ref()
+                    .expect("Valid regex generated at state change"),
+                threshold,
+                limit,
+            );
+        }
+
+        None
     }
 }
 
@@ -916,6 +985,14 @@ impl Accumulate {
         pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let (incomplete_sentence_threshold, incomplete_sentence_limit) = {
+            let settings = self.settings.lock().unwrap();
+            (
+                settings.incomplete_sentence_threshold,
+                settings.incomplete_sentence_limit,
+            )
+        };
+
         let data = buffer.map_readable().map_err(|_| {
             gst::error!(CAT, obj = pad, "Can't map buffer readable");
 
@@ -976,6 +1053,25 @@ impl Accumulate {
 
         while let Some(items) = state.input.as_mut().and_then(|input| input.next_sentence()) {
             gst::log!(CAT, imp = self, "drained next sentence: {:#?}", items);
+            if let Some(tx) = state.accumulate_tx.clone() {
+                drop(state);
+                let _ = tx.send(AccumulateInput::Items(items));
+                state = self.state.lock().unwrap();
+            }
+        }
+
+        if let Some(items) = state
+            .drain_incomplete_sentence(incomplete_sentence_threshold, incomplete_sentence_limit)
+        {
+            gst::debug!(
+                CAT,
+                "drained incomplete sentence {}",
+                items
+                    .iter()
+                    .map(|item| item.content.clone())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            );
             if let Some(tx) = state.accumulate_tx.clone() {
                 drop(state);
                 let _ = tx.send(AccumulateInput::Items(items));
@@ -1181,6 +1277,20 @@ impl ObjectImpl for Accumulate {
                     .default_value(DEFAULT_NO_TIMEOUT)
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecUInt::builder("incomplete-sentence-threshold")
+                    .nick("Incomplete Sentence Threshold")
+                    .blurb("When latency is -1, attempt to drain up to the terminators located after the threshold \
+                        as specified by timeout-terminators. milliseconds. -1 = don't drain")
+                    .default_value(u32::MAX)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("incomplete-sentence-limit")
+                    .nick("Incomplete Sentence Limit")
+                    .blurb("When latency is -1, always drain when the internal queue reaches the limit. \
+                        milliseconds. 0 = don't drain")
+                    .default_value(u32::MAX)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -1236,6 +1346,26 @@ impl ObjectImpl for Accumulate {
                 let mut settings = self.settings.lock().unwrap();
                 settings.no_timeout = value.get::<bool>().expect("type checked upstream");
             }
+            "incomplete-sentence-threshold" => {
+                let mut settings = self.settings.lock().unwrap();
+                let value = value.get::<u32>().expect("type checked upstream");
+                if value == u32::MAX {
+                    settings.incomplete_sentence_threshold = None;
+                } else {
+                    settings.incomplete_sentence_threshold =
+                        Some(gst::ClockTime::from_mseconds(value.into()));
+                }
+            }
+            "incomplete-sentence-limit" => {
+                let mut settings = self.settings.lock().unwrap();
+                let value = value.get::<u32>().expect("type checked upstream");
+                if value == u32::MAX {
+                    settings.incomplete_sentence_limit = None;
+                } else {
+                    settings.incomplete_sentence_limit =
+                        Some(gst::ClockTime::from_mseconds(value.into()));
+                }
+            }
             _ => unimplemented!(),
         }
     }
@@ -1273,6 +1403,22 @@ impl ObjectImpl for Accumulate {
             "no-timeout" => {
                 let settings = self.settings.lock().unwrap();
                 settings.no_timeout.to_value()
+            }
+            "incomplete-sentence-threshold" => {
+                let settings = self.settings.lock().unwrap();
+                if let Some(t) = settings.incomplete_sentence_threshold {
+                    (t.mseconds() as u32).to_value()
+                } else {
+                    u32::MAX.to_value()
+                }
+            }
+            "incomplete-sentence-limit" => {
+                let settings = self.settings.lock().unwrap();
+                if let Some(t) = settings.incomplete_sentence_limit {
+                    (t.mseconds() as u32).to_value()
+                } else {
+                    u32::MAX.to_value()
+                }
             }
             _ => unimplemented!(),
         }
@@ -1605,5 +1751,123 @@ mod tests {
         let drained = input.drain_to_next_terminator();
         eprintln!("drained: {:?}", drained);
         */
+    }
+
+    #[test]
+    fn test_incomplete_sentence_threshold() {
+        let mut input = Input::try_new(None).unwrap();
+
+        let timeout_terminators_regex = Regex::new(DEFAULT_TIMEOUT_TERMINATORS).unwrap();
+
+        input.push(
+            "0".into(),
+            gst::ClockTime::from_nseconds(0),
+            gst::ClockTime::from_nseconds(0),
+            gst::ClockTime::from_nseconds(1),
+            None,
+        );
+        input.push(
+            "2, ".into(),
+            gst::ClockTime::from_nseconds(2),
+            gst::ClockTime::from_nseconds(2),
+            gst::ClockTime::from_nseconds(1),
+            None,
+        );
+
+        let items = input.drain_incomplete_sentence(
+            &timeout_terminators_regex,
+            Some(gst::ClockTime::from_nseconds(3)),
+            None,
+        );
+
+        assert!(items.is_none());
+
+        input.push(
+            "3, ".into(),
+            gst::ClockTime::from_nseconds(3),
+            gst::ClockTime::from_nseconds(3),
+            gst::ClockTime::from_nseconds(1),
+            None,
+        );
+
+        input.push(
+            "4".into(),
+            gst::ClockTime::from_nseconds(4),
+            gst::ClockTime::from_nseconds(4),
+            gst::ClockTime::from_nseconds(1),
+            None,
+        );
+
+        let items = input.drain_incomplete_sentence(
+            &timeout_terminators_regex,
+            Some(gst::ClockTime::from_nseconds(3)),
+            None,
+        );
+
+        // "0", "2, ", "3,"
+        assert_eq!(items.unwrap().len(), 3);
+
+        let items = input.drain_all();
+
+        eprintln!("Items: {items:?}");
+
+        // " ", "4"
+        assert_eq!(items.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_incomplete_sentence_limit() {
+        let mut input = Input::try_new(None).unwrap();
+
+        let timeout_terminators_regex = Regex::new(DEFAULT_TIMEOUT_TERMINATORS).unwrap();
+
+        input.push(
+            "0".into(),
+            gst::ClockTime::from_nseconds(0),
+            gst::ClockTime::from_nseconds(0),
+            gst::ClockTime::from_nseconds(1),
+            None,
+        );
+        input.push(
+            "2, ".into(),
+            gst::ClockTime::from_nseconds(2),
+            gst::ClockTime::from_nseconds(2),
+            gst::ClockTime::from_nseconds(1),
+            None,
+        );
+
+        let items = input.drain_incomplete_sentence(
+            &timeout_terminators_regex,
+            None,
+            Some(gst::ClockTime::from_nseconds(4)),
+        );
+
+        assert!(items.is_none());
+
+        input.push(
+            "3, ".into(),
+            gst::ClockTime::from_nseconds(3),
+            gst::ClockTime::from_nseconds(3),
+            gst::ClockTime::from_nseconds(1),
+            None,
+        );
+
+        input.push(
+            "4".into(),
+            gst::ClockTime::from_nseconds(4),
+            gst::ClockTime::from_nseconds(4),
+            gst::ClockTime::from_nseconds(1),
+            None,
+        );
+
+        let items = input.drain_incomplete_sentence(
+            &timeout_terminators_regex,
+            None,
+            Some(gst::ClockTime::from_nseconds(4)),
+        );
+
+        assert_eq!(items.unwrap().len(), 4);
+
+        assert!(input.is_empty());
     }
 }

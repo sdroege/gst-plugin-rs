@@ -20641,8 +20641,36 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "incomplete-sentence-limit": {
+                        "blurb": "When latency is -1, always drain when the internal queue reaches the limit. milliseconds. 0 = don't drain",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "incomplete-sentence-threshold": {
+                        "blurb": "When latency is -1, attempt to drain up to the terminators located after the threshold as specified by timeout-terminators. milliseconds. -1 = don't drain",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
                     "latency": {
-                        "blurb": "Amount of milliseconds to allow for accumulating",
+                        "blurb": "Amount of milliseconds to allow for accumulating. A value of -1 will cause full-sentence accumulation and retimestamping.",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
