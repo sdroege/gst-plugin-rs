@@ -1752,7 +1752,7 @@ impl FMP4Mux {
                         // previously drained a partial GOP because the GOP is ending too far after the
                         // planned fragment end.
                         if gop.start_pts > fragment_end_pts
-                            && !gop.buffers.first().is_some_and(|b| {
+                            && gop.buffers.first().is_some_and(|b| {
                                 b.buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
                             })
                         {
@@ -1882,7 +1882,7 @@ impl FMP4Mux {
                     // previously drained a partial GOP because the GOP is ending too far after the
                     // planned fragment end.
                     if gop.start_pts > fragment_end_pts
-                        && !gop.buffers.first().is_some_and(|b| {
+                        && gop.buffers.first().is_some_and(|b| {
                             b.buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
                         })
                     {
