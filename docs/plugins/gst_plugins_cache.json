@@ -87,13 +87,27 @@
                         "type": "GstValueArray",
                         "writable": true
                     },
+                    "max-compression": {
+                        "blurb": "Maximum compression factor allowed. Only used with mode=compress, may cause max-overflow to be ignored",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "1.79769e+308",
+                        "min": "-1.79769e+308",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gdouble",
+                        "writable": true
+                    },
                     "max-overflow": {
                         "blurb": "Amount of milliseconds any given text cue is allowed to overflow its intended duration. Only used with mode=compress",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "2000",
+                        "default": "0",
                         "max": "-1",
                         "min": "0",
                         "mutable": "ready",
