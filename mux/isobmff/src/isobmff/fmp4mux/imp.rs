@@ -2118,9 +2118,9 @@ impl FMP4Mux {
                 || settings.manual_split
         );
 
+        stream.late_gop = false;
         let mut gops = Vec::with_capacity(stream.queued_gops.len());
-        if stream.queued_gops.is_empty() || stream.late_gop {
-            stream.late_gop = false;
+        if stream.queued_gops.is_empty() {
             return Ok(gops);
         }
 
