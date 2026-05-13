@@ -166,6 +166,8 @@ plugins = {
       'cairo-gobject': [],
     }
   },
+  # colorlut needs to check platform dependency below
+  'colorlut': {},
   'dav1d': {
     'library': 'libgstdav1d',
     'extra-deps': {'dav1d': ['>=1.3']},
@@ -265,6 +267,10 @@ if analytics_option.allowed()
   deps += [['gstreamer-analytics-1.0', 'gst-plugins-bad', 'gstanalytics_dep', 'gstanalytics', analytics_option]]
 endif
 
+if colorlut_option.allowed() and host_system == 'windows'
+  deps += [['gstreamer-d3d12-1.0', 'gst-plugins-bad', 'gstd3d12_dep', 'gstd3d12', colorlut_option]]
+endif
+
 glib_dep = dependency('glib-2.0', version: glib_req)
 deps_cache += {'glib-2.0': glib_dep}
 
@@ -292,6 +298,22 @@ if analytics_option.allowed()
     }
   endif
 endif
+
+# colorlut requires d3d12 on Windows
+if colorlut_option.allowed()
+  colorlut_plugin = {'colorlut': {
+    'library': 'libgstcolorlut',
+  }}
+  if host_system != 'windows'
+    plugins += colorlut_plugin
+  else
+    gst_d3d12_dep = deps_cache['gstreamer-d3d12-1.0']
+    if gst_d3d12_dep.found()
+      plugins += colorlut_plugin
+    endif
+  endif
+endif
+
 
 # Won't build on platforms where it bundles the sources because of:
 # https://github.com/qnighy/libwebp-sys2-rs/issues/12

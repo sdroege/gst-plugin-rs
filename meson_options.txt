@@ -73,6 +73,7 @@ option('validate', type: 'feature', value: 'auto', description: 'Build validate 
 # video
 option('cdg', type: 'feature', value: 'auto', description: 'Build cdg plugin')
 option('closedcaption', type: 'feature', value: 'auto', description: 'Build closedcaption plugin')
+option('colorlut', type: 'feature', value: 'auto', description: 'Build colorlut plugin')
 option('dav1d', type: 'feature', value: 'auto', description: 'Build dav1d plugin')
 option('ffv1', type: 'feature', value: 'auto', description: 'Build ffv1 plugin')
 option('gif', type: 'feature', value: 'auto', description: 'Build gif plugin')
