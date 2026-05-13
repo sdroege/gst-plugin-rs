@@ -204,6 +204,11 @@ mod imp {
                         .nick("SDES")
                         .blurb("The SDES items of this session")
                         .build(),
+                    glib::ParamSpecBoxed::builder::<gst::Structure>("stats")
+                        .nick("Statistics")
+                        .blurb("The statistics of this session")
+                        .read_only()
+                        .build(),
                 ]
             });
 
