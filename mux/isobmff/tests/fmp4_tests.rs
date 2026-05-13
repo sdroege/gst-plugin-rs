@@ -1554,6 +1554,16 @@ fn test_chunking_single_stream_manual_fragment() {
         .emit_by_name::<()>("split-at-running-time", &[&4.seconds()]);
 
     // Push 15 buffers of 0.5s each, 1st and 11th buffer without DELTA_UNIT flag
+    //
+    // Expected output is:
+    //   1. fragment start, buffers 1 + 2.
+    //   2. chunk, buffers 3 + 4.
+    //   3. chunk, buffers 5 + 6.
+    //   4. chunk, buffers 7 + 8.
+    //   5. chunk, buffers 9 + 10, fragment end.
+    //   6. fragment start, buffers 11 + 12.
+    //   7. chunk, buffers 13 + 14.
+    //   8. chunk, buffer 15.
     for i in 0..15 {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
@@ -1706,6 +1716,16 @@ fn test_chunking_single_stream() {
     h.play();
 
     // Push 15 buffers of 0.5s each, 1st and 11th buffer without DELTA_UNIT flag
+    //
+    // Expected output is:
+    //   1. fragment start, buffers 1 + 2.
+    //   2. chunk, buffers 3 + 4.
+    //   3. chunk, buffers 5 + 6.
+    //   4. chunk, buffers 7 + 8.
+    //   5. chunk, buffers 9 + 10, fragment end.
+    //   6. fragment start, buffers 11 + 12.
+    //   7. chunk, buffers 13 + 14.
+    //   8. chunk, buffer 15.
     for i in 0..15 {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
@@ -1878,6 +1898,16 @@ fn test_chunking_multi_stream() {
     let output_offset = (60 * 60 * 1000).seconds();
 
     // Push 15 buffers of 0.5s each, 1st and 11th buffer without DELTA_UNIT flag
+    //
+    // Expected output is:
+    //   1. fragment start, buffers 1 + 2.
+    //   2. chunk, buffers 3 + 4.
+    //   3. chunk, buffers 5 + 6.
+    //   4. chunk, buffers 7 + 8.
+    //   5. chunk, buffers 9 + 10, fragment end.
+    //   6. fragment start, buffers 11 + 12.
+    //   7. chunk, buffers 13 + 14.
+    //   8. chunk, buffer 15.
     for i in 0..15 {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
@@ -2089,6 +2119,16 @@ fn test_chunking_single_stream_gops_after_fragment_end_before_next_chunk_end() {
     h.play();
 
     // Push 15 buffers of 0.5s each, 1st and 12th buffer without DELTA_UNIT flag
+    //
+    // Expected output is:
+    //   1. fragment start, buffers 1 + 2.
+    //   2. chunk, buffers 3 + 4.
+    //   3. chunk, buffers 5 + 6.
+    //   4. chunk, buffers 7 + 8.
+    //   5. chunk, buffers 9 + 10.
+    //   6. chunk, buffer 11, fragment end.
+    //   7. fragment start, buffers 12 + 13.
+    //   8. chunk, buffers 14 + 15.
     for i in 0..15 {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
@@ -2251,7 +2291,17 @@ fn test_chunking_single_stream_gops_after_fragment_end_after_next_chunk_end() {
     h.set_src_caps(caps);
     h.play();
 
-    // Push 15 buffers of 0.5s each, 1st and 14th buffer without DELTA_UNIT flag
+    // Push 15 buffers of 0.5s each, 1st and 14th buffer without DELTA_UNIT flag.
+    //
+    // Expected output is:
+    //   1. fragment start, buffers 1 + 2.
+    //   2. chunk, buffers 3 + 4.
+    //   3. chunk, buffers 5 + 6.
+    //   4. chunk, buffers 7 + 8.
+    //   5. chunk, buffers 9 + 10.
+    //   6. chunk, buffers 11 + 12.
+    //   7. chunk, buffer 13, fragment end.
+    //   8. fragment start, buffers 14 + 15
     for i in 0..15 {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
@@ -2411,6 +2461,14 @@ fn test_chunking_on_keyframe_single_stream() {
     h.set_src_caps(caps);
     h.play();
 
+    // Push 20 buffers of 0.5s each, 1st, 5th, 9th, 13th, 17th buffer without DELTA_UNIT flag.
+    //
+    // Expected output is:
+    //   1. fragment start, buffers 1, 2, 3, 4.
+    //   2. chunk, buffers 5, 6, 7, 8.
+    //   3. chunk, buffers 9, 10, 11, 12.
+    //   4. chunk, buffers 13, 14, 15, 16.
+    //   5. chunk, buffers 17, 18, 19, 20, fragment end.
     for i in 0..20 {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
