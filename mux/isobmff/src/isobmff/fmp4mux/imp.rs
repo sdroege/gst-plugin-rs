@@ -5296,8 +5296,8 @@ impl ElementImpl for ISOFMP4Mux {
                                 "r210",
                             ]),
                         )
-                        .field("width", gst::IntRange::new(1, i32::MAX))
-                        .field("height", gst::IntRange::new(1, i32::MAX))
+                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
+                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
                         .build(),
                     gst::Structure::builder("video/x-raw")
                         // TODO: this could be extended to handle gst_video::VideoMeta for non-default stride and plane offsets
@@ -5308,9 +5308,9 @@ impl ElementImpl for ISOFMP4Mux {
                         )
                         .field(
                             "width",
-                            gst::IntRange::with_step(4, i32::MAX.prev_multiple_of(&4), 4),
+                            gst::IntRange::with_step(4, (u16::MAX as i32).prev_multiple_of(&4), 4),
                         )
-                        .field("height", gst::IntRange::new(1, i32::MAX))
+                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
                         .build(),
                     gst::Structure::builder("video/x-raw")
                         // TODO: this could be extended to handle gst_video::VideoMeta for non-default stride and plane offsets
@@ -5321,11 +5321,11 @@ impl ElementImpl for ISOFMP4Mux {
                         )
                         .field(
                             "width",
-                            gst::IntRange::with_step(4, i32::MAX.prev_multiple_of(&4), 4),
+                            gst::IntRange::with_step(4, (u16::MAX as i32).prev_multiple_of(&4), 4),
                         )
                         .field(
                             "height",
-                            gst::IntRange::with_step(2, i32::MAX.prev_multiple_of(&2), 2),
+                            gst::IntRange::with_step(2, (u16::MAX as i32).prev_multiple_of(&2), 2),
                         )
                         .build(),
                     gst::Structure::builder("video/x-bayer")
