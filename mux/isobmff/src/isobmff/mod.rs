@@ -45,6 +45,38 @@ pub(crate) const BAYER_FORMATS: &[&str] = &[
     "grbg16be", "rggb16le", "rggb16be",
 ];
 
+/* video/x-raw formats with no subsampling (any width/height).
+ * Plus NV12 and NV21 because that works OK with the interleaved planes */
+pub(crate) const VIDEO_RAW_FORMATS_NO_ALIGN: &[&str] = &[
+    "IYU2",
+    "RGB",
+    "BGR",
+    "NV12",
+    "NV21",
+    "RGBA",
+    "ARGB",
+    "ABGR",
+    "BGRA",
+    "RGBx",
+    "BGRx",
+    "Y444",
+    "AYUV",
+    "GRAY8",
+    "GRAY16_BE",
+    "GBR",
+    "RGBP",
+    "BGRP",
+    "v308",
+    "r210",
+];
+
+/* video/x-raw formats with horizontal-only subsampling (4:2:2, 4:1:1 — width multiple of 4) */
+pub(crate) const VIDEO_RAW_FORMATS_HSUBSAMPLE: &[&str] = &["Y41B", "NV16", "NV61", "Y42B"];
+
+/* video/x-raw formats with both horizontal and vertical subsampling (4:2:0 — width×4, height×2) */
+pub(crate) const VIDEO_RAW_FORMATS_HVSUBSAMPLE: &[&str] =
+    &["I420", "YV12", "YUY2", "YVYU", "UYVY", "VYUY"];
+
 glib::wrapper! {
     pub(crate) struct FMP4MuxPad(ObjectSubclass<crate::isobmff::fmp4mux::imp::FMP4MuxPad>) @extends gst_base::AggregatorPad, gst::Pad, gst::Object;
 }

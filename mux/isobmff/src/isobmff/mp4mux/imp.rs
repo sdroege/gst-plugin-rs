@@ -2753,30 +2753,7 @@ impl ElementImpl for ISOMP4Mux {
                         // TODO: this could be extended to handle gst_video::VideoMeta for non-default stride and plane offsets
                         .field(
                             "format",
-                            // formats that do not use subsampling
-                            // Plus NV12 and NV21 because that works OK with the interleaved planes
-                            gst::List::new([
-                                "IYU2",
-                                "RGB",
-                                "BGR",
-                                "NV12",
-                                "NV21",
-                                "RGBA",
-                                "ARGB",
-                                "ABGR",
-                                "BGRA",
-                                "RGBx",
-                                "BGRx",
-                                "Y444",
-                                "AYUV",
-                                "GRAY8",
-                                "GRAY16_BE",
-                                "GBR",
-                                "RGBP",
-                                "BGRP",
-                                "v308",
-                                "r210",
-                            ]),
+                            gst::List::new(crate::isobmff::VIDEO_RAW_FORMATS_NO_ALIGN),
                         )
                         .field("width", gst::IntRange::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::new(1, u16::MAX as i32))
@@ -2785,8 +2762,7 @@ impl ElementImpl for ISOMP4Mux {
                         // TODO: this could be extended to handle gst_video::VideoMeta for non-default stride and plane offsets
                         .field(
                             "format",
-                            // Formats that use horizontal subsampling, but not vertical subsampling (4:2:2 and 4:1:1)
-                            gst::List::new(["Y41B", "NV16", "NV61", "Y42B"]),
+                            gst::List::new(crate::isobmff::VIDEO_RAW_FORMATS_HSUBSAMPLE),
                         )
                         .field(
                             "width",
@@ -2798,8 +2774,7 @@ impl ElementImpl for ISOMP4Mux {
                         // TODO: this could be extended to handle gst_video::VideoMeta for non-default stride and plane offsets
                         .field(
                             "format",
-                            // Formats that use both horizontal and vertical subsampling (4:2:0)
-                            gst::List::new(["I420", "YV12", "YUY2", "YVYU", "UYVY", "VYUY"]),
+                            gst::List::new(crate::isobmff::VIDEO_RAW_FORMATS_HVSUBSAMPLE),
                         )
                         .field(
                             "width",
