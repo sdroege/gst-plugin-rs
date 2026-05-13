@@ -20,6 +20,9 @@ fn is_video_codec(name: &str) -> bool {
             | "image/jpeg"
             | "video/x-raw"
             | "video/x-bayer"
+            | "application/x-zlib-compressed"
+            | "application/x-deflate-compressed"
+            | "application/x-brotli-compressed"
     )
 }
 
@@ -33,6 +36,9 @@ fn supports_mp4_brands(name: &str) -> bool {
             | "image/jpeg"
             | "video/x-raw"
             | "video/x-bayer"
+            | "application/x-zlib-compressed"
+            | "application/x-deflate-compressed"
+            | "application/x-brotli-compressed"
             | "audio/mpeg"
             | "audio/x-opus"
             | "audio/x-flac"
@@ -380,6 +386,14 @@ pub(crate) fn brands_from_variant_and_caps<'a>(
             }
             "audio/x-opus" => {
                 compatible_brands.insert(*b"opus");
+            }
+            // Generically-compressed video (gcmp scheme, ISO/IEC 23001-17:2024/Amd. 2 11.1)
+            // Requires the 'gcmm' brand and 'iso6'.
+            "application/x-zlib-compressed"
+            | "application/x-deflate-compressed"
+            | "application/x-brotli-compressed" => {
+                compatible_brands.insert(*b"gcmm");
+                compatible_brands.insert(*b"iso6");
             }
             _ => {}
         }

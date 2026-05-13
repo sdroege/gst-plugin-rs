@@ -12,7 +12,8 @@ use crate::isobmff::fmp4mux::boxes::write_mvex;
 use crate::isobmff::uncompressed::write_uncompressed_sample_entries;
 use crate::isobmff::{CAT, ChnlLayoutInfo, Chunk, Variant, ac3, eac3};
 use crate::isobmff::{
-    PresentationConfiguration, TrackConfiguration, transform_matrix::IDENTITY_MATRIX,
+    PresentationConfiguration, TrackConfiguration, resolve_original_caps,
+    transform_matrix::IDENTITY_MATRIX,
 };
 use anyhow::{Context, Error, bail};
 use gst::prelude::MulDiv;
@@ -170,6 +171,9 @@ fn write_moov(v: &mut Vec<u8>, cfg: &PresentationConfiguration) -> Result<(), Er
                             | "image/jpeg"
                             | "video/x-raw"
                             | "video/x-bayer"
+                            | "application/x-zlib-compressed"
+                            | "application/x-deflate-compressed"
+                            | "application/x-brotli-compressed"
                     ) {
                         references.push(TrackReference {
                             reference_type: *b"cdsc",
@@ -262,8 +266,17 @@ fn write_minf(
     let s = caps.structure(0).unwrap();
 
     match s.name().as_str() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
-        | "image/jpeg" | "video/x-raw" | "video/x-bayer" => {
+        "video/x-h264"
+        | "video/x-h265"
+        | "video/x-vp8"
+        | "video/x-vp9"
+        | "video/x-av1"
+        | "image/jpeg"
+        | "video/x-raw"
+        | "video/x-bayer"
+        | "application/x-zlib-compressed"
+        | "application/x-deflate-compressed"
+        | "application/x-brotli-compressed" => {
             // Flags are always 1 for unspecified reasons
             write_full_box(v, b"vmhd", FULL_BOX_VERSION_0, 1, write_vmhd)?
         }
@@ -1000,8 +1013,17 @@ pub(crate) fn write_hdlr_box(
 fn write_hdlr_for_stream(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error> {
     let s = stream.caps().structure(0).unwrap();
     let (handler_type, name) = match s.name().as_str() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
-        | "image/jpeg" | "video/x-raw" | "video/x-bayer" => {
+        "video/x-h264"
+        | "video/x-h265"
+        | "video/x-vp8"
+        | "video/x-vp9"
+        | "video/x-av1"
+        | "image/jpeg"
+        | "video/x-raw"
+        | "video/x-bayer"
+        | "application/x-zlib-compressed"
+        | "application/x-deflate-compressed"
+        | "application/x-brotli-compressed" => {
             if stream.image_sequence {
                 // See ISO/IEC 23008-12:2022 Section 7.2.2
                 (b"pict", b"PictureHandler\0".as_slice())
@@ -1024,7 +1046,10 @@ fn find_width_and_height(caps: &[gst::Caps]) -> (u32, u32) {
 
     // The width/height in the track header for video tracks should
     // be set to the one with the maximum number of pixels.
-    let (max_caps, max_width, max_height, _) = caps
+    // For compressed caps, width/height live inside original-caps.
+    let resolved_caps: Vec<gst::Caps> = caps.iter().map(resolve_original_caps).collect();
+
+    let (max_resolved, max_width, max_height, _) = resolved_caps
         .iter()
         .map(|c| {
             let s = c.structure(0).unwrap();
@@ -1037,7 +1062,7 @@ fn find_width_and_height(caps: &[gst::Caps]) -> (u32, u32) {
         .max_by_key(|(_, _, _, pixels)| *pixels)
         .unwrap();
 
-    let par = max_caps
+    let par = max_resolved
         .structure(0)
         .unwrap()
         .get::<gst::Fraction>("pixel-aspect-ratio")
@@ -1115,8 +1140,17 @@ fn write_tkhd(
 
     // Width/height
     match s.name().as_str() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
-        | "image/jpeg" | "video/x-raw" | "video/x-bayer" => {
+        "video/x-h264"
+        | "video/x-h265"
+        | "video/x-vp8"
+        | "video/x-vp9"
+        | "video/x-av1"
+        | "image/jpeg"
+        | "video/x-raw"
+        | "video/x-bayer"
+        | "application/x-zlib-compressed"
+        | "application/x-deflate-compressed"
+        | "application/x-brotli-compressed" => {
             let (width, height) = find_width_and_height(&stream.caps);
 
             v.extend((width << 16).to_be_bytes());
@@ -1373,8 +1407,17 @@ pub(crate) fn write_stsd(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result
 
     let s = stream.caps().structure(0).unwrap();
     match s.name().as_str() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
-        | "image/jpeg" | "video/x-raw" | "video/x-bayer" => write_visual_sample_entry(v, stream)?,
+        "video/x-h264"
+        | "video/x-h265"
+        | "video/x-vp8"
+        | "video/x-vp9"
+        | "video/x-av1"
+        | "image/jpeg"
+        | "video/x-raw"
+        | "video/x-bayer"
+        | "application/x-zlib-compressed"
+        | "application/x-deflate-compressed"
+        | "application/x-brotli-compressed" => write_visual_sample_entry(v, stream)?,
         "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
         | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" | "audio/x-raw" => {
             write_audio_sample_entry(v, stream)?
@@ -1442,6 +1485,11 @@ fn get_video_fourcc(s: &gst::StructureRef) -> Result<&[u8; 4], Error> {
         "video/x-vp9" => b"vp09",
         "video/x-av1" => b"av01",
         "video/x-raw" | "video/x-bayer" => b"uncv",
+        // Generically-compressed video uses the restricted video sample entry
+        // (ISO/IEC 14496-12, 8.12.5 + ISO/IEC 23001-17:2024/Amd. 2, 9.3)
+        "application/x-zlib-compressed"
+        | "application/x-deflate-compressed"
+        | "application/x-brotli-compressed" => b"resv",
         _ => unreachable!(),
     };
 
@@ -1453,6 +1501,12 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
         let caps = stream.caps.get(idx).unwrap();
         let s = caps.structure(0).unwrap();
         let fourcc = get_video_fourcc(s).context("failed fourcc")?;
+
+        // For compressed caps, width/height/framerate live inside original-caps.
+        let inner_caps = resolve_original_caps(caps);
+        let cll = gst_video::VideoContentLightLevel::from_caps(&inner_caps).ok();
+        let mastering = gst_video::VideoMasteringDisplayInfo::from_caps(&inner_caps).ok();
+        let s = inner_caps.structure(0).unwrap();
 
         write_sample_entry_box(v, fourcc, move |v| {
             // pre-defined
@@ -1502,7 +1556,11 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                     // https://github.com/webmproject/vp9-dash/blob/main/VPCodecISOMediaFileFormatBinding.md#semantics
                     *b"\x0aVPC Coding\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
                 }
-                "video/x-raw" | "video/x-bayer" => {
+                "video/x-raw"
+                | "video/x-bayer"
+                | "application/x-zlib-compressed"
+                | "application/x-deflate-compressed"
+                | "application/x-brotli-compressed" => {
                     // ISO/IEC 23001-17:2024 Section 4.2
                     [0u8; 32]
                 }
@@ -1733,12 +1791,14 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                 "image/jpeg" => {
                     // Nothing to do here
                 }
-                "video/x-raw" | "video/x-bayer" => {
+                "video/x-raw"
+                | "video/x-bayer"
+                | "application/x-zlib-compressed"
+                | "application/x-deflate-compressed"
+                | "application/x-brotli-compressed" => {
                     let format_info =
-                        crate::isobmff::uncompressed::UncompressedFormatInfo::from_caps(
-                            stream.caps(),
-                        )
-                        .map_err(|e| anyhow::anyhow!("Failed to parse caps: {}", e))?;
+                        crate::isobmff::uncompressed::UncompressedFormatInfo::from_caps(caps)
+                            .map_err(|e| anyhow::anyhow!("Failed to parse caps: {}", e))?;
                     write_uncompressed_sample_entries(v, format_info)?
                 }
                 _ => unreachable!(),
@@ -1782,7 +1842,7 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                 })?;
             }
 
-            if let Ok(cll) = gst_video::VideoContentLightLevel::from_caps(stream.caps()) {
+            if let Some(cll) = cll {
                 write_box(v, b"clli", move |v| {
                     v.extend((cll.max_content_light_level()).to_be_bytes());
                     v.extend((cll.max_frame_average_light_level()).to_be_bytes());
@@ -1790,7 +1850,7 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                 })?;
             }
 
-            if let Ok(mastering) = gst_video::VideoMasteringDisplayInfo::from_caps(stream.caps()) {
+            if let Some(mastering) = mastering {
                 write_box(v, b"mdcv", move |v| {
                     for primary in mastering.display_primaries() {
                         v.extend(primary.x.to_be_bytes());
@@ -1850,8 +1910,12 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                             Ok(())
                         })?;
                     }
-                    // uncompressed
-                    "video/x-raw" | "video/x-bayer" => {
+                    // uncompressed and generically-compressed
+                    "video/x-raw"
+                    | "video/x-bayer"
+                    | "application/x-zlib-compressed"
+                    | "application/x-deflate-compressed"
+                    | "application/x-brotli-compressed" => {
                         let all_ref_pics_intra = 1u32; // 0 = don't know, 1 = reference pictures are only intra
                         let intra_pred_used = 0u32; // 0 = no, 1 = yes, or maybe
                         let max_ref_per_pic = 0u32; // none

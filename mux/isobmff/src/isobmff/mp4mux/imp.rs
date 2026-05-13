@@ -4,8 +4,8 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
-
 use num_integer::Integer;
+
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -1608,9 +1608,12 @@ impl MP4Mux {
                 "video/x-av1" => {
                     delta_frames = DeltaFrames::PredictiveOnly;
                 }
-                "image/jpeg" => (),
-                "video/x-raw" => (),
-                "video/x-bayer" => (),
+                "image/jpeg"
+                | "video/x-raw"
+                | "video/x-bayer"
+                | "application/x-zlib-compressed"
+                | "application/x-deflate-compressed"
+                | "application/x-brotli-compressed" => (),
                 "audio/mpeg" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
                         gst::error!(CAT, obj = pad, "Received caps without codec_data");
@@ -2707,147 +2710,122 @@ impl ElementImpl for ISOMP4Mux {
             )
             .unwrap();
 
+            let mut sink_caps = [
+                gst::Structure::builder("video/x-h264")
+                    .field("stream-format", gst::List::new(["avc", "avc3"]))
+                    .field("alignment", "au")
+                    .field("width", gst::IntRange::new(1, u16::MAX as i32))
+                    .field("height", gst::IntRange::new(1, u16::MAX as i32))
+                    .build(),
+                gst::Structure::builder("video/x-h265")
+                    .field("stream-format", gst::List::new(["hvc1", "hev1"]))
+                    .field("alignment", "au")
+                    .field("width", gst::IntRange::new(1, u16::MAX as i32))
+                    .field("height", gst::IntRange::new(1, u16::MAX as i32))
+                    .build(),
+                gst::Structure::builder("video/x-vp8")
+                    .field("width", gst::IntRange::new(1, u16::MAX as i32))
+                    .field("height", gst::IntRange::new(1, u16::MAX as i32))
+                    .build(),
+                gst::Structure::builder("video/x-vp9")
+                    .field("profile", gst::List::new(["0", "1", "2", "3"]))
+                    .field("chroma-format", gst::List::new(["4:2:0", "4:2:2", "4:4:4"]))
+                    .field("bit-depth-luma", gst::List::new([8u32, 10u32, 12u32]))
+                    .field("bit-depth-chroma", gst::List::new([8u32, 10u32, 12u32]))
+                    .field("width", gst::IntRange::new(1, u16::MAX as i32))
+                    .field("height", gst::IntRange::new(1, u16::MAX as i32))
+                    .build(),
+                gst::Structure::builder("video/x-av1")
+                    .field("stream-format", "obu-stream")
+                    .field("alignment", "tu")
+                    .field("profile", gst::List::new(["main", "high", "professional"]))
+                    .field(
+                        "chroma-format",
+                        gst::List::new(["4:0:0", "4:2:0", "4:2:2", "4:4:4"]),
+                    )
+                    .field("bit-depth-luma", gst::List::new([8u32, 10u32, 12u32]))
+                    .field("bit-depth-chroma", gst::List::new([8u32, 10u32, 12u32]))
+                    .field("width", gst::IntRange::new(1, u16::MAX as i32))
+                    .field("height", gst::IntRange::new(1, u16::MAX as i32))
+                    .build(),
+                // Generically-compressed video (gcmp scheme, ISO/IEC 23001-17:2024/Amd. 2).
+                // original-caps is restricted to the formats that can be encoded as uncC boxes.
+                gst::Structure::builder("application/x-zlib-compressed")
+                    .field(
+                        "original-caps",
+                        crate::isobmff::supported_uncompressed_caps(),
+                    )
+                    .build(),
+                gst::Structure::builder("application/x-deflate-compressed")
+                    .field(
+                        "original-caps",
+                        crate::isobmff::supported_uncompressed_caps(),
+                    )
+                    .build(),
+                gst::Structure::builder("application/x-brotli-compressed")
+                    .field(
+                        "original-caps",
+                        crate::isobmff::supported_uncompressed_caps(),
+                    )
+                    .build(),
+                gst::Structure::builder("audio/mpeg")
+                    .field("mpegversion", 4i32)
+                    .field("stream-format", "raw")
+                    .field("channels", gst::IntRange::new(1, u16::MAX as i32))
+                    .field("rate", gst::IntRange::new(1, i32::MAX))
+                    .build(),
+                gst::Structure::builder("audio/x-opus")
+                    .field("channel-mapping-family", gst::IntRange::new(0i32, 255))
+                    .field("channels", gst::IntRange::new(1i32, 8))
+                    .field("rate", gst::IntRange::new(1, i32::MAX))
+                    .build(),
+                gst::Structure::builder("audio/x-flac")
+                    .field("framed", true)
+                    .field("channels", gst::IntRange::<i32>::new(1, 8))
+                    .field("rate", gst::IntRange::<i32>::new(1, 10 * u16::MAX as i32))
+                    .build(),
+                gst::Structure::builder("audio/x-ac3")
+                    .field("framed", true)
+                    .field("alignment", "frame")
+                    .field("channels", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                    .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
+                    .build(),
+                gst::Structure::builder("audio/x-eac3")
+                    .field("framed", true)
+                    .field("alignment", "iec61937")
+                    .field("channels", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                    .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
+                    .build(),
+                gst::Structure::builder("audio/x-raw")
+                    .field(
+                        "format",
+                        gst::List::new([
+                            gst_audio::AudioFormat::S16le.to_str(),
+                            gst_audio::AudioFormat::S24le.to_str(),
+                            gst_audio::AudioFormat::S32le.to_str(),
+                            gst_audio::AudioFormat::F32le.to_str(),
+                            gst_audio::AudioFormat::F64le.to_str(),
+                            gst_audio::AudioFormat::S16be.to_str(),
+                            gst_audio::AudioFormat::S24be.to_str(),
+                            gst_audio::AudioFormat::S32be.to_str(),
+                            gst_audio::AudioFormat::F32be.to_str(),
+                            gst_audio::AudioFormat::F64be.to_str(),
+                        ]),
+                    )
+                    .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
+                    .field("channels", gst::IntRange::<i32>::new(1, i32::MAX))
+                    .field("layout", "interleaved")
+                    .build(),
+            ]
+            .into_iter()
+            .collect::<gst::Caps>();
+            sink_caps.merge(crate::isobmff::supported_uncompressed_caps());
+
             let sink_pad_template = gst::PadTemplate::with_gtype(
                 "sink_%u",
                 gst::PadDirection::Sink,
                 gst::PadPresence::Request,
-                &[
-                    gst::Structure::builder("video/x-h264")
-                        .field("stream-format", gst::List::new(["avc", "avc3"]))
-                        .field("alignment", "au")
-                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
-                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
-                        .build(),
-                    gst::Structure::builder("video/x-h265")
-                        .field("stream-format", gst::List::new(["hvc1", "hev1"]))
-                        .field("alignment", "au")
-                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
-                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
-                        .build(),
-                    gst::Structure::builder("video/x-vp8")
-                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
-                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
-                        .build(),
-                    gst::Structure::builder("video/x-vp9")
-                        .field("profile", gst::List::new(["0", "1", "2", "3"]))
-                        .field("chroma-format", gst::List::new(["4:2:0", "4:2:2", "4:4:4"]))
-                        .field("bit-depth-luma", gst::List::new([8u32, 10u32, 12u32]))
-                        .field("bit-depth-chroma", gst::List::new([8u32, 10u32, 12u32]))
-                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
-                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
-                        .build(),
-                    gst::Structure::builder("video/x-av1")
-                        .field("stream-format", "obu-stream")
-                        .field("alignment", "tu")
-                        .field("profile", gst::List::new(["main", "high", "professional"]))
-                        .field(
-                            "chroma-format",
-                            gst::List::new(["4:0:0", "4:2:0", "4:2:2", "4:4:4"]),
-                        )
-                        .field("bit-depth-luma", gst::List::new([8u32, 10u32, 12u32]))
-                        .field("bit-depth-chroma", gst::List::new([8u32, 10u32, 12u32]))
-                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
-                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
-                        .build(),
-                    gst::Structure::builder("video/x-raw")
-                        // TODO: this could be extended to handle gst_video::VideoMeta for non-default stride and plane offsets
-                        .field(
-                            "format",
-                            gst::List::new(crate::isobmff::VIDEO_RAW_FORMATS_NO_ALIGN),
-                        )
-                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
-                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
-                        .build(),
-                    gst::Structure::builder("video/x-raw")
-                        // TODO: this could be extended to handle gst_video::VideoMeta for non-default stride and plane offsets
-                        .field(
-                            "format",
-                            gst::List::new(crate::isobmff::VIDEO_RAW_FORMATS_HSUBSAMPLE),
-                        )
-                        .field(
-                            "width",
-                            gst::IntRange::with_step(4, (u16::MAX as i32).prev_multiple_of(&4), 4),
-                        )
-                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
-                        .build(),
-                    gst::Structure::builder("video/x-raw")
-                        // TODO: this could be extended to handle gst_video::VideoMeta for non-default stride and plane offsets
-                        .field(
-                            "format",
-                            gst::List::new(crate::isobmff::VIDEO_RAW_FORMATS_HVSUBSAMPLE),
-                        )
-                        .field(
-                            "width",
-                            gst::IntRange::with_step(4, (u16::MAX as i32).prev_multiple_of(&4), 4),
-                        )
-                        .field(
-                            "height",
-                            gst::IntRange::with_step(2, (u16::MAX as i32).prev_multiple_of(&2), 2),
-                        )
-                        .build(),
-                    gst::Structure::builder("video/x-bayer")
-                        .field("format", gst::List::new(crate::isobmff::BAYER_FORMATS))
-                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
-                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
-                        .field(
-                            "framerate",
-                            gst::FractionRange::new(
-                                gst::Fraction::new(0, 1),
-                                gst::Fraction::new(i32::MAX, 1),
-                            ),
-                        )
-                        .build(),
-                    gst::Structure::builder("audio/mpeg")
-                        .field("mpegversion", 4i32)
-                        .field("stream-format", "raw")
-                        .field("channels", gst::IntRange::new(1, u16::MAX as i32))
-                        .field("rate", gst::IntRange::new(1, i32::MAX))
-                        .build(),
-                    gst::Structure::builder("audio/x-opus")
-                        .field("channel-mapping-family", gst::IntRange::new(0i32, 255))
-                        .field("channels", gst::IntRange::new(1i32, 8))
-                        .field("rate", gst::IntRange::new(1, i32::MAX))
-                        .build(),
-                    gst::Structure::builder("audio/x-flac")
-                        .field("framed", true)
-                        .field("channels", gst::IntRange::<i32>::new(1, 8))
-                        .field("rate", gst::IntRange::<i32>::new(1, 10 * u16::MAX as i32))
-                        .build(),
-                    gst::Structure::builder("audio/x-ac3")
-                        .field("framed", true)
-                        .field("alignment", "frame")
-                        .field("channels", gst::IntRange::<i32>::new(1, u16::MAX as i32))
-                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
-                        .build(),
-                    gst::Structure::builder("audio/x-eac3")
-                        .field("framed", true)
-                        .field("alignment", "iec61937")
-                        .field("channels", gst::IntRange::<i32>::new(1, u16::MAX as i32))
-                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
-                        .build(),
-                    gst::Structure::builder("audio/x-raw")
-                        .field(
-                            "format",
-                            gst::List::new([
-                                gst_audio::AudioFormat::S16le.to_str(),
-                                gst_audio::AudioFormat::S24le.to_str(),
-                                gst_audio::AudioFormat::S32le.to_str(),
-                                gst_audio::AudioFormat::F32le.to_str(),
-                                gst_audio::AudioFormat::F64le.to_str(),
-                                gst_audio::AudioFormat::S16be.to_str(),
-                                gst_audio::AudioFormat::S24be.to_str(),
-                                gst_audio::AudioFormat::S32be.to_str(),
-                                gst_audio::AudioFormat::F32be.to_str(),
-                                gst_audio::AudioFormat::F64be.to_str(),
-                            ]),
-                        )
-                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
-                        .field("channels", gst::IntRange::<i32>::new(1, i32::MAX))
-                        .field("layout", "interleaved")
-                        .build(),
-                ]
-                .into_iter()
-                .collect::<gst::Caps>(),
+                &sink_caps,
                 crate::isobmff::MP4MuxPad::static_type(),
             )
             .unwrap();

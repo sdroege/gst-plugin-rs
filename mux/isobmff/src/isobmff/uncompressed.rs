@@ -13,6 +13,48 @@ static CAT_23001: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
+// Compression types for the gcmp scheme (ISO/IEC 23001-17:2024/Amd. 2, Table 7)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CompressionType {
+    Deflate,
+    Zlib,
+    Brotli,
+}
+
+#[derive(Debug)]
+pub(crate) struct UnknownCompressionType;
+
+impl std::fmt::Display for UnknownCompressionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("unknown compression type")
+    }
+}
+
+impl std::error::Error for UnknownCompressionType {}
+
+impl std::str::FromStr for CompressionType {
+    type Err = UnknownCompressionType;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "application/x-deflate-compressed" => Ok(Self::Deflate),
+            "application/x-zlib-compressed" => Ok(Self::Zlib),
+            "application/x-brotli-compressed" => Ok(Self::Brotli),
+            _ => Err(UnknownCompressionType),
+        }
+    }
+}
+
+impl CompressionType {
+    pub(crate) fn fourcc(self) -> [u8; 4] {
+        match self {
+            Self::Deflate => *b"defl",
+            Self::Zlib => *b"zlib",
+            Self::Brotli => *b"brot",
+        }
+    }
+}
+
 pub(crate) enum UncompressedFormatInfo {
     VideoInfo(gst_video::VideoInfo),
     Bayer {
@@ -24,12 +66,29 @@ pub(crate) enum UncompressedFormatInfo {
         #[allow(dead_code)]
         framerate: gst::Fraction,
     },
+    // Generically compressed video (gcmp scheme, ISO/IEC 23001-17:2024/Amd. 2, 9.3)
+    CompressedVideo {
+        compression: CompressionType,
+        inner: Box<UncompressedFormatInfo>,
+    },
 }
 
 impl UncompressedFormatInfo {
     pub fn from_caps(caps: &gst::Caps) -> Result<Self, Error> {
         let s = caps.structure(0).ok_or_else(|| anyhow!("Empty caps"))?;
         let media_type = s.name();
+
+        // Check for compressed outer caps first (application/x-*-compressed)
+        if let Ok(compression) = media_type.as_str().parse::<CompressionType>() {
+            let inner_caps = s
+                .get::<gst::Caps>("original-caps")
+                .map_err(|_| anyhow!("Missing original-caps in compressed caps"))?;
+            let inner = Self::from_caps(&inner_caps)?;
+            return Ok(UncompressedFormatInfo::CompressedVideo {
+                compression,
+                inner: Box::new(inner),
+            });
+        }
 
         match media_type.as_str() {
             "video/x-raw" => {
@@ -164,6 +223,37 @@ fn write_component_pattern_box(v: &mut Vec<u8>, pattern: BayerPattern) -> Result
     })
 }
 
+// Writes a `cmpC` FullBox (CompressionConfigurationBox, Amd. 2, 9.2.2)
+fn write_compression_config_box(
+    v: &mut Vec<u8>,
+    compression: CompressionType,
+) -> Result<(), Error> {
+    write_full_box(v, b"cmpC", 0, 0, |v| {
+        v.extend(compression.fourcc());
+        v.extend(0u8.to_be_bytes()); // compressed_unit_type = 0 (whole sample)
+        Ok(())
+    })
+}
+
+// Writes a `rinf` box (RestrictedSchemeInfoBox, ISO/IEC 14496-12 8.12.5 + Amd. 2, 9.3.1)
+fn write_rinf_box(v: &mut Vec<u8>, compression: CompressionType) -> Result<(), Error> {
+    write_box(v, b"rinf", |v| {
+        // OriginalFormatBox — indicates the original sample entry type
+        write_box(v, b"frma", |v| {
+            v.extend(b"uncv"); // data_format = 'uncv'
+            Ok(())
+        })?;
+        // SchemeTypeBox
+        write_full_box(v, b"schm", 0, 0, |v| {
+            v.extend(b"gcmp"); // scheme_type
+            v.extend(1u32.to_be_bytes()); // scheme_version
+            Ok(())
+        })?;
+        // SchemeInformationBox — contains only cmpC
+        write_box(v, b"schi", |v| write_compression_config_box(v, compression))
+    })
+}
+
 pub(crate) fn write_uncompressed_sample_entries(
     v: &mut Vec<u8>,
     format_info: UncompressedFormatInfo,
@@ -223,6 +313,12 @@ pub(crate) fn write_uncompressed_sample_entries(
                 })?;
             }
             Ok(())
+        }
+        UncompressedFormatInfo::CompressedVideo { compression, inner } => {
+            // Write the restricted scheme info box (rinf: frma + schm + schi/cmpC)
+            write_rinf_box(v, compression)?;
+            // Write the uncompressed format boxes (cmpd + uncC) at sample entry level
+            write_uncompressed_sample_entries(v, *inner)
         }
         UncompressedFormatInfo::Bayer { info, .. } => {
             write_component_pattern_box(v, info.pattern)?;

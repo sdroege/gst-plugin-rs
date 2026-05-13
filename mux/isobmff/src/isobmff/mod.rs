@@ -14,6 +14,7 @@ use gst::glib;
 use gst::prelude::*;
 #[cfg(feature = "v1_28")]
 use gst::tags;
+use num_integer::Integer;
 
 mod ac3;
 mod aux_info;
@@ -462,8 +463,71 @@ pub(crate) struct TrackConfiguration {
     chnl_layout_info: Option<ChnlLayoutInfo>,
 }
 
-pub(crate) fn caps_to_timescale(caps: &gst::CapsRef) -> u32 {
+/// Returns the caps for all uncompressed video formats that `isobmff` muxers support.
+/// Used both for the uncompressed sink pad template structures and as the
+/// `original-caps` constraint in the generically-compressed video structures.
+/// This ensures that upstream elements only negotiate formats that the muxer
+/// can actually encode into uncC boxes.
+pub(crate) fn supported_uncompressed_caps() -> gst::Caps {
+    [
+        gst::Structure::builder("video/x-raw")
+            // TODO: this could be extended to handle gst_video::VideoMeta for non-default stride and plane offsets
+            .field("format", gst::List::new(VIDEO_RAW_FORMATS_NO_ALIGN))
+            .field("width", gst::IntRange::new(1, u16::MAX as i32))
+            .field("height", gst::IntRange::new(1, u16::MAX as i32))
+            .build(),
+        gst::Structure::builder("video/x-raw")
+            // TODO: this could be extended to handle gst_video::VideoMeta for non-default stride and plane offsets
+            .field("format", gst::List::new(VIDEO_RAW_FORMATS_HSUBSAMPLE))
+            .field(
+                "width",
+                gst::IntRange::with_step(4, (u16::MAX as i32).prev_multiple_of(&4), 4),
+            )
+            .field("height", gst::IntRange::new(1, u16::MAX as i32))
+            .build(),
+        gst::Structure::builder("video/x-raw")
+            // TODO: this could be extended to handle gst_video::VideoMeta for non-default stride and plane offsets
+            .field("format", gst::List::new(VIDEO_RAW_FORMATS_HVSUBSAMPLE))
+            .field(
+                "width",
+                gst::IntRange::with_step(4, (u16::MAX as i32).prev_multiple_of(&4), 4),
+            )
+            .field(
+                "height",
+                gst::IntRange::with_step(2, (u16::MAX as i32).prev_multiple_of(&2), 2),
+            )
+            .build(),
+        gst::Structure::builder("video/x-bayer")
+            .field("format", gst::List::new(BAYER_FORMATS))
+            .field("width", gst::IntRange::new(1, u16::MAX as i32))
+            .field("height", gst::IntRange::new(1, u16::MAX as i32))
+            .build(),
+    ]
+    .into_iter()
+    .collect::<gst::Caps>()
+}
+
+/// For compressed caps (`application/x-*-compressed`), returns the inner
+/// `original-caps`. For all other caps, returns the caps themselves (cloned).
+pub(crate) fn resolve_original_caps(caps: &gst::Caps) -> gst::Caps {
     let s = caps.structure(0).unwrap();
+    if s.name()
+        .as_str()
+        .parse::<uncompressed::CompressionType>()
+        .is_ok()
+    {
+        s.get::<gst::Caps>("original-caps")
+            .unwrap_or_else(|_| caps.clone())
+    } else {
+        caps.clone()
+    }
+}
+
+pub(crate) fn caps_to_timescale(caps: &gst::CapsRef) -> u32 {
+    // For compressed caps the framerate lives inside original-caps.
+    let owned = caps.to_owned();
+    let resolved = resolve_original_caps(&owned);
+    let s = resolved.structure(0).unwrap();
 
     match s.get::<gst::Fraction>("framerate") {
         Ok(fps) => {
