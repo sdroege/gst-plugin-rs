@@ -35,6 +35,9 @@ path = "src/lib.rs"
 static = []
 capi = []
 doc = ["gst/v1_18"]
+# In udpsrc2, overrides prepare_allocator virtual method (introduced in v1_30)
+# to avoid using an Allocation Query when downstream is Reconfigured.
+v1_30 = ["gst-base/v1_30"]
 
 [dev-dependencies]
 gst-check.workspace = true

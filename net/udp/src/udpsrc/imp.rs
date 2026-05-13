@@ -998,6 +998,13 @@ impl BaseSrcImpl for UdpSrc {
 
         Ok(())
     }
+
+    #[cfg(feature = "v1_30")]
+    fn prepare_allocator(&self, _: Option<&gst::Caps>) -> Result<(), gst::LoggableError> {
+        // buffer pool is initialized with `UdpSocket`, let's short-cut parent's implementation
+        // which uses an allocation query that would not be used here
+        Ok(())
+    }
 }
 
 impl PushSrcImpl for UdpSrc {
