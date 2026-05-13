@@ -14038,6 +14038,17 @@
                         "readable": true,
                         "type": "GstStructure",
                         "writable": true
+                    },
+                    "stats": {
+                        "blurb": "The statistics of this session",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": false
                     }
                 },
                 "signals": {

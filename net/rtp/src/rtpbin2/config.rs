@@ -124,6 +124,11 @@ mod imp {
                         .nick("RTP Payload Type Map")
                         .blurb("Mapping of RTP payload type to caps")
                         .build(),
+                    glib::ParamSpecBoxed::builder::<gst::Structure>("stats")
+                        .nick("Statistics")
+                        .blurb("The statistics of this session")
+                        .read_only()
+                        .build(),
                 ]
             });
 
