@@ -1895,32 +1895,28 @@ impl FMP4Mux {
                         stream.late_gop = true;
                         return;
                     }
-                }
 
-                // We can only finish a fragment if a full GOP with final end PTS is queued and it
-                // ends at or after the fragment end PTS.
-                if let Some((gop_idx, gop)) = stream
-                    .queued_gops
-                    .iter()
-                    .enumerate()
-                    .find(|(_idx, gop)| gop.final_end_pts || stream.sinkpad.is_eos())
-                {
-                    gst::trace!(
-                        CAT,
-                        obj = stream.sinkpad,
-                        "GOP {gop_idx} start PTS {}, GOP end PTS {}",
-                        gop.start_pts,
-                        gop.end_pts,
-                    );
-
-                    if gop.end_pts >= fragment_end_pts {
+                    // We can only finish a fragment if the first GOP has a final end PTS and it
+                    // ends at or after the fragment end PTS.
+                    if gop.final_end_pts || stream.sinkpad.is_eos() {
                         gst::trace!(
                             CAT,
                             obj = stream.sinkpad,
-                            "Stream queued enough data for finishing this fragment"
+                            "GOP {} start PTS {}, GOP end PTS {}",
+                            stream.queued_gops.len() - 1,
+                            gop.start_pts,
+                            gop.end_pts,
                         );
-                        stream.fragment_filled = true;
-                        return;
+
+                        if gop.end_pts >= fragment_end_pts {
+                            gst::trace!(
+                                CAT,
+                                obj = stream.sinkpad,
+                                "Stream queued enough data for finishing this fragment"
+                            );
+                            stream.fragment_filled = true;
+                            return;
+                        }
                     }
                 }
 

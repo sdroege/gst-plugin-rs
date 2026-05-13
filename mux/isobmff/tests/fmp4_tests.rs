@@ -2461,7 +2461,7 @@ fn test_chunking_on_keyframe_single_stream() {
     h.set_src_caps(caps);
     h.play();
 
-    // Push 20 buffers of 0.5s each, 1st, 5th, 9th, 13th, 17th buffer without DELTA_UNIT flag.
+    // Push 22 buffers of 0.5s each, 1st, 5th, 9th, 13th, 17th buffer without DELTA_UNIT flag.
     //
     // Expected output is:
     //   1. fragment start, buffers 1, 2, 3, 4.
@@ -2469,7 +2469,8 @@ fn test_chunking_on_keyframe_single_stream() {
     //   3. chunk, buffers 9, 10, 11, 12.
     //   4. chunk, buffers 13, 14, 15, 16.
     //   5. chunk, buffers 17, 18, 19, 20, fragment end.
-    for i in 0..20 {
+    //   6. fragment start, buffers 21, 22.
+    for i in 0..22 {
         let mut buffer = gst::Buffer::with_size(1).unwrap();
         {
             // Buffer every 0.5ms and key frame every 2s.
@@ -2494,8 +2495,9 @@ fn test_chunking_on_keyframe_single_stream() {
         gst::BufferFlags::HEADER | gst::BufferFlags::DISCONT
     );
 
-    // For 10s fragment duration with key frame every 2s, we expect 4 chunks.
-    for chunk in 0..4 {
+    // For 10s fragment duration with key frame every 2s, we expect 5 chunks.
+    // Each chunk has 4 buffers.
+    for chunk in 0..5 {
         let chunk_header = h.pull().unwrap();
 
         if chunk == 0 {
@@ -2536,6 +2538,40 @@ fn test_chunking_on_keyframe_single_stream() {
     }
 
     h.push_event(gst::event::Eos::new());
+
+    // After EOS there should be the new fragment start with 2 buffers.
+    for chunk in 5..6 {
+        let chunk_header = h.pull().unwrap();
+
+        assert_eq!(chunk_header.flags(), gst::BufferFlags::HEADER);
+
+        assert_eq!(chunk_header.pts(), Some(chunk * 2.seconds()));
+        assert_eq!(chunk_header.dts(), Some(chunk * 2.seconds()));
+        assert_eq!(chunk_header.duration(), Some(1.seconds()));
+
+        for buffer_idx in 0..2 {
+            let buffer = h.pull().unwrap();
+
+            if buffer_idx == 1 {
+                assert_eq!(
+                    buffer.flags(),
+                    gst::BufferFlags::MARKER | gst::BufferFlags::DELTA_UNIT
+                );
+            } else {
+                assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
+            }
+
+            assert_eq!(
+                buffer.pts(),
+                Some((chunk * 4 + buffer_idx) * 500.mseconds())
+            );
+            assert_eq!(
+                buffer.dts(),
+                Some((chunk * 4 + buffer_idx) * 500.mseconds())
+            );
+            assert_eq!(buffer.duration(), Some(500.mseconds()));
+        }
+    }
 
     let ev = h.pull_event().unwrap();
     assert_eq!(ev.type_(), gst::EventType::StreamStart);
