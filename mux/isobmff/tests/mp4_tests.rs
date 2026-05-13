@@ -1942,3 +1942,146 @@ fn bayer_roundtrip_rggb16be() {
     init();
     test_bayer_roundtrip("rggb16be");
 }
+
+fn test_encode_compressed_raw_video(
+    compressor: &str,
+    video_format: &str,
+    width: u32,
+    height: u32,
+    num_buffers: u32,
+    cb: impl FnOnce(&Path),
+) {
+    let Ok(pipeline) = gst::parse::launch(&format!(
+        "videotestsrc num-buffers={num_buffers} ! video/x-raw,format={video_format},width={width},height={height} ! {compressor} ! isomp4mux name=mux ! filesink name=sink"
+    )) else {
+        println!("could not build encoding pipeline");
+        return;
+    };
+
+    run_pipeline(pipeline, cb);
+}
+
+fn test_encode_compressed_bayer(compressor: &str, bayer_format: &str, cb: impl FnOnce(&Path)) {
+    let Ok(pipeline) = gst::parse::launch(&format!(
+        "videotestsrc num-buffers=10 ! rgb2bayer ! video/x-bayer,format={bayer_format} ! {compressor} ! isomp4mux name=mux ! filesink name=sink"
+    )) else {
+        println!("could not build encoding pipeline");
+        return;
+    };
+
+    run_pipeline(pipeline, cb);
+}
+
+#[test]
+fn encode_compressed_raw_rgb_zlib() {
+    init();
+    test_encode_compressed_raw_video("zlibcompress", "RGB", 320, 240, 10, |_| {});
+}
+
+#[test]
+fn encode_compressed_raw_nv12_zlib() {
+    init();
+    test_encode_compressed_raw_video("zlibcompress", "NV12", 320, 240, 10, |_| {});
+}
+
+#[test]
+fn encode_compressed_raw_i420_zlib() {
+    init();
+    test_encode_compressed_raw_video("zlibcompress", "I420", 320, 240, 10, |_| {});
+}
+
+#[test]
+fn encode_compressed_raw_rgb_deflate() {
+    init();
+    test_encode_compressed_raw_video("deflatecompress", "RGB", 320, 240, 10, |_| {});
+}
+
+#[test]
+fn encode_compressed_raw_rgb_brotli() {
+    init();
+    test_encode_compressed_raw_video("brotlicompress", "RGB", 320, 240, 10, |_| {});
+}
+
+#[test]
+fn encode_compressed_bayer_zlib() {
+    init();
+    test_encode_compressed_bayer("zlibcompress", "rggb", |_| {});
+}
+
+fn test_roundtrip_compressed_raw_video(
+    compressor: &str,
+    decompressor: &str,
+    video_format: &str,
+    width: u32,
+    height: u32,
+) {
+    test_encode_compressed_raw_video(compressor, video_format, width, height, 10, |location| {
+        let Ok(pipeline) = gst::parse::launch(&format!(
+            "filesrc name=src ! qtdemux name=demux \
+             demux.video_0 ! queue ! {decompressor} ! fakesink"
+        )) else {
+            println!("could not build demux pipeline for compressed video roundtrip");
+            return;
+        };
+        let pipeline = Pipeline(pipeline.downcast::<gst::Pipeline>().unwrap());
+        pipeline
+            .by_name("src")
+            .unwrap()
+            .set_property("location", location.display().to_string());
+        pipeline.into_completion();
+    });
+}
+
+fn test_roundtrip_compressed_bayer(compressor: &str, decompressor: &str, bayer_format: &str) {
+    test_encode_compressed_bayer(compressor, bayer_format, |location| {
+        let Ok(pipeline) = gst::parse::launch(&format!(
+            "filesrc name=src ! qtdemux name=demux \
+             demux.video_0 ! queue ! {decompressor} ! fakesink"
+        )) else {
+            println!("could not build demux pipeline for compressed bayer roundtrip");
+            return;
+        };
+        let pipeline = Pipeline(pipeline.downcast::<gst::Pipeline>().unwrap());
+        pipeline
+            .by_name("src")
+            .unwrap()
+            .set_property("location", location.display().to_string());
+        pipeline.into_completion();
+    });
+}
+
+#[test]
+fn roundtrip_compressed_raw_rgb_zlib() {
+    init();
+    test_roundtrip_compressed_raw_video("zlibcompress", "zlibdecompress", "RGB", 320, 240);
+}
+
+#[test]
+fn roundtrip_compressed_raw_nv12_zlib() {
+    init();
+    test_roundtrip_compressed_raw_video("zlibcompress", "zlibdecompress", "NV12", 320, 240);
+}
+
+#[test]
+fn roundtrip_compressed_raw_i420_zlib() {
+    init();
+    test_roundtrip_compressed_raw_video("zlibcompress", "zlibdecompress", "I420", 320, 240);
+}
+
+#[test]
+fn roundtrip_compressed_raw_rgb_deflate() {
+    init();
+    test_roundtrip_compressed_raw_video("deflatecompress", "deflatedecompress", "RGB", 320, 240);
+}
+
+#[test]
+fn roundtrip_compressed_raw_rgb_brotli() {
+    init();
+    test_roundtrip_compressed_raw_video("brotlicompress", "brotlidecompress", "RGB", 320, 240);
+}
+
+#[test]
+fn roundtrip_compressed_bayer_zlib() {
+    init();
+    test_roundtrip_compressed_bayer("zlibcompress", "zlibdecompress", "rggb");
+}
