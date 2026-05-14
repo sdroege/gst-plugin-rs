@@ -22,6 +22,10 @@ architecture of rtspsrc. There are some major problems with rtspsrc:
 * RTCP-based A/V sync
 * Lower transport selection and priority (NEW!)
   - Also supports different lower transports for each SETUP
+* Credentials support
+* TLS/TCP support
+* HTTP tunnelling
+* Keep-alive
 
 ## Missing features
 
