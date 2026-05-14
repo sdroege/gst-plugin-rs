@@ -4826,7 +4826,11 @@ impl BaseWebRTCSink {
         output_caps: &gst::Caps,
         extension_configuration_type: ExtensionConfigurationType,
     ) -> Result<(gst::Structure, Option<PreparedEncoder>), Error> {
-        let pipe = PipelineWrapper(gst::Pipeline::default());
+        let pipe = PipelineWrapper(
+            gst::Pipeline::builder()
+                .name(format!("Discovery-pipeline-{}-{}", stream_name, codec.name))
+                .build(),
+        );
 
         let has_raw_input = has_raw_caps(&input_caps);
         let src = discovery_info.create_src();
