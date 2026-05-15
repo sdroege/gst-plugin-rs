@@ -617,9 +617,9 @@ impl TranscriberSrcPad {
                         let buf_mut = buf.make_mut();
 
                         let pts = if let Some(last_position) = last_position {
-                            let rtime = transcriber
-                                .current_running_time()
-                                .expect("Have current running time");
+                            let Some(rtime) = transcriber.current_running_time() else {
+                                return Ok(std::ops::ControlFlow::Break(()));
+                            };
                             last_position.max(
                                 self.state
                                     .lock()
@@ -629,9 +629,12 @@ impl TranscriberSrcPad {
                                     .unwrap(),
                             )
                         } else {
-                            transcriber
-                                .current_running_time()
-                                .expect("Have current running time")
+                            match transcriber.current_running_time() {
+                                Some(rtime) => rtime,
+                                None => {
+                                    return Ok(std::ops::ControlFlow::Break(()));
+                                }
+                            }
                         };
 
                         buf_mut.set_pts(pts);
@@ -669,17 +672,20 @@ impl TranscriberSrcPad {
                     Ok(std::ops::ControlFlow::Continue(()))
                 }
                 TranscriberOutput::Position(position) => {
-                    let position = position.unwrap_or_else(|| {
-                        let now = transcriber
-                            .current_running_time()
-                            .expect("Have current running time");
-                        self.state
-                            .lock()
-                            .unwrap()
-                            .out_segment
-                            .position_from_running_time(now)
-                            .unwrap()
+                    let position = position.or_else(|| {
+                        let now = transcriber.current_running_time()?;
+                        Some(
+                            self.state
+                                .lock()
+                                .unwrap()
+                                .out_segment
+                                .position_from_running_time(now)
+                                .unwrap(),
+                        )
                     });
+                    let Some(position) = position else {
+                        return Ok(std::ops::ControlFlow::Break(()));
+                    };
                     if let Some(last_position) = last_position
                         && position > last_position
                     {
