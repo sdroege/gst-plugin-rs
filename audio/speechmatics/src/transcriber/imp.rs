@@ -579,25 +579,24 @@ impl TranscriberSrcPad {
         self.state.lock().unwrap().push_eos();
     }
 
-    fn loop_fn(&self) -> Result<(), gst::ErrorMessage> {
+    fn loop_fn(&self) -> Result<std::ops::ControlFlow<(), ()>, gst::ErrorMessage> {
         let future = async move {
             let Some(mut receiver) = self.state.lock().unwrap().receiver.take() else {
-                return Ok(());
+                return Ok(std::ops::ControlFlow::Break(()));
             };
 
             let msg = match receiver.recv().await {
                 Some(msg) => msg,
                 /* Sender was closed */
                 None => {
-                    let _ = self.pause_task();
-                    return Ok(());
+                    return Ok(std::ops::ControlFlow::Break(()));
                 }
             };
 
             self.state.lock().unwrap().receiver = Some(receiver);
 
             let Some(parent) = self.obj().parent() else {
-                return Ok(());
+                return Ok(std::ops::ControlFlow::Break(()));
             };
 
             let transcriber = parent
@@ -667,7 +666,7 @@ impl TranscriberSrcPad {
 
                     self.state.lock().unwrap().out_segment.set_position(pts_end);
 
-                    Ok(())
+                    Ok(std::ops::ControlFlow::Continue(()))
                 }
                 TranscriberOutput::Position(position) => {
                     let position = position.unwrap_or_else(|| {
@@ -698,7 +697,7 @@ impl TranscriberSrcPad {
                             .set_position(position);
                     }
 
-                    Ok(())
+                    Ok(std::ops::ControlFlow::Continue(()))
                 }
                 TranscriberOutput::Event(event) => {
                     if event.is_downstream() {
@@ -707,11 +706,9 @@ impl TranscriberSrcPad {
                         transcriber.imp().sinkpad.push_event(event);
                     }
 
-                    Ok(())
+                    Ok(std::ops::ControlFlow::Continue(()))
                 }
                 TranscriberOutput::Eos => {
-                    let _ = self.pause_task();
-
                     let draining = transcriber.imp().state.lock().unwrap().draining;
 
                     if !draining {
@@ -719,7 +716,7 @@ impl TranscriberSrcPad {
                             .push_event(gst::event::Eos::builder().seqnum(seqnum).build());
                     }
 
-                    Ok(())
+                    Ok(std::ops::ControlFlow::Break(()))
                 }
             }
         };
@@ -751,19 +748,27 @@ impl TranscriberSrcPad {
                 return;
             };
 
-            if let Err(err) = this.loop_fn() {
-                let parent = this
-                    .obj()
-                    .parent()
-                    .and_downcast::<gst::Element>()
-                    .expect("has parent");
-                gst::error!(CAT, imp = this, "Streaming failed: {}", err);
-                gst::element_error!(
-                    parent,
-                    gst::StreamError::Failed,
-                    ["Streaming failed: {}", err]
-                );
-                let _ = this.pause_task();
+            let res = this.loop_fn();
+            match res {
+                Ok(std::ops::ControlFlow::Break(())) => {
+                    gst::debug!(CAT, imp = this, "Pausing task");
+                    let _ = this.pause_task();
+                }
+                Err(err) => {
+                    let parent = this
+                        .obj()
+                        .parent()
+                        .and_downcast::<gst::Element>()
+                        .expect("has parent");
+                    gst::error!(CAT, imp = this, "Streaming failed: {}", err);
+                    gst::element_error!(
+                        parent,
+                        gst::StreamError::Failed,
+                        ["Streaming failed: {}", err]
+                    );
+                    let _ = this.pause_task();
+                }
+                _ => {}
             }
         });
         if res.is_err() {
