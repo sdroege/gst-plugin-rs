@@ -39,9 +39,9 @@ use tokio::task::JoinHandle;
 use tokio::time;
 
 use rtsp_types::headers::{
-    ACCEPT, AUTHORIZATION, CONTENT_BASE, CONTENT_LOCATION, CSeq, NptRange, NptTime, Public, Range,
-    RtpInfos, RtpLowerTransport, RtpProfile, RtpTransport, RtpTransportParameters, Session,
-    Transport, TransportMode, Transports, USER_AGENT, WWW_AUTHENTICATE,
+    ACCEPT, AUTHORIZATION, CONTENT_BASE, CONTENT_LOCATION, CONTENT_TYPE, CSeq, NptRange, NptTime,
+    Public, Range, RtpInfos, RtpLowerTransport, RtpProfile, RtpTransport, RtpTransportParameters,
+    Session, Transport, TransportMode, Transports, USER_AGENT, WWW_AUTHENTICATE,
 };
 use rtsp_types::{Message, Method, Request, Response, StatusCode, Version};
 
@@ -77,6 +77,11 @@ const MAX_AUTH_RETRIES: u32 = 1;
 const INITIAL_NONCE: u32 = 1;
 
 const SIGNAL_TLS_CLIENT_AUTH: &str = "tls-client-auth";
+const SIGNAL_GET_PARAMETER: &str = "get-parameter";
+const SIGNAL_GET_PARAMETERS: &str = "get-parameters";
+const SIGNAL_SET_PARAMETER: &str = "set-parameter";
+const GET_PARAMETER_REPLY: &str = "get-parameter-reply";
+const SET_PARAMETER_REPLY: &str = "set-parameter-reply";
 
 static RTCP_CAPS: LazyLock<gst::Caps> =
     LazyLock::new(|| gst::Caps::from(gst::Structure::new_empty("application/x-rtcp")));
@@ -264,6 +269,65 @@ fn is_secure_rtp_profile(profile: &RtpProfile) -> bool {
     *profile == RtpProfile::SAvp || *profile == RtpProfile::SAvpF
 }
 
+fn reply_with_promise(
+    promise: gst::Promise,
+    reply_name: &str,
+    status_code: StatusCode,
+    reason: &str,
+    body: Option<String>,
+) {
+    let mut reply = gst::Structure::builder(reply_name)
+        .field("rtsp-code", u16::from(status_code) as u32)
+        .field("rtsp-reason", reason)
+        // We do not define result codes as C `rtspsrc` does. This
+        // field is mostly for compatibility with `rtspsrc`. See
+        // `GstRTSPResult`.
+        .field(
+            "rtsp-result",
+            if status_code.is_success() {
+                0i32
+            } else {
+                -1i32
+            },
+        )
+        .build();
+
+    if let Some(body) = body
+        && reply_name == GET_PARAMETER_REPLY
+    {
+        reply.set("body", body)
+    }
+
+    promise.reply(Some(reply));
+}
+
+fn get_content_type(content: Option<String>) -> String {
+    match content {
+        Some(c) => c,
+        None => "text/parameters".to_string(),
+    }
+}
+
+fn parameter_method_to_reply(method: &Method) -> &str {
+    match method {
+        Method::GetParameter => GET_PARAMETER_REPLY,
+        Method::SetParameter => SET_PARAMETER_REPLY,
+        _ => unreachable!(),
+    }
+}
+
+fn session_not_found(param_req: ParameterRequest) {
+    let reply = parameter_method_to_reply(&param_req.method);
+
+    reply_with_promise(
+        param_req.promise,
+        reply,
+        StatusCode::SessionNotFound,
+        &StatusCode::SessionNotFound.to_string(),
+        None,
+    );
+}
+
 #[derive(Debug, Clone)]
 struct Settings {
     location: Option<Url>,
@@ -294,12 +358,22 @@ impl Default for Settings {
 }
 
 #[derive(Debug)]
+struct ParameterRequest {
+    method: Method,
+    body: Vec<u8>,
+    content_type: String,
+    promise: gst::Promise,
+}
+
+#[derive(Debug)]
 enum Commands {
     Play,
     //Pause,
     Teardown(Option<oneshot::Sender<()>>),
     Data(rtsp_types::Data<Body>),
     KeepAlive,
+    GetParameter(ParameterRequest),
+    SetParameter(ParameterRequest),
 }
 
 #[derive(Debug, Clone)]
@@ -408,6 +482,8 @@ pub enum RtspError {
     Fatal(String),
     #[error("Authentication challenge")]
     AuthChallenge(AuthMethod, Option<String>),
+    #[error("Parameter Error")]
+    Parameter(StatusCode, String),
 }
 
 pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
@@ -839,6 +915,116 @@ impl ObjectImpl for RtspSrc {
                     .return_type::<Option<gst::Structure>>()
                     .action()
                     .class_handler(|_| Some(None::<gst::Structure>.to_value()))
+                    .build(),
+                // GstRtspSrc2::get-parameter:
+                //
+                // @rtspsrc: a #GstRtspSrc2
+                // @parameter: the parameter name
+                // @parameter: the content type
+                // @parameter: a pointer to #GstPromise
+                //
+                // Handle the GET_PARAMETER signal.
+                //
+                // The #GstPromise reply consists in the following fields:
+                //
+                // * 'rtsp-result': set to 0 if the RTSP request could be processed.
+                // * 'rtsp-code': the HTTP status code returned by the server.
+                // * 'rtsp-reason': a human-readable version of the HTTP status code.
+                //
+                // Returns: %TRUE when the command could be issued, %FALSE otherwise
+                glib::subclass::Signal::builder(SIGNAL_GET_PARAMETER)
+                    .param_types([
+                        String::static_type(),
+                        Option::<String>::static_type(),
+                        gst::Promise::static_type(),
+                    ])
+                    .return_type::<bool>()
+                    .action()
+                    .class_handler(move |args| {
+                        let this = args[0].get::<super::RtspSrc>().unwrap();
+                        let parameter = args[1].get::<String>().unwrap();
+                        let content_type = args[2].get::<Option<String>>().unwrap();
+                        let promise = args[3].get::<gst::Promise>().unwrap();
+
+                        Some((this.imp().get_parameter(parameter, content_type, promise)).into())
+                    })
+                    .build(),
+                // GstRtspSrc2::get-parameters:
+                //
+                // @rtspsrc: a #GstRtspSrc2
+                // @parameter: a NULL-terminated array of parameters
+                // @parameter: the content type
+                // @parameter: a pointer to #GstPromise
+                //
+                // Handle the GET_PARAMETERS signal.
+                //
+                // The #GstPromise reply consists in the following fields:
+                //
+                // * 'rtsp-result': set to 0 if the RTSP request could be processed.
+                // * 'rtsp-code': the HTTP status code returned by the server.
+                // * 'rtsp-reason': a human-readable version of the HTTP status code.
+                //
+                // Returns: %TRUE when the command could be issued, %FALSE otherwise
+                glib::subclass::Signal::builder(SIGNAL_GET_PARAMETERS)
+                    .param_types([
+                        glib::StrV::static_type(),
+                        Option::<String>::static_type(),
+                        gst::Promise::static_type(),
+                    ])
+                    .return_type::<bool>()
+                    .action()
+                    .class_handler(move |args| {
+                        let this = args[0].get::<super::RtspSrc>().unwrap();
+                        let parameters = args[1].get::<Vec<String>>().unwrap();
+                        let content_type = args[2].get::<Option<String>>().unwrap();
+                        let promise = args[3].get::<gst::Promise>().unwrap();
+
+                        Some((this.imp().get_parameters(parameters, content_type, promise)).into())
+                    })
+                    .build(),
+                // GstRtspSrc2::set-parameter:
+                //
+                // @rtspsrc: a #GstRtspSrc2
+                // @parameter: the parameter name
+                // @parameter: the parameter value
+                // @parameter: the content type
+                // @parameter: a pointer to #GstPromise
+                //
+                // Handle the SET_PARAMETER signal.
+                //
+                // The #GstPromise reply consists in the following fields:
+                //
+                // * 'rtsp-result': set to 0 if the RTSP request could be processed.
+                // * 'rtsp-code': the HTTP status code returned by the server.
+                // * 'rtsp-reason': a human-readable version of the HTTP status code.
+                //
+                // Returns: %TRUE when the command could be issued, %FALSE otherwise
+                glib::subclass::Signal::builder(SIGNAL_SET_PARAMETER)
+                    .param_types([
+                        String::static_type(),
+                        String::static_type(),
+                        Option::<String>::static_type(),
+                        gst::Promise::static_type(),
+                    ])
+                    .return_type::<bool>()
+                    .action()
+                    .class_handler(move |args| {
+                        let this = args[0].get::<super::RtspSrc>().unwrap();
+                        let parameter_name = args[1].get::<String>().unwrap();
+                        let parameter_value = args[2].get::<String>().unwrap();
+                        let content_type = args[3].get::<Option<String>>().unwrap();
+                        let promise = args[4].get::<gst::Promise>().unwrap();
+
+                        Some(
+                            (this.imp().set_parameter(
+                                parameter_name,
+                                parameter_value,
+                                content_type,
+                                promise,
+                            ))
+                            .into(),
+                        )
+                    })
                     .build(),
             ]
         });
@@ -1957,6 +2143,20 @@ impl RtspSrc {
                             expected_response = None;
                         };
                     }
+                    Commands::GetParameter(param_req) => {
+                        match &session {
+                            Some(s) => task_state.send_parameter(s, param_req).await?,
+                            None => session_not_found(param_req),
+                        }
+                        expected_response = None;
+                    }
+                    Commands::SetParameter(param_req) => {
+                        match &session {
+                            Some(s) => task_state.send_parameter(s, param_req).await?,
+                            None => session_not_found(param_req),
+                        }
+                        expected_response = None;
+                    }
                 },
                 else => {
                     gst::error!(CAT, "No select statement matched, breaking loop");
@@ -2063,6 +2263,144 @@ impl RtspSrc {
                 "Stream selection handled while posting default StreamCollection"
             );
         }
+    }
+
+    fn get_parameter(
+        &self,
+        parameter: String,
+        content_type: Option<String>,
+        promise: gst::Promise,
+    ) -> bool {
+        if parameter.is_empty() {
+            gst::error!(CAT, imp = self, "Invalid GET_PARAMETER input");
+            return false;
+        }
+
+        let content_type = get_content_type(content_type);
+
+        self.get_parameters(vec![parameter], Some(content_type), promise)
+    }
+
+    fn get_parameters(
+        &self,
+        parameters: Vec<String>,
+        content_type: Option<String>,
+        promise: gst::Promise,
+    ) -> bool {
+        if parameters.is_empty() {
+            gst::error!(CAT, "Invalid GET_PARAMETERS input");
+            return false;
+        }
+
+        gst::log!(CAT, imp = self, "get_parameters: {}", parameters.len());
+
+        if !self.validate_get_set_parameters(&parameters) {
+            return false;
+        }
+
+        let content_type = get_content_type(content_type);
+
+        let command = {
+            let body = parameters
+                .iter()
+                .flat_map(|param| format!("{}:\r\n", param).into_bytes())
+                .collect::<Vec<u8>>();
+
+            Commands::GetParameter(ParameterRequest {
+                method: Method::GetParameter,
+                body,
+                content_type,
+                promise,
+            })
+        };
+
+        self.send_parameter(command)
+    }
+
+    fn set_parameter(
+        &self,
+        parameter_name: String,
+        parameter_value: String,
+        content_type: Option<String>,
+        promise: gst::Promise,
+    ) -> bool {
+        if parameter_name.is_empty() || parameter_value.is_empty() {
+            gst::error!(CAT, imp = self, "Invalid SET_PARAMETER input");
+            return false;
+        }
+
+        if !self.validate_get_set_parameters(std::slice::from_ref(&parameter_name)) {
+            return false;
+        }
+
+        let content_type = get_content_type(content_type);
+
+        let command = {
+            let body = {
+                let s = format!("{}: {}\r\n", parameter_name, parameter_value);
+                s.into_bytes()
+            };
+
+            Commands::SetParameter(ParameterRequest {
+                method: Method::SetParameter,
+                body,
+                content_type,
+                promise,
+            })
+        };
+
+        self.send_parameter(command)
+    }
+
+    fn validate_get_set_parameters(&self, parameters: &[String]) -> bool {
+        parameters.iter().all(|p| {
+            let valid = !p
+                .chars()
+                .any(|c| c.is_ascii_whitespace() || c.is_ascii_control());
+
+            if !valid {
+                gst::debug!(CAT, imp = self, "invalid parameter name '{p}'");
+            }
+
+            valid
+        })
+    }
+
+    fn send_parameter(&self, command: Commands) -> bool {
+        if self.obj().current_state() != gst::State::Playing {
+            return false;
+        }
+
+        let cmd_tx = self.cmd_queue();
+        let (promise, reply) = match &command {
+            Commands::GetParameter(param_request) => {
+                (param_request.promise.clone(), GET_PARAMETER_REPLY)
+            }
+            Commands::SetParameter(param_request) => {
+                (param_request.promise.clone(), SET_PARAMETER_REPLY)
+            }
+            _ => unreachable!(),
+        };
+
+        RUNTIME.spawn(async move {
+            match cmd_tx.send(command).await {
+                Ok(_) => {
+                    gst::debug!(CAT, "Send Parameter successful");
+                }
+                Err(err) => {
+                    gst::error!(CAT, "Send Parameter failed {err:?}");
+                    reply_with_promise(
+                        promise,
+                        reply,
+                        StatusCode::InternalServerError,
+                        &err.to_string(),
+                        None,
+                    );
+                }
+            }
+        });
+
+        true
     }
 }
 
@@ -2229,6 +2567,8 @@ impl RtspTaskState {
         req_name: Method,
         session: Option<&Session>,
     ) -> Result<(), RtspError> {
+        let is_param_req = req_name == Method::GetParameter || req_name == Method::SetParameter;
+
         if rsp.status() == StatusCode::Unauthorized {
             if let Some(auth_header) = rsp.header(&WWW_AUTHENTICATE) {
                 if auth_header.as_str().starts_with("Digest") {
@@ -2251,6 +2591,17 @@ impl RtspTaskState {
 
         if rsp.status() == StatusCode::NotFound {
             return Err(RtspError::AuthChallenge(AuthMethod::Basic, None));
+        }
+
+        // This is different to `rtspsrc` behaviour. `rtspsrc` does not
+        // retry on authorization failure for GET/SET_PARAMETER requests.
+        // `rtspsrc2` will retry the request with authorization before
+        // failing here. Also see `RtspTaskState::send_parameter`.
+        if is_param_req && rsp.status() != StatusCode::Ok {
+            return Err(RtspError::Parameter(
+                rsp.status(),
+                rsp.reason_phrase().to_string(),
+            ));
         }
 
         if rsp.status() != StatusCode::Ok {
@@ -2995,6 +3346,67 @@ impl RtspTaskState {
         });
 
         self.keep_alive_task = Some(task);
+    }
+
+    async fn send_parameter(
+        &mut self,
+        session: &Session,
+        param_req: ParameterRequest,
+    ) -> Result<(), RtspError> {
+        let method = param_req.method.clone();
+        let reply = parameter_method_to_reply(&method);
+
+        if let Some(m) = self.methods.as_ref()
+            && !m.contains(&param_req.method)
+        {
+            reply_with_promise(
+                param_req.promise,
+                reply,
+                StatusCode::MethodNotAllowed,
+                &StatusCode::MethodNotAllowed.to_string(),
+                None,
+            );
+            return Ok(());
+        };
+
+        self.cseq += 1;
+        let request_uri = self.aggregate_control.as_ref().unwrap_or(&self.url).clone();
+
+        let req = Request::builder(param_req.method, self.version)
+            .typed_header::<CSeq>(&self.cseq.into())
+            .header(USER_AGENT, DEFAULT_USER_AGENT)
+            .header(CONTENT_TYPE, param_req.content_type.clone())
+            .request_uri(request_uri)
+            .typed_header::<Session>(session)
+            .build(param_req.body.into());
+
+        match self.send_request_with_auth(req).await {
+            Ok(rsp) => {
+                reply_with_promise(
+                    param_req.promise,
+                    reply,
+                    rsp.status(),
+                    rsp.reason_phrase(),
+                    String::from_utf8(rsp.body().to_vec()).ok(),
+                );
+            }
+            Err(err) => match err {
+                RtspError::Parameter(status_code, reason) => {
+                    reply_with_promise(param_req.promise, reply, status_code, &reason, None);
+                }
+                e => {
+                    reply_with_promise(
+                        param_req.promise,
+                        reply,
+                        StatusCode::InternalServerError,
+                        &e.to_string(),
+                        None,
+                    );
+                }
+            },
+        }
+
+        Ok(())
     }
 }
 
