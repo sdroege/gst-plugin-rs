@@ -5350,7 +5350,7 @@ dependencies = [
 
 [[package]]
 name = "gst-plugin-version-helper"
-version = "0.8.1"
+version = "0.8.4"
 dependencies = [
  "chrono",
  "toml_edit",
