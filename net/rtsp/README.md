@@ -29,6 +29,7 @@ architecture of rtspsrc. There are some major problems with rtspsrc:
 * Support for stream selection at the start
 * Allow unlinked pads
 * Support for SRTP with `rtpbin`/`!USE_RTP2`
+* `GET_PARAMETER` / `SET_PARAMETER`
 
 ## Missing features
 
@@ -38,7 +39,6 @@ Roughly in order of priority:
 * Handle stream selection after SETUP.
 * SRTP support (`client-managed-key` and with `USE_RTP2/rtprecv`)
 * Proxy support
-* `GET_PARAMETER` / `SET_PARAMETER`
 * Make TCP connection optional when using UDP transport
   - Or TCP reconnection if UDP has not timed out
 * Parse more SDP attributes

@@ -14842,6 +14842,67 @@
                 },
                 "rank": "none",
                 "signals": {
+                    "get-parameter": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "GstPromise"
+                            }
+                        ],
+                        "return-type": "gboolean",
+                        "when": "last"
+                    },
+                    "get-parameters": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "GStrv"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "GstPromise"
+                            }
+                        ],
+                        "return-type": "gboolean",
+                        "when": "last"
+                    },
+                    "set-parameter": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg3",
+                                "type": "GstPromise"
+                            }
+                        ],
+                        "return-type": "gboolean",
+                        "when": "last"
+                    },
                     "tls-client-auth": {
                         "action": true,
                         "args": [],
