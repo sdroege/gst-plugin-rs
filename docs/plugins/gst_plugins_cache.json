@@ -2768,6 +2768,59 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "colorlut": {
+        "description": "GStreamer Color LUT Plugin",
+        "elements": {
+            "colorlut": {
+                "author": "Seungha Yang <seungha@centricular.com>",
+                "description": "Apply color lookup table",
+                "hierarchy": [
+                    "GstColorLut",
+                    "GstVideoFilter",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Filter/Effect/Video",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-raw:\n         format: { RGBA64_LE, RGBA64_BE, RGBA }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\n         format: { RGBA64_LE, RGBA64_BE, RGBA }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "location": {
+                        "blurb": "Location of the LUT file to read from",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstcolorlut",
+        "license": "MPL-2.0",
+        "other-types": {},
+        "package": "gst-plugin-colorlut",
+        "source": "gst-plugin-colorlut",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "compress": {
         "description": "GStreamer plugin for lossless compression/decompression",
         "elements": {
