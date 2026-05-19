@@ -20,8 +20,7 @@ use std::sync::{
 };
 
 const DEFAULT_TARGET_DURATION: u32 = 10000;
-const DEFAULT_LATENCY: gst::ClockTime =
-    gst::ClockTime::from_mseconds((DEFAULT_TARGET_DURATION / 2) as u64);
+const DEFAULT_LATENCY: u32 = 2000;
 const DEFAULT_DYNAMIC: bool = false;
 const DEFAULT_SYNC: bool = true;
 const DEFAULT_FILENAME: &str = "manifest.mpd";
@@ -47,7 +46,7 @@ struct DashSink2Settings {
     mpd_filename: String,
     target_duration: u32,
     sync: bool,
-    latency: gst::ClockTime,
+    latency: u32,
     min_buffer_time: u32,
     minimum_update_period: Option<u32>,
     utc_timing_url: Option<String>,
@@ -100,7 +99,10 @@ impl Default for DashSink2Stream {
                 "fragment-duration",
                 gst::ClockTime::from_mseconds(DEFAULT_TARGET_DURATION as u64),
             )
-            .property("latency", DEFAULT_LATENCY)
+            .property(
+                "latency",
+                gst::ClockTime::from_mseconds(DEFAULT_LATENCY as u64),
+            )
             .build()
             .expect("Could not create cmafmux");
 
@@ -153,10 +155,11 @@ impl ObjectImpl for DashSink2 {
                     .blurb("Whether to sync appsink to the pipeline clock")
                     .default_value(DEFAULT_SYNC)
                     .build(),
-                glib::ParamSpecUInt64::builder("latency")
+                glib::ParamSpecUInt::builder("latency")
                     .nick("Latency")
                     .blurb("Latency in milliseconds")
-                    .default_value(DEFAULT_LATENCY.mseconds())
+                    .default_value(DEFAULT_LATENCY)
+                    .mutable_ready()
                     .build(),
                 glib::ParamSpecUInt::builder("min-buffer-time")
                     .nick("Minimum Buffer Time")
@@ -215,8 +218,7 @@ impl ObjectImpl for DashSink2 {
                 settings.sync = value.get().expect("type checked upstream");
             }
             "latency" => {
-                let latency_ns = value.get::<u64>().expect("type checked upstream");
-                settings.latency = gst::ClockTime::from_nseconds(latency_ns);
+                settings.latency = value.get().expect("type checked upstream");
             }
             "min-buffer-time" => {
                 settings.min_buffer_time = value.get().expect("type checked upstream");
@@ -257,7 +259,7 @@ impl ObjectImpl for DashSink2 {
             "mpd-filename" => settings.mpd_filename.to_value(),
             "target-duration" => settings.target_duration.to_value(),
             "sync" => settings.sync.to_value(),
-            "latency" => settings.latency.mseconds().to_value(),
+            "latency" => settings.latency.to_value(),
             "min-buffer-time" => settings.min_buffer_time.to_value(),
             "minimum-update-period" => settings.minimum_update_period.unwrap_or(0).to_value(),
             "utc-timing-url" => settings.utc_timing_url.to_value(),
@@ -442,7 +444,10 @@ impl ElementImpl for DashSink2 {
                 "fragment-duration",
                 gst::ClockTime::from_mseconds(settings.target_duration as u64),
             );
-            stream.cmafmux.set_property("latency", settings.latency);
+            stream.cmafmux.set_property(
+                "latency",
+                gst::ClockTime::from_mseconds(settings.latency as u64),
+            );
             stream.cmafmux.set_property("send-force-keyunit", false);
             stream.appsink.set_property("sync", settings.sync);
 

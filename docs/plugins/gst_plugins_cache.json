@@ -3202,12 +3202,12 @@
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "5000",
-                        "max": "18446744073709551615",
+                        "default": "2000",
+                        "max": "-1",
                         "min": "0",
-                        "mutable": "null",
+                        "mutable": "ready",
                         "readable": true,
-                        "type": "guint64",
+                        "type": "guint",
                         "writable": true
                     },
                     "min-buffer-time": {

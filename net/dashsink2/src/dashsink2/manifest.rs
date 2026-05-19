@@ -103,13 +103,13 @@ impl Manifest {
     }
 
     pub fn set_min_buffer_time(&mut self, time: u32) {
-        self.inner.minBufferTime = Some(Duration::from_secs(time as u64));
+        self.inner.minBufferTime = Some(Duration::from_millis(time as u64));
     }
 
     pub fn set_minimum_update_period(&mut self, time: u32) {
-        self.minimum_update_period = Some(Duration::from_secs(time as u64));
+        self.minimum_update_period = Some(Duration::from_millis(time as u64));
         if self.mpd_type == ManifestType::Dynamic {
-            self.inner.minimumUpdatePeriod = Some(Duration::from_secs(time as u64));
+            self.inner.minimumUpdatePeriod = Some(Duration::from_millis(time as u64));
         }
     }
 
