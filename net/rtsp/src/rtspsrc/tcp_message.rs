@@ -55,6 +55,7 @@ pub(crate) fn async_read<R: AsyncRead + Unpin + Send>(
 ) -> impl Stream<Item = Result<Message<Body>, ReadError>> + Send {
     const INITIAL_BUF_SIZE: usize = 8192;
     const MAX_EMPTY_BUF_SIZE: usize = 8 * INITIAL_BUF_SIZE;
+    const MAX_MISPARSE_BYTES: usize = 256 * INITIAL_BUF_SIZE;
 
     struct State<R> {
         read: R,
@@ -80,6 +81,7 @@ pub(crate) fn async_read<R: AsyncRead + Unpin + Send>(
         } = state.take()?;
 
         let read_one = async {
+            let mut misparsed_bytes = 0;
             loop {
                 assert!(read_pos <= write_pos);
 
@@ -100,9 +102,23 @@ pub(crate) fn async_read<R: AsyncRead + Unpin + Send>(
 
                             return Ok((Some(msg), write_pos, read_pos));
                         }
-                        Err(rtsp_types::ParseError::Error) => return Err(ReadError::ParseError),
+                        Err(rtsp_types::ParseError::Error) => {
+                            if misparsed_bytes == 0 {
+                                gst::warning!(
+                                    super::imp::CAT,
+                                    "Parse error attempting to read RTSP message. Attempting to resync"
+                                );
+                            }
+                            misparsed_bytes += write_pos - read_pos;
+                            write_pos = 0;
+                            read_pos = 0;
+                        }
                         Err(rtsp_types::ParseError::Incomplete(_)) => {
-                            if read_pos > 0 {
+                            if misparsed_bytes > 0 {
+                                misparsed_bytes += write_pos - read_pos;
+                                write_pos = 0;
+                                read_pos = 0;
+                            } else if read_pos > 0 {
                                 // Not a complete message left, copy to the beginning and read more
                                 // data
                                 buf.copy_within(read_pos..write_pos, 0);
@@ -124,6 +140,14 @@ pub(crate) fn async_read<R: AsyncRead + Unpin + Send>(
                 if write_pos == max_size {
                     gst::error!(super::imp::CAT, "Message bigger than maximum {}", max_size);
                     return Err(ReadError::TooBig);
+                }
+                if misparsed_bytes > MAX_MISPARSE_BYTES {
+                    gst::error!(
+                        super::imp::CAT,
+                        "Misparsed {} bytes, limit is {MAX_MISPARSE_BYTES}",
+                        misparsed_bytes
+                    );
+                    return Err(ReadError::ParseError);
                 }
 
                 // Grow the buffer if needed up to the maximum
