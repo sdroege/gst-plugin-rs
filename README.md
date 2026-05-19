@@ -211,6 +211,9 @@ You will find the following plugins in this repository:
       - `tttocea708`: Convert timed text to CTA-708 / CEA-708 closed captions.
       - `tttojson`: Convert timed text to JSON.
 
+    - `colorlut`: CPU and D3D12-based element for applying Adobe Cube LUTs to
+      RGB video streams.
+
     - `dav1d`: AV1 decoder based on the [dav1d](https://code.videolan.org/videolan/dav1d) library.
 
     - `ffv1`: FFV1 decoder based on the [ffv1](https://github.com/rust-av/ffv1) library.
