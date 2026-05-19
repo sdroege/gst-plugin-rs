@@ -6,6 +6,26 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+/**
+ * SECTION:element-d3d12colorlut
+ * @see_also: colorlut
+ *
+ * Parses Adobe Cube LUT files and applies the parsed color LUT to video frames using GPU acceleration.
+ *
+ * ## Example pipeline
+ *
+ * ```
+ * gst-launch-1.0 filesrc location=test.mp4 ! decodebin ! d3d12upload ! \
+ *     d3d12convert ! d3d12colorlut location=PATH/TO/LUT.cube ! \
+ *     d3d12videosink
+ * ```
+ *
+ * This pipeline uploads video frames to GPU memory and converts them to a format
+ * supported by `d3d12colorlut` using `d3d12convert`, then applies the parsed LUT.
+ * The processed video frames are rendered by `d3d12videosink`.
+ *
+ * Since: plugins-rs-0.16
+ */
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
