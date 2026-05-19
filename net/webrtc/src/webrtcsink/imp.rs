@@ -1972,7 +1972,34 @@ impl BaseWebRTCSink {
                     anyhow::bail!("Failed to compute RTP base time. clock-rate: {clock_rate}");
                 };
 
-                payloader.set_property("timestamp-offset", (rtp_basetime & 0xffff_ffff) as u32);
+                let ts_offset = rtp_basetime & 0xffff_ffff;
+                const TIMESTAMP_OFFSET_PROP: &str = "timestamp-offset";
+                match payloader.property_type(TIMESTAMP_OFFSET_PROP) {
+                    Some(glib::Type::U32) => {
+                        // RtpBasePayload heir
+                        payloader.set_property(TIMESTAMP_OFFSET_PROP, ts_offset as u32)
+                    }
+                    Some(glib::Type::I64) => {
+                        // RtpBasePay2 heir
+                        payloader.set_property(TIMESTAMP_OFFSET_PROP, ts_offset as i64)
+                    }
+                    Some(other) => {
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "payloader {} property '{TIMESTAMP_OFFSET_PROP}' has unsupported type {other}",
+                            payloader.factory().unwrap().name(),
+                        );
+                    }
+                    None => {
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "payloader {} has no '{TIMESTAMP_OFFSET_PROP}' properties",
+                            payloader.factory().unwrap().name(),
+                        );
+                    }
+                }
             }
         }
 
