@@ -5360,6 +5360,7 @@ dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-app",
+ "gstreamer-base",
  "gstreamer-net",
  "gstreamer-pbutils",
  "hex",
