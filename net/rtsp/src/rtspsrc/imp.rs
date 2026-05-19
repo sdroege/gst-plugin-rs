@@ -310,6 +310,8 @@ struct State {
     stream_collection: Option<gst::StreamCollection>,
     selected_streams: Option<Vec<RtspGstStream>>,
     stream_selection_done: bool,
+    flow_combiner: gst_base::UniqueFlowCombiner,
+    emitted_no_more_pads: bool,
 }
 
 impl State {
@@ -542,6 +544,60 @@ impl RtspSrc {
             }
             _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
         }
+    }
+
+    fn proxy_pad_chain(
+        &self,
+        pad: &gst::ProxyPad,
+        buffer: gst::Buffer,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let ret = gst::ProxyPad::chain_default(pad, Some(&*self.obj()), buffer);
+        let (ret, streams_aware, emitted_no_more_pads) = {
+            let mut state = self.state.lock().unwrap();
+            (
+                state.flow_combiner.update_pad_flow(pad, ret),
+                state.streams_aware,
+                state.emitted_no_more_pads,
+            )
+        };
+
+        if let Err(res) = ret
+            && res == gst::FlowError::NotLinked
+            && (streams_aware || !emitted_no_more_pads)
+        {
+            // Ignore not-linked errors until we've added all pads,
+            // as downstream might only link one pad they are interested in.
+            return Ok(gst::FlowSuccess::Ok);
+        }
+
+        ret
+    }
+
+    fn proxy_pad_chain_list(
+        &self,
+        pad: &gst::ProxyPad,
+        bufferlist: gst::BufferList,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let ret = gst::ProxyPad::chain_list_default(pad, Some(&*self.obj()), bufferlist);
+        let (ret, streams_aware, emitted_no_more_pads) = {
+            let mut state = self.state.lock().unwrap();
+            (
+                state.flow_combiner.update_pad_flow(pad, ret),
+                state.streams_aware,
+                state.emitted_no_more_pads,
+            )
+        };
+
+        if let Err(res) = ret
+            && res == gst::FlowError::NotLinked
+            && (streams_aware || !emitted_no_more_pads)
+        {
+            // Ignore not-linked errors until we've added all pads,
+            // as downstream might only link one pad they are interested in.
+            return Ok(gst::FlowSuccess::Ok);
+        }
+
+        ret
     }
 
     fn post_streams_selected(&self, num_src_pads: usize) {
@@ -1183,6 +1239,9 @@ impl RtspSrc {
 
         self.command_queue.lock().unwrap().take();
 
+        let mut state = self.state.lock().unwrap();
+        state.flow_combiner.reset();
+
         gst::info!(CAT, imp = self, "Stopped");
 
         Ok(())
@@ -1221,6 +1280,26 @@ impl RtspSrc {
         let templ = obj.pad_template("stream_%u").unwrap();
         let ghostpad = gst::GhostPad::builder_from_template(&templ)
             .name(format!("stream_{rtpsession_n}"))
+            .proxy_pad_chain_function({
+                move |pad, parent, buffer| {
+                    let parent = parent.and_then(|p| p.parent());
+                    RtspSrc::catch_panic_pad_function(
+                        parent.as_ref(),
+                        || Err(gst::FlowError::Error),
+                        |imp| imp.proxy_pad_chain(pad, buffer),
+                    )
+                }
+            })
+            .proxy_pad_chain_list_function({
+                move |pad, parent, bufferlist| {
+                    let parent = parent.and_then(|p| p.parent());
+                    RtspSrc::catch_panic_pad_function(
+                        parent.as_ref(),
+                        || Err(gst::FlowError::Error),
+                        |imp| imp.proxy_pad_chain_list(pad, bufferlist),
+                    )
+                }
+            })
             .event_function(move |pad, parent, event| {
                 RtspSrc::catch_panic_pad_function(
                     parent,
@@ -1233,6 +1312,21 @@ impl RtspSrc {
         obj.add_pad(&ghostpad)
             .expect("Adding a ghostpad should never fail");
         appsrc.sync_state_with_parent()?;
+
+        // We do this here instead of when calling `remove_pad` to
+        // avoid taking a reference to `self` in RTSP task. DO NOT
+        // hold the `state` lock when calling `remove_pad`.
+        obj.connect_pad_removed(glib::clone!(
+            #[weak(rename_to = self_)]
+            self,
+            move |_, pad| {
+                if pad.name().starts_with("stream_") {
+                    let mut state = self_.state.lock().unwrap();
+                    state.flow_combiner.remove_pad(pad);
+                }
+            }
+        ));
+
         Ok(appsrc)
     }
 
@@ -1532,6 +1626,9 @@ impl RtspSrc {
 
         if !streams_aware {
             obj.no_more_pads();
+
+            let mut state = self.state.lock().unwrap();
+            state.emitted_no_more_pads = true;
         }
 
         // Expose RTP srcpads
@@ -1576,6 +1673,11 @@ impl RtspSrc {
                                 ["pt: {pt}, ssrc: {ssrc}"]
                             );
                         }
+
+                        {
+                            let mut state = self_.state.lock().unwrap();
+                            state.flow_combiner.add_pad(&ghostpad);
+                        }
                     }
                     _ => {
                         gst::info!(CAT, "Ignoring unknown srcpad: {name}");
@@ -1619,7 +1721,6 @@ impl RtspSrc {
                         let mut buffer = gst::Buffer::from_slice(data.into_body());
                         let bufref = buffer.make_mut();
                         bufref.set_dts(t);
-                        // TODO: Allow unlinked source pads
                         if let Err(err) = appsrc.push_buffer(buffer) {
                             gst::error!(CAT, "Failed to push buffer on pad {} for channel {}", appsrc.name(), channel_id);
                             return Err(err.into());

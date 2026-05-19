@@ -26,6 +26,7 @@
  * * HTTP tunnelling
  * * Keep-alive
  * * Support for stream selection at the start
+ * * Allow unlinked pads
  *
  * Some missing features:
  * * SET_PARAMETER/GET_PARAMETER messages

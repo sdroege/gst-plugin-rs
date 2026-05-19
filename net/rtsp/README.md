@@ -27,6 +27,7 @@ architecture of rtspsrc. There are some major problems with rtspsrc:
 * HTTP tunnelling
 * Keep-alive
 * Support for stream selection at the start
+* Allow unlinked pads
 
 ## Missing features
 
