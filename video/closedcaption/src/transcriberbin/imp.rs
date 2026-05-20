@@ -651,9 +651,13 @@ impl TranscriberBin {
         //
         // We keep the default conversion to not-linked as the tee further upstream
         // is configured to ignore not-linked.
+        //
+        // We also ignore flushing to avoid propagating the return flow upstream
+        // when the transcriber is disconnecting.
         let errorignore = gst::ElementFactory::make("errorignore")
             .name("transqueue-errorignore")
             .property("ignore-notnegotiated", false)
+            .property("ignore-flushing", true)
             .build()?;
 
         pad_state.transcription_bin.add_many([
