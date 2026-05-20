@@ -97,8 +97,8 @@ impl From<std::io::Error> for CubeParseError {
 #[derive(Debug, Clone, Copy)]
 enum ParseState {
     Header,
-    Lut1D { size: usize },
-    Lut3D { size: usize },
+    Lut1D { size: usize, have_data: bool },
+    Lut3D { size: usize, have_data: bool },
 }
 
 impl CubeLut {
@@ -143,27 +143,48 @@ impl CubeLut {
                 "LUT_1D_SIZE" => {
                     ensure_header(state, line_no, line)?;
 
+                    if !matches!(state, ParseState::Header) {
+                        return Err(CubeParseError::InvalidLut(format!(
+                            "Invalid LUT_1D_SIZE at line {line_no}: {line}"
+                        )));
+                    }
+
                     let size = parse_single_usize(parts, line_no, line)?;
                     validate_lut_size(size, LUT_1D_MIN_SIZE, LUT_1D_MAX_SIZE, line_no)?;
 
-                    state = ParseState::Lut1D { size };
+                    state = ParseState::Lut1D {
+                        size,
+                        have_data: false,
+                    };
                 }
                 "LUT_3D_SIZE" => {
                     ensure_header(state, line_no, line)?;
 
+                    if !matches!(state, ParseState::Header) {
+                        return Err(CubeParseError::InvalidLut(format!(
+                            "Invalid LUT_3D_SIZE at line {line_no}: {line}"
+                        )));
+                    }
+
                     let size = parse_single_usize(parts, line_no, line)?;
                     validate_lut_size(size, LUT_3D_MIN_SIZE, LUT_3D_MAX_SIZE, line_no)?;
 
-                    state = ParseState::Lut3D { size };
+                    state = ParseState::Lut3D {
+                        size,
+                        have_data: false,
+                    };
                 }
                 _ => {
-                    match state {
+                    match &mut state {
                         ParseState::Header => {
                             return Err(CubeParseError::InvalidLut(format!(
                                 "LUT data found before LUT size at line {line_no}: {line}"
                             )));
                         }
-                        ParseState::Lut1D { .. } | ParseState::Lut3D { .. } => {}
+                        ParseState::Lut1D { have_data, .. }
+                        | ParseState::Lut3D { have_data, .. } => {
+                            *have_data = true;
+                        }
                     }
 
                     let r = parse_f32(first, line_no, line)?;
@@ -194,7 +215,7 @@ impl CubeLut {
             ParseState::Header => {
                 return Err(CubeParseError::InvalidLut("Missing LUT size".to_string()));
             }
-            ParseState::Lut1D { size } => {
+            ParseState::Lut1D { size, .. } => {
                 if values.len() != size {
                     return Err(CubeParseError::InvalidLut(format!(
                         "Invalid 1D LUT value count, expected {size}, got {}",
@@ -214,7 +235,7 @@ impl CubeLut {
 
                 CubeLutKind::Lut1D { size, r, g, b }
             }
-            ParseState::Lut3D { size } => {
+            ParseState::Lut3D { size, .. } => {
                 let expected = size
                     .checked_mul(size)
                     .and_then(|v| v.checked_mul(size))
@@ -262,10 +283,22 @@ impl CubeLut {
 
 fn ensure_header(state: ParseState, line_no: usize, line: &str) -> Result<(), CubeParseError> {
     match state {
-        ParseState::Header => Ok(()),
-        ParseState::Lut1D { .. } | ParseState::Lut3D { .. } => Err(CubeParseError::InvalidLut(
-            format!("Header found after LUT data at line {line_no}: {line}"),
-        )),
+        ParseState::Header
+        | ParseState::Lut1D {
+            have_data: false, ..
+        }
+        | ParseState::Lut3D {
+            have_data: false, ..
+        } => Ok(()),
+
+        ParseState::Lut1D {
+            have_data: true, ..
+        }
+        | ParseState::Lut3D {
+            have_data: true, ..
+        } => Err(CubeParseError::InvalidLut(format!(
+            "Header found after LUT data at line {line_no}: {line}"
+        ))),
     }
 }
 
