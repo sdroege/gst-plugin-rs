@@ -373,3 +373,102 @@ fn parse_f32(text: &str, line_no: usize, line: &str) -> Result<f32, CubeParseErr
     text.parse::<f32>()
         .map_err(|_| CubeParseError::InvalidLut(format!("Invalid float at line {line_no}: {line}")))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_3d_lut() {
+        let text = r#"
+            LUT_3D_SIZE 2
+
+            0.0 0.0 0.0
+            1.0 0.0 0.0
+            0.0 1.0 0.0
+            1.0 1.0 0.0
+            0.0 0.0 1.0
+            1.0 0.0 1.0
+            0.0 1.0 1.0
+            1.0 1.0 1.0
+        "#;
+
+        let lut = CubeLut::parse(text).unwrap();
+
+        match lut.kind {
+            CubeLutKind::Lut3D(lut3d) => {
+                assert_eq!(lut3d.size(), 2);
+                assert_eq!(lut3d.as_flat().len(), 8);
+
+                assert_eq!(lut3d.at(0, 0, 0), [0.0, 0.0, 0.0, 1.0]);
+                assert_eq!(lut3d.at(1, 1, 1), [1.0, 1.0, 1.0, 1.0]);
+            }
+            _ => panic!("expected 3D LUT"),
+        }
+    }
+
+    #[test]
+    fn keyword_after_lut_size() {
+        let text = r#"
+            LUT_1D_SIZE 2
+
+            TITLE "test"
+            DOMAIN_MIN 0.0 0.0 0.0
+            DOMAIN_MAX 1.0 1.0 1.0
+
+            0.0 0.0 0.0
+            1.0 0.5 0.7
+        "#;
+
+        let lut = CubeLut::parse(text).unwrap();
+
+        match lut.kind {
+            CubeLutKind::Lut1D { size, r, g, b } => {
+                assert_eq!(size, 2);
+                assert_eq!(r, [0.0, 1.0]);
+                assert_eq!(g, [0.0, 0.5]);
+                assert_eq!(b, [0.0, 0.7]);
+            }
+            _ => panic!("expected 1D LUT"),
+        }
+    }
+
+    #[test]
+    fn keyword_after_data() {
+        let text = r#"
+            LUT_1D_SIZE 2
+
+            0.0 0.0 0.0
+            1.0 0.0 0.0
+            TITLE "invalid"
+        "#;
+
+        assert!(CubeLut::parse(text).is_err());
+    }
+
+    #[test]
+    fn keyword_between_data() {
+        let text = r#"
+            LUT_1D_SIZE 2
+
+            0.0 0.0 0.0
+            TITLE "invalid"
+            1.0 0.0 0.0
+        "#;
+
+        assert!(CubeLut::parse(text).is_err());
+    }
+
+    #[test]
+    fn multiple_lut_sizes() {
+        let text = r#"
+            LUT_1D_SIZE 2
+            LUT_3D_SIZE 2
+
+            0.0 0.0 0.0
+            1.0 1.0 1.0
+        "#;
+
+        assert!(CubeLut::parse(text).is_err());
+    }
+}
