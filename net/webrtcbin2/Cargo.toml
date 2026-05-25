@@ -15,6 +15,7 @@ gst-base.workspace = true
 
 thiserror = "2"
 futures = "0.3"
+# Check top-level meson.build rice-proto version req when bumping the librice version!
 librice = { version = "0.4.3", default-features = false, features = ["runtime-tokio"] }
 sdp-types = "0.1"
 tokio = { version = "1", features = ["net", "rt-multi-thread", "time", "sync"] }

@@ -132,7 +132,7 @@ plugins = {
   },
   'webrtcbin2': {
     'library': 'libgstrswebrtcbin2',
-    'extra-deps': {'openssl': ['>=1.1']},
+    'extra-deps': {'openssl': ['>=1.1'], 'rice-proto': ['>= 0.4.2']},
   },
 
   'textaccumulate': {'library': 'libgsttextaccumulate'},
