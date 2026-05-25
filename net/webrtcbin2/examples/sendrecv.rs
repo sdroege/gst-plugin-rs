@@ -463,7 +463,10 @@ impl App {
         Ok(())
     }
 
-    fn configure_pipeline_on_offer(&self, offer: &sdp_types::Session) -> Result<(), anyhow::Error> {
+    fn configure_pipeline_on_offer(
+        &self,
+        offer: &sdp_types::Session,
+    ) -> Result<std::sync::mpsc::Receiver<()>, anyhow::Error> {
         // Extract audio/video payload types from the SDP and configure accordingly on the
         // pipeline as these have to match with the offer
         let mut opus_id = None;
@@ -515,6 +518,8 @@ impl App {
             }
         }
 
+        let (send, recv) = std::sync::mpsc::channel();
+
         if let (Some(opus_id), Some(vp8_id)) = (opus_id, vp8_id) {
             let apay = self.pipeline.by_name("apay").unwrap();
             let vpay = self.pipeline.by_name("vpay").unwrap();
@@ -529,6 +534,22 @@ impl App {
                     pay.emit_by_name::<()>("add-extension", &[&twcc]);
                 }
                 */
+                let srcpad = pay.static_pad("src").unwrap();
+                let send = send.clone();
+                srcpad.add_probe(gst::PadProbeType::EVENT_DOWNSTREAM, move |pad, info| {
+                    let Some(event) = info.event() else {
+                        return gst::PadProbeReturn::Ok;
+                    };
+                    let gst::EventView::Caps(_caps) = event.view() else {
+                        return gst::PadProbeReturn::Ok;
+                    };
+                    let Some(peer) = pad.peer() else {
+                        return gst::PadProbeReturn::Ok;
+                    };
+                    peer.send_event(event.clone());
+                    let _ = send.send(());
+                    gst::PadProbeReturn::Remove
+                });
             }
         } else {
             gst::element_error!(
@@ -539,7 +560,7 @@ impl App {
             bail!("Not all streams found in the offer");
         }
 
-        Ok(())
+        Ok(recv)
     }
 
     // Handle incoming SDP answers from the peer
@@ -567,9 +588,9 @@ impl App {
                 let sdp =
                     sdp_types::Session::parse(sdp_str.as_bytes()).expect("Failed to parse SDP");
 
-                if app.configure_pipeline_on_offer(&sdp).is_err() {
+                let Ok(recv) = app.configure_pipeline_on_offer(&sdp) else {
                     return;
-                }
+                };
 
                 // If this fails, post an error on the bus so we exit
                 if app.pipeline.set_state(gst::State::Playing).is_err() {
@@ -598,9 +619,8 @@ impl App {
                         );
                     }
                 });
-                // FIXME: sleep allows vp8 encoder to produce caps correctly
-                // Fix by supporting rengotation, or waiting for caps manually.
-                std::thread::sleep(core::time::Duration::from_secs(1));
+                recv.recv().unwrap();
+                recv.recv().unwrap();
 
                 app.0
                     .session
