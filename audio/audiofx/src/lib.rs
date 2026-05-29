@@ -14,6 +14,7 @@
  */
 use gst::glib;
 
+mod agingradio;
 mod audioecho;
 mod audioloudnorm;
 mod audiornnoise;
@@ -21,6 +22,7 @@ mod ebur128level;
 mod hrtfrender;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    agingradio::register(plugin)?;
     audioecho::register(plugin)?;
     audioloudnorm::register(plugin)?;
     audiornnoise::register(plugin)?;

@@ -10240,6 +10240,119 @@
     "rsaudiofx": {
         "description": "GStreamer Rust Audio Effects Plugin",
         "elements": {
+            "agingradio": {
+                "author": "Vivia Nikolaidou <vivia@ahiru.eu>",
+                "description": "Adds age to audio input using various kinds of distortion",
+                "hierarchy": [
+                    "GstRsAgingRadio",
+                    "GstAudioFilter",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Filter/Effect/Audio",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: { F32LE, F64LE }\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: [ 1, 2147483647 ]\n         layout: interleaved\n         format: { F32LE, F64LE }\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "bits-to-quantize": {
+                        "blurb": "Bits to quantize (0 to disable)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "4",
+                        "max": "64",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gfloat",
+                        "writable": true
+                    },
+                    "clicks-prob": {
+                        "blurb": "Clicks probability (0 to disable)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1e-05",
+                        "max": "1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gfloat",
+                        "writable": true
+                    },
+                    "cubic-curve-distortion": {
+                        "blurb": "Cubic curve distortion (0 to disable)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1",
+                        "max": "1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gfloat",
+                        "writable": true
+                    },
+                    "cubic-curve-passes": {
+                        "blurb": "Cubic curve passes (0 to disable)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "3",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "lowpass-freq": {
+                        "blurb": "Lowpass filter frequency (0 to disable)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "2000",
+                        "max": "22000",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "white-noise-ampl": {
+                        "blurb": "White noise amplitude (0 to disable)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0.011",
+                        "max": "1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gfloat",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
             "audioloudnorm": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Normalizes perceived loudness of an audio stream",

@@ -148,6 +148,7 @@ You will find the following plugins in this repository:
   * `audio`
     - `audiofx`: Elements to apply audio effects to a stream
       - `rsaudioecho`: a simple echo/reverb filter.
+      - `agingradio`: Filter to add age to audio input using various kinds of distortion.
       - `audioloudnorm`: [audio normalization](http://k.ylo.ph/2016/04/04/loudnorm.html) filter.
       - `audiornnoise`: Filter for [removing noise](https://jmvalin.ca/demo/rnnoise/).
       - `ebur128level`: Filter for measuring audio loudness according to EBU R-128.
