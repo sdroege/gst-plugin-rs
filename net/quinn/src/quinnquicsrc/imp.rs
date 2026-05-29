@@ -17,7 +17,6 @@ use crate::utils::{
 use crate::{common::*, utils};
 use async_channel::{Receiver, Sender, unbounded};
 use bytes::Bytes;
-use futures::{StreamExt, future::BoxFuture, stream::FuturesUnordered};
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_base::prelude::*;
 use gst_base::subclass::base_src::CreateSuccess;
@@ -27,6 +26,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::thread::{Builder, JoinHandle};
+use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
 
 const DEFAULT_ROLE: QuinnQuicRole = QuinnQuicRole::Server;
@@ -891,60 +891,9 @@ impl QuinnQuicSrc {
         sender: Sender<QuinnData>,
         receiver: oneshot::Receiver<()>,
     ) {
-        // Unifies the Future return types
-        enum QuinnFuture {
-            Datagram(Bytes),
-            StreamData(RecvStream, QuinnData),
-            Stream(RecvStream),
-            Stop,
-        }
-
         let blocksize = self.obj().blocksize() as usize;
-        gst::info!(CAT, imp = self, "Using a blocksize of {blocksize} for read",);
-
-        let incoming_stream = |conn: Connection| async move {
-            match conn.accept_uni().await {
-                Ok(recv_stream) => QuinnFuture::Stream(recv_stream),
-                Err(err) => {
-                    self.handle_connection_error(err);
-                    QuinnFuture::Stop
-                }
-            }
-        };
-
-        let datagram = |conn: Connection| async move {
-            match conn.read_datagram().await {
-                Ok(bytes) => QuinnFuture::Datagram(bytes),
-                Err(err) => {
-                    self.handle_connection_error(err);
-                    QuinnFuture::Stop
-                }
-            }
-        };
-
-        let recv_stream = |mut s: RecvStream| async move {
-            let stream_id = s.id().index();
-            match s.read_chunk(blocksize, true).await {
-                Ok(Some(chunk)) => {
-                    QuinnFuture::StreamData(s, QuinnData::Stream(stream_id, chunk.bytes))
-                }
-                Ok(None) => QuinnFuture::StreamData(s, QuinnData::Closed(stream_id)),
-                Err(err) => match err {
-                    ReadError::ClosedStream => {
-                        gst::debug!(CAT, "Stream closed: {stream_id}");
-                        QuinnFuture::StreamData(s, QuinnData::Closed(stream_id))
-                    }
-                    ReadError::ConnectionLost(err) => {
-                        gst::error!(CAT, "Connection lost: {err:?}");
-                        QuinnFuture::StreamData(s, QuinnData::Eos)
-                    }
-                    rerr => {
-                        gst::error!(CAT, "Read error on stream {stream_id}: {rerr:?}");
-                        QuinnFuture::StreamData(s, QuinnData::Eos)
-                    }
-                },
-            }
-        };
+        let use_datagram = self.settings.lock().unwrap().use_datagram;
+        gst::info!(CAT, imp = self, "Using a blocksize of {blocksize} for read");
 
         let tx_send = |data: QuinnData| async {
             if let Err(err) = sender.send(data).await {
@@ -952,55 +901,79 @@ impl QuinnQuicSrc {
             }
         };
 
-        // TODO:
-        // Decide if the ordering matters when we might have a STREAM
-        // Close followed by a Connection Close almost immediately.
-        let mut tasks: FuturesUnordered<BoxFuture<QuinnFuture>> = FuturesUnordered::new();
-
-        tasks.push(Box::pin(datagram(connection.clone())));
-        tasks.push(Box::pin(incoming_stream(connection.clone())));
-        // We only ever expect to receive on this channel once, so we
-        // need not push this in the loop below.
-        tasks.push(Box::pin(async {
-            let _ = receiver.await;
-            gst::debug!(CAT, imp = self, "Quitting");
-            QuinnFuture::Stop
-        }));
-
         RUNTIME.block_on(async {
-            while let Some(stream) = tasks.next().await {
-                match stream {
-                    QuinnFuture::Stop => {
+            let (stream_tx, mut stream_rx) = unbounded_channel::<RecvStream>();
+            let (dg_tx, mut dg_rx) = unbounded_channel::<Bytes>();
+            let (err_tx, mut err_rx) = unbounded_channel::<ConnectionError>();
+
+            let conn = connection.clone();
+            let err_tx_clone = err_tx.clone();
+
+            tokio::spawn(async move {
+                loop {
+                    match conn.accept_uni().await {
+                        Ok(s) => {
+                            if stream_tx.send(s).is_err() {
+                                break;
+                            }
+                        }
+                        Err(err) => {
+                            let _ = err_tx_clone.send(err);
+                            break;
+                        }
+                    }
+                }
+            });
+
+            if use_datagram {
+                let conn = connection.clone();
+                let err_tx_clone = err_tx.clone();
+                tokio::spawn(async move {
+                    loop {
+                        match conn.read_datagram().await {
+                            Ok(bytes) => {
+                                if dg_tx.send(bytes).is_err() {
+                                    break;
+                                }
+                            }
+                            Err(err) => {
+                                let _ = err_tx_clone.send(err);
+                                break;
+                            }
+                        }
+                    }
+                });
+            }
+
+            let mut quit = std::pin::pin!(receiver);
+
+            loop {
+                tokio::select! {
+                    biased;
+                    _ = &mut quit => {
                         tx_send(QuinnData::Eos).await;
                         break;
                     }
-                    QuinnFuture::StreamData(s, data) => match data {
-                        d @ QuinnData::Stream(stream_id, _) => {
-                            gst::trace!(CAT, imp = self, "Sending data for stream: {stream_id}");
-                            tx_send(d).await;
-                            tasks.push(Box::pin(recv_stream(s)));
+                    res = err_rx.recv() => {
+                        if let Some(err) = res {
+                            self.handle_connection_error(err);
+                            tx_send(QuinnData::Eos).await;
                         }
-                        eos @ QuinnData::Eos => {
-                            tx_send(eos).await;
-                            drop(s);
-                            break;
-                        }
-                        c @ QuinnData::Closed(stream_id) => {
-                            gst::trace!(CAT, imp = self, "Stream closed: {stream_id}");
-                            tx_send(c).await;
-                            drop(s);
-                        }
-                        QuinnData::Datagram(_) => unreachable!(),
-                    },
-                    QuinnFuture::Stream(s) => {
-                        gst::trace!(CAT, imp = self, "Incoming stream connection {:?}", s.id());
-                        tasks.push(Box::pin(recv_stream(s)));
-                        tasks.push(Box::pin(incoming_stream(connection.clone())));
+                        break;
                     }
-                    QuinnFuture::Datagram(b) => {
-                        gst::trace!(CAT, imp = self, "Received {} bytes on datagram", b.len());
-                        tx_send(QuinnData::Datagram(b)).await;
-                        tasks.push(Box::pin(datagram(connection.clone())));
+                    res = stream_rx.recv() => {
+                        match res {
+                            Some(stream) => {
+                                tokio::spawn(read_stream(stream, sender.clone(), blocksize, err_tx.clone()));
+                            }
+                            None => break,
+                        }
+                    }
+                    res = dg_rx.recv(), if use_datagram => {
+                        match res {
+                            Some(bytes) => tx_send(QuinnData::Datagram(bytes)).await,
+                            None => break,
+                        }
                     }
                 }
             }
@@ -1130,5 +1103,40 @@ impl QuinnQuicSrc {
         }
 
         None
+    }
+}
+
+async fn read_stream(
+    mut s: RecvStream,
+    sender: Sender<QuinnData>,
+    blocksize: usize,
+    err_tx: UnboundedSender<ConnectionError>,
+) {
+    let stream_id = s.id().index();
+
+    loop {
+        match s.read_chunk(blocksize, true).await {
+            Ok(Some(chunk)) => {
+                if let Err(err) = sender.send(QuinnData::Stream(stream_id, chunk.bytes)).await {
+                    gst::error!(CAT, "Error sending data: {err:?}");
+                    break;
+                }
+            }
+            Ok(None) | Err(ReadError::ClosedStream) => {
+                gst::debug!(CAT, "Stream ended: {stream_id}");
+                let _ = sender.send(QuinnData::Closed(stream_id)).await;
+                break;
+            }
+            Err(ReadError::ConnectionLost(err)) => {
+                gst::error!(CAT, "Connection lost: {err:?}");
+                let _ = err_tx.send(err);
+                break;
+            }
+            Err(rerr) => {
+                gst::error!(CAT, "Read error on stream {stream_id}: {rerr:?}");
+                let _ = sender.send(QuinnData::Closed(stream_id)).await;
+                break;
+            }
+        }
     }
 }
