@@ -5,3 +5,7 @@ pub mod pay;
 
 mod mpeg_video_packet;
 mod packet_header;
+
+#[allow(clippy::module_inception)]
+#[cfg(test)]
+mod tests;
