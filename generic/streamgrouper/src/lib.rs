@@ -31,6 +31,9 @@ gst::plugin_define!(
 );
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     streamgrouper::register(plugin).unwrap();
     Ok(())
 }

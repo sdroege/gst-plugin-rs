@@ -60,6 +60,7 @@ path = "src/lib.rs"
 static = []
 capi = []
 doc = []
+v1_30 = ["gst/v1_30"]
 
 [[example]]
 name = "rtpbin2-send"

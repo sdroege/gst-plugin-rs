@@ -66,6 +66,7 @@ wbmp = ["image_extras/wbmp"]
 webp = ["image/webp"]
 xbm = ["image_extras/xbm"]
 xpm = ["image_extras/xpm"]
+v1_30 = ["gst/v1_30"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

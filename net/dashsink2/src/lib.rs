@@ -16,6 +16,9 @@ use gst::glib;
 mod dashsink2;
 
 pub fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     dashsink2::register(plugin)?;
     Ok(())
 }

@@ -63,6 +63,9 @@ fn typefind_register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     encrypter::register(plugin)?;
     decrypter::register(plugin)?;
     typefind_register(plugin)?;

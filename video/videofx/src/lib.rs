@@ -23,6 +23,9 @@ mod videocompare;
 pub use videocompare::{HashAlgorithm, PadDistance, VideoCompareMessage};
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), gst::glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     #[cfg(feature = "doc")]
     HashAlgorithm::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
 

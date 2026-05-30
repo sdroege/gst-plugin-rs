@@ -30,6 +30,10 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     if let Err(err) = &*BACKEND {
         gst::error!(CAT, "Failed to initialize llama.cpp: {err}");
     }
+
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     texttransform::register(plugin)?;
     Ok(())
 }

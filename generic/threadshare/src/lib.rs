@@ -39,6 +39,9 @@ use gst::glib;
 use gst::prelude::*;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     dataqueue::QueueLeakyMode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     appsrc::register(plugin)?;
     audiotestsrc::register(plugin)?;

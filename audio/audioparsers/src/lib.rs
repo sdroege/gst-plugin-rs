@@ -18,6 +18,9 @@ mod ac4parse;
 mod s302mparse;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     ac4parse::register(plugin)?;
     s302mparse::register(plugin)?;
     Ok(())

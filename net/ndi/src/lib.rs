@@ -132,6 +132,9 @@ impl From<RecvColorFormat> for crate::ndisys::NDIlib_recv_color_format_e {
 }
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     #[cfg(feature = "doc")]
     TimestampMode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     #[cfg(feature = "doc")]

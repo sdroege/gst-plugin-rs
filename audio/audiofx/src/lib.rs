@@ -21,6 +21,9 @@ mod audiornnoise;
 mod ebur128level;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     agingradio::register(plugin)?;
     audioecho::register(plugin)?;
     audioloudnorm::register(plugin)?;

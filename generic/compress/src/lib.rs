@@ -36,6 +36,9 @@ mod flatedecompress;
 
 #[allow(unused_variables)]
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     #[cfg(feature = "flate")]
     {
         flatecompress::register(plugin)?;

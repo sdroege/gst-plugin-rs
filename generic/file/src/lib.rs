@@ -21,6 +21,9 @@ mod filesink;
 mod filesrc;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     filesink::register(plugin)?;
     filesrc::register(plugin)?;
     Ok(())

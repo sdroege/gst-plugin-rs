@@ -22,6 +22,9 @@ mod constants;
 mod typefind;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     cdgdec::register(plugin)?;
     cdgparse::register(plugin)?;
     typefind::register(plugin)?;

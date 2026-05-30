@@ -53,6 +53,9 @@ mod vp9;
 mod tests;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     gcc::register(plugin)?;
     rtpbin2::register(plugin)?;
 

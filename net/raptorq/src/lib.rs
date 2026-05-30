@@ -19,6 +19,9 @@ mod raptorqdec;
 mod raptorqenc;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     raptorqdec::register(plugin)?;
     raptorqenc::register(plugin)?;
 

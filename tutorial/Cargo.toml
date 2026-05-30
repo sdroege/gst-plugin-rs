@@ -21,5 +21,8 @@ name = "gstrstutorial"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
+[features]
+v1_30 = ["gst/v1_30"]
+
 [build-dependencies]
 gst-plugin-version-helper.workspace = true

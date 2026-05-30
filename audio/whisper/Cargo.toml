@@ -38,6 +38,7 @@ metal = ["whisper-rs/metal"]
 vulkan = ["whisper-rs/vulkan"]
 openmp = ["whisper-rs/openmp"]
 intel-sycl = ["whisper-rs/intel-sycl"]
+v1_30 = ["gst/v1_30"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

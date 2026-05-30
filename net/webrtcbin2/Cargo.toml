@@ -53,6 +53,7 @@ capi = []
 doc = []
 rustls-ring = ["rustls/ring"]
 default = ["rustls-ring"]
+v1_30 = ["gst/v1_30"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

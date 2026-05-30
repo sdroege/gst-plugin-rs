@@ -15,6 +15,9 @@ pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 });
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     if let Err(err) = check_last_frame_qrcode::register_validate_actions(plugin) {
         gst::warning!(
             gst::CAT_RUST,

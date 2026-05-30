@@ -108,6 +108,7 @@ whip = ["dep:reqwest", "dep:warp", "dep:ctrlc"]
 web_server = ["dep:warp"]
 whep = ["dep:reqwest", "dep:warp"]
 pixelstreaming = []
+v1_30 = ["gst/v1_30"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

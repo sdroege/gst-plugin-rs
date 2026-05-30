@@ -29,6 +29,9 @@ mod quinnwtsrc;
 mod utils;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     env_logger::init();
     #[cfg(feature = "doc")]
     {

@@ -19,6 +19,9 @@ mod sinesrc;
 // Plugin entry point that should register all elements provided by this plugin,
 // and everything else that this plugin might provide (e.g. typefinders or device providers).
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     rgb2gray::register(plugin)?;
     sinesrc::register(plugin)?;
     identity::register(plugin)?;

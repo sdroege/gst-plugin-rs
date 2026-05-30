@@ -39,6 +39,7 @@ capi = []
 doc = ["gst/v1_18"]
 signalsmith_stretch = ["dep:signalsmith-stretch"]
 rustls-ring = ["rustls/ring"]
+v1_30 = ["gst/v1_30"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

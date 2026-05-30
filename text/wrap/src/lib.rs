@@ -18,6 +18,9 @@ use gst::glib;
 mod gsttextwrap;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     gsttextwrap::register(plugin)
 }
 

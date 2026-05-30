@@ -54,6 +54,7 @@ gst-tracing = ["dep:gst-tracing", "dep:tracing"]
 tracing-chrome = ["gst-tracing", "dep:tracing-chrome", "dep:tracing-subscriber"]
 tracing-subscriber = ["gst-tracing", "dep:tracing-subscriber"]
 perfetto = ["gst-tracing", "dep:tracing-perfetto-sdk-layer", "dep:tracing-perfetto-sdk-schema", "dep:tracing-appender"]
+v1_30 = ["gst/v1_30"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

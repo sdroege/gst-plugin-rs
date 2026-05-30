@@ -20,6 +20,9 @@ mod fallbackswitch;
 pub use fallbacksrc::{RetryReason, Status};
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "v1_30")]
+    plugin.set_static_features_flag();
+
     fallbacksrc::register(plugin)?;
     fallbackswitch::register(plugin)?;
     Ok(())

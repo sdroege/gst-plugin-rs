@@ -41,6 +41,7 @@ metal = ["llama-cpp-2/metal"]
 vulkan = ["llama-cpp-2/vulkan"]
 openmp = ["llama-cpp-2/openmp"]
 rocm = ["llama-cpp-2/rocm"]
+v1_30 = ["gst/v1_30"]
 
 [package.metadata.capi]
 min_version = "0.9.21"
