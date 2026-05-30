@@ -626,11 +626,17 @@ impl WebRTCSession {
                 );
                 continue;
             };
+            let dtls = if let Some(transport) = state
+                .transports
+                .iter()
+                .find(|transport| transport.id == transport_idx)
+            {
+                &transport.dtls
+            } else {
+                new_dtls.push((idx, TlsImpl::new()));
+                new_dtls.last().map(|(_idx, dtls)| dtls).unwrap()
+            };
             if idx == transport_idx {
-                let dtls = TlsImpl::new();
-                new_media
-                    .fingerprints
-                    .push(Fingerprint::new(HashFunc::Sha256, dtls.local_fingerprint()));
                 new_media.setup = dtls
                     .is_client()
                     .map(|client| {
@@ -643,8 +649,10 @@ impl WebRTCSession {
                     .or(Some(DtlsSetup::ActPass));
                 new_media.ice_ufrag = Some(librice::random_string(8));
                 new_media.ice_pwd = Some(librice::random_string(32));
-                new_dtls.push((idx, dtls));
             };
+            new_media
+                .fingerprints
+                .push(Fingerprint::new(HashFunc::Sha256, dtls.local_fingerprint()));
             let mid = idx.to_string();
             new_media.mid = Some(mid.clone());
             if desc.group_bundle.is_empty() {
@@ -783,9 +791,6 @@ impl WebRTCSession {
             if idx == transport_idx {
                 new_media.ice_ufrag = Some(librice::random_string(4));
                 new_media.ice_pwd = Some(librice::random_string(32));
-                new_media
-                    .fingerprints
-                    .push(Fingerprint::new(HashFunc::Sha256, dtls.local_fingerprint()));
                 new_media.setup = dtls
                     .is_client()
                     .map(|client| {
@@ -799,6 +804,9 @@ impl WebRTCSession {
             } else if bundle_idx.is_some() {
                 new_media.port = 0;
             }
+            new_media
+                .fingerprints
+                .push(Fingerprint::new(HashFunc::Sha256, dtls.local_fingerprint()));
             if let Some(mid) = media.mid.as_ref() {
                 desc.group_bundle.push(mid.clone());
             }
@@ -2153,7 +2161,7 @@ mod tests {
                     setup: None,
                     mid: String::from("1"),
                     bundle_only: true,
-                    fingerprints: 0,
+                    fingerprints: 1,
                     rtp: Some(media1),
                 },
             ],
