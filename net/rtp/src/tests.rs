@@ -647,7 +647,7 @@ pub fn run_test_pipeline_full_and_validate_buffer<
     assert_eq!(
         depay_samples.len(),
         expected_depay.len(),
-        "Expected {} depayload samples but got {}",
+        "Expected {} depayload samples but got {}:\n\n{depay_samples:#?}\n\n{expected_depay:#?}",
         expected_depay.len(),
         depay_samples.len()
     );
