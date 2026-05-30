@@ -48,7 +48,7 @@ impl ExpectedPacket {
             flags: gst::BufferFlags::empty(),
             pt: 96,
             rtp_time: 0,
-            marker: true,
+            marker: false,
             drop: false,
         })
     }

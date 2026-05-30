@@ -38,6 +38,7 @@ fn aac_hbr_not_fragmented() {
                 } else {
                     gst::BufferFlags::MARKER
                 })
+                .marker_bit(true)
                 .rtp_time((position & 0xffff_ffff) as u32)
                 .build(),
         ]);
@@ -96,11 +97,11 @@ fn aac_hbr_fragmented() {
                     gst::BufferFlags::empty()
                 })
                 .rtp_time(rtp_time)
-                .marker_bit(false)
                 .build(),
             ExpectedPacket::builder()
                 .pts(pts)
                 .flags(gst::BufferFlags::MARKER)
+                .marker_bit(true)
                 .rtp_time(rtp_time)
                 .build(),
         ]);
@@ -203,6 +204,7 @@ fn generic_not_fragmented() {
                     gst::BufferFlags::MARKER
                 })
                 .rtp_time(pos_to_rtp(i * PACKETS_PER_BUFFER))
+                .marker_bit(true)
                 .build(),
         ]);
     }
@@ -491,6 +493,7 @@ fn generic_variable_au_size() {
                             .pts(pos_to_pts(i))
                             .flags(gst::BufferFlags::MARKER)
                             .rtp_time(pos_to_rtp(i))
+                            .marker_bit(true)
                             .build(),
                     ]);
                 }
@@ -501,6 +504,7 @@ fn generic_variable_au_size() {
                         .pts(pos_to_pts(i))
                         .flags(gst::BufferFlags::MARKER)
                         .rtp_time(pos_to_rtp(i))
+                        .marker_bit(true)
                         .build(),
                 );
                 pending_size = size;
