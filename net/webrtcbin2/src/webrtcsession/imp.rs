@@ -1025,7 +1025,9 @@ impl WebRTCSession {
                                 continue;
                             };
                             webrtcrecv.imp().recv_srtp(recv.to_vec());
-                        } else if let Some(app_data) = dtls.dtls.handle_incoming(&recv).unwrap() {
+                        } else if dtls.dtls.is_client().is_some()
+                            && let Some(app_data) = dtls.dtls.handle_incoming(&recv).unwrap()
+                        {
                             if !valid_fingerprint {
                                 gst::debug!(
                                     CAT,
