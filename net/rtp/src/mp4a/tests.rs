@@ -37,6 +37,7 @@ fn mp4a_one_frame_per_packet() {
                 } else {
                     gst::BufferFlags::MARKER
                 })
+                .marker_bit(true)
                 .rtp_time((position & 0xffff_ffff) as u32)
                 .build(),
         ]);
@@ -93,11 +94,11 @@ fn mp4a_fragmented() {
                     gst::BufferFlags::empty()
                 })
                 .rtp_time(rtp_time)
-                .marker_bit(false)
                 .build(),
             ExpectedPacket::builder()
                 .pts(pts)
                 .flags(gst::BufferFlags::MARKER)
+                .marker_bit(true)
                 .rtp_time(rtp_time)
                 .build(),
         ]);
