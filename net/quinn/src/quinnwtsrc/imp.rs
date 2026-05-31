@@ -527,10 +527,24 @@ impl PushSrcImpl for QuinnWebTransportSrc {
         &self,
         _buffer: Option<&mut gst::BufferRef>,
     ) -> Result<CreateSuccess, gst::FlowError> {
+        let timeout = {
+            let settings = self.settings.lock().unwrap();
+            settings.timeout
+        };
+
+        let rx_chan = {
+            let state = self.state.lock().unwrap();
+            match *state {
+                State::Started(ref started) => started.data_rx.clone(),
+                State::Stopped => return Err(gst::FlowError::Error),
+            }
+        };
+        let mut rx_chan = rx_chan.expect("Channel must be valid here");
+
         loop {
             // We do not want `create` to return when a stream is closed,
             // but, wait for one of the other streams to receive data.
-            match self.get() {
+            match self.get(timeout, &mut rx_chan) {
                 Ok(Some(QuinnData::Stream(stream_id, bytes))) => {
                     break Ok(self.create_buffer(bytes, Some(stream_id)));
                 }
@@ -585,25 +599,11 @@ impl QuinnWebTransportSrc {
         CreateSuccess::NewBuffer(buffer)
     }
 
-    fn get(&self) -> Result<Option<QuinnData>, Option<gst::ErrorMessage>> {
-        let settings = self.settings.lock().unwrap();
-        let timeout = settings.timeout;
-        drop(settings);
-
-        let state = self.state.lock().unwrap();
-        let rx_chan = match *state {
-            State::Started(ref started) => started.data_rx.clone(),
-            State::Stopped => {
-                return Err(Some(gst::error_msg!(
-                    gst::LibraryError::Failed,
-                    ["Cannot get data before start"]
-                )));
-            }
-        };
-        drop(state);
-
-        let rx_chan = rx_chan.expect("Channel must be valid here");
-
+    fn get(
+        &self,
+        timeout: u32,
+        rx_chan: &mut Receiver<QuinnData>,
+    ) -> Result<Option<QuinnData>, Option<gst::ErrorMessage>> {
         match wait(&self.canceller, rx_chan.recv(), timeout) {
             Ok(Ok(bytes)) => Ok(Some(bytes)),
             Ok(Err(_)) => Ok(None),
