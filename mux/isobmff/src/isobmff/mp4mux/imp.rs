@@ -417,28 +417,28 @@ pub(crate) struct MP4Mux {
 
 impl MP4Mux {
     /// Checks if a buffer is valid according to the stream configuration.
-    fn check_buffer(
-        buffer: &gst::BufferRef,
-        sinkpad: &crate::isobmff::MP4MuxPad,
-        delta_frames: DeltaFrames,
-        discard_headers: bool,
-    ) -> Result<(), gst::FlowError> {
-        if discard_headers && buffer.flags().contains(gst::BufferFlags::HEADER) {
+    fn check_buffer(buffer: &mut gst::Buffer, stream: &Stream) -> Result<(), gst::FlowError> {
+        if stream.discard_header_buffers && buffer.flags().contains(gst::BufferFlags::HEADER) {
             return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
         }
 
-        if delta_frames.requires_dts() && buffer.dts().is_none() {
-            gst::error!(CAT, obj = sinkpad, "Require DTS for video streams");
+        if stream.delta_frames.requires_dts() && buffer.dts().is_none() {
+            gst::error!(CAT, obj = stream.sinkpad, "Require DTS for video streams");
             return Err(gst::FlowError::Error);
         }
 
         if buffer.pts().is_none() {
-            gst::error!(CAT, obj = sinkpad, "Require timestamped buffers");
+            gst::error!(CAT, obj = stream.sinkpad, "Require timestamped buffers");
             return Err(gst::FlowError::Error);
         }
 
-        if delta_frames.intra_only() && buffer.flags().contains(gst::BufferFlags::DELTA_UNIT) {
-            gst::error!(CAT, obj = sinkpad, "Intra-only stream with delta units");
+        if stream.delta_frames.intra_only() && buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
+        {
+            gst::error!(
+                CAT,
+                obj = stream.sinkpad,
+                "Intra-only stream with delta units"
+            );
             return Err(gst::FlowError::Error);
         }
 
@@ -516,24 +516,20 @@ impl MP4Mux {
 
     fn peek_buffer(
         &self,
-        sinkpad: &crate::isobmff::MP4MuxPad,
-        delta_frames: DeltaFrames,
-        discard_headers: bool,
-        pre_queue: &mut VecDeque<(gst::FormattedSegment<gst::ClockTime>, gst::Buffer)>,
-        running_time_utc_time_mapping: &Option<(gst::Signed<gst::ClockTime>, gst::ClockTime)>,
+        stream: &mut Stream,
     ) -> Result<Option<(gst::FormattedSegment<gst::ClockTime>, gst::Buffer)>, gst::FlowError> {
-        if let Some((segment, buffer)) = pre_queue.front() {
+        if let Some((segment, buffer)) = stream.pre_queue.front() {
             return Ok(Some((segment.clone(), buffer.clone())));
         }
 
-        let Some(mut buffer) = sinkpad.peek_buffer() else {
+        let Some(mut buffer) = stream.sinkpad.peek_buffer() else {
             return Ok(None);
         };
-        Self::check_buffer(&buffer, sinkpad, delta_frames, discard_headers)?;
-        let mut segment = match sinkpad.segment().downcast::<gst::ClockTime>().ok() {
+        Self::check_buffer(&mut buffer, stream)?;
+        let mut segment = match stream.sinkpad.segment().downcast::<gst::ClockTime>().ok() {
             Some(segment) => segment,
             None => {
-                gst::error!(CAT, obj = sinkpad, "Got buffer before segment");
+                gst::error!(CAT, obj = stream.sinkpad, "Got buffer before segment");
                 return Err(gst::FlowError::Error);
             }
         };
@@ -544,7 +540,7 @@ impl MP4Mux {
         // After re-timestamping, put the buffer into the pre-queue so re-timestamping only has to
         // happen once.
         if self.obj().class().as_ref().variant == Variant::ONVIF {
-            let running_time_utc_time_mapping = running_time_utc_time_mapping.unwrap();
+            let running_time_utc_time_mapping = stream.running_time_utc_time_mapping.unwrap();
 
             let pts_position = buffer.pts().unwrap();
             let dts_position = buffer.dts();
@@ -559,7 +555,11 @@ impl MP4Mux {
                     // Calculate from the mapping
                     running_time_to_utc_time(pts, running_time_utc_time_mapping).ok_or_else(
                         || {
-                            gst::error!(CAT, obj = sinkpad, "Stream has negative PTS UTC time");
+                            gst::error!(
+                                CAT,
+                                obj = stream.sinkpad,
+                                "Stream has negative PTS UTC time"
+                            );
                             gst::FlowError::Error
                         },
                     )?
@@ -569,7 +569,7 @@ impl MP4Mux {
 
             gst::trace!(
                 CAT,
-                obj = sinkpad,
+                obj = stream.sinkpad,
                 "Mapped PTS running time {pts} to UTC time {utc_time}"
             );
 
@@ -580,12 +580,16 @@ impl MP4Mux {
                 if let Some(dts) = dts {
                     let dts_utc_time =
                         running_time_to_utc_time(dts, (pts, utc_time)).ok_or_else(|| {
-                            gst::error!(CAT, obj = sinkpad, "Stream has negative DTS UTC time");
+                            gst::error!(
+                                CAT,
+                                obj = stream.sinkpad,
+                                "Stream has negative DTS UTC time"
+                            );
                             gst::FlowError::Error
                         })?;
                     gst::trace!(
                         CAT,
-                        obj = sinkpad,
+                        obj = stream.sinkpad,
                         "Mapped DTS running time {dts} to UTC time {dts_utc_time}"
                     );
                     buffer.set_dts(dts_utc_time);
@@ -595,8 +599,10 @@ impl MP4Mux {
             segment = gst::FormattedSegment::default();
 
             // Drop current buffer as it is now queued
-            sinkpad.drop_buffer();
-            pre_queue.push_back((segment.clone(), buffer.clone()));
+            stream.sinkpad.drop_buffer();
+            stream
+                .pre_queue
+                .push_back((segment.clone(), buffer.clone()));
         }
 
         Ok(Some((segment, buffer)))
@@ -606,16 +612,14 @@ impl MP4Mux {
         &self,
         stream: &mut Stream,
     ) -> Result<Option<(gst::FormattedSegment<gst::ClockTime>, gst::Buffer)>, gst::FlowError> {
-        let Stream {
-            sinkpad, pre_queue, ..
-        } = stream;
-
         // In ONVIF mode we need to get UTC times for each buffer and synchronize based on that.
         // Queue up to 6s of data to get the first UTC time and then backdate.
         if self.obj().class().as_ref().variant == Variant::ONVIF
             && stream.running_time_utc_time_mapping.is_none()
         {
-            if let Some((last, first)) = Option::zip(pre_queue.back(), pre_queue.front()) {
+            if let Some((last, first)) =
+                Option::zip(stream.pre_queue.back(), stream.pre_queue.front())
+            {
                 // Existence of PTS/DTS checked below
                 let (last, first) = if stream.delta_frames.requires_dts() {
                     (
@@ -634,32 +638,27 @@ impl MP4Mux {
                 {
                     gst::error!(
                         CAT,
-                        obj = sinkpad,
+                        obj = stream.sinkpad,
                         "Got no UTC time in the first 6s of the stream"
                     );
                     return Err(gst::FlowError::Error);
                 }
             }
 
-            let Some(buffer) = sinkpad.pop_buffer() else {
-                if sinkpad.is_eos() {
-                    gst::error!(CAT, obj = sinkpad, "Got no UTC time before EOS");
+            let Some(mut buffer) = stream.sinkpad.pop_buffer() else {
+                if stream.sinkpad.is_eos() {
+                    gst::error!(CAT, obj = stream.sinkpad, "Got no UTC time before EOS");
                     return Err(gst::FlowError::Error);
                 } else {
                     return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
                 }
             };
-            Self::check_buffer(
-                &buffer,
-                sinkpad,
-                stream.delta_frames,
-                stream.discard_header_buffers,
-            )?;
+            Self::check_buffer(&mut buffer, stream)?;
 
-            let segment = match sinkpad.segment().downcast::<gst::ClockTime>().ok() {
+            let segment = match stream.sinkpad.segment().downcast::<gst::ClockTime>().ok() {
                 Some(segment) => segment,
                 None => {
-                    gst::error!(CAT, obj = sinkpad, "Got buffer before segment");
+                    gst::error!(CAT, obj = stream.sinkpad, "Got buffer before segment");
                     return Err(gst::FlowError::Error);
                 }
             };
@@ -667,7 +666,7 @@ impl MP4Mux {
             let utc_time = match get_utc_time_from_buffer(&buffer) {
                 Some(utc_time) => utc_time,
                 None => {
-                    pre_queue.push_back((segment, buffer));
+                    stream.pre_queue.push_back((segment, buffer));
                     return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
                 }
             };
@@ -675,7 +674,7 @@ impl MP4Mux {
             let running_time = segment.to_running_time_full(buffer.pts().unwrap()).unwrap();
             gst::info!(
                 CAT,
-                obj = sinkpad,
+                obj = stream.sinkpad,
                 "Got initial UTC time {utc_time} at PTS running time {running_time}",
             );
 
@@ -684,19 +683,23 @@ impl MP4Mux {
 
             // Push the buffer onto the pre-queue and re-timestamp it and all other buffers
             // based on the mapping above.
-            pre_queue.push_back((segment, buffer));
+            stream.pre_queue.push_back((segment, buffer));
 
-            for (segment, buffer) in pre_queue.iter_mut() {
+            for (segment, buffer) in stream.pre_queue.iter_mut() {
                 let buffer = buffer.make_mut();
 
                 let pts = segment.to_running_time_full(buffer.pts().unwrap()).unwrap();
                 let pts_utc_time = running_time_to_utc_time(pts, mapping).ok_or_else(|| {
-                    gst::error!(CAT, obj = sinkpad, "Stream has negative PTS UTC time");
+                    gst::error!(
+                        CAT,
+                        obj = stream.sinkpad,
+                        "Stream has negative PTS UTC time"
+                    );
                     gst::FlowError::Error
                 })?;
                 gst::trace!(
                     CAT,
-                    obj = sinkpad,
+                    obj = stream.sinkpad,
                     "Mapped PTS running time {pts} to UTC time {pts_utc_time}"
                 );
                 buffer.set_pts(pts_utc_time);
@@ -704,12 +707,16 @@ impl MP4Mux {
                 if let Some(dts) = buffer.dts() {
                     let dts = segment.to_running_time_full(dts).unwrap();
                     let dts_utc_time = running_time_to_utc_time(dts, mapping).ok_or_else(|| {
-                        gst::error!(CAT, obj = sinkpad, "Stream has negative DTS UTC time");
+                        gst::error!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Stream has negative DTS UTC time"
+                        );
                         gst::FlowError::Error
                     })?;
                     gst::trace!(
                         CAT,
-                        obj = sinkpad,
+                        obj = stream.sinkpad,
                         "Mapped DTS running time {dts} to UTC time {dts_utc_time}"
                     );
                     buffer.set_dts(dts_utc_time);
@@ -736,15 +743,10 @@ impl MP4Mux {
             unreachable!();
         }
 
-        let Some(buffer) = stream.sinkpad.pop_buffer() else {
+        let Some(mut buffer) = stream.sinkpad.pop_buffer() else {
             return Ok(None);
         };
-        Self::check_buffer(
-            &buffer,
-            &stream.sinkpad,
-            stream.delta_frames,
-            stream.discard_header_buffers,
-        )?;
+        Self::check_buffer(&mut buffer, stream)?;
 
         let segment = match stream.sinkpad.segment().downcast::<gst::ClockTime>().ok() {
             Some(segment) => segment,
@@ -771,220 +773,200 @@ impl MP4Mux {
         // Loop up to two times here to first retrieve the current buffer and then potentially
         // already calculate its duration based on the next queued buffer.
         loop {
-            match stream.pending_buffer {
-                Some(PendingBuffer {
-                    duration: Some(_), ..
-                }) => return Ok(()),
-                Some(PendingBuffer { ref buffer, .. })
+            match &stream.pending_buffer {
+                Some(p) if p.duration.is_some() => return Ok(()),
+                Some(p)
                     if stream.discard_header_buffers
-                        && buffer.flags().contains(gst::BufferFlags::HEADER) =>
+                        && p.buffer.flags().contains(gst::BufferFlags::HEADER) =>
                 {
                     return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
                 }
-                Some(PendingBuffer {
-                    timestamp,
-                    pts,
-                    ref buffer,
-                    ref mut duration,
-                    ..
-                }) => {
-                    let peek_outcome = self.peek_buffer(
-                        &stream.sinkpad,
-                        stream.delta_frames,
-                        stream.discard_header_buffers,
-                        &mut stream.pre_queue,
-                        &stream.running_time_utc_time_mapping,
-                    )?;
-                    // Already have a pending buffer but no duration, so try to get that now
-                    let (segment, buffer) = match peek_outcome {
-                        Some(res) => res,
-                        None => {
-                            if stream.sinkpad.is_eos() {
-                                let dur = buffer.duration().unwrap_or(gst::ClockTime::ZERO);
-                                gst::trace!(
-                                    CAT,
-                                    obj = stream.sinkpad,
-                                    "Stream is EOS, using {dur} as duration for queued buffer",
-                                );
+                _ => {}
+            }
 
-                                let pts = pts + dur;
-                                if stream.end_pts.is_none_or(|end_pts| end_pts < pts) {
-                                    gst::trace!(CAT, obj = stream.sinkpad, "Stream end PTS {pts}");
-                                    stream.end_pts = Some(pts);
-                                }
-
-                                *duration = Some(dur);
-
-                                return Ok(());
-                            } else {
-                                gst::trace!(
-                                    CAT,
-                                    obj = stream.sinkpad,
-                                    "Stream has no buffer queued"
-                                );
-                                return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
-                            }
-                        }
-                    };
-
-                    // Was checked above
-                    let pts_position = buffer.pts().unwrap();
-                    let next_timestamp_position = if stream.delta_frames.requires_dts() {
-                        // Was checked above
-                        buffer.dts().unwrap()
-                    } else {
-                        pts_position
-                    };
-
-                    let next_timestamp = segment
-                        .to_running_time_full(next_timestamp_position)
-                        .unwrap();
-
-                    gst::trace!(
-                        CAT,
-                        obj = stream.sinkpad,
-                        "Stream has buffer with timestamp {next_timestamp} queued",
-                    );
-
-                    let dur = next_timestamp
-                        .saturating_sub(timestamp)
-                        .positive()
-                        .unwrap_or_else(|| {
-                            gst::warning!(
+            if let Some(PendingBuffer { timestamp, pts, .. }) = stream.pending_buffer {
+                let peek_outcome = self.peek_buffer(stream)?;
+                // Already have a pending buffer but no duration, so try to get that now
+                let (segment, buffer) = match peek_outcome {
+                    Some(res) => res,
+                    None => {
+                        if stream.sinkpad.is_eos() {
+                            let pending = stream.pending_buffer.as_mut().unwrap();
+                            let dur = pending.buffer.duration().unwrap_or(gst::ClockTime::ZERO);
+                            gst::trace!(
                                 CAT,
                                 obj = stream.sinkpad,
-                                "Stream timestamps going backwards {next_timestamp} < {timestamp}",
+                                "Stream is EOS, using {dur} as duration for queued buffer",
                             );
-                            gst::ClockTime::ZERO
-                        });
 
-                    gst::trace!(
-                        CAT,
-                        obj = stream.sinkpad,
-                        "Using {dur} as duration for queued buffer",
-                    );
-
-                    let pts = pts + dur;
-                    if stream.end_pts.is_none_or(|end_pts| end_pts < pts) {
-                        gst::trace!(CAT, obj = stream.sinkpad, "Stream end PTS {pts}");
-                        stream.end_pts = Some(pts);
-                    }
-
-                    *duration = Some(dur);
-
-                    // If the stream is AV1, we need  to parse the SequenceHeader OBU to include in the
-                    // extra data of the 'av1C' box. It makes the stream playable in some browsers.
-                    let s = stream.caps().structure(0).unwrap();
-                    if !buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
-                        && s.name().as_str() == "video/x-av1"
-                    {
-                        let buf_map = buffer.map_readable().map_err(|_| {
-                            gst::error!(CAT, obj = stream.sinkpad, "Failed to map buffer");
-                            gst::FlowError::Error
-                        })?;
-                        stream.extra_header_data = read_seq_header_obu_bytes(buf_map.as_slice())
-                            .map_err(|_| {
-                                gst::error!(
-                                    CAT,
-                                    obj = stream.sinkpad,
-                                    "Failed to parse AV1 SequenceHeader OBU"
-                                );
-                                gst::FlowError::Error
-                            })?;
-                    }
-
-                    return Ok(());
-                }
-                None => {
-                    // Have no buffer queued at all yet
-
-                    let (segment, buffer) = match self.pop_buffer(stream)? {
-                        Some(res) => res,
-                        None => {
-                            if stream.sinkpad.is_eos() {
-                                gst::trace!(CAT, obj = stream.sinkpad, "Stream is EOS",);
-
-                                return Err(gst::FlowError::Eos);
-                            } else {
-                                gst::trace!(
-                                    CAT,
-                                    obj = stream.sinkpad,
-                                    "Stream has no buffer queued"
-                                );
-                                return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
+                            let pts = pts + dur;
+                            if stream.end_pts.is_none_or(|end_pts| end_pts < pts) {
+                                gst::trace!(CAT, obj = stream.sinkpad, "Stream end PTS {pts}");
+                                stream.end_pts = Some(pts);
                             }
+
+                            pending.duration = Some(dur);
+
+                            return Ok(());
+                        } else {
+                            gst::trace!(CAT, obj = stream.sinkpad, "Stream has no buffer queued");
+                            return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
                         }
-                    };
+                    }
+                };
 
+                // Was checked above
+                let pts_position = buffer.pts().unwrap();
+                let next_timestamp_position = if stream.delta_frames.requires_dts() {
                     // Was checked above
-                    let pts_position = buffer.pts().unwrap();
-                    let dts_position = buffer.dts();
+                    buffer.dts().unwrap()
+                } else {
+                    pts_position
+                };
 
-                    let pts = segment
-                        .to_running_time_full(pts_position)
-                        .unwrap()
-                        .positive()
-                        .unwrap_or_else(|| {
+                let next_timestamp = segment
+                    .to_running_time_full(next_timestamp_position)
+                    .unwrap();
+
+                gst::trace!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Stream has buffer with timestamp {next_timestamp} queued",
+                );
+
+                let dur = next_timestamp
+                    .saturating_sub(timestamp)
+                    .positive()
+                    .unwrap_or_else(|| {
+                        gst::warning!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Stream timestamps going backwards {next_timestamp} < {timestamp}",
+                        );
+                        gst::ClockTime::ZERO
+                    });
+
+                gst::trace!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Using {dur} as duration for queued buffer",
+                );
+
+                let pts = pts + dur;
+                if stream.end_pts.is_none_or(|end_pts| end_pts < pts) {
+                    gst::trace!(CAT, obj = stream.sinkpad, "Stream end PTS {pts}");
+                    stream.end_pts = Some(pts);
+                }
+
+                stream.pending_buffer.as_mut().unwrap().duration = Some(dur);
+
+                // If the stream is AV1, we need  to parse the SequenceHeader OBU to include in the
+                // extra data of the 'av1C' box. It makes the stream playable in some browsers.
+                let s = stream.caps().structure(0).unwrap();
+                if !buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
+                    && s.name().as_str() == "video/x-av1"
+                {
+                    let buf_map = buffer.map_readable().map_err(|_| {
+                        gst::error!(CAT, obj = stream.sinkpad, "Failed to map buffer");
+                        gst::FlowError::Error
+                    })?;
+                    stream.extra_header_data = read_seq_header_obu_bytes(buf_map.as_slice())
+                        .map_err(|_| {
                             gst::error!(
                                 CAT,
                                 obj = stream.sinkpad,
-                                "Stream has negative PTS running time"
+                                "Failed to parse AV1 SequenceHeader OBU"
                             );
-                            gst::ClockTime::ZERO
-                        });
+                            gst::FlowError::Error
+                        })?;
+                }
 
-                    let dts = dts_position
-                        .map(|dts_position| segment.to_running_time_full(dts_position).unwrap());
+                return Ok(());
+            } else {
+                // Have no buffer queued at all yet
 
-                    let timestamp = if stream.delta_frames.requires_dts() {
-                        // Was checked above
-                        let dts = dts.unwrap();
+                let (segment, buffer) = match self.pop_buffer(stream)? {
+                    Some(res) => res,
+                    None => {
+                        if stream.sinkpad.is_eos() {
+                            gst::trace!(CAT, obj = stream.sinkpad, "Stream is EOS",);
 
-                        if stream.start_dts.is_none() {
-                            gst::debug!(CAT, obj = stream.sinkpad, "Stream start DTS {dts}");
-                            stream.start_dts = Some(dts);
+                            return Err(gst::FlowError::Eos);
+                        } else {
+                            gst::trace!(CAT, obj = stream.sinkpad, "Stream has no buffer queued");
+                            return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
                         }
+                    }
+                };
 
-                        dts
-                    } else {
-                        gst::Signed::Positive(pts)
-                    };
+                // Was checked above
+                let pts_position = buffer.pts().unwrap();
+                let dts_position = buffer.dts();
 
-                    if stream
-                        .earliest_pts
-                        .is_none_or(|earliest_pts| earliest_pts > pts)
-                    {
-                        gst::debug!(CAT, obj = stream.sinkpad, "Stream earliest PTS {pts}");
-                        stream.earliest_pts = Some(pts);
+                let pts = segment
+                    .to_running_time_full(pts_position)
+                    .unwrap()
+                    .positive()
+                    .unwrap_or_else(|| {
+                        gst::error!(
+                            CAT,
+                            obj = stream.sinkpad,
+                            "Stream has negative PTS running time"
+                        );
+                        gst::ClockTime::ZERO
+                    });
+
+                let dts = dts_position
+                    .map(|dts_position| segment.to_running_time_full(dts_position).unwrap());
+
+                let timestamp = if stream.delta_frames.requires_dts() {
+                    // Was checked above
+                    let dts = dts.unwrap();
+
+                    if stream.start_dts.is_none() {
+                        gst::debug!(CAT, obj = stream.sinkpad, "Stream start DTS {dts}");
+                        stream.start_dts = Some(dts);
                     }
 
-                    let composition_time_offset = if stream.delta_frames.requires_dts() {
-                        let pts = gst::Signed::Positive(pts);
-                        let dts = dts.unwrap(); // set above
+                    dts
+                } else {
+                    gst::Signed::Positive(pts)
+                };
 
-                        Some(i64::try_from((pts - dts).nseconds()).map_err(|_| {
-                            gst::error!(CAT, obj = stream.sinkpad, "Too big PTS/DTS difference");
-                            gst::FlowError::Error
-                        })?)
-                    } else {
-                        None
-                    };
-
-                    gst::trace!(
-                        CAT,
-                        obj = stream.sinkpad,
-                        "Stream has buffer of size {} with timestamp {timestamp} pending",
-                        buffer.size(),
-                    );
-
-                    stream.pending_buffer = Some(PendingBuffer {
-                        buffer,
-                        timestamp,
-                        pts,
-                        composition_time_offset,
-                        duration: None,
-                    });
+                if stream
+                    .earliest_pts
+                    .is_none_or(|earliest_pts| earliest_pts > pts)
+                {
+                    gst::debug!(CAT, obj = stream.sinkpad, "Stream earliest PTS {pts}");
+                    stream.earliest_pts = Some(pts);
                 }
+
+                let composition_time_offset = if stream.delta_frames.requires_dts() {
+                    let pts = gst::Signed::Positive(pts);
+                    let dts = dts.unwrap(); // set above
+
+                    Some(i64::try_from((pts - dts).nseconds()).map_err(|_| {
+                        gst::error!(CAT, obj = stream.sinkpad, "Too big PTS/DTS difference");
+                        gst::FlowError::Error
+                    })?)
+                } else {
+                    None
+                };
+
+                gst::trace!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Stream has buffer of size {} with timestamp {timestamp} pending",
+                    buffer.size(),
+                );
+
+                stream.pending_buffer = Some(PendingBuffer {
+                    buffer,
+                    timestamp,
+                    pts,
+                    composition_time_offset,
+                    duration: None,
+                });
             }
         }
     }
