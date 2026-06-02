@@ -191,6 +191,9 @@ struct Stream {
     /// Current end PTS.
     end_pts: Option<gst::ClockTime>,
 
+    /// Current end DTS
+    end_dts: Option<gst::Signed<gst::ClockTime>>,
+
     /// In ONVIF mode, the mapping between running time and UTC time (UNIX)
     running_time_utc_time_mapping: Option<(gst::Signed<gst::ClockTime>, gst::ClockTime)>,
 
@@ -423,13 +426,37 @@ impl MP4Mux {
         }
 
         if stream.delta_frames.requires_dts() && buffer.dts().is_none() {
-            gst::error!(CAT, obj = stream.sinkpad, "Require DTS for video streams");
-            return Err(gst::FlowError::Error);
+            let Some(fallback_dts) = stream.end_dts.and_then(|d| d.positive()) else {
+                gst::error!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Buffer without DTS before any valid DTS was seen"
+                );
+                return Err(gst::FlowError::Error);
+            };
+            gst::warning!(
+                CAT,
+                obj = stream.sinkpad,
+                "Buffer has no DTS, using previous highest DTS instead"
+            );
+            buffer.make_mut().set_dts(fallback_dts);
         }
 
         if buffer.pts().is_none() {
-            gst::error!(CAT, obj = stream.sinkpad, "Require timestamped buffers");
-            return Err(gst::FlowError::Error);
+            let Some(fallback_pts) = stream.end_pts else {
+                gst::error!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Buffer without PTS before any valid PTS was seen"
+                );
+                return Err(gst::FlowError::Error);
+            };
+            gst::warning!(
+                CAT,
+                obj = stream.sinkpad,
+                "Buffer has no PTS, using previous highest PTS instead"
+            );
+            buffer.make_mut().set_pts(fallback_pts);
         }
 
         if stream.delta_frames.intra_only() && buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
@@ -805,6 +832,18 @@ impl MP4Mux {
                                 stream.end_pts = Some(pts);
                             }
 
+                            let new_end_dts = timestamp + dur;
+                            if stream.delta_frames.requires_dts()
+                                && stream.end_dts.is_none_or(|end_dts| end_dts < new_end_dts)
+                            {
+                                gst::trace!(
+                                    CAT,
+                                    obj = stream.sinkpad,
+                                    "Stream end DTS {new_end_dts}"
+                                );
+                                stream.end_dts = Some(new_end_dts)
+                            }
+
                             pending.duration = Some(dur);
 
                             return Ok(());
@@ -856,6 +895,14 @@ impl MP4Mux {
                 if stream.end_pts.is_none_or(|end_pts| end_pts < pts) {
                     gst::trace!(CAT, obj = stream.sinkpad, "Stream end PTS {pts}");
                     stream.end_pts = Some(pts);
+                }
+
+                let new_end_dts = timestamp + dur;
+                if stream.delta_frames.requires_dts()
+                    && stream.end_dts.is_none_or(|end_dts| end_dts < new_end_dts)
+                {
+                    gst::trace!(CAT, obj = stream.sinkpad, "Stream end DTS {new_end_dts}");
+                    stream.end_dts = Some(new_end_dts)
                 }
 
                 stream.pending_buffer.as_mut().unwrap().duration = Some(dur);
@@ -1219,6 +1266,7 @@ impl MP4Mux {
                     stream.earliest_pts = None;
                     stream.start_dts = None;
                     stream.end_pts = None;
+                    stream.end_dts = None;
                 }
 
                 continue;
@@ -1719,6 +1767,7 @@ impl MP4Mux {
                 earliest_pts: None,
                 elst_infos: Default::default(),
                 end_pts: None,
+                end_dts: None,
                 running_time_utc_time_mapping: None,
                 extra_header_data: None,
                 codec_specific_boxes,

@@ -613,14 +613,38 @@ impl FMP4Mux {
                 buffer.make_mut().set_dts(pts);
                 return Ok(());
             } else {
-                gst::error!(CAT, obj = sinkpad, "Require DTS for video streams");
-                return Err(gst::FlowError::Error);
+                let Some(fallback_dts) = stream.current_position.positive() else {
+                    gst::error!(
+                        CAT,
+                        obj = sinkpad,
+                        "Buffer without DTS before any valid DTS was seen"
+                    );
+                    return Err(gst::FlowError::Error);
+                };
+                gst::warning!(
+                    CAT,
+                    obj = sinkpad,
+                    "Buffer has no DTS, using previous highest DTS instead"
+                );
+                buffer.make_mut().set_dts(fallback_dts);
             }
         }
 
         if buffer.pts().is_none() {
-            gst::error!(CAT, obj = sinkpad, "Require timestamped buffers");
-            return Err(gst::FlowError::Error);
+            let Some(fallback_pts) = stream.end_pts else {
+                gst::error!(
+                    CAT,
+                    obj = sinkpad,
+                    "Buffer without PTS before any valid PTS was seen"
+                );
+                return Err(gst::FlowError::Error);
+            };
+            gst::warning!(
+                CAT,
+                obj = sinkpad,
+                "Buffer has no PTS, using previous highest PTS instead"
+            );
+            buffer.make_mut().set_pts(fallback_pts);
         }
 
         if delta_frames.intra_only() && buffer.flags().contains(gst::BufferFlags::DELTA_UNIT) {
