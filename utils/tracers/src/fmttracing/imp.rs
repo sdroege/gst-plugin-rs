@@ -73,6 +73,7 @@ pub struct FmtTracer {
         name = "format",
         get,
         set,
+        construct,
         type = FmtFormat,
         member = format,
         blurb = "Output format",
@@ -82,6 +83,7 @@ pub struct FmtTracer {
         name = "with-time",
         get,
         set,
+        construct,
         type = bool,
         member = with_time,
         blurb = "Include timestamps",
@@ -91,6 +93,7 @@ pub struct FmtTracer {
         name = "with-target",
         get,
         set,
+        construct,
         type = bool,
         member = with_target,
         blurb = "Include the target",
@@ -100,6 +103,7 @@ pub struct FmtTracer {
         name = "with-ansi",
         get,
         set,
+        construct,
         type = bool,
         member = with_ansi,
         blurb = "Include ANSI color codes",
@@ -154,5 +158,8 @@ impl ObjectImpl for FmtTracer {
 }
 
 impl GstObjectImpl for FmtTracer {}
-impl TracerImpl for FmtTracer {}
+impl TracerImpl for FmtTracer {
+    // Parse the GST_TRACERS params (format=, with-time=, ...) into properties.
+    const USE_STRUCTURE_PARAMS: bool = true;
+}
 impl TracingTracerImpl for FmtTracer {}

@@ -31,9 +31,9 @@
  *
  * Whether to include span arguments in the trace output (default: true).
  */
+use gst::glib::Properties;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_tracing::tracer::{TracingTracer, TracingTracerImpl};
-use std::str::FromStr;
 use std::sync::Mutex;
 use tracing::error;
 use tracing_subscriber::prelude::*;
@@ -43,9 +43,22 @@ struct State {
     chrome_guard: Option<tracing_chrome::FlushGuard>,
 }
 
-#[derive(Default)]
+#[derive(Properties, Default)]
+#[properties(wrapper_type = super::ChromeTracer)]
 pub struct ChromeTracer {
+    #[property(name = "include-args", get, set, construct, type = bool, member = include_args, blurb = "Include span arguments in the trace output", default = true)]
+    settings: Mutex<Settings>,
     state: Mutex<State>,
+}
+
+struct Settings {
+    include_args: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self { include_args: true }
+    }
 }
 
 #[glib::object_subclass]
@@ -55,20 +68,12 @@ impl ObjectSubclass for ChromeTracer {
     type ParentType = TracingTracer;
 }
 
+#[glib::derived_properties]
 impl ObjectImpl for ChromeTracer {
     fn constructed(&self) {
-        let mut include_args = true;
+        self.parent_constructed();
 
-        if let Some(params) = self.obj().property::<Option<String>>("params") {
-            let tmp = format!("params,{}", params);
-            include_args = gst::Structure::from_str(&tmp)
-                .unwrap_or_else(|e| {
-                    eprintln!("Invalid params string: {:?}: {e:?}", tmp);
-                    gst::Structure::new_empty("params")
-                })
-                .get::<bool>("include-args")
-                .unwrap_or(true)
-        }
+        let include_args = self.settings.lock().unwrap().include_args;
 
         let (chrome_layer, guard) = tracing_chrome::ChromeLayerBuilder::new()
             .include_args(include_args)
@@ -78,11 +83,12 @@ impl ObjectImpl for ChromeTracer {
         if let Err(e) = tracing_subscriber::registry().with(chrome_layer).try_init() {
             error!("Failed to initialize tracing subscriber: {e:?}");
         }
-
-        self.parent_constructed();
     }
 }
 
 impl GstObjectImpl for ChromeTracer {}
-impl TracerImpl for ChromeTracer {}
+impl TracerImpl for ChromeTracer {
+    // Parse the GST_TRACERS params into properties.
+    const USE_STRUCTURE_PARAMS: bool = true;
+}
 impl TracingTracerImpl for ChromeTracer {}

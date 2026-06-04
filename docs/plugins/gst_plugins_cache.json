@@ -18207,7 +18207,21 @@
                     "GstObject",
                     "GInitiallyUnowned",
                     "GObject"
-                ]
+                ],
+                "properties": {
+                    "include-args": {
+                        "blurb": "Include span arguments in the trace output",
+                        "conditionally-available": false,
+                        "construct": true,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                }
             },
             "fmttracing": {
                 "hierarchy": [
@@ -18222,7 +18236,7 @@
                     "format": {
                         "blurb": "Output format",
                         "conditionally-available": false,
-                        "construct": false,
+                        "construct": true,
                         "construct-only": false,
                         "controllable": false,
                         "default": "full (0)",
@@ -18234,7 +18248,7 @@
                     "with-ansi": {
                         "blurb": "Include ANSI color codes",
                         "conditionally-available": false,
-                        "construct": false,
+                        "construct": true,
                         "construct-only": false,
                         "controllable": false,
                         "default": "true",
@@ -18246,7 +18260,7 @@
                     "with-target": {
                         "blurb": "Include the target",
                         "conditionally-available": false,
-                        "construct": false,
+                        "construct": true,
                         "construct-only": false,
                         "controllable": false,
                         "default": "true",
@@ -18258,7 +18272,7 @@
                     "with-time": {
                         "blurb": "Include timestamps",
                         "conditionally-available": false,
-                        "construct": false,
+                        "construct": true,
                         "construct-only": false,
                         "controllable": false,
                         "default": "true",
