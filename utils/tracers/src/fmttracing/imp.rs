@@ -11,7 +11,7 @@
  * tracer-fmttracing:
  *
  * This tracer uses the `tracing_subscriber::fmt` subscriber to format
- * tracing events. This provides human-readable output on stderr.
+ * tracing events. This provides human-readable output on stdout.
  *
  * Example:
  *
@@ -40,11 +40,16 @@
  * ### `with-ansi`
  *
  * Whether to include ANSI color codes in the output (default: true).
+ *
+ * Span lifecycle is always logged: a line is printed when a span opens (with
+ * its field values) and another when it closes (with its duration), so custom
+ * spans emitted via gst_trace_span_begin()/gst_trace_span_end() are visible.
  */
 use gst::glib::Properties;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_tracing::tracer::{TracingTracer, TracingTracerImpl};
 use tracing::error;
+use tracing_subscriber::fmt::format::FmtSpan;
 
 use super::FmtFormat;
 
@@ -131,11 +136,18 @@ impl ObjectImpl for FmtTracer {
         let with_ansi = settings.with_ansi;
         drop(settings);
 
+        // Always log span lifecycle so custom spans are visible. The
+        // tracing-subscriber fmt layer otherwise only prints events, not spans.
+        let span_events = FmtSpan::NEW | FmtSpan::CLOSE;
+
         // Macro to reduce repetition - each format returns a different type
         // so we can't easily abstract over them without boxing
         macro_rules! init_subscriber {
             ($builder:expr) => {{
-                let builder = $builder.with_target(with_target).with_ansi(with_ansi);
+                let builder = $builder
+                    .with_target(with_target)
+                    .with_ansi(with_ansi)
+                    .with_span_events(span_events);
                 if with_time {
                     builder.try_init()
                 } else {
