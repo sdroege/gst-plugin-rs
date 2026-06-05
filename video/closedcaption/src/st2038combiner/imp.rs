@@ -363,7 +363,12 @@ impl AggregatorImpl for St2038Combiner {
                 }
             }
             gst::EventView::Segment(e) => match e.segment().downcast_ref::<gst::ClockTime>() {
-                Some(s) => self.obj().update_segment(s),
+                Some(s) => {
+                    if self.is_video_pad(pad) {
+                        gst::info!(CAT, imp = self, "Forwarding video segment {s:?}");
+                        self.obj().update_segment(s);
+                    }
+                }
                 None => {
                     gst::error!(CAT, obj = pad, "Segment in non-TIME format");
                     return false;
