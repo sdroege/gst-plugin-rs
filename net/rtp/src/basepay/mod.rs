@@ -120,6 +120,11 @@ pub trait RtpBasePay2Ext: IsA<RtpBasePay2> + 'static {
     fn max_payload_size(&self) -> u32 {
         self.upcast_ref::<RtpBasePay2>().imp().max_payload_size()
     }
+
+    // Returns the current segment. Must only be called from the streaming thread!
+    fn segment(&self) -> Option<gst::FormattedSegment<gst::ClockTime>> {
+        self.upcast_ref::<RtpBasePay2>().imp().segment()
+    }
 }
 
 impl<O: IsA<RtpBasePay2>> RtpBasePay2Ext for O {}

@@ -913,6 +913,15 @@ impl RtpBasePay2 {
     pub(super) fn src_pad(&self) -> &gst::Pad {
         &self.src_pad
     }
+
+    pub(super) fn segment(&self) -> Option<gst::FormattedSegment<gst::ClockTime>> {
+        let state = self.state.borrow();
+
+        match &state.segment {
+            Some((_, segment)) => Some(segment.clone()),
+            _ => None,
+        }
+    }
 }
 
 /// Default virtual method implementations.
