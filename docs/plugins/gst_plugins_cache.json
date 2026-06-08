@@ -14852,6 +14852,18 @@
                         "readable": true,
                         "type": "guint64",
                         "writable": true
+                    },
+                    "tls-validation-flags": {
+                        "blurb": "TLS certificate validation flags used to validate the server certificate",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "validate-all",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRtspSrc2TlsValidationFlags",
+                        "writable": true
                     }
                 },
                 "rank": "none",
@@ -14928,7 +14940,53 @@
         },
         "filename": "gstrsrtsp",
         "license": "MPL",
-        "other-types": {},
+        "other-types": {
+            "GstRtspSrc2TlsValidationFlags": {
+                "kind": "flags",
+                "values": [
+                    {
+                        "desc": "Signing certificate authority is not known.",
+                        "name": "unknown-ca",
+                        "value": "0x00000001"
+                    },
+                    {
+                        "desc": "Certificate does not match the expected identity of the site that it was retrieved from.",
+                        "name": "bad-identity",
+                        "value": "0x00000002"
+                    },
+                    {
+                        "desc": "Certificate's activation time is still in the future.",
+                        "name": "not-activated",
+                        "value": "0x00000004"
+                    },
+                    {
+                        "desc": "Certificate has expired.",
+                        "name": "expired",
+                        "value": "0x00000008"
+                    },
+                    {
+                        "desc": "Certificate has been revoked.",
+                        "name": "revoked",
+                        "value": "0x00000010"
+                    },
+                    {
+                        "desc": "Certificate's algorithm is considered insecure.",
+                        "name": "insecure",
+                        "value": "0x00000020"
+                    },
+                    {
+                        "desc": "Some other error occurred validating the certificate.",
+                        "name": "generic-error",
+                        "value": "0x00000040"
+                    },
+                    {
+                        "desc": "Combination of all of the above flags.",
+                        "name": "validate-all",
+                        "value": "0x0000007f"
+                    }
+                ]
+            }
+        },
         "package": "gst-plugin-rtsp",
         "source": "gst-plugin-rtsp",
         "tracers": {},

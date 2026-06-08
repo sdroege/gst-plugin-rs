@@ -11,6 +11,7 @@
 //
 // https://www.rfc-editor.org/rfc/rfc2326.html
 
+use crate::rtspsrc::RtspSrc2TlsValidationFlags;
 use crate::rtspsrc::http_tunnel::TunnelStream;
 use crate::utils::create_tls_connector;
 use rand::distr::{Alphanumeric, Distribution};
@@ -69,6 +70,7 @@ const DEFAULT_PROTOCOLS: &str = "udp-mcast,udp,tcp";
 const DEFAULT_RECEIVE_MTU: u32 = 1500 + 8;
 const DEFAULT_DO_RTSP_KEEP_ALIVE: bool = true;
 const DEFAULT_LATENCY_MS: u32 = 200;
+const DEFAULT_TLS_VALIDATION: RtspSrc2TlsValidationFlags = RtspSrc2TlsValidationFlags::ValidateAll;
 
 const MAX_MESSAGE_SIZE: usize = 1024 * 1024;
 const MAX_BIND_PORT_RETRY: u16 = 100;
@@ -341,6 +343,7 @@ struct Settings {
     extra_headers: Vec<(String, String)>,
     do_rtsp_keep_alive: bool,
     latency: u32,
+    tls_validation: RtspSrc2TlsValidationFlags,
 }
 
 impl Default for Settings {
@@ -356,6 +359,7 @@ impl Default for Settings {
             extra_headers: Vec::new(),
             do_rtsp_keep_alive: DEFAULT_DO_RTSP_KEEP_ALIVE,
             latency: DEFAULT_LATENCY_MS,
+            tls_validation: DEFAULT_TLS_VALIDATION,
         }
     }
 }
@@ -778,6 +782,12 @@ impl ObjectImpl for RtspSrc {
                     .default_value(DEFAULT_LATENCY_MS)
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecFlags::builder::<RtspSrc2TlsValidationFlags>("tls-validation-flags")
+                    .nick("TLS certificate validation")
+                    .blurb("TLS certificate validation flags used to validate the server certificate")
+                    .default_value(DEFAULT_TLS_VALIDATION)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -855,6 +865,13 @@ impl ObjectImpl for RtspSrc {
                 settings.latency = value.get::<u32>().expect("type checked upstream");
                 Ok(())
             }
+            "tls-validation-flags" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.tls_validation = value
+                    .get::<RtspSrc2TlsValidationFlags>()
+                    .expect("type checked upstream");
+                Ok(())
+            }
             name => unimplemented!("Property '{name}'"),
         };
 
@@ -916,6 +933,10 @@ impl ObjectImpl for RtspSrc {
             "latency" => {
                 let settings = self.settings.lock().unwrap();
                 settings.latency.to_value()
+            }
+            "tls-validation-flags" => {
+                let settings = self.settings.lock().unwrap();
+                settings.tls_validation.to_value()
             }
             name => unimplemented!("Property '{name}'"),
         }
@@ -1210,7 +1231,7 @@ impl RtspSrc {
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        let (url, tls_enabled, cert, key, tunnel_enabled, extra_headers) = {
+        let (url, tls_enabled, cert, key, tunnel_enabled, extra_headers, tls_validation) = {
             let settings = self.settings.lock().unwrap();
             let Some(url) = settings.location.clone() else {
                 return Err(gst::error_msg!(
@@ -1223,6 +1244,7 @@ impl RtspSrc {
             let certificate_file = settings.certificate_file.clone();
             let private_key_file = settings.private_key_file.clone();
             let extra_headers = settings.extra_headers.clone();
+            let tls_validation = settings.tls_validation;
 
             (
                 url,
@@ -1231,6 +1253,7 @@ impl RtspSrc {
                 private_key_file,
                 tunnel_enabled,
                 extra_headers,
+                tls_validation,
             )
         };
 
@@ -1316,7 +1339,8 @@ impl RtspSrc {
                         }
                     };
 
-                    let connector = match create_tls_connector(self_weak, cert, key) {
+                    let connector = match create_tls_connector(self_weak, cert, key, tls_validation)
+                    {
                         Ok(c) => c,
                         Err(err) => {
                             gst::element_imp_error!(
