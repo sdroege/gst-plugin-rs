@@ -59,7 +59,6 @@ Roughly in order of priority:
 These are some misc rtspsrc props that haven't been implemented in rtspsrc2
 yet:
 
-* latency
 * do-rtx
 * do-rtcp
 * iface

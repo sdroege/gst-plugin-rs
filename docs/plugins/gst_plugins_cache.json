@@ -14761,6 +14761,20 @@
                         "type": "GstStructure",
                         "writable": true
                     },
+                    "latency": {
+                        "blurb": "Amount of ms to buffer",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "200",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
                     "location": {
                         "blurb": "RTSP server, credentials and media path, e.g. rtsp://user:p4ssw0rd@camera-5.local:8554/h264_1080p30",
                         "conditionally-available": false,
