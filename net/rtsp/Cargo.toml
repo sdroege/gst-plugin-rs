@@ -39,6 +39,7 @@ base64 = "0.22"
 bytes = "1"
 tokio-util = "0.7"
 mykey = "1"
+x509-parser = "0.18"
 
 [dev-dependencies]
 ctrlc = "3.4"

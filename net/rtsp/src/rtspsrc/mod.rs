@@ -49,11 +49,58 @@ mod sdp;
 mod tcp_message;
 mod transport;
 
+#[glib::flags(name = "GstRtspSrc2TlsValidationFlags")]
+pub(crate) enum RtspSrc2TlsValidationFlags {
+    #[flags_value(
+        name = "Signing certificate authority is not known.",
+        nick = "unknown-ca"
+    )]
+    UnknownCA = 1 << 0,
+
+    #[flags_value(
+        name = "Certificate does not match the expected identity of the site that it was retrieved from.",
+        nick = "bad-identity"
+    )]
+    BadIdentity = 1 << 1,
+
+    #[flags_value(
+        name = "Certificate's activation time is still in the future.",
+        nick = "not-activated"
+    )]
+    NotActivated = 1 << 2,
+
+    #[flags_value(name = "Certificate has expired.", nick = "expired")]
+    Expired = 1 << 3,
+
+    #[flags_value(name = "Certificate has been revoked.", nick = "revoked")]
+    Revoked = 1 << 4,
+
+    #[flags_value(
+        name = "Certificate's algorithm is considered insecure.",
+        nick = "insecure"
+    )]
+    Insecure = 1 << 5,
+
+    #[flags_value(
+        name = "Some other error occurred validating the certificate.",
+        nick = "generic-error"
+    )]
+    GenericError = 1 << 6,
+
+    #[flags_value(name = "Combination of all of the above flags.", nick = "validate-all")]
+    ValidateAll = 0x00_7f,
+}
+
 glib::wrapper! {
     pub struct RtspSrc(ObjectSubclass<imp::RtspSrc>) @extends gst::Bin, gst::Element, gst::Object, @implements gst::URIHandler;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(feature = "doc")]
+    {
+        RtspSrc2TlsValidationFlags::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    }
+
     gst::Element::register(
         Some(plugin),
         "rtspsrc2",

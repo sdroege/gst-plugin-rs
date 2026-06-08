@@ -5439,6 +5439,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "url",
+ "x509-parser",
 ]
 
 [[package]]
