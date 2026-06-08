@@ -68,6 +68,7 @@ const DEFAULT_PROTOCOLS: &str = "udp-mcast,udp,tcp";
 // possibly overflown our receive buffer, and triggering a doubling of the buffer sizes.
 const DEFAULT_RECEIVE_MTU: u32 = 1500 + 8;
 const DEFAULT_DO_RTSP_KEEP_ALIVE: bool = true;
+const DEFAULT_LATENCY_MS: u32 = 200;
 
 const MAX_MESSAGE_SIZE: usize = 1024 * 1024;
 const MAX_BIND_PORT_RETRY: u16 = 100;
@@ -339,6 +340,7 @@ struct Settings {
     private_key_file: Option<PathBuf>,
     extra_headers: Vec<(String, String)>,
     do_rtsp_keep_alive: bool,
+    latency: u32,
 }
 
 impl Default for Settings {
@@ -353,6 +355,7 @@ impl Default for Settings {
             private_key_file: None,
             extra_headers: Vec::new(),
             do_rtsp_keep_alive: DEFAULT_DO_RTSP_KEEP_ALIVE,
+            latency: DEFAULT_LATENCY_MS,
         }
     }
 }
@@ -768,6 +771,13 @@ impl ObjectImpl for RtspSrc {
                     .blurb("Send RTSP keep alive packets, disable for old incompatible server.")
                     .default_value(DEFAULT_DO_RTSP_KEEP_ALIVE)
                     .build(),
+                glib::ParamSpecUInt::builder("latency")
+                    .nick("Buffer latency in ms")
+                    .blurb("Amount of ms to buffer")
+                    .maximum(u32::MAX)
+                    .default_value(DEFAULT_LATENCY_MS)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -840,6 +850,11 @@ impl ObjectImpl for RtspSrc {
                 settings.do_rtsp_keep_alive = value.get::<bool>().expect("type checked upstream");
                 Ok(())
             }
+            "latency" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.latency = value.get::<u32>().expect("type checked upstream");
+                Ok(())
+            }
             name => unimplemented!("Property '{name}'"),
         };
 
@@ -897,6 +912,10 @@ impl ObjectImpl for RtspSrc {
             "do-rtsp-keep-alive" => {
                 let settings = self.settings.lock().unwrap();
                 settings.do_rtsp_keep_alive.to_value()
+            }
+            "latency" => {
+                let settings = self.settings.lock().unwrap();
+                settings.latency.to_value()
             }
             name => unimplemented!("Property '{name}'"),
         }
@@ -1663,7 +1682,7 @@ impl RtspSrc {
         }
 
         let using_rtp2 = std::env::var("USE_RTP2").is_ok_and(|s| s == "1");
-        let manager = RtspManager::new(using_rtp2);
+        let manager = RtspManager::new(using_rtp2, settings.latency);
 
         if !manager.using_rtp2 {
             for (rtpsession_n, p) in task_state
@@ -2411,10 +2430,12 @@ struct RtspManager {
 }
 
 impl RtspManager {
-    fn new(rtp2: bool) -> Self {
+    fn new(rtp2: bool, latency: u32) -> Self {
         let (recv, send) = if rtp2 {
             let recv = gst::ElementFactory::make_with_name("rtprecv", None)
                 .unwrap_or_else(|_| panic!("rtprecv not found"));
+            recv.set_property("latency", latency);
+
             let send = gst::ElementFactory::make("rtpsend")
                 .property("rtp-id", recv.property::<String>("rtp-id"))
                 .build()
@@ -2423,6 +2444,8 @@ impl RtspManager {
         } else {
             let e = gst::ElementFactory::make_with_name("rtpbin", None)
                 .unwrap_or_else(|_| panic!("rtpbin not found"));
+            e.set_property("latency", latency);
+
             (e.clone(), e)
         };
         if !rtp2 {
