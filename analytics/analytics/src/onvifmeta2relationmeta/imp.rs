@@ -155,6 +155,7 @@ impl OnvifMeta2RelationMeta {
         mut input_buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let buf = input_buffer.make_mut();
+        let buf_pts = buf.pts();
         let state = self.state.lock().unwrap();
 
         let video_info = state
@@ -521,15 +522,33 @@ impl OnvifMeta2RelationMeta {
 
                                 let mut arm = AnalyticsRelationMeta::add(buf);
                                 let quark = glib::Quark::from_str(tag);
-                                let _ = arm.add_od_mtd(
-                                    quark,
-                                    x1,
-                                    y1,
-                                    x2 - x1,
-                                    y2 - y1,
-                                    likelihood as f32,
-                                );
+                                let od_id = arm
+                                    .add_od_mtd(quark, x1, y1, x2 - x1, y2 - y1, likelihood as f32)
+                                    .ok()
+                                    .map(|od| od.id());
                                 let _ = arm.add_one_cls_mtd(likelihood as f32, quark);
+
+                                // Reconstruct tracking metadata from the
+                                // ONVIF ObjectId so downstream elements
+                                // (objectdetectionoverlay, ioutracker) can
+                                // colour-code and correlate objects across
+                                // frames. Non-numeric ObjectIds are silently
+                                // skipped: the ONVIF spec defines ObjectId
+                                // as xs:integer.
+                                //
+                                // Use the buffer PTS as first-seen: with no
+                                // cross-frame state, this marks the object as
+                                // first observed on the current frame.
+                                if let (Some(od_id), Ok(tracking_id)) =
+                                    (od_id, object_id.parse::<u64>())
+                                    && let Ok(track) = arm.add_tracking_mtd(
+                                        tracking_id,
+                                        buf_pts.unwrap_or(gst::ClockTime::ZERO),
+                                    )
+                                {
+                                    let track_id = track.id();
+                                    let _ = arm.set_relation(RelTypes::RELATE_TO, od_id, track_id);
+                                }
                             }
                         }
                     }

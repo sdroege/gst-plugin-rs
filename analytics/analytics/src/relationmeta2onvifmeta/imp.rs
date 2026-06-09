@@ -342,11 +342,28 @@ impl RelationMeta2OnvifMeta {
             for meta in metas.iter::<AnalyticsODMtd>() {
                 let loc = meta.location().unwrap();
 
+                // Use the persistent tracking ID as ObjectId when a tracker
+                // (e.g. ioutracker) is upstream, otherwise fall back to the
+                // per-frame metadata slot index for backwards compatibility.
+                let object_id = metas
+                    .iter_direct_related::<AnalyticsTrackingMtd>(meta.id(), RelTypes::RELATE_TO)
+                    .next()
+                    .map(|tracking| tracking.info().0)
+                    .unwrap_or(meta.id() as u64);
+
+                gst::trace!(
+                    CAT,
+                    imp = self,
+                    "Object meta {} -> ObjectId {}",
+                    meta.id(),
+                    object_id
+                );
+
                 let mut object = xmltree::Element::new("Object");
                 object.prefix = Some(String::from(crate::ONVIF_METADATA_PREFIX));
                 object
                     .attributes
-                    .insert("ObjectId".to_string(), meta.id().to_string());
+                    .insert("ObjectId".to_string(), object_id.to_string());
 
                 let mut appearance = xmltree::Element::new("Appearance");
                 appearance.prefix = Some(String::from(crate::ONVIF_METADATA_PREFIX));
