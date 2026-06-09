@@ -18540,6 +18540,20 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "rtx-percentage": {
+                        "blurb": "Maximum bandwidth to use for retransmissions, as a percentage of the overall used bandwidth (-1 = no-throttling)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "2147483647",
+                        "min": "-1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    },
                     "run-web-server": {
                         "blurb": "Whether the element should run a web server",
                         "conditionally-available": false,

@@ -65,6 +65,7 @@ const TLS_HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_sec
 
 const DEFAULT_STUN_SERVER: Option<&str> = Some("stun://stun.l.google.com:19302");
 const DEFAULT_MIN_BITRATE: u32 = 1000;
+const DEFAULT_RTX_PERCENTAGE: i32 = -1;
 
 /* I have found higher values to cause packet loss *somewhere* in
  * my local network, possibly related to chrome's pretty low UDP
@@ -135,6 +136,7 @@ struct Settings {
     web_server_host_addr: url::Url,
     forward_metas: HashSet<String>,
     enabled_mitigation_modes: WebRTCSinkMitigationMode,
+    rtx_percentage: i32,
 }
 
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -578,6 +580,7 @@ impl Default for Settings {
             web_server_host_addr: url::Url::parse(DEFAULT_WEB_SERVER_HOST_ADDR).unwrap(),
             forward_metas: HashSet::new(),
             enabled_mitigation_modes: DEFAULT_ENABLE_MITIGATION_MODES,
+            rtx_percentage: DEFAULT_RTX_PERCENTAGE,
         }
     }
 }
@@ -4328,6 +4331,20 @@ impl BaseWebRTCSink {
             format!("webrtcsink-peer-{}-remote-description-set", session.id),
         );
 
+        let rtpbin = session
+            .webrtcbin
+            .dynamic_cast_ref::<gst::ChildProxy>()
+            .unwrap()
+            .child_by_name("rtpbin")
+            .unwrap();
+
+        let rtp_session = rtpbin.emit_by_name::<gst::Element>("get-session", &[&0u32]);
+
+        if rtp_session.has_property("rtx-percentage") {
+            let rtx_percentage = self.settings.lock().unwrap().rtx_percentage;
+            rtp_session.set_property("rtx-percentage", rtx_percentage);
+        }
+
         let this_weak = self.downgrade();
         let webrtcbin = session.webrtcbin.downgrade();
         let session_id_clone = session.id.clone();
@@ -5488,6 +5505,22 @@ impl ObjectImpl for BaseWebRTCSink {
                     .mutable_playing()
                     .build(),
 
+                /**
+                 * GstBaseWebRTCSink:rtx-percentage:
+                 *
+                 * Maximum bandwidth to use for retransmissions, as a percentage of the overall used
+                 * bandwidth (-1 = no-throttling)
+                 *
+                 * Since: plugins-rs-0.16
+                 */
+                glib::ParamSpecInt::builder("rtx-percentage")
+                    .nick("RTX Percentage")
+                    .blurb("Maximum bandwidth to use for retransmissions, as a percentage of the overall used bandwidth (-1 = no-throttling)")
+                    .minimum(-1)
+                    .maximum(i32::MAX)
+                    .default_value(DEFAULT_RTX_PERCENTAGE)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -5641,6 +5674,10 @@ impl ObjectImpl for BaseWebRTCSink {
                     .get::<WebRTCSinkMitigationMode>()
                     .expect("type checked upstream");
             }
+            "rtx-percentage" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.rtx_percentage = value.get::<i32>().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -5746,6 +5783,10 @@ impl ObjectImpl for BaseWebRTCSink {
             "enable-mitigation-modes" => {
                 let settings = self.settings.lock().unwrap();
                 settings.enabled_mitigation_modes.to_value()
+            }
+            "rtx-percentage" => {
+                let settings = self.settings.lock().unwrap();
+                settings.rtx_percentage.to_value()
             }
             _ => unimplemented!(),
         }
