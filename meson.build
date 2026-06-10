@@ -240,7 +240,7 @@ if webrtc_option.allowed() \
   deps += [['gstreamer-webrtc-1.0', 'gst-plugins-bad', 'gstwebrtc_dep', 'gstwebrtc', req]]
   deps += [['gstreamer-sdp-1.0', 'gst-plugins-base', 'sdp_dep', 'gstsdp', req]]
 endif
-if get_option('tests').allowed()
+if get_option('tests').allowed() or get_option('docs').allowed()
   deps += [['gstreamer-check-1.0', 'gstreamer', 'gst_check_dep', 'gst_check', get_option('tests')]]
 endif
 if gtk4_option.allowed()
