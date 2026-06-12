@@ -19178,6 +19178,18 @@
                 ],
                 "kind": "object",
                 "properties": {
+                    "early-data-mode": {
+                        "blurb": "Controls how this sink pad deals with buffers while connection is pending",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "block (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstWebRTCSendSinkPadEarlyDataMode",
+                        "writable": true
+                    },
                     "transceiver": {
                         "blurb": "The transceiver in use for this sink pad",
                         "conditionally-available": false,
@@ -19190,6 +19202,21 @@
                         "writable": false
                     }
                 }
+            },
+            "GstWebRTCSendSinkPadEarlyDataMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Block buffers",
+                        "name": "block",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Drop buffers",
+                        "name": "drop",
+                        "value": "1"
+                    }
+                ]
             },
             "GstWebRTCSession": {
                 "hierarchy": [

@@ -454,17 +454,28 @@ impl ElementImpl for WebRTCSend {
                     .build()
                     .downcast::<WebRTCSendSinkPad>()
                     .unwrap();
-                let block_id = sinkpad
-                    .add_probe(
-                        gst::PadProbeType::BLOCK
-                            | gst::PadProbeType::BUFFER
-                            | gst::PadProbeType::BUFFER_LIST,
-                        |_pad, _info| gst::PadProbeReturn::Ok,
-                    )
-                    .unwrap();
 
                 let mut trans_state = transceiver.imp().state();
                 let mut sink_state = sinkpad.imp().state();
+
+                let block_id = if sink_state.early_data_mode().is_block() {
+                    sinkpad
+                        .add_probe(
+                            gst::PadProbeType::BLOCK
+                                | gst::PadProbeType::BUFFER
+                                | gst::PadProbeType::BUFFER_LIST,
+                            |_pad, _info| gst::PadProbeReturn::Ok,
+                        )
+                        .unwrap()
+                } else {
+                    sinkpad
+                        .add_probe(
+                            gst::PadProbeType::BUFFER | gst::PadProbeType::BUFFER_LIST,
+                            |_pad, _info| gst::PadProbeReturn::Drop,
+                        )
+                        .unwrap()
+                };
+
                 trans_state.set_send_pad(sinkpad.upcast_ref());
                 sink_state.set_mline(Some(id));
                 sink_state.set_block_id(block_id);
