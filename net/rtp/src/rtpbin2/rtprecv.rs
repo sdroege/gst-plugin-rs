@@ -1719,6 +1719,8 @@ impl RtpRecv {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let handling_time = InstantAndRunningTime::now(self, pad)?;
 
+        gst::trace!(CAT, obj = pad, "id {id}: {list:?}");
+
         let mut state = self.state.lock().unwrap();
         let Some(session) = state.mut_session_by_id(id) else {
             return Err(gst::FlowError::Error);
@@ -1743,6 +1745,8 @@ impl RtpRecv {
         let mut items_to_pre_push: smallvec::SmallVec<[HeldRecvItem; 4]> =
             smallvec::SmallVec::with_capacity(list.len() + 2);
         let mut held_buffers: smallvec::SmallVec<[HeldRecvBuffer; 4]> = Default::default();
+        // recv src pads for retained buffers, in case we end up needing to split the list
+        let mut recv_src_pads = RtpRecvSrcPads::default();
         let mut split_bufferlist = false;
         let mut previous_recv_src_pad = None;
         let list_mut = list.make_mut();
@@ -1782,6 +1786,7 @@ impl RtpRecv {
                     {
                         split_bufferlist = true;
                     }
+                    recv_src_pads.push(recv_src_pad.clone());
                     previous_recv_src_pad = Some(recv_src_pad);
                     ControlFlow::Continue(Some(buffer))
                 }
@@ -1801,11 +1806,10 @@ impl RtpRecv {
         if split_bufferlist {
             assert!(!list_mut.is_empty());
 
-            let previous_recv_src_pad = previous_recv_src_pad.unwrap();
-
             // this abomination is to work around passing state through handle_push_jitterbuffer
             // inside a closure
             let mut maybe_state = Some(state);
+            let mut recv_src_pad_iter = recv_src_pads.drain(..);
             list_mut.foreach_mut({
                 let maybe_state = &mut maybe_state;
                 |buffer, _i| match self.handle_push_jitterbuffer(
@@ -1815,7 +1819,9 @@ impl RtpRecv {
                         hold_id: None,
                         arrival_time: arrival_time.instant,
                         buffer,
-                        recv_src_pad: previous_recv_src_pad.clone(),
+                        recv_src_pad: recv_src_pad_iter
+                            .next()
+                            .expect("pushed recv_src_pad for each retained buffers"),
                     })],
                 ) {
                     Ok(state) => {
@@ -1853,6 +1859,8 @@ impl RtpRecv {
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let handling_time = InstantAndRunningTime::now(self, pad)?;
+
+        gst::trace!(CAT, obj = pad, "id {id}: {buffer:?}");
 
         let mut state = self.state.lock().unwrap();
         let Some(session) = state.mut_session_by_id(id) else {
@@ -1916,6 +1924,8 @@ impl RtpRecv {
         id: usize,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst::trace!(CAT, obj = pad, "id {id}: {buffer:?}");
+
         let state = self.state.lock().unwrap();
         let Some(session) = state.session_by_id(id) else {
             return Err(gst::FlowError::Error);
