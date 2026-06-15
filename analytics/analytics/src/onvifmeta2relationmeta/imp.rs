@@ -525,8 +525,8 @@ impl OnvifMeta2RelationMeta {
                                     quark,
                                     x1,
                                     y1,
-                                    y2 - y1,
                                     x2 - x1,
+                                    y2 - y1,
                                     likelihood as f32,
                                 );
                                 let _ = arm.add_one_cls_mtd(likelihood as f32, quark);
