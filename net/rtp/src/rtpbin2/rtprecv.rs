@@ -1834,8 +1834,8 @@ impl RtpRecv {
                     }
                 }
             });
-            state = maybe_state.unwrap();
             ret?;
+            state = maybe_state.expect("no errors => maybe_state restored");
         } else if !list.is_empty() {
             state = self.handle_push_jitterbuffer(
                 state,
