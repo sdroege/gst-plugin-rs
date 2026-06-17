@@ -7,7 +7,11 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::sync::{Arc, Mutex, atomic::AtomicUsize};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicU16, AtomicUsize, Ordering},
+    mpsc,
+};
 
 use gst::{Caps, prelude::*};
 use gst_check::Harness;
@@ -16,7 +20,7 @@ use rtp_types::*;
 static ELEMENT_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 fn next_element_counter() -> usize {
-    ELEMENT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+    ELEMENT_COUNTER.fetch_add(1, Ordering::SeqCst)
 }
 
 fn init() {
@@ -29,14 +33,14 @@ fn init() {
     });
 }
 
-const TEST_SSRC: u32 = 0x12345678;
+const TEST_DEFAULT_SSRC: u32 = 0x12345678;
 const TEST_PT: u8 = 96;
 const TEST_CLOCK_RATE: u32 = 48000;
 
-fn generate_rtp_buffer(seqno: u16, rtpts: u32, payload_len: usize) -> gst::Buffer {
+fn generate_rtp_buffer(ssrc: u32, seqno: u16, rtpts: u32, payload_len: usize) -> gst::Buffer {
     let payload = vec![4; payload_len];
     let packet = RtpPacketBuilder::new()
-        .ssrc(TEST_SSRC)
+        .ssrc(ssrc)
         .payload_type(TEST_PT)
         .sequence_number(seqno)
         .timestamp(rtpts)
@@ -52,11 +56,12 @@ struct PacketInfo {
     seq_no: u16,
     rtp_ts: u32,
     payload_len: usize,
+    ssrc: u32,
 }
 
 impl PacketInfo {
     fn generate_buffer(&self, dts: Option<gst::ClockTime>) -> gst::Buffer {
-        let mut buf = generate_rtp_buffer(self.seq_no, self.rtp_ts, self.payload_len);
+        let mut buf = generate_rtp_buffer(self.ssrc, self.seq_no, self.rtp_ts, self.payload_len);
         let buf_mut = buf.make_mut();
         buf_mut.set_dts(dts);
         buf
@@ -137,9 +142,9 @@ where
 
     let session_stats = stats.get::<gst::Structure>("0").unwrap();
     let source_stats = session_stats
-        .get::<gst::Structure>(TEST_SSRC.to_string())
+        .get::<gst::Structure>(TEST_DEFAULT_SSRC.to_string())
         .unwrap();
-    assert_eq!(source_stats.get::<u32>("ssrc").unwrap(), TEST_SSRC);
+    assert_eq!(source_stats.get::<u32>("ssrc").unwrap(), TEST_DEFAULT_SSRC);
     assert_eq!(
         source_stats.get::<u32>("clock-rate").unwrap(),
         TEST_CLOCK_RATE
@@ -185,6 +190,7 @@ fn test_send_benchmark() {
                 seq_no: (i & u16::MAX as usize) as u16,
                 rtp_ts: i as u32,
                 payload_len: 8,
+                ssrc: TEST_DEFAULT_SSRC,
             }
             .generate_buffer(None),
         )
@@ -233,6 +239,7 @@ fn test_send_list_benchmark() {
                 seq_no: (i & u16::MAX as usize) as u16,
                 rtp_ts: i as u32,
                 payload_len: 8,
+                ssrc: TEST_DEFAULT_SSRC,
             }
             .generate_buffer(None),
         );
@@ -377,7 +384,7 @@ where
 
     let session_stats = stats.get::<gst::Structure>("0").unwrap();
     let source_stats = session_stats
-        .get::<gst::Structure>(TEST_SSRC.to_string())
+        .get::<gst::Structure>(TEST_DEFAULT_SSRC.to_string())
         .unwrap();
     let jitterbuffers_stats = session_stats
         .get::<gst::List>("jitterbuffer-stats")
@@ -388,7 +395,7 @@ where
         .unwrap()
         .get::<gst::Structure>()
         .unwrap();
-    assert_eq!(source_stats.get::<u32>("ssrc").unwrap(), TEST_SSRC);
+    assert_eq!(source_stats.get::<u32>("ssrc").unwrap(), TEST_DEFAULT_SSRC);
     assert_eq!(
         source_stats.get::<u32>("clock-rate").unwrap(),
         TEST_CLOCK_RATE
@@ -413,7 +420,7 @@ where
     assert_eq!(jitterbuffer_stats.get::<i32>("pt").unwrap(), TEST_PT as i32);
     assert_eq!(
         jitterbuffer_stats.get::<i32>("ssrc").unwrap(),
-        TEST_SSRC as i32
+        TEST_DEFAULT_SSRC as i32
     );
 }
 
@@ -422,11 +429,13 @@ static PACKETS_TEST_1: [PacketInfo; 2] = [
         seq_no: 500,
         rtp_ts: 20,
         payload_len: 13,
+        ssrc: TEST_DEFAULT_SSRC,
     },
     PacketInfo {
         seq_no: 501,
         rtp_ts: 30,
         payload_len: 7,
+        ssrc: TEST_DEFAULT_SSRC,
     },
 ];
 
@@ -490,6 +499,7 @@ fn test_receive_benchmark() {
                 seq_no: (i & u16::MAX as usize) as u16,
                 rtp_ts: i as u32,
                 payload_len: 8,
+                ssrc: TEST_DEFAULT_SSRC,
             }
             .generate_buffer(None),
         )
@@ -593,6 +603,7 @@ fn test_receive_list_benchmark() {
                     seq_no: ((p * N_PACKETS + i) & u16::MAX as usize) as u16,
                     rtp_ts: (p * N_PACKETS + i) as u32,
                     payload_len: 8,
+                    ssrc: TEST_DEFAULT_SSRC,
                 }
                 .generate_buffer(None),
             );
@@ -693,6 +704,7 @@ fn recv_release_sink_pad() {
                 seq_no: 30,
                 rtp_ts: 10,
                 payload_len: 4,
+                ssrc: TEST_DEFAULT_SSRC,
             }
             .generate_buffer(Some(gst::ClockTime::from_mseconds(50))),
         )
@@ -703,6 +715,7 @@ fn recv_release_sink_pad() {
                 seq_no: 31,
                 rtp_ts: 10,
                 payload_len: 4,
+                ssrc: TEST_DEFAULT_SSRC,
             }
             .generate_buffer(Some(gst::ClockTime::from_mseconds(100))),
         )
@@ -711,4 +724,140 @@ fn recv_release_sink_pad() {
 
     elem.release_request_pad(&sinkpad);
     elem.set_state(gst::State::Null).unwrap();
+}
+
+#[test]
+fn recv_multiple_ssrc_buffer_list() {
+    const SSRC_1: u32 = 1;
+    const BASE_SEQ_1: u16 = 10;
+    const BASE_RTP_TS_1: u32 = 100;
+    const SSRC_2: u32 = 2;
+    const BASE_SEQ_2: u16 = 20;
+    const BASE_RTP_TS_2: u32 = 200;
+
+    const NB_BUFFERS_PER_STREAM: usize = 2;
+
+    fn new_sink_pad(ssrc: u32, base_seq: u16, sender: mpsc::Sender<u16>) -> gst::Pad {
+        fn check_packet(ssrc: u32, seq: &AtomicU16, buffer: &gst::BufferRef) -> u16 {
+            let mapped = buffer.map_readable().unwrap();
+            let rtp = rtp_types::RtpPacket::parse(&mapped).unwrap();
+            assert_eq!(
+                ssrc,
+                rtp.ssrc(),
+                "pad for ssrc {ssrc} received packet with ssrc {}",
+                rtp.ssrc()
+            );
+            assert_eq!(seq.fetch_add(1, Ordering::SeqCst), rtp.sequence_number());
+            println!(
+                "ssrc {ssrc} checked packet with seq num {}",
+                rtp.sequence_number()
+            );
+
+            rtp.sequence_number()
+        }
+
+        let seq_num = Arc::new(AtomicU16::new(base_seq));
+        let sinkpad = gst::Pad::builder(gst::PadDirection::Sink)
+            .name(format!("sink_{ssrc}"))
+            .chain_list_function({
+                let seq_num = seq_num.clone();
+                let sender = sender.clone();
+                move |_pad, _parent, list| {
+                    for buffer in list.iter() {
+                        sender.send(check_packet(ssrc, &seq_num, buffer)).unwrap();
+                    }
+                    Ok(gst::FlowSuccess::Ok)
+                }
+            })
+            .chain_function({
+                let seq_num = seq_num.clone();
+                move |_pad, _parent, buffer| {
+                    sender.send(check_packet(ssrc, &seq_num, &buffer)).unwrap();
+                    Ok(gst::FlowSuccess::Ok)
+                }
+            })
+            .event_function(|_pad, _parent, _event| true)
+            .build();
+        sinkpad.set_active(true).unwrap();
+
+        sinkpad
+    }
+
+    init();
+
+    let mut seq_1 = BASE_SEQ_1;
+    let mut rtp_ts_1 = BASE_RTP_TS_1;
+    let mut seq_2 = BASE_SEQ_2;
+    let mut rtp_ts_2 = BASE_RTP_TS_2;
+
+    let (tx, rx) = mpsc::channel();
+    let h = receive_init_with_new_srcpad({
+        let sinkpad_1 = new_sink_pad(SSRC_1, seq_1, tx.clone());
+        let sinkpad_2 = new_sink_pad(SSRC_2, seq_2, tx);
+
+        move |_h, srcpad| {
+            let srcpad_name = srcpad.name();
+            println!("h sink srcpad {srcpad_name}");
+            let _ = match srcpad_name.as_str() {
+                "rtp_src_0_96_1" => srcpad.link(&sinkpad_1).unwrap(),
+                "rtp_src_0_96_2" => srcpad.link(&sinkpad_2).unwrap(),
+                other => unreachable!("{other}"),
+            };
+        }
+    });
+
+    receive_push(
+        h.clone(),
+        [
+            PacketInfo {
+                seq_no: seq_1,
+                rtp_ts: rtp_ts_1,
+                payload_len: 8,
+                ssrc: SSRC_1,
+            },
+            PacketInfo {
+                seq_no: seq_2,
+                rtp_ts: rtp_ts_2,
+                payload_len: 8,
+                ssrc: SSRC_2,
+            },
+        ],
+        true,
+    );
+
+    seq_1 += 1;
+    rtp_ts_1 += 1;
+    seq_2 += 1;
+    rtp_ts_2 += 1;
+    receive_push(
+        h.clone(),
+        [
+            PacketInfo {
+                seq_no: seq_1,
+                rtp_ts: rtp_ts_1,
+                payload_len: 8,
+                ssrc: SSRC_1,
+            },
+            PacketInfo {
+                seq_no: seq_2,
+                rtp_ts: rtp_ts_2,
+                payload_len: 8,
+                ssrc: SSRC_2,
+            },
+        ],
+        true,
+    );
+
+    let mut buffer_count = 0;
+    while let Ok(seq) = rx.recv() {
+        println!("main loop got seq {seq}");
+        // note: out packet / stream consistency checked by `check_packet()` above
+        buffer_count += 1;
+        if buffer_count == 2 * NB_BUFFERS_PER_STREAM {
+            // done
+            return;
+        }
+    }
+
+    panic!("recv failed");
 }
