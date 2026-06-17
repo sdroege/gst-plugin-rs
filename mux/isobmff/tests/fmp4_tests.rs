@@ -4985,3 +4985,77 @@ fn fmp4_bayer_roundtrip_rggb16be() {
     init();
     test_fmp4_bayer_roundtrip("rggb16be");
 }
+
+// Test that drain does not stall when a fragment boundary is reached
+// and all remaining GOPs start after fragment_end_pts. Without the fix
+// the while loop breaks with empty GOPs and repeated aggregate calls
+// produce nothing.
+#[test]
+fn test_fragment_filled_gop_starts_after_fragment_end_chunked() {
+    init();
+
+    let mut h1 = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
+
+    h1.element()
+        .unwrap()
+        .set_property("fragment-duration", 5.seconds());
+    h1.element()
+        .unwrap()
+        .set_property("chunk-duration", 1.seconds());
+
+    h1.set_src_caps(
+        gst::Caps::builder("video/x-h264")
+            .field("width", 1920i32)
+            .field("height", 1080i32)
+            .field("framerate", gst::Fraction::new(30, 1))
+            .field("stream-format", "avc")
+            .field("alignment", "au")
+            .field("codec_data", gst::Buffer::with_size(1).unwrap())
+            .build(),
+    );
+    h1.play();
+
+    // Keyframe at PTS 0 with GOP extending to 5.5s.
+    // No further keyframes until 10.5s.
+    for i in 0..30 {
+        let mut buffer = gst::Buffer::with_size(1).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(i * 500.mseconds());
+            buffer.set_dts(i * 500.mseconds());
+            buffer.set_duration(500.mseconds());
+            if i != 0 && i != 21 {
+                buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h1.push(buffer), Ok(gst::FlowSuccess::Ok));
+    }
+
+    h1.crank_single_clock_wait().unwrap();
+
+    let header = h1.pull().unwrap();
+    assert_eq!(
+        header.flags(),
+        gst::BufferFlags::HEADER | gst::BufferFlags::DISCONT
+    );
+
+    // The first 5 chunks (0-4s, 5×1s) each contain video data.
+    // Chunk 5 at 5s is the fragment boundary chunk (short because GOP
+    // extends past 5s). After the fragment transition, chunks continue
+    // normally without stalling.
+    let mut num_chunks = 0u32;
+    while h1.buffers_in_queue() > 0 {
+        let buf = h1.pull().unwrap();
+        if buf.flags().contains(gst::BufferFlags::HEADER) {
+            num_chunks += 1;
+        }
+    }
+
+    assert!(
+        num_chunks > 10,
+        "Expected greater than 10 chunks, got {}",
+        num_chunks
+    );
+
+    h1.push_event(gst::event::Eos::new());
+}
