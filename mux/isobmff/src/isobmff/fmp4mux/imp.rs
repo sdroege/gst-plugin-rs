@@ -2253,6 +2253,31 @@ impl FMP4Mux {
         let chunk_strategy = get_chunk_strategy(settings);
 
         if chunk_strategy.is_chunk_mode() {
+            // When fragment_filled is true but all remaining data starts past
+            // the fragment end, fallback to chunk boundaries so the drain can
+            // make progress.
+            let mut fragment_filled = fragment_filled;
+
+            // Check if the oldest queued GOP starts at or after fragment end
+            // PTS. If fragment_filled is true but all remaining data starts
+            // past the fragment end, this stream has no data within this
+            // fragment. Fall through to chunk boundaries to avoid stalling
+            // the drain.
+            if fragment_filled
+                && stream
+                    .queued_gops
+                    .back()
+                    .is_some_and(|gop| gop.start_pts >= fragment_end_pts)
+            {
+                gst::trace!(
+                    CAT,
+                    obj = stream.sinkpad,
+                    "Fragment filled but GOP starts after fragment end PTS {}, falling through to chunk boundaries",
+                    fragment_end_pts,
+                );
+                fragment_filled = false;
+            }
+
             let dequeue_end_pts = if let Some(chunk_end_pts) = chunk_end_pts {
                 // Not the first stream
                 chunk_end_pts
