@@ -5059,3 +5059,113 @@ fn test_fragment_filled_gop_starts_after_fragment_end_chunked() {
 
     h1.push_event(gst::event::Eos::new());
 }
+
+// Test that a GOP extending far past the fragment boundary is split
+// correctly. Without the fix the entire GOP would be pushed as one
+// chunk, producing a chunk much larger than chunk_duration.
+#[test]
+fn test_large_gop_split_at_fragment_boundary_chunked() {
+    init();
+
+    let caps = gst::Caps::builder("video/x-h264")
+        .field("width", 1920i32)
+        .field("height", 1080i32)
+        .field("framerate", gst::Fraction::new(30, 1))
+        .field("stream-format", "avc")
+        .field("alignment", "au")
+        .field("codec_data", gst::Buffer::with_size(1).unwrap())
+        .build();
+
+    let mut h = gst_check::Harness::new("cmafmux");
+
+    h.element()
+        .unwrap()
+        .set_property("fragment-duration", 5.seconds());
+    h.element()
+        .unwrap()
+        .set_property("chunk-duration", 1.seconds());
+
+    h.set_src_caps(caps);
+    h.play();
+
+    // 22 buffers of 0.5s each. 1st and 22nd buffer are key frames.
+    // GOP1 spans 0-10.5s (21 buffers), GOP2 is [10.5s] (1 buffer).
+    // Fragment ends at 5s with GOP1 extending 5.5s past it.
+    for i in 0..22 {
+        let mut buffer = gst::Buffer::with_size(1).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(i * 500.mseconds());
+            buffer.set_dts(i * 500.mseconds());
+            buffer.set_duration(500.mseconds());
+            if i != 0 && i != 21 {
+                buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h.push(buffer), Ok(gst::FlowSuccess::Ok));
+
+        if i == 2 {
+            let ev = loop {
+                let ev = h.pull_upstream_event().unwrap();
+                if ev.type_() != gst::EventType::Reconfigure
+                    && ev.type_() != gst::EventType::Latency
+                {
+                    break ev;
+                }
+            };
+
+            assert_eq!(ev.type_(), gst::EventType::CustomUpstream);
+            assert_eq!(
+                gst_video::UpstreamForceKeyUnitEvent::parse(&ev).unwrap(),
+                gst_video::UpstreamForceKeyUnitEvent {
+                    running_time: Some(5.seconds()),
+                    all_headers: true,
+                    count: 0
+                }
+            );
+        }
+    }
+
+    h.crank_single_clock_wait().unwrap();
+
+    let mut num_buffers = 0;
+
+    // verify each chunk is ≤ chunk_duration and count data buffers.
+    let mut max_chunk_duration = gst::ClockTime::ZERO;
+    while h.buffers_in_queue() > 0 {
+        let buf = h.pull().unwrap();
+        if buf.flags().contains(gst::BufferFlags::HEADER) {
+            if let Some(dur) = buf.duration() {
+                max_chunk_duration = std::cmp::max(max_chunk_duration, dur);
+            }
+        } else {
+            num_buffers += 1;
+        }
+    }
+
+    assert!(
+        max_chunk_duration <= 1.seconds(),
+        "Large chunk detected: duration {:?} exceeds chunk_duration",
+        max_chunk_duration
+    );
+
+    h.push_event(gst::event::Eos::new());
+
+    while h.buffers_in_queue() > 0 {
+        let buf = h.pull().unwrap();
+        if !buf.flags().contains(gst::BufferFlags::HEADER) {
+            num_buffers += 1;
+        }
+    }
+
+    assert_eq!(num_buffers, 20);
+
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::StreamStart);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Caps);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Segment);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Eos);
+}
