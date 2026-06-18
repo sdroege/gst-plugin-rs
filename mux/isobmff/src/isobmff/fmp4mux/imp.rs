@@ -2292,6 +2292,27 @@ impl FMP4Mux {
                 chunk_start_pts + settings.chunk_duration.unwrap()
             };
 
+            // When a finalized split-GOP from a fragment boundary exists with end
+            // before dequeue_end_pts, restrict the drain to its end to prevent the
+            // next GOP's data from leaking in.
+            let dequeue_end_pts = if stream.queued_gops.len() >= 2 {
+                stream
+                    .queued_gops
+                    .iter()
+                    .filter(|g| {
+                        g.start_pts == chunk_start_pts
+                            && g.buffers.first().is_some_and(|b| {
+                                b.buffer.flags().contains(gst::BufferFlags::DELTA_UNIT)
+                            })
+                            && g.end_pts < dequeue_end_pts
+                    })
+                    .fold(dequeue_end_pts, |min_end, gop| {
+                        std::cmp::min(min_end, gop.end_pts)
+                    })
+            } else {
+                dequeue_end_pts
+            };
+
             gst::trace!(
                 CAT,
                 obj = stream.sinkpad,
@@ -2330,13 +2351,80 @@ impl FMP4Mux {
                         && (gop.end_pts <= dequeue_end_pts
                             || (gops.is_empty() && chunk_end_pts.is_none()))
                     {
-                        if !gop.final_end_pts && need_new_header {
-                            stream.pushed_incomplete_gop = true;
-                            gst::trace!(CAT, obj = stream.sinkpad, "Pushing incomplete GOP");
+                        if gop.end_pts <= dequeue_end_pts
+                            || (gops.is_empty()
+                                && chunk_end_pts.is_none()
+                                && gop.buffers.last().is_some_and(|b| b.pts < dequeue_end_pts))
+                        {
+                            // GOP ends within the fragment boundary or all buffers
+                            // are before the boundary, push whole
+                            if !gop.final_end_pts && need_new_header {
+                                stream.pushed_incomplete_gop = true;
+                                gst::trace!(CAT, obj = stream.sinkpad, "Pushing incomplete GOP");
+                            } else {
+                                gst::trace!(CAT, obj = stream.sinkpad, "Pushing whole GOP");
+                            }
+                            gops.push(stream.queued_gops.pop_back().unwrap());
                         } else {
-                            gst::trace!(CAT, obj = stream.sinkpad, "Pushing whole GOP");
+                            // GOP extends past the fragment boundary. Split it at
+                            // the fragment end PTS so only data within the fragment
+                            // is included in this chunk.
+                            let gop = stream.queued_gops.back_mut().unwrap();
+
+                            let start_pts = gop.start_pts;
+                            let start_dts = gop.start_dts;
+                            let earliest_pts = gop.earliest_pts;
+                            let earliest_pts_position = gop.earliest_pts_position;
+
+                            let mut split_index = None;
+                            for (idx, buffer) in gop.buffers.iter().enumerate() {
+                                if buffer.pts >= dequeue_end_pts {
+                                    break;
+                                }
+                                split_index = Some(idx);
+                            }
+
+                            let split_index = match split_index {
+                                Some(split_index) => split_index,
+                                None => {
+                                    gst::trace!(
+                                        CAT,
+                                        obj = stream.sinkpad,
+                                        "First buffer of GOP at or after fragment end",
+                                    );
+                                    break;
+                                }
+                            };
+
+                            let mut buffers = mem::take(&mut gop.buffers);
+                            gop.buffers = buffers.split_off(split_index + 1);
+
+                            gop.start_pts = gop.buffers[0].pts;
+                            gop.start_dts = gop.buffers[0].dts;
+                            gop.earliest_pts_position = gop.buffers[0].pts_position;
+                            gop.earliest_pts = gop.buffers[0].pts;
+
+                            gst::trace!(
+                                CAT,
+                                obj = stream.sinkpad,
+                                "Splitting GOP and keeping PTS {}",
+                                gop.buffers[0].pts,
+                            );
+
+                            let queue_gop = Gop {
+                                start_pts,
+                                start_dts,
+                                earliest_pts,
+                                final_earliest_pts: true,
+                                end_pts: gop.start_pts,
+                                final_end_pts: true,
+                                end_dts: gop.start_dts,
+                                earliest_pts_position,
+                                buffers,
+                            };
+
+                            gops.push(queue_gop);
                         }
-                        gops.push(stream.queued_gops.pop_back().unwrap());
                         continue;
                     }
                     if !gops.is_empty() {
