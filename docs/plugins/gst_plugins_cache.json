@@ -10583,6 +10583,18 @@
                         "readable": true,
                         "type": "GstValueArray",
                         "writable": true
+                    },
+                    "multi-buffer-mode": {
+                        "blurb": "How to accumulate input when it partially matches commands",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "disabled (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstRegExMultiBufferMode",
+                        "writable": true
                     }
                 },
                 "rank": "none"
@@ -10590,7 +10602,23 @@
         },
         "filename": "gstregex",
         "license": "MPL",
-        "other-types": {},
+        "other-types": {
+            "GstRegExMultiBufferMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Disabled",
+                        "name": "disabled",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Compress",
+                        "name": "compress",
+                        "value": "1"
+                    }
+                ]
+            }
+        },
         "package": "gst-plugin-regex",
         "source": "gst-plugin-regex",
         "tracers": {},

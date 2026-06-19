@@ -5583,6 +5583,7 @@ dependencies = [
  "gstreamer",
  "gstreamer-check",
  "regex",
+ "regex-automata",
 ]
 
 [[package]]

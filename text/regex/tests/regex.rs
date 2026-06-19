@@ -65,3 +65,68 @@ fn test_replace_all() {
         std::str::from_utf8(expected_output.as_ref())
     );
 }
+
+#[test]
+fn test_multi_buffer_replace() {
+    init();
+
+    let input = "Here in Saint Paul, Minnesota we love Saint";
+
+    let command_1 = gst::Structure::builder("replace-all")
+        .field("pattern", "Saint Paul")
+        .field("replacement", "St. Paul")
+        .build();
+
+    let command_2 = gst::Structure::builder("replace-all")
+        .field("pattern", "St. Paul, Minnesota")
+        .field("replacement", "our city")
+        .build();
+
+    let commands = gst::Array::new([command_1, command_2]);
+
+    let element = gst::ElementFactory::make("regex")
+        .property("commands", &commands)
+        .property_from_str("multi-buffer-mode", "compress")
+        .build()
+        .unwrap();
+
+    let mut h = gst_check::Harness::with_element(&element, Some("sink"), Some("src"));
+    h.set_src_caps(
+        gst::Caps::builder("text/x-raw")
+            .field("format", "utf8")
+            .build(),
+    );
+
+    for (idx, word) in input.split(" ").enumerate() {
+        let buf = {
+            let mut buf = gst::Buffer::from_mut_slice(Vec::from(word));
+            let buf_ref = buf.get_mut().unwrap();
+            buf_ref.set_pts(Some((idx as u64).seconds()));
+            buf_ref.set_duration(1.seconds());
+            buf
+        };
+
+        assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
+    }
+
+    h.push_event(gst::event::Eos::builder().build());
+
+    let expected_output = [
+        ("Here", 0),
+        ("in", 1),
+        ("our city we", 5),
+        ("love", 6),
+        ("Saint", 7),
+    ];
+
+    for (text, n_seconds) in expected_output {
+        let buf = h.pull().expect("Couldn't pull buffer");
+
+        assert_eq!(buf.pts(), Some(n_seconds.seconds()));
+        assert_eq!(buf.duration(), Some(1.seconds()));
+
+        let map = buf.map_readable().expect("Couldn't map buffer readable");
+        assert_eq!(std::str::from_utf8(map.as_ref()).unwrap(), text);
+        eprintln!("Processed {text}");
+    }
+}
