@@ -186,6 +186,25 @@ impl<'a> TryFrom<&'a gst::StructureRef> for Format {
 }
 
 impl Format {
+    pub fn all_animated_formats() -> impl IntoIterator<Item = gst::Caps> {
+        [
+            #[cfg(any(feature = "png", feature = "ico"))]
+            gst::Caps::builder("image/png")
+                .field("animated", true)
+                .build(),
+            // FIXME upstream: AVIF also supports animations
+            // https://github.com/image-rs/image/issues/2794
+            // #[cfg(feature = "avif")]
+            // Format::Avif,
+            #[cfg(feature = "gif")]
+            make_caps!(ImageFormat::Gif),
+            #[cfg(feature = "webp")]
+            gst::Caps::builder("image/webp")
+                .field("animated", true)
+                .build(),
+        ]
+    }
+
     /// Missing formats from gdkpixbufdec:
     /// - application/x-navi-animation
     /// - image/svg

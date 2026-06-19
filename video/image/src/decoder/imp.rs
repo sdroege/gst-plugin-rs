@@ -14,7 +14,7 @@ use std::collections::VecDeque;
 use std::io::{BufRead, Cursor, Seek};
 use std::sync::{LazyLock, Mutex, MutexGuard};
 
-use crate::buffer::{GStreamerImage, ImageStride, Wrapper};
+use crate::buffer::{GStreamerImage, ImageStride, ImageWrapper};
 use crate::cicp::ImageCicp;
 use crate::format::Format;
 
@@ -473,7 +473,7 @@ impl Decoder {
 
         let stride = [image.stride_in_bytes()];
         let mut outbuf = if allow_zerocopy {
-            let mut b = Wrapper::Image(image).into_gst_buffer();
+            let mut b = gst::Buffer::from_slice(ImageWrapper(image));
             gst_video::VideoMeta::add_full(
                 b.make_mut(),
                 gst_video::VideoFrameFlags::empty(),
@@ -489,7 +489,7 @@ impl Decoder {
             })?;
             b
         } else {
-            image.wrap_for_gstreamer().into_gst_buffer()
+            image.wrap_for_gstreamer()
         };
         {
             let outbuf = outbuf.get_mut().unwrap();

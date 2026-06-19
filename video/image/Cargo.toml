@@ -34,7 +34,7 @@ path = "src/lib.rs"
 gst-plugin-version-helper.workspace = true
 
 [features]
-default = ["still_formats", "still_formats_extras"]
+default = ["still_formats", "still_formats_extras", "animated_formats"]
 static = []
 capi = []
 doc = []
@@ -42,6 +42,8 @@ doc = []
 # them
 still_formats = ["bmp", "dds", "ff", "hdr", "ico", "jpeg", "pnm", "qoi", "tga", "tiff"]
 still_formats_extras = ["ora", "otb", "pcx", "sgi", "wbmp", "xbm", "xpm"]
+# See anim/imp.rs -- add AVIF when upstream supports them
+animated_formats = ["gif", "png", "webp"]
 # image/avif enables encoding with rav1e, avif-native decoding with dav1d
 # rayon is multithreading and nasm rav1e's optimized assembly
 avif = ["image/avif", "image/avif-native", "image/rayon", "image/nasm"]

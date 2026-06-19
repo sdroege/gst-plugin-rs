@@ -7103,6 +7103,73 @@
     "imagers": {
         "description": "GStreamer plugin based on image-rs",
         "elements": {
+            "animatedimagersdec": {
+                "author": "Amyspark <amy@centricular.com>",
+                "description": "Decodes animated image formats",
+                "hierarchy": [
+                    "GstImageRsAnimDecoder",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Decoder/Video",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "image/png:\n       animated: true\nimage/gif:\nimage/webp:\n       animated: true\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\n         format: RGBA\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "loop": {
+                        "blurb": "Set the repeat behaviour of the image",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "image (2)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstImageRsLoopStrategy",
+                        "writable": true
+                    },
+                    "max-alloc-bytes": {
+                        "blurb": "Max. amount of data to allocate for decoding (bytes, 0=disable)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "max-size-bytes": {
+                        "blurb": "Max. amount of data to buffer (bytes, 0=disable)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    }
+                },
+                "rank": "secondary + 2"
+            },
             "imagersdec": {
                 "author": "Amyspark <amy@centricular.com>",
                 "description": "Decodes still image formats",
@@ -7116,7 +7183,7 @@
                 "klass": "Codec/Decoder/Image",
                 "pad-templates": {
                     "sink": {
-                        "caps": "image/bmp:\nimage/x-MS-bmp:\nimage/vnd.ms-dds:\nimage/x-farbfeld:\nimage/vnd.radiance:\nimage/x-icon:\nimage/jpeg:\nimage/openraster:\nimage/x-nokia-over-the-air-bitmap:\nimage/vnd.zbrush.pcx:\nimage/x-pcx:\nimage/png:\nimage/x-portable-anymap:\nimage/x-portable-bitmap:\nimage/x-portable-graymap:\nimage/x-portable-pixmap:\nimage/x-qoi:\nimage/qoi:\nimage/sgi:\nimage/x-targa:\nimage/x-tga:\nimage/tiff:\nimage/vnd.wap.wbmp:\nimage/x-xbitmap:\nimage/x-xbm:\nimage/x-xpixmap:\n",
+                        "caps": "image/bmp:\nimage/x-MS-bmp:\nimage/vnd.ms-dds:\nimage/x-farbfeld:\nimage/vnd.radiance:\nimage/x-icon:\nimage/jpeg:\nimage/openraster:\nimage/x-nokia-over-the-air-bitmap:\nimage/vnd.zbrush.pcx:\nimage/x-pcx:\nimage/png:\nimage/x-portable-anymap:\nimage/x-portable-bitmap:\nimage/x-portable-graymap:\nimage/x-portable-pixmap:\nimage/x-qoi:\nimage/qoi:\nimage/sgi:\nimage/x-targa:\nimage/x-tga:\nimage/tiff:\nimage/webp:\nimage/vnd.wap.wbmp:\nimage/x-xbitmap:\nimage/x-xbm:\nimage/x-xpixmap:\n",
                         "direction": "sink",
                         "presence": "always"
                     },
@@ -7384,6 +7451,26 @@
         "filename": "gstimagers",
         "license": "MPL-2.0",
         "other-types": {
+            "GstImageRsLoopStrategy": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Loop the animation irrespective of the image's settings",
+                        "name": "force-yes",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Play the animation only once irrespective of the image's settings",
+                        "name": "force-no",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Respect the image's settings",
+                        "name": "image",
+                        "value": "2"
+                    }
+                ]
+            },
             "GstImageRsOverlayPositioningMode": {
                 "kind": "enum",
                 "values": [

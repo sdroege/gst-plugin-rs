@@ -13,7 +13,7 @@ use image::{DynamicImage, ImageReader, Limits};
 
 use std::sync::{LazyLock, Mutex};
 
-use crate::buffer::Wrapper;
+use crate::buffer::ImageWrapper;
 
 pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -249,7 +249,7 @@ impl ImageRsOverlay {
         let (width, height) = argb_image.dimensions();
 
         let stride = [i32::try_from(argb_image.as_flat_samples().layout.height_stride).unwrap()];
-        let mut buffer = Wrapper::Image(argb_image.into()).into_gst_buffer();
+        let mut buffer = gst::Buffer::from_slice(ImageWrapper(argb_image.into()));
 
         gst_video::VideoMeta::add_full(
             buffer.get_mut().unwrap(),
