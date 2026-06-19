@@ -5416,6 +5416,7 @@ name = "gst-plugin-imagers"
 version = "0.16.0-alpha"
 dependencies = [
  "anyhow",
+ "atomic_refcell",
  "byte-slice-cast",
  "futures",
  "gst-plugin-version-helper",

@@ -15,6 +15,17 @@ impl From<ImageCicp> for Cicp {
     }
 }
 
+impl ImageCicp {
+    /// Implements image::metadata::Cicp::try_into_rgb's validation checks.
+    /// Upstream doesn't accept CICP metadata that isn't full-range RGB.
+    ///
+    /// See https://github.com/image-rs/image/blob/76e57184f22772dad1138e96954e57945406b15e/src/metadata/cicp.rs#L1548
+    pub fn is_rgb(&self) -> bool {
+        self.0.matrix == image::metadata::CicpMatrixCoefficients::Identity
+            && self.0.full_range == image::metadata::CicpVideoFullRangeFlag::FullRange
+    }
+}
+
 #[derive(Debug, Clone, Copy, thiserror::Error)]
 pub(crate) enum UnsupportedCicp {
     #[error("Unknown color range {:?}", .0)]

@@ -41,3 +41,27 @@ macro_rules! make_caps_with_extra_mimetypes {
         }
     };
 }
+
+#[allow(unused_macros)]
+macro_rules! make_encoder_caps {
+    ($mime:literal, $formats:expr) => {{
+        let caps = gst::Caps::builder($mime).build();
+        (caps, Vec::from_iter($formats))
+    }};
+
+    ($format:expr, $formats:expr) => {{
+        let caps = gst::Caps::builder($format.to_mime_type()).build();
+        (caps, Vec::from_iter($formats))
+    }};
+}
+
+#[allow(unused_macros)]
+macro_rules! make_encoder_caps_with_extra_mimetypes {
+    ($format:expr, $($mime:literal),+, $formats:expr) => {{
+        let mut caps = gst::Caps::new_empty();
+        let c = caps.make_mut();
+        c.append(gst::Caps::builder($format.to_mime_type()).build());
+        append_caps!(c, $($mime),+);
+        (caps, Vec::from_iter($formats))
+    }};
+}

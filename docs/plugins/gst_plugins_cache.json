@@ -6796,6 +6796,35 @@
                 },
                 "rank": "secondary + 1"
             },
+            "imagersenc": {
+                "author": "Amyspark <amy@centricular.com>",
+                "description": "Encodes still images",
+                "hierarchy": [
+                    "GstImageRsEncoder",
+                    "GstVideoEncoder",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstPreset"
+                ],
+                "klass": "Encoder/Video",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-raw:\n         format: { GRAY8, GRAY16_LE, RGB, RGBA, RGBA64_LE }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "image/png:\nimage/tiff:\nimage/jpeg:\nimage/bmp:\nimage/x-MS-bmp:\nimage/x-targa:\nimage/x-tga:\nimage/x-farbfeld:\nimage/x-qoi:\nimage/qoi:\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "secondary + 1"
+            },
             "imagersoverlay": {
                 "author": "Amyspark <amy@centricular.com>",
                 "description": "Renders images decoded with image-rs over raw video frames",

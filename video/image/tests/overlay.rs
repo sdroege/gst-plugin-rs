@@ -1,8 +1,10 @@
 // SPDX-CopyrightText: 2026 Amyspark <amy@centricular.com>
 // SPDX-License-Identifier: MPL-2.0
 
+#[cfg(any(feature = "png", feature = "ico"))]
 use gst::prelude::*;
 
+#[allow(dead_code)]
 fn init() {
     use std::sync::Once;
     static INIT: Once = Once::new();
@@ -13,6 +15,7 @@ fn init() {
     });
 }
 
+#[cfg(any(feature = "png", feature = "ico"))]
 fn create_overlay() -> (gst::Element, gst_check::Harness) {
     let overlay = gst::ElementFactory::make("imagersoverlay")
         .property("location", "tests/files/red-box.png")
@@ -25,6 +28,7 @@ fn create_overlay() -> (gst::Element, gst_check::Harness) {
     (overlay, h)
 }
 
+#[cfg(any(feature = "png", feature = "ico"))]
 #[test]
 fn test_meta_composition() {
     init();
@@ -59,6 +63,7 @@ fn test_meta_composition() {
     );
 }
 
+#[cfg(any(feature = "png", feature = "ico"))]
 #[test]
 fn test_blending() {
     init();

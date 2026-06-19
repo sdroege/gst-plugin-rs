@@ -17,7 +17,7 @@ fn init() {
     });
 }
 
-#[cfg(feature = "jpeg")]
+#[cfg(all(feature = "jpeg", any(feature = "png", feature = "ico")))]
 #[test]
 fn test_aligned() {
     init();
@@ -57,7 +57,7 @@ fn test_aligned() {
     assert!(result.score >= 0.95);
 }
 
-#[cfg(feature = "tga")]
+#[cfg(all(feature = "tga", any(feature = "png", feature = "ico")))]
 #[test]
 fn test_misaligned() {
     use image::GenericImage;

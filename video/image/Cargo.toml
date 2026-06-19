@@ -14,6 +14,7 @@ gst-base.workspace = true
 gst-tag.workspace = true
 gst-video = { workspace = true, features = ["v1_26"] }
 anyhow = "1"
+atomic_refcell = "0.1"
 byte-slice-cast = "1.2"
 futures = "0.3"
 image = { version = "0.25.10", default-features = false }

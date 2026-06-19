@@ -16,12 +16,14 @@ mod cicp;
 pub mod format;
 
 mod decoder;
+mod encoder;
 mod overlay;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "v1_30")]
     plugin.set_static_features_flag();
 
+    encoder::register(plugin)?;
     overlay::register(plugin)?;
     decoder::register(plugin)?;
     Ok(())
