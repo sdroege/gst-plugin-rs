@@ -434,8 +434,9 @@ You will find the following plugins in this repository:
       - `hsvdetector`: Mark pixels that are close to a configured color in HSV format.
       - `hsvfilter`: Apply various transformations in the HSV colorspace.
 
-    - `imagers`: multi-format plugin based on the [image](https://github.com/image-rs/image) crate
+    - `imagers`: multi-format plugin based on the [image](https://github.com/image-rs/image) and [image-extras](https://github.com/image-rs/images) crates
        - `imagersoverlay`: Overlays an image on top of a video stream. It is a reimplementation of `gdkpixbufoverlay` entirely in Rust.
+       - `imagersdec`: Multiformat still image decoder. Supports a variety of formats: BMP, DirectDraw surfaces, Farbfeld, Radiance HDR, Windows icons, JPEG, NetPBM (by default only the pixmap variant), Quite OK Image, Truevision Targa, and TIFF. Through `image-extras` it can also read OpenRaster, Nokia Over-The-Air bitmaps, PCX, SGI, Wireless Bitmap, and the bitmap and graymap variants of NetPBM. AVIF and OpenEXR are also supported but are disabled by default.
 
     - `png`: PNG encoder based on the [png](https://github.com/image-rs/image-png) library.
       - `rspngenc`: PNG encoder.

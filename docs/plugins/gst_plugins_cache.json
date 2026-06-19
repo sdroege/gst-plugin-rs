@@ -6550,6 +6550,61 @@
     "imagers": {
         "description": "GStreamer plugin based on image-rs",
         "elements": {
+            "imagersdec": {
+                "author": "Amyspark <amy@centricular.com>",
+                "description": "Decodes still image formats",
+                "hierarchy": [
+                    "GstImageRsDecoder",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Decoder/Image",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "image/bmp:\nimage/x-MS-bmp:\nimage/vnd.ms-dds:\nimage/x-farbfeld:\nimage/vnd.radiance:\nimage/x-icon:\nimage/jpeg:\nimage/openraster:\nimage/x-nokia-over-the-air-bitmap:\nimage/vnd.zbrush.pcx:\nimage/x-pcx:\nimage/png:\nimage/x-portable-anymap:\nimage/x-portable-bitmap:\nimage/x-portable-graymap:\nimage/x-portable-pixmap:\nimage/x-qoi:\nimage/qoi:\nimage/sgi:\nimage/x-targa:\nimage/x-tga:\nimage/tiff:\nimage/vnd.wap.wbmp:\nimage/x-xbitmap:\nimage/x-xbm:\nimage/x-xpixmap:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\n         format: { RGB, RGBA, GRAY8, GRAY16_LE, RGBA64_LE }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "max-alloc-bytes": {
+                        "blurb": "Max. amount of data to allocate for decoding (bytes, 0=disable)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "max-size-bytes": {
+                        "blurb": "Max. amount of data to buffer (bytes, 0=disable)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    }
+                },
+                "rank": "secondary + 1"
+            },
             "imagersoverlay": {
                 "author": "Amyspark <amy@centricular.com>",
                 "description": "Renders images decoded with image-rs over raw video frames",

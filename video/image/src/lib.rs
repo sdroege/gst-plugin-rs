@@ -10,11 +10,17 @@
 use gst::glib;
 
 mod buffer;
+#[macro_use]
+mod caps;
+mod cicp;
+pub mod format;
 
+mod decoder;
 mod overlay;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     overlay::register(plugin)?;
+    decoder::register(plugin)?;
     Ok(())
 }
 
