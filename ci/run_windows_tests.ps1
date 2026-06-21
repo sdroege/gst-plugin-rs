@@ -38,6 +38,7 @@ function Run-Tests {
         # In this case the plugin will try to build all its backends,
         # which will fail
         $local_exclude += @("--exclude", "gst-plugin-whisper")
+        $local_exclude += @("--exclude", "gst-plugin-llamacpp")
         # The perfetto SDK does not compile with MSVC
         $local_exclude += @("--exclude", "gst-plugin-tracers")
     }

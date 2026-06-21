@@ -141,6 +141,7 @@ plugins = {
   'textaccumulate': {'library': 'libgsttextaccumulate'},
   'textahead': {'library': 'libgsttextahead'},
   'json': {'library': 'libgstjson'},
+  'llamacpp': {'library': 'libgstllamacpp'},
   'regex': {'library': 'libgstregex'},
   'textwrap': {'library': 'libgsttextwrap'},
 

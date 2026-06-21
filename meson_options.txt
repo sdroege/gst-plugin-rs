@@ -60,6 +60,7 @@ option('quinn', type: 'feature', value: 'auto', description: 'Build quinn plugin
 option('textaccumulate', type: 'feature', value: 'auto', description: 'Build textaccumulate plugin')
 option('textahead', type: 'feature', value: 'auto', description: 'Build textahead plugin')
 option('json', type: 'feature', value: 'auto', description: 'Build json plugin')
+option('llamacpp', type: 'feature', value: 'auto', description: 'Build llama.cpp plugin')
 option('regex', type: 'feature', value: 'auto', description: 'Build regex plugin')
 option('textwrap', type: 'feature', value: 'auto', description: 'Build textwrap plugin')
 

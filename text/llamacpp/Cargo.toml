@@ -1,0 +1,58 @@
+[package]
+name = "gst-plugin-llamacpp"
+version.workspace = true
+authors = ["Sebastian Dröge <sebastian@centricular.com>"]
+repository.workspace = true
+license = "MPL-2.0"
+description = "GStreamer llama.cpp Plugin"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+encoding_rs = "0.8"
+glib.workspace = true
+gst.workspace = true
+llama-cpp-2 = { version = "0.1.150" }
+minijinja = { version = "2.21.0", features = ["builtins"] }
+minijinja-contrib = { version = "2.21.0", features = ["pycompat"] }
+once_cell = "1.0"
+serde_json = "1.0"
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
+tracing-log = "0.2"
+anyhow = "1"
+
+[build-dependencies]
+gst-plugin-version-helper.workspace = true
+
+[lib]
+name = "gstllamacpp"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[features]
+static = []
+capi = []
+doc = ["gst/v1_18"]
+
+# Re-export llama-cpp-2 features
+cuda = ["llama-cpp-2/cuda"]
+metal = ["llama-cpp-2/metal"]
+vulkan = ["llama-cpp-2/vulkan"]
+openmp = ["llama-cpp-2/openmp"]
+rocm = ["llama-cpp-2/rocm"]
+
+[package.metadata.capi]
+min_version = "0.9.21"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+import_library = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gobject-2.0, glib-2.0, gmodule-2.0"
+

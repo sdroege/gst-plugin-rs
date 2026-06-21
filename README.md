@@ -326,6 +326,9 @@ You will find the following plugins in this repository:
       - `jsongstenc`: Wraps buffers containing any valid top-level JSON structures into higher level JSON objects, and outputs those as ndjson.
       - `jsongstparse`: Parses ndjson as output by jsongstenc.
 
+    - `llamacpp`: A plugin wrapping [llama.cpp](https://github.com/ggml-org/llama.cpp) for making use of LLMs
+      - `llamacpp-texttransform`: Text transformation element.
+
     - `regex`: A regular expression text filter plugin.
 
     - `wrap`: A plugin to perform text wrapping with hyphenation.
