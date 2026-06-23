@@ -928,10 +928,11 @@ pub static AV1_CAPS: LazyLock<gst::Caps> =
 pub static RTP_CAPS: LazyLock<gst::Caps> =
     LazyLock::new(|| can_leak(gst::Caps::new_empty_simple("application/x-rtp")));
 
-pub const H264_PROFILES_COMPAT: [&str; 7] = [
+pub const H264_PROFILES_COMPAT: [&str; 8] = [
     "constrained-baseline",
     "baseline",
     "main",
+    "constrained-high",
     "high",
     "high-10",
     "high-4:2:2",
