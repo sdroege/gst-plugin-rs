@@ -20,9 +20,9 @@ glib::wrapper! {
 
 #[derive(Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
-#[enum_type(name = "GstWebRTCSendSinkPadEarlyDataMode")]
-/// WebRTCSend Sink Pad behaviour while connection is pending.
-pub enum WebRTCSendSinkPadEarlyDataMode {
+#[enum_type(name = "GstWebRTCSendEarlyDataMode")]
+/// WebRTCSend behaviour while connection is pending.
+pub enum WebRTCSendEarlyDataMode {
     #[default]
     #[enum_value(name = "Block buffers", nick = "block")]
     Block,
@@ -30,18 +30,18 @@ pub enum WebRTCSendSinkPadEarlyDataMode {
     Drop,
 }
 
-impl WebRTCSendSinkPadEarlyDataMode {
+impl WebRTCSendEarlyDataMode {
     pub fn is_block(self) -> bool {
-        matches!(self, WebRTCSendSinkPadEarlyDataMode::Block)
+        matches!(self, WebRTCSendEarlyDataMode::Block)
     }
 
     pub fn is_drop(self) -> bool {
-        matches!(self, WebRTCSendSinkPadEarlyDataMode::Drop)
+        matches!(self, WebRTCSendEarlyDataMode::Drop)
     }
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    WebRTCSendSinkPadEarlyDataMode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    WebRTCSendEarlyDataMode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     gst::Element::register(
         Some(plugin),
         "webrtcsend",

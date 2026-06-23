@@ -19082,6 +19082,18 @@
                     }
                 },
                 "properties": {
+                    "early-data-mode": {
+                        "blurb": "Controls how this sink pad deals with buffers while connection is pending",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "block (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstWebRTCSendEarlyDataMode",
+                        "writable": true
+                    },
                     "id": {
                         "blurb": "The identifier to connect with another webrtcrecv element",
                         "conditionally-available": false,
@@ -19166,44 +19178,7 @@
                 ],
                 "kind": "object"
             },
-            "GstWebRTCSendSinkPad": {
-                "hierarchy": [
-                    "GstWebRTCSendSinkPad",
-                    "GstGhostPad",
-                    "GstProxyPad",
-                    "GstPad",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "kind": "object",
-                "properties": {
-                    "early-data-mode": {
-                        "blurb": "Controls how this sink pad deals with buffers while connection is pending",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "block (0)",
-                        "mutable": "ready",
-                        "readable": true,
-                        "type": "GstWebRTCSendSinkPadEarlyDataMode",
-                        "writable": true
-                    },
-                    "transceiver": {
-                        "blurb": "The transceiver in use for this sink pad",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "mutable": "null",
-                        "readable": true,
-                        "type": "GstWebRTCBin2Transceiver",
-                        "writable": false
-                    }
-                }
-            },
-            "GstWebRTCSendSinkPadEarlyDataMode": {
+            "GstWebRTCSendEarlyDataMode": {
                 "kind": "enum",
                 "values": [
                     {
@@ -19217,6 +19192,31 @@
                         "value": "1"
                     }
                 ]
+            },
+            "GstWebRTCSendSinkPad": {
+                "hierarchy": [
+                    "GstWebRTCSendSinkPad",
+                    "GstGhostPad",
+                    "GstProxyPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "transceiver": {
+                        "blurb": "The transceiver in use for this sink pad",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstWebRTCBin2Transceiver",
+                        "writable": false
+                    }
+                }
             },
             "GstWebRTCSession": {
                 "hierarchy": [

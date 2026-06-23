@@ -9,7 +9,6 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use super::WebRTCSendSinkPadEarlyDataMode;
 use crate::transceiver::Transceiver;
 
 #[derive(Default)]
@@ -21,7 +20,6 @@ pub struct WebRTCSendSinkPad {
 pub struct State {
     mline: Option<usize>,
     transceiver: Option<Transceiver>,
-    early_data_mode: WebRTCSendSinkPadEarlyDataMode,
     block_id: Option<gst::PadProbeId>,
     received_caps: Option<gst::Caps>,
 }
@@ -42,9 +40,6 @@ impl State {
         self.mline = mline
     }
 
-    pub fn early_data_mode(&self) -> WebRTCSendSinkPadEarlyDataMode {
-        self.early_data_mode
-    }
     pub fn set_block_id(&mut self, id: gst::PadProbeId) {
         self.block_id = Some(id);
     }
@@ -77,13 +72,6 @@ impl ObjectImpl for WebRTCSendSinkPad {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPS: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
-                glib::ParamSpecEnum::builder::<WebRTCSendSinkPadEarlyDataMode>("early-data-mode")
-                    .nick("Early data mode")
-                    .blurb(
-                        "Controls how this sink pad deals with buffers while connection is pending",
-                    )
-                    .mutable_ready()
-                    .build(),
                 glib::ParamSpecObject::builder::<Transceiver>("transceiver")
                     .nick("Transceiver")
                     .blurb("The transceiver in use for this sink pad")
@@ -96,18 +84,7 @@ impl ObjectImpl for WebRTCSendSinkPad {
 
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
-            "early-data-mode" => self.state.lock().unwrap().early_data_mode.to_value(),
             "transceiver" => self.state.lock().unwrap().transceiver.to_value(),
-            _ => unreachable!(),
-        }
-    }
-
-    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
-        match pspec.name() {
-            "early-data-mode" => {
-                self.state.lock().unwrap().early_data_mode =
-                    value.get::<WebRTCSendSinkPadEarlyDataMode>().unwrap();
-            }
             _ => unreachable!(),
         }
     }

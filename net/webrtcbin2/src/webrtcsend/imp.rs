@@ -14,6 +14,8 @@ use crate::webrtcsession::WebRTCSession;
 use crate::webrtcsession::dtls::KeyMaterial;
 use crate::webrtcsession::srtp::SrtpKeyMaterial;
 
+use super::WebRTCSendEarlyDataMode;
+
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "webrtc2send",
@@ -39,6 +41,7 @@ pub struct WebRTCSend {
 
 #[derive(Debug, Default)]
 struct Settings {
+    early_data_mode: WebRTCSendEarlyDataMode,
     session_id: String,
 }
 
@@ -124,6 +127,12 @@ impl ObjectImpl for WebRTCSend {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPS: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
+                glib::ParamSpecEnum::builder::<WebRTCSendEarlyDataMode>("early-data-mode")
+                    .nick("Early data mode")
+                    .blurb(
+                        "Controls how this sink pad deals with buffers while connection is pending",
+                    )
+                    .build(),
                 glib::ParamSpecString::builder("id")
                     .nick("ID")
                     .blurb("The identifier to connect with another webrtcrecv element")
@@ -139,6 +148,7 @@ impl ObjectImpl for WebRTCSend {
 
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
+            "early-data-mode" => self.settings.lock().unwrap().early_data_mode.to_value(),
             "id" => self.settings.lock().unwrap().session_id.to_value(),
             "session" => self
                 .state
@@ -154,6 +164,10 @@ impl ObjectImpl for WebRTCSend {
 
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
+            "early-data-mode" => {
+                self.settings.lock().unwrap().early_data_mode =
+                    value.get::<WebRTCSendEarlyDataMode>().unwrap();
+            }
             "id" => {
                 self.settings.lock().unwrap().session_id =
                     value.get::<String>().expect("type checked upstream")
@@ -458,7 +472,7 @@ impl ElementImpl for WebRTCSend {
                 let mut trans_state = transceiver.imp().state();
                 let mut sink_state = sinkpad.imp().state();
 
-                let block_id = if sink_state.early_data_mode().is_block() {
+                let block_id = if self.settings.lock().unwrap().early_data_mode.is_block() {
                     sinkpad
                         .add_probe(
                             gst::PadProbeType::BLOCK
