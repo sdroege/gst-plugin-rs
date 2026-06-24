@@ -29,6 +29,9 @@ pub struct WebRTCRecv {
 #[derive(Debug, Default)]
 struct Settings {
     session_id: String,
+    threadshare_mode: bool,
+    threadshare_ctx: String,
+    threadshare_ctx_wait: gst::ClockTime,
 }
 
 #[derive(Debug, Default)]
@@ -40,7 +43,7 @@ struct State {
 
 #[derive(Debug)]
 struct TransportReceiveElements {
-    appsrc: gst_app::AppSrc,
+    appsrc: gst::Element,
     _rtprecv: gst::Element,
     _srtpdec: gst::Element,
     material: Option<SrtpKeyMaterial>,
@@ -54,8 +57,22 @@ impl WebRTCRecv {
             return;
         };
         let buffer = gst::Buffer::from_mut_slice(data);
-        if let Err(e) = transport.appsrc.push_buffer(buffer) {
-            gst::warning!(CAT, "receiving data failed with: {e:?}");
+        if let Some(appsrc) = transport.appsrc.downcast_ref::<gst_app::AppSrc>() {
+            if let Err(e) = appsrc.push_buffer(buffer) {
+                gst::warning!(CAT, "receiving data failed with: {e:?}");
+            }
+        } else {
+            // threadshare-mode
+            if !transport
+                .appsrc
+                .emit_by_name::<bool>("push-buffer", &[&buffer])
+            {
+                gst::warning!(
+                    CAT,
+                    obj = transport.appsrc,
+                    "receiving data failed: failed to 'push-buffer'"
+                );
+            }
         }
     }
 
@@ -87,6 +104,21 @@ impl ObjectImpl for WebRTCRecv {
                     .nick("session")
                     .blurb("The internal session object. Only valid after reaching READY state")
                     .build(),
+                glib::ParamSpecBoolean::builder("threadshare-mode")
+                    .nick("Threadshare Mode")
+                    .blurb("Share thread for various input streams. Make sure to set 'threadshare-context-wait' to match the expected passing")
+                    .build(),
+                glib::ParamSpecString::builder("threadshare-context")
+                    .nick("Threadshare Context")
+                    .blurb("Context name to share threads with. Only used when 'threadshare-mode' is active")
+                    .default_value(Some(""))
+                    .build(),
+                glib::ParamSpecUInt::builder("threadshare-context-wait")
+                    .nick("Threadshare Context Wait")
+                    .blurb("Throttle poll loop to run at most once every this many ms. Only used when 'threadshare-mode' is active")
+                    .maximum(1000)
+                    .default_value(0)
+                    .build(),
             ]
         });
         PROPS.as_ref()
@@ -103,6 +135,14 @@ impl ObjectImpl for WebRTCRecv {
                 .as_ref()
                 .map(|s| s.session())
                 .to_value(),
+            "threadshare-mode" => self.settings.lock().unwrap().threadshare_mode.to_value(),
+            "threadshare-context" => self.settings.lock().unwrap().threadshare_ctx.to_value(),
+            "threadshare-context-wait" => self
+                .settings
+                .lock()
+                .unwrap()
+                .threadshare_ctx_wait
+                .to_value(),
             _ => unreachable!(),
         }
     }
@@ -112,6 +152,16 @@ impl ObjectImpl for WebRTCRecv {
             "id" => {
                 self.settings.lock().unwrap().session_id =
                     value.get::<String>().expect("type checked upstream")
+            }
+            "threadshare-mode" => {
+                self.settings.lock().unwrap().threadshare_mode = value.get::<bool>().unwrap()
+            }
+            "threadshare-context" => {
+                self.settings.lock().unwrap().threadshare_ctx = value.get::<String>().unwrap()
+            }
+            "threadshare-context-wait" => {
+                self.settings.lock().unwrap().threadshare_ctx_wait =
+                    gst::ClockTime::from_mseconds(value.get::<u32>().unwrap() as u64)
             }
             _ => unreachable!(),
         }
@@ -140,7 +190,15 @@ impl ElementImpl for WebRTCRecv {
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         match transition {
             gst::StateChange::NullToReady => {
-                let session_id = self.settings.lock().unwrap().session_id.clone();
+                let (session_id, threadshare_mode, threadshare_ctx, threadshare_ctx_wait) = {
+                    let settings = self.settings.lock().unwrap();
+                    (
+                        settings.session_id.clone(),
+                        settings.threadshare_mode,
+                        settings.threadshare_ctx.clone(),
+                        settings.threadshare_ctx_wait,
+                    )
+                };
                 let rtp_id = format!("webrtcbin2-{session_id}");
                 let rtprecv = gst::ElementFactory::make("rtprecv")
                     .property("rtp-id", rtp_id)
@@ -200,12 +258,27 @@ impl ElementImpl for WebRTCRecv {
                         Some(ret)
                     }),
                 );
-                let appsrc = gst_app::AppSrc::builder().format(gst::Format::Time).build();
-                if self
-                    .obj()
-                    .add_many([appsrc.upcast_ref(), &srtpdec, &rtprecv])
-                    .is_err()
-                {
+                let appsrc = if !threadshare_mode {
+                    gst_app::AppSrc::builder()
+                        .format(gst::Format::Time)
+                        .build()
+                        .upcast()
+                } else {
+                    gst::ElementFactory::make("ts-appsrc")
+                        .property("context", threadshare_ctx)
+                        .property("context-wait", threadshare_ctx_wait.mseconds() as u32)
+                        .build()
+                        .map_err(|_| {
+                            self.post_error_message(gst::error_msg!(
+                                gst::CoreError::MissingPlugin,
+                                ["\'ts-appsrc\' element not found"]
+                            ));
+                            gst::StateChangeError
+                        })?
+                        .upcast()
+                };
+
+                if self.obj().add_many([&appsrc, &srtpdec, &rtprecv]).is_err() {
                     return Err(gst::StateChangeError);
                 }
                 rtprecv.set_state(gst::State::Ready)?;

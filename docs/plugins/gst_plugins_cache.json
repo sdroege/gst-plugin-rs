@@ -19049,6 +19049,44 @@
                         "readable": true,
                         "type": "GstWebRTCSession",
                         "writable": true
+                    },
+                    "threadshare-context": {
+                        "blurb": "Context name to share threads with. Only used when 'threadshare-mode' is active",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "threadshare-context-wait": {
+                        "blurb": "Throttle poll loop to run at most once every this many ms. Only used when 'threadshare-mode' is active",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "0",
+                        "min": "4294967296000",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "threadshare-mode": {
+                        "blurb": "Share thread for various input streams. Make sure to set 'threadshare-context-wait' to match the expected passing",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
                     }
                 },
                 "rank": "none"
