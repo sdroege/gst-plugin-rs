@@ -4745,6 +4745,7 @@ impl BaseWebRTCSink {
                 "pixel-aspect-ratio",
                 "colorimetry",
                 "chroma-site",
+                "interlace-mode",
             ];
 
             current.remove_fields(VIDEO_ALLOWED_CHANGES.iter().copied());
