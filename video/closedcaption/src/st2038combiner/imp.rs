@@ -22,6 +22,7 @@ use gst_base::subclass::prelude::*;
 use std::sync::{LazyLock, Mutex, MutexGuard};
 
 const FALLBACK_FRAME_DURATION: gst::ClockTime = gst::ClockTime::from_mseconds(50);
+const DEFAULT_DROP_LATE_ST2038: bool = false;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum Alignment {
@@ -35,6 +36,11 @@ enum Alignment {
 struct CollectedSt2038 {
     running_time: gst::ClockTime,
     anc: Vec<AncData>,
+}
+
+#[derive(Default)]
+struct Settings {
+    drop_late_st2038: bool,
 }
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
@@ -117,9 +123,46 @@ impl State {
 pub struct St2038Combiner {
     video_sinkpad: gst_base::AggregatorPad,
     state: Mutex<State>,
+    settings: Mutex<Settings>,
 }
 
 impl ObjectImpl for St2038Combiner {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
+            vec![
+                glib::ParamSpecBoolean::builder("drop-late-st2038")
+                    .nick("Drop late ST-2038")
+                    .blurb(
+                        "Drop ST-2038 buffers whose running time is before the current video \
+                         frame start instead of collecting them for the next output picture",
+                    )
+                    .default_value(DEFAULT_DROP_LATE_ST2038)
+                    .mutable_playing()
+                    .build(),
+            ]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        match pspec.name() {
+            "drop-late-st2038" => {
+                self.settings.lock().unwrap().drop_late_st2038 =
+                    value.get().expect("type checked upstream");
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        let settings = self.settings.lock().unwrap();
+        match pspec.name() {
+            "drop-late-st2038" => settings.drop_late_st2038.to_value(),
+            _ => unimplemented!(),
+        }
+    }
+
     fn constructed(&self) {
         self.parent_constructed();
         let obj = self.obj();
@@ -213,6 +256,7 @@ impl ObjectSubclass for St2038Combiner {
         Self {
             video_sinkpad,
             state: Mutex::<State>::default(),
+            settings: Mutex::<Settings>::default(),
         }
     }
 }
@@ -666,6 +710,7 @@ impl St2038Combiner {
         }
 
         let st2038_sinkpad = state.st2038_sinkpad.as_ref().unwrap().clone();
+        let drop_late = self.settings.lock().unwrap().drop_late_st2038;
 
         loop {
             let Some(buffer) = st2038_sinkpad.peek_buffer() else {
@@ -748,6 +793,7 @@ impl St2038Combiner {
             } else if let Some(previous_video_running_time_end) =
                 state.previous_video_running_time_end
                 && st2038_time < previous_video_running_time_end
+                && drop_late
             {
                 gst::debug!(
                     CAT,
@@ -761,6 +807,15 @@ impl St2038Combiner {
             if let Some(current_video_running_time) = state.current_video_running_time
                 && st2038_time < current_video_running_time
             {
+                if drop_late {
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "ST-2038 buffer before current video frame, dropping {st2038_time} < {current_video_running_time}"
+                    );
+                    st2038_sinkpad.drop_buffer();
+                    continue;
+                }
                 gst::debug!(
                     CAT,
                     imp = self,
