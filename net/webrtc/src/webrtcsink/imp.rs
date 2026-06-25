@@ -4942,6 +4942,7 @@ impl BaseWebRTCSink {
                 "pixel-aspect-ratio",
                 "colorimetry",
                 "chroma-site",
+                "interlace-mode",
             ];
 
             current.remove_fields(VIDEO_ALLOWED_CHANGES.iter().copied());
@@ -4959,18 +4960,6 @@ impl BaseWebRTCSink {
             }
             remove_multiview(current);
             remove_multiview(new);
-
-            // Interlace mode default is progressive, so a missing field should be
-            // treated the same as explicit progressive
-            fn interlace_mode(s: &gst::StructureRef) -> gst_video::VideoInterlaceMode {
-                s.get::<gst_video::VideoInterlaceMode>("interlace-mode")
-                    .unwrap_or(gst_video::VideoInterlaceMode::Progressive)
-            }
-
-            if interlace_mode(current) == interlace_mode(new) {
-                current.remove_field("interlace-mode");
-                new.remove_field("interlace-mode");
-            }
         } else if caps_type.starts_with("audio/") {
             // TODO
         }
