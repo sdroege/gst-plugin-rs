@@ -674,11 +674,12 @@ fn make_converter_for_video_caps(caps: &gst::Caps, codec: &Codec) -> Result<gst:
                 let glupload = make_element("glupload", None)?;
                 let glconvert = make_element("glcolorconvert", None)?;
                 let glscale = make_element("glcolorscale", None)?;
+                let glconvert2 = make_element("glcolorconvert", None)?;
 
-                ret.add_many([&glupload, &glconvert, &glscale])?;
-                gst::Element::link_many([&glupload, &glconvert, &glscale])?;
+                ret.add_many([&glupload, &glconvert, &glscale, &glconvert2])?;
+                gst::Element::link_many([&glupload, &glconvert, &glscale, &glconvert2])?;
 
-                (glupload, glscale)
+                (glupload, glconvert2)
             } else if feature.contains(VA_MEMORY_FEATURE) {
                 let vapostproc = make_element("vapostproc", None)?;
 
