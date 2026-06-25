@@ -12294,6 +12294,20 @@
                         "type": "GstAggregatorPad"
                     }
                 },
+                "properties": {
+                    "drop-late-st2038": {
+                        "blurb": "Drop ST-2038 buffers whose running time is before the current video frame start instead of collecting them for the next output picture",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
                 "rank": "none"
             },
             "st2038extractor": {
