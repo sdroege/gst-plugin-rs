@@ -159,7 +159,9 @@ fn add_auth_header(
                     format!("response=\"{response}\""),
                 ];
 
-                parts.push(format!("algorithm={}", params.algorithm));
+                if let Some(algorithm) = params.algorithm {
+                    parts.push(format!("algorithm={}", algorithm));
+                }
 
                 if let Some(qop) = &params.qop {
                     parts.push(format!("qop={}", qop));
@@ -3252,7 +3254,11 @@ impl RtspTaskState {
 
     async fn play(&mut self, session: &Session) -> Result<u32, RtspError> {
         self.cseq += 1;
-        let request_uri = self.aggregate_control.as_ref().unwrap_or(&self.request_uri()).clone();
+        let request_uri = self
+            .aggregate_control
+            .as_ref()
+            .unwrap_or(&self.request_uri())
+            .clone();
         let req = Request::builder(Method::Play, self.version)
             .typed_header::<CSeq>(&self.cseq.into())
             .typed_header::<Range>(&Range::Npt(NptRange::From(NptTime::Now)))
@@ -3303,7 +3309,11 @@ impl RtspTaskState {
 
     async fn teardown(&mut self, session: &Session) -> Result<u32, RtspError> {
         self.cseq += 1;
-        let request_uri = self.aggregate_control.as_ref().unwrap_or(&self.request_uri()).clone();
+        let request_uri = self
+            .aggregate_control
+            .as_ref()
+            .unwrap_or(&self.request_uri())
+            .clone();
         let req = Request::builder(Method::Teardown, self.version)
             .typed_header::<CSeq>(&self.cseq.into())
             .header(USER_AGENT, DEFAULT_USER_AGENT)
@@ -3318,7 +3328,11 @@ impl RtspTaskState {
 
     async fn keep_alive(&mut self, session: &Session) -> Result<(), RtspError> {
         self.cseq += 1;
-        let request_uri = self.aggregate_control.as_ref().unwrap_or(&self.request_uri()).clone();
+        let request_uri = self
+            .aggregate_control
+            .as_ref()
+            .unwrap_or(&self.request_uri())
+            .clone();
         let method = self
             .methods
             .as_ref()
@@ -3424,7 +3438,11 @@ impl RtspTaskState {
         };
 
         self.cseq += 1;
-        let request_uri = self.aggregate_control.as_ref().unwrap_or(&self.request_uri()).clone();
+        let request_uri = self
+            .aggregate_control
+            .as_ref()
+            .unwrap_or(&self.request_uri())
+            .clone();
 
         let req = Request::builder(param_req.method, self.version)
             .typed_header::<CSeq>(&self.cseq.into())
