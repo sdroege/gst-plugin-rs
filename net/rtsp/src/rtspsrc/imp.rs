@@ -2607,6 +2607,13 @@ impl RtspTaskState {
         }
     }
 
+    fn request_uri(&self) -> Url {
+        let mut uri = self.url.clone();
+        let _ = uri.set_username("");
+        let _ = uri.set_password(None);
+        uri
+    }
+
     #[allow(clippy::result_large_err)]
     fn check_response(
         rsp: &Response<Body>,
@@ -2766,7 +2773,7 @@ impl RtspTaskState {
         self.cseq += 1;
         let req = Request::builder(Method::Options, self.version)
             .typed_header::<CSeq>(&self.cseq.into())
-            .request_uri(self.url.clone())
+            .request_uri(self.request_uri())
             .header(USER_AGENT, DEFAULT_USER_AGENT)
             .build(Body::default());
         let rsp = self.send_request_with_auth(req).await?;
@@ -2807,7 +2814,7 @@ impl RtspTaskState {
             .typed_header::<CSeq>(&self.cseq.into())
             .header(USER_AGENT, DEFAULT_USER_AGENT)
             .header(ACCEPT, "application/sdp")
-            .request_uri(self.url.clone())
+            .request_uri(self.request_uri())
             .build(Body::default());
         let rsp = self.send_request_with_auth(req).await?;
 
@@ -2973,7 +2980,7 @@ impl RtspTaskState {
             .content_base_or_location
             .as_ref()
             .and_then(|s| Url::parse(s).ok())
-            .unwrap_or_else(|| self.url.clone());
+            .unwrap_or_else(|| self.request_uri());
 
         self.aggregate_control = sdp
             .get_first_attribute_value("control")
@@ -3007,7 +3014,7 @@ impl RtspTaskState {
             .content_base_or_location
             .as_ref()
             .and_then(|s| Url::parse(s).ok())
-            .unwrap_or_else(|| self.url.clone());
+            .unwrap_or_else(|| self.request_uri());
 
         let mut port_next = port_start;
         let mut stream_num = 0;
@@ -3245,7 +3252,7 @@ impl RtspTaskState {
 
     async fn play(&mut self, session: &Session) -> Result<u32, RtspError> {
         self.cseq += 1;
-        let request_uri = self.aggregate_control.as_ref().unwrap_or(&self.url).clone();
+        let request_uri = self.aggregate_control.as_ref().unwrap_or(&self.request_uri()).clone();
         let req = Request::builder(Method::Play, self.version)
             .typed_header::<CSeq>(&self.cseq.into())
             .typed_header::<Range>(&Range::Npt(NptRange::From(NptTime::Now)))
@@ -3296,7 +3303,7 @@ impl RtspTaskState {
 
     async fn teardown(&mut self, session: &Session) -> Result<u32, RtspError> {
         self.cseq += 1;
-        let request_uri = self.aggregate_control.as_ref().unwrap_or(&self.url).clone();
+        let request_uri = self.aggregate_control.as_ref().unwrap_or(&self.request_uri()).clone();
         let req = Request::builder(Method::Teardown, self.version)
             .typed_header::<CSeq>(&self.cseq.into())
             .header(USER_AGENT, DEFAULT_USER_AGENT)
@@ -3311,7 +3318,7 @@ impl RtspTaskState {
 
     async fn keep_alive(&mut self, session: &Session) -> Result<(), RtspError> {
         self.cseq += 1;
-        let request_uri = self.aggregate_control.as_ref().unwrap_or(&self.url).clone();
+        let request_uri = self.aggregate_control.as_ref().unwrap_or(&self.request_uri()).clone();
         let method = self
             .methods
             .as_ref()
@@ -3417,7 +3424,7 @@ impl RtspTaskState {
         };
 
         self.cseq += 1;
-        let request_uri = self.aggregate_control.as_ref().unwrap_or(&self.url).clone();
+        let request_uri = self.aggregate_control.as_ref().unwrap_or(&self.request_uri()).clone();
 
         let req = Request::builder(param_req.method, self.version)
             .typed_header::<CSeq>(&self.cseq.into())
