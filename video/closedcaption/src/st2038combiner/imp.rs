@@ -74,6 +74,32 @@ impl State {
         all
     }
 
+    fn has_in_window_st2038(&self) -> bool {
+        let (Some(v_start), Some(v_end)) = (
+            self.current_video_running_time,
+            self.current_video_running_time_end,
+        ) else {
+            return false;
+        };
+        self.current_frame_st2038
+            .iter()
+            .any(|c| c.running_time >= v_start && c.running_time < v_end)
+    }
+
+    /// Whether an empty ST-2038 pad peek means collection for this video frame is done.
+    fn should_stop_waiting_empty_peek(&self, timeout: bool) -> bool {
+        if self.current_frame_st2038.is_empty() {
+            return timeout;
+        }
+        if !self.has_in_window_st2038() {
+            return timeout;
+        }
+        match self.alignment {
+            Alignment::Frame => true,
+            Alignment::Packet | Alignment::Line => timeout,
+        }
+    }
+
     fn alignment_from_caps(caps: &gst::CapsRef) -> Alignment {
         let s = caps.structure(0).expect("ST-2038 caps missing structure");
         let align = s
@@ -646,13 +672,13 @@ impl St2038Combiner {
                 if st2038_sinkpad.is_eos() {
                     gst::debug!(CAT, imp = self, "ST-2038 pad is EOS, we're done");
                     break;
-                } else if !state.current_frame_st2038.is_empty() {
+                } else if state.should_stop_waiting_empty_peek(timeout) {
                     gst::debug!(
                         CAT,
                         imp = self,
-                        "No more ST-2038 data for current_video_running_time_end: {:?}, collected {}",
-                        state.current_video_running_time_end,
-                        state.current_frame_st2038.len()
+                        "Stopping ST-2038 wait on empty peek (timeout: {timeout}, collected buffers: {}, in_window: {})",
+                        state.current_frame_st2038.len(),
+                        state.has_in_window_st2038(),
                     );
                     break;
                 } else if !timeout {
@@ -719,30 +745,27 @@ impl St2038Combiner {
                     );
                     break;
                 }
-            } else {
-                if let Some(previous_video_running_time_end) = state.previous_video_running_time_end
-                    && st2038_time < previous_video_running_time_end
-                {
-                    gst::debug!(
-                        CAT,
-                        imp = self,
-                        "ST-2038 buffer before end of last video frame, dropping {st2038_time} < {previous_video_running_time_end}"
-                    );
-                    st2038_sinkpad.drop_buffer();
-                    continue;
-                }
+            } else if let Some(previous_video_running_time_end) =
+                state.previous_video_running_time_end
+                && st2038_time < previous_video_running_time_end
+            {
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "ST-2038 buffer before end of last video frame, dropping {st2038_time} < {previous_video_running_time_end}"
+                );
+                st2038_sinkpad.drop_buffer();
+                continue;
+            }
 
-                if let Some(current_video_running_time) = state.current_video_running_time
-                    && st2038_time < current_video_running_time
-                {
-                    gst::debug!(
-                        CAT,
-                        imp = self,
-                        "ST-2038 buffer before current video frame, dropping {st2038_time} < {current_video_running_time}"
-                    );
-                    st2038_sinkpad.drop_buffer();
-                    continue;
-                }
+            if let Some(current_video_running_time) = state.current_video_running_time
+                && st2038_time < current_video_running_time
+            {
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "Collecting late ST-2038 for {st2038_time} < {current_video_running_time}"
+                );
             }
 
             // This ST-2038 buffer has to be collected

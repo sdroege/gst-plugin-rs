@@ -15,6 +15,7 @@ use gst_video::video_meta::AncillaryMeta;
 //
 // When parsed should give,
 // AncDataHeader { c_not_y_channel_flag: false, did: 97, sdid: 1, line_number: 9, horizontal_offset: 0, data_count: 73, checksum: 427, len: 100 }
+const ST2038_PACKET_CHECKSUM: u16 = 427;
 const ST2038_PACKET: &[u8; 100] = &[
     0x00, 0x02, 0x40, 0x02, 0x61, 0x80, 0x64, 0x96, 0x59, 0x69, 0x92, 0x64, 0xf9, 0x0d, 0x00, 0x8f,
     0x97, 0x2b, 0xd1, 0xfc, 0xa0, 0x28, 0x0b, 0xf6, 0x80, 0xa0, 0x1f, 0xa4, 0x01, 0x00, 0x7e, 0x90,
@@ -24,6 +25,21 @@ const ST2038_PACKET: &[u8; 100] = &[
     0x40, 0x10, 0x07, 0xe9, 0x00, 0x40, 0x1f, 0xa4, 0x01, 0x00, 0x7e, 0x90, 0x04, 0x01, 0x74, 0x40,
     0x23, 0xe9, 0x0d, 0xab,
 ];
+/// Second valid ST-2038 packet; ANC user-data/checksum differ from `ST2038_PACKET`.
+///
+/// When parsed should give,
+/// AncDataHeader { c_not_y_channel_flag: false, did: 97, sdid: 1, line_number: 9, horizontal_offset: 0, data_count: 73, checksum: 683, len: 100 }
+const ST2038_PACKET_ALT_CHECKSUM: u16 = 683;
+const ST2038_PACKET_ALT: &[u8; 100] = &[
+    0x00, 0x02, 0x40, 0x02, 0x61, 0x80, 0x64, 0x96, 0x59, 0x69, 0x92, 0x64, 0xf9, 0x0e, 0x02, 0x8f,
+    0x97, 0x2b, 0xd1, 0xfc, 0xa0, 0x28, 0x0b, 0xf6, 0x80, 0xa0, 0x1f, 0xa4, 0x01, 0x00, 0x7e, 0x90,
+    0x04, 0x01, 0xfa, 0x40, 0x10, 0x07, 0xe9, 0x00, 0x40, 0x1f, 0xa4, 0x01, 0x00, 0x7e, 0x90, 0x04,
+    0x01, 0xfa, 0x40, 0x10, 0x07, 0xe9, 0x00, 0x40, 0x1f, 0xa4, 0x01, 0x00, 0x7e, 0x90, 0x04, 0x01,
+    0xfa, 0x40, 0x10, 0x07, 0xe9, 0x00, 0x40, 0x1f, 0xa4, 0x01, 0x00, 0x7e, 0x90, 0x04, 0x01, 0xfa,
+    0x40, 0x10, 0x07, 0xe9, 0x00, 0x40, 0x1f, 0xa4, 0x01, 0x00, 0x7e, 0x90, 0x04, 0x01, 0x74, 0x80,
+    0xa3, 0xe4, 0xfe, 0xab,
+];
+
 const FRAME_DURATION_NS: u64 = gst::ClockTime::SECOND.nseconds() / 30;
 
 const NUM_ST2038_BUFFERS: usize = 6;
@@ -107,8 +123,18 @@ fn test_st2038_combiner_extractor(
 
     let mut combiner_buffers = Vec::<gst::Buffer>::new();
 
-    for (frame_num, pair) in st2038_buffers.chunks_exact(2).enumerate() {
-        let video_pts = gst::ClockTime::from_nseconds((frame_num + 1) as u64 * FRAME_DURATION_NS);
+    let frame_limit = if same_pts {
+        1
+    } else {
+        NUM_ST2038_BUFFERS / BUFFERS_PER_FRAME
+    };
+
+    for (frame_num, pair) in st2038_buffers
+        .chunks_exact(BUFFERS_PER_FRAME)
+        .enumerate()
+        .take(frame_limit)
+    {
+        let video_pts = gst::ClockTime::from_nseconds(frame_num as u64 * FRAME_DURATION_NS);
         let mut video_buffer = gst::Buffer::with_size(1).unwrap();
         {
             let buffer = video_buffer.get_mut().unwrap();
@@ -129,7 +155,7 @@ fn test_st2038_combiner_extractor(
         combiner_buffers.push(buffer);
     }
 
-    assert_eq!(combiner_buffers.len(), NUM_ST2038_BUFFERS / 2);
+    assert_eq!(combiner_buffers.len(), frame_limit);
 
     for cb in &combiner_buffers {
         assert_eq!(cb.iter_meta::<AncillaryMeta>().count(), combiner_meta_count);
@@ -189,7 +215,7 @@ fn test_st2038_combiner_extractor(
     while let Some(buffer) = h2.try_pull() {
         extractor_buffers.push(buffer);
     }
-    assert_eq!(extractor_buffers.len(), NUM_ST2038_BUFFERS / 2);
+    assert_eq!(extractor_buffers.len(), frame_limit);
 
     for eb in extractor_buffers {
         assert_eq!(
@@ -217,4 +243,139 @@ fn test_st2038_extractor_combiner_without_st2038() {
 #[test]
 fn test_st2038_extractor_combiner_with_multiple_st2038_same_pts() {
     test_st2038_combiner_extractor(true, false, true, 2, 2);
+}
+
+fn st2038_buffer(packet: [u8; 100], pts: gst::ClockTime) -> gst::Buffer {
+    let mut buffer = gst::Buffer::from_slice(packet);
+    {
+        let buffer = buffer.get_mut().unwrap();
+        buffer.set_pts(pts);
+        buffer.set_duration(gst::ClockTime::from_nseconds(FRAME_DURATION_NS));
+    }
+    buffer
+}
+
+/// Late ST-2038 is collected by default and attached with in-window data for the same picture.
+#[test]
+fn test_st2038_combiner_collects_late_by_default() {
+    init();
+
+    let st2038_caps = gst::Caps::builder("meta/x-st-2038")
+        .field("alignment", "frame")
+        .build();
+    let video_caps = gst_video::VideoInfo::builder(gst_video::VideoFormat::I420, 320, 240)
+        .fps(gst::Fraction::new(30, 1))
+        .build()
+        .unwrap()
+        .to_caps()
+        .unwrap();
+    let in_segment = gst::FormattedSegment::<gst::ClockTime>::new();
+
+    let combiner = gst::ElementFactory::make("st2038combiner").build().unwrap();
+    let mut h0 = gst_check::Harness::with_element(&combiner, Some("sink"), Some("src"));
+    let mut h1 = gst_check::Harness::with_element(&combiner, None, None);
+
+    h0.set_sink_caps(video_caps.clone());
+    h0.set_src_caps(video_caps);
+    h0.play();
+    assert!(h0.push_event(gst::event::Segment::builder(&in_segment).build()));
+
+    h1.add_element_sink_pad(&combiner.request_pad_simple("st2038").unwrap());
+    h1.set_sink_caps(st2038_caps);
+    h1.play();
+    assert!(h1.push_event(gst::event::Segment::builder(&in_segment).build()));
+
+    let stale_st2038 = st2038_buffer(*ST2038_PACKET, gst::ClockTime::ZERO);
+
+    let in_window_pts = gst::ClockTime::from_nseconds(FRAME_DURATION_NS);
+    let in_window_st2038 = st2038_buffer(*ST2038_PACKET_ALT, in_window_pts);
+
+    let mut video_buffer = gst::Buffer::with_size(1).unwrap();
+    {
+        let buffer = video_buffer.get_mut().unwrap();
+        buffer.set_pts(in_window_pts);
+        buffer.set_dts(in_window_pts);
+        buffer.set_duration(gst::ClockTime::from_nseconds(FRAME_DURATION_NS));
+    }
+
+    assert_eq!(h1.push(stale_st2038), Ok(gst::FlowSuccess::Ok));
+    assert_eq!(h1.push(in_window_st2038), Ok(gst::FlowSuccess::Ok));
+    assert_eq!(h0.push(video_buffer), Ok(gst::FlowSuccess::Ok));
+
+    let output = h0.pull().unwrap();
+    assert_eq!(output.iter_meta::<AncillaryMeta>().count(), 2);
+
+    let checksums: std::collections::BTreeSet<_> = output
+        .iter_meta::<AncillaryMeta>()
+        .map(|meta| meta.checksum())
+        .collect();
+    assert_eq!(
+        checksums,
+        std::collections::BTreeSet::from([ST2038_PACKET_CHECKSUM, ST2038_PACKET_ALT_CHECKSUM,])
+    );
+
+    drop(h0);
+    drop(h1);
+    let _ = combiner.set_state(gst::State::Null);
+}
+
+/// With drop-late-st2038, buffers before the current video window are not collected.
+#[test]
+fn test_st2038_combiner_drop_late_st2038_property() {
+    init();
+
+    let st2038_caps = gst::Caps::builder("meta/x-st-2038")
+        .field("alignment", "frame")
+        .build();
+    let video_caps = gst_video::VideoInfo::builder(gst_video::VideoFormat::I420, 320, 240)
+        .fps(gst::Fraction::new(30, 1))
+        .build()
+        .unwrap()
+        .to_caps()
+        .unwrap();
+    let in_segment = gst::FormattedSegment::<gst::ClockTime>::new();
+
+    let combiner = gst::ElementFactory::make("st2038combiner")
+        .property("drop-late-st2038", true)
+        .build()
+        .unwrap();
+    let mut h0 = gst_check::Harness::with_element(&combiner, Some("sink"), Some("src"));
+    let mut h1 = gst_check::Harness::with_element(&combiner, None, None);
+
+    h0.set_sink_caps(video_caps.clone());
+    h0.set_src_caps(video_caps);
+    h0.play();
+    assert!(h0.push_event(gst::event::Segment::builder(&in_segment).build()));
+
+    h1.add_element_sink_pad(&combiner.request_pad_simple("st2038").unwrap());
+    h1.set_sink_caps(st2038_caps);
+    h1.play();
+    assert!(h1.push_event(gst::event::Segment::builder(&in_segment).build()));
+
+    let stale_st2038 = st2038_buffer(*ST2038_PACKET, gst::ClockTime::ZERO);
+
+    let in_window_pts = gst::ClockTime::from_nseconds(FRAME_DURATION_NS);
+    let in_window_st2038 = st2038_buffer(*ST2038_PACKET_ALT, in_window_pts);
+
+    let mut video_buffer = gst::Buffer::with_size(1).unwrap();
+    {
+        let buffer = video_buffer.get_mut().unwrap();
+        buffer.set_pts(in_window_pts);
+        buffer.set_dts(in_window_pts);
+        buffer.set_duration(gst::ClockTime::from_nseconds(FRAME_DURATION_NS));
+    }
+
+    assert_eq!(h1.push(stale_st2038), Ok(gst::FlowSuccess::Ok));
+    assert_eq!(h1.push(in_window_st2038), Ok(gst::FlowSuccess::Ok));
+    assert_eq!(h0.push(video_buffer), Ok(gst::FlowSuccess::Ok));
+
+    let output = h0.pull().unwrap();
+    assert_eq!(output.iter_meta::<AncillaryMeta>().count(), 1);
+    let meta = output.iter_meta::<AncillaryMeta>().next().unwrap();
+    assert_ne!(meta.checksum(), ST2038_PACKET_CHECKSUM);
+    assert_eq!(meta.checksum(), ST2038_PACKET_ALT_CHECKSUM);
+
+    drop(h0);
+    drop(h1);
+    let _ = combiner.set_state(gst::State::Null);
 }
