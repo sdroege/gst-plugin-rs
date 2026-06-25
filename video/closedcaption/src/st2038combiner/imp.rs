@@ -23,6 +23,20 @@ use std::sync::{LazyLock, Mutex, MutexGuard};
 
 const FALLBACK_FRAME_DURATION: gst::ClockTime = gst::ClockTime::from_mseconds(50);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum Alignment {
+    #[default]
+    Packet,
+    Line,
+    Frame,
+}
+
+#[derive(Clone, Debug)]
+struct CollectedSt2038 {
+    running_time: gst::ClockTime,
+    anc: Vec<AncData>,
+}
+
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "st2038combiner",
@@ -34,16 +48,44 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 #[derive(Default)]
 struct State {
     st2038_sinkpad: Option<gst_base::AggregatorPad>,
-    current_frame_st2038: Vec<AncData>,
+    current_frame_st2038: Vec<CollectedSt2038>,
     last_st2038_ts: Option<gst::ClockTime>,
 
     current_video_buffer: Option<gst::Buffer>,
     current_video_caps: Option<gst::Caps>,
     pending_video_caps: Option<gst::Caps>,
     framerate: Option<gst::Fraction>,
+    alignment: Alignment,
     previous_video_running_time_end: Option<gst::ClockTime>,
     current_video_running_time_end: Option<gst::ClockTime>,
     current_video_running_time: Option<gst::ClockTime>,
+}
+
+impl State {
+    // Sort by line and then horizontal offset. While this is not strictly required
+    // for the ancillary meta, it keeps the output in a nicer order.
+    fn flattened_anc_sorted(&self) -> Vec<AncData> {
+        let mut all: Vec<AncData> = self
+            .current_frame_st2038
+            .iter()
+            .flat_map(|c| c.anc.iter().cloned())
+            .collect();
+        all.sort_by_key(|anc| (anc.header.line_number, anc.header.horizontal_offset));
+        all
+    }
+
+    fn alignment_from_caps(caps: &gst::CapsRef) -> Alignment {
+        let s = caps.structure(0).expect("ST-2038 caps missing structure");
+        let align = s
+            .get::<&str>("alignment")
+            .expect("ST-2038 caps missing alignment field");
+        match align {
+            "packet" => Alignment::Packet,
+            "line" => Alignment::Line,
+            "frame" => Alignment::Frame,
+            other => panic!("invalid ST-2038 alignment: {other}"),
+        }
+    }
 }
 
 pub struct St2038Combiner {
@@ -121,6 +163,7 @@ impl ElementImpl for St2038Combiner {
                 && st2038_pad == pad.downcast_ref::<gst_base::AggregatorPad>().unwrap()
             {
                 state.st2038_sinkpad.take();
+                state.alignment = Alignment::default();
             }
         }
 
@@ -362,6 +405,11 @@ impl AggregatorImpl for St2038Combiner {
                     self.obj().set_src_caps(&caps);
                 }
             }
+            gst::EventView::Caps(ev) if self.is_st2038_pad(pad) => {
+                let mut state = self.state.lock().unwrap();
+                state.alignment = State::alignment_from_caps(ev.caps());
+                gst::debug!(CAT, imp = self, "ST-2038 alignment {:?}", state.alignment);
+            }
             gst::EventView::Segment(e) => match e.segment().downcast_ref::<gst::ClockTime>() {
                 Some(s) => {
                     if self.is_video_pad(pad) {
@@ -479,7 +527,7 @@ impl AggregatorImpl for St2038Combiner {
                 let mut anc_data_buffer = gst::Buffer::new();
                 let buffer_mut = anc_data_buffer.make_mut();
 
-                add_ancillary_meta_to_buffer(buffer_mut, &state.current_frame_st2038);
+                add_ancillary_meta_to_buffer(buffer_mut, &state.flattened_anc_sorted());
 
                 return Some(
                     gst::Sample::builder()
@@ -542,6 +590,24 @@ impl St2038Combiner {
         }
 
         Ok(())
+    }
+
+    fn collect_st2038_buffer(
+        &self,
+        state: &mut State,
+        running_time: gst::ClockTime,
+        buffer: gst::Buffer,
+    ) -> Result<usize, gst::FlowError> {
+        let mut anc = Vec::new();
+        self.buffer_to_ancdata(&mut anc, buffer)?;
+        if anc.is_empty() {
+            return Ok(0);
+        }
+        let anc_packets = anc.len();
+        state
+            .current_frame_st2038
+            .push(CollectedSt2038 { running_time, anc });
+        Ok(anc_packets)
     }
 
     // Only if we collected all ST-2038 we replace the current video
@@ -683,20 +749,13 @@ impl St2038Combiner {
             st2038_sinkpad.drop_buffer();
 
             state.last_st2038_ts = buffer.pts();
-            if self
-                .buffer_to_ancdata(&mut state.current_frame_st2038, buffer)
-                .is_err()
-            {
-                gst::warning!(CAT, imp = self, "Dropping invalid ST2038 packets");
-            } else {
-                gst::debug!(
-                    CAT,
-                    imp = self,
-                    "Collected {} ST-2038 buffers with PTS: {st2038_time:?} for current_video_running_time_end: {:?}",
-                    state.current_frame_st2038.len(),
-                    state.current_video_running_time_end
-                );
-            }
+            let anc_packets = self.collect_st2038_buffer(&mut state, st2038_time, buffer)?;
+            gst::debug!(
+                CAT,
+                imp = self,
+                "Collected ST-2038 buffer with running time {st2038_time:?} ({anc_packets} ANC packets in buffer) for current_video_running_time_end: {:?}",
+                state.current_video_running_time_end
+            );
         }
 
         gst::log!(
@@ -711,14 +770,10 @@ impl St2038Combiner {
         let mut video_buf = state.current_video_buffer.take().unwrap();
 
         if !state.current_frame_st2038.is_empty() {
-            // Sort by line and then horizontal offset. While this is not strictly required
-            // for the ancillary meta, it keeps the output in a nicer order.
-            state
-                .current_frame_st2038
-                .sort_by_key(|anc| (anc.header.line_number, anc.header.horizontal_offset));
+            let anc = state.flattened_anc_sorted();
 
             if CAT.above_threshold(gst::DebugLevel::Trace) {
-                for anc in &state.current_frame_st2038 {
+                for anc in &anc {
                     gst::trace!(
                         CAT,
                         imp = self,
@@ -731,7 +786,7 @@ impl St2038Combiner {
                     );
                 }
             }
-            add_ancillary_meta_to_buffer(video_buf.make_mut(), &state.current_frame_st2038);
+            add_ancillary_meta_to_buffer(video_buf.make_mut(), &anc);
             state.current_frame_st2038.clear();
         } else {
             gst::log!(CAT, imp = self, "No ST-2038 for video buffer");
@@ -823,6 +878,7 @@ impl St2038Combiner {
         let mut state = self.state.lock().unwrap();
         if !is_flush {
             let _ = state.framerate.take();
+            state.alignment = Alignment::default();
         }
         let _ = state.pending_video_caps.take();
         let _ = state.current_video_buffer.take();
