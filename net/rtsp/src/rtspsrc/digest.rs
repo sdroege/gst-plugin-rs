@@ -45,25 +45,13 @@ impl std::fmt::Display for DigestAlgorithm {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct DigestParams {
     pub realm: String,
     pub nonce: String,
-    pub algorithm: DigestAlgorithm,
+    pub algorithm: Option<DigestAlgorithm>,
     pub qop: Option<String>,
     pub opaque: Option<String>,
-}
-
-impl Default for DigestParams {
-    fn default() -> Self {
-        DigestParams {
-            realm: String::new(),
-            nonce: String::new(),
-            algorithm: DigestAlgorithm::Md5,
-            qop: None,
-            opaque: None,
-        }
-    }
 }
 
 // Adapted from `rtsp-types` crate, `quoted_string` implementation.
@@ -125,9 +113,7 @@ fn process_part(part: &str, params: &mut DigestParams) {
         "realm" => params.realm = unescaped,
         "nonce" => params.nonce = unescaped,
         "algorithm" => {
-            if let Ok(alg) = DigestAlgorithm::from_str(&unescaped) {
-                params.algorithm = alg;
-            }
+            params.algorithm = DigestAlgorithm::from_str(&unescaped).ok();
         }
         "qop" => params.qop = Some(unescaped),
         "opaque" => params.opaque = Some(unescaped),
@@ -229,13 +215,13 @@ pub fn compute_digest_response(
     }
 
     match params.algorithm {
-        DigestAlgorithm::Md5 => {
+        None | Some(DigestAlgorithm::Md5) => {
             compute_digest::<md5::Md5>(params, method, uri, username, password, cnonce, nc)
         }
-        DigestAlgorithm::Sha256 => {
+        Some(DigestAlgorithm::Sha256) => {
             compute_digest::<sha2::Sha256>(params, method, uri, username, password, cnonce, nc)
         }
-        DigestAlgorithm::Sha512 => {
+        Some(DigestAlgorithm::Sha512) => {
             compute_digest::<sha2::Sha512_256>(params, method, uri, username, password, cnonce, nc)
         }
     }
@@ -253,7 +239,7 @@ mod tests {
 
         assert_eq!(params.realm, "GStreamer RTSP Server");
         assert_eq!(params.nonce, "c8aa9f5031ccfec3");
-        assert_eq!(params.algorithm, DigestAlgorithm::Md5);
+        assert_eq!(params.algorithm, Some(DigestAlgorithm::Md5));
     }
 
     #[test]
@@ -362,7 +348,7 @@ mod tests {
 
         assert_eq!(params.realm, "Home \"Sweet\" Home");
         assert_eq!(params.nonce, "12345");
-        assert_eq!(params.algorithm, DigestAlgorithm::Md5);
+        assert_eq!(params.algorithm, Some(DigestAlgorithm::Md5));
         assert_eq!(params.qop, Some("auth".to_string()));
     }
 
