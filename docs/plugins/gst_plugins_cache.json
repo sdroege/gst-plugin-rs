@@ -18966,6 +18966,45 @@
                 },
                 "rank": "none"
             },
+            "ts-clocksync": {
+                "author": "François Laignel <francois@centricular.com>",
+                "description": "Asynchronously synchronizes buffers to the clock",
+                "hierarchy": [
+                    "GstTsClockSync",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "sync": {
+                        "blurb": "Sync on the clock",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
             "ts-input-selector": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
                 "description": "Simple input selector element",
