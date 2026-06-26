@@ -21,6 +21,7 @@ pub mod runtime;
 mod appsrc;
 mod audiotestsrc;
 mod blocking_adapter;
+mod clocksync;
 pub mod dataqueue;
 mod inputselector;
 mod inter;
@@ -42,6 +43,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     appsrc::register(plugin)?;
     audiotestsrc::register(plugin)?;
     blocking_adapter::register(plugin)?;
+    clocksync::register(plugin)?;
     inputselector::register(plugin)?;
     inter::register(plugin)?;
     proxy::register(plugin)?;
