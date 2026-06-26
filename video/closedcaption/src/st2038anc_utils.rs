@@ -260,18 +260,22 @@ impl AncData {
     }
 }
 
-pub(crate) fn add_ancillary_meta_to_buffer(buffer: &mut gst::BufferRef, anc_data: &Vec<AncData>) {
+pub(crate) fn add_ancillary_meta_to_buffer(
+    buffer: &mut gst::BufferRef,
+    anc_data: impl IntoIterator<Item = AncData>,
+) {
     for anc in anc_data {
+        let data_len = anc.data.len();
         let mut meta = AncillaryMeta::add(buffer);
         meta.set_c_not_y_channel(anc.header.c_not_y_channel_flag);
         meta.set_did(extend_with_even_odd_parity(anc.header.did));
         meta.set_sdid_block_number(extend_with_even_odd_parity(anc.header.sdid));
         meta.set_line(anc.header.line_number);
         meta.set_offset(anc.header.horizontal_offset);
-        meta.set_data(anc.data.clone().into());
+        meta.set_data(anc.data.into());
         meta.set_checksum(anc.header.checksum);
         meta.set_data_count_upper_two_bits(
-            (extend_with_even_odd_parity(anc.data.len() as u8) >> 8) as u8,
+            (extend_with_even_odd_parity(data_len as u8) >> 8) as u8,
         );
     }
 }

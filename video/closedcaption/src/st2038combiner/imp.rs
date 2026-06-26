@@ -70,14 +70,30 @@ struct State {
 impl State {
     // Sort by line and then horizontal offset. While this is not strictly required
     // for the ancillary meta, it keeps the output in a nicer order.
+    fn sort_anc_by_line_and_offset(mut anc: Vec<AncData>) -> Vec<AncData> {
+        anc.sort_by_key(|a| (a.header.line_number, a.header.horizontal_offset));
+        anc
+    }
+
+    /// On-demand only: `peek_next_sample` for external `samples-selected` handlers
+    /// (`gst_aggregator_peek_next_sample`). Clones because peek must not drain
+    /// `current_frame_st2038`; the output path uses `take_flattened_anc_sorted`.
     fn flattened_anc_sorted(&self) -> Vec<AncData> {
-        let mut all: Vec<AncData> = self
+        let all: Vec<AncData> = self
             .current_frame_st2038
             .iter()
             .flat_map(|c| c.anc.iter().cloned())
             .collect();
-        all.sort_by_key(|anc| (anc.header.line_number, anc.header.horizontal_offset));
-        all
+        Self::sort_anc_by_line_and_offset(all)
+    }
+
+    fn take_flattened_anc_sorted(&mut self) -> Vec<AncData> {
+        let all: Vec<AncData> = self
+            .current_frame_st2038
+            .drain(..)
+            .flat_map(|c| c.anc)
+            .collect();
+        Self::sort_anc_by_line_and_offset(all)
     }
 
     fn has_in_window_st2038(&self) -> bool {
@@ -597,7 +613,7 @@ impl AggregatorImpl for St2038Combiner {
                 let mut anc_data_buffer = gst::Buffer::new();
                 let buffer_mut = anc_data_buffer.make_mut();
 
-                add_ancillary_meta_to_buffer(buffer_mut, &state.flattened_anc_sorted());
+                add_ancillary_meta_to_buffer(buffer_mut, state.flattened_anc_sorted());
 
                 return Some(
                     gst::Sample::builder()
@@ -848,7 +864,7 @@ impl St2038Combiner {
         let mut video_buf = state.current_video_buffer.take().unwrap();
 
         if !state.current_frame_st2038.is_empty() {
-            let anc = state.flattened_anc_sorted();
+            let anc = state.take_flattened_anc_sorted();
 
             if CAT.above_threshold(gst::DebugLevel::Trace) {
                 for anc in &anc {
@@ -864,8 +880,7 @@ impl St2038Combiner {
                     );
                 }
             }
-            add_ancillary_meta_to_buffer(video_buf.make_mut(), &anc);
-            state.current_frame_st2038.clear();
+            add_ancillary_meta_to_buffer(video_buf.make_mut(), anc);
         } else {
             gst::log!(CAT, imp = self, "No ST-2038 for video buffer");
         }
