@@ -83,7 +83,7 @@ impl DeltaFrames {
     pub(crate) fn from_caps(caps: &gst::CapsRef) -> Option<Self> {
         let s = caps.structure(0)?;
         Some(match s.name().as_str() {
-            "video/x-h264" | "video/x-h265" => DeltaFrames::Bidirectional,
+            "video/x-h264" | "video/x-h265" | "video/x-h266" => DeltaFrames::Bidirectional,
             "video/x-vp8" | "video/x-vp9" | "video/x-av1" => DeltaFrames::PredictiveOnly,
             "image/jpeg" | "image/png" | "video/x-raw" => DeltaFrames::IntraOnly,
             _ => return None,
@@ -836,6 +836,10 @@ impl ElementImpl for GopBuffer {
                     .build(),
                 gst::Structure::builder("video/x-h265")
                     .field("stream-format", gst::List::new(["hvc1", "hev1"]))
+                    .field("alignment", "au")
+                    .build(),
+                gst::Structure::builder("video/x-h266")
+                    .field("stream-format", gst::List::new(["vvc1", "vvi1"]))
                     .field("alignment", "au")
                     .build(),
                 gst::Structure::builder("video/x-vp8").build(),

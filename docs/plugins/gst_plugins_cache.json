@@ -4306,12 +4306,12 @@
                 "klass": "Video",
                 "pad-templates": {
                     "video_sink": {
-                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\nvideo/x-vp8:\nvideo/x-vp9:\nvideo/x-av1:\n  stream-format: obu-stream\n      alignment: tu\n",
+                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\nvideo/x-h266:\n  stream-format: { (string)vvc1, (string)vvi1 }\n      alignment: au\nvideo/x-vp8:\nvideo/x-vp9:\nvideo/x-av1:\n  stream-format: obu-stream\n      alignment: tu\n",
                         "direction": "sink",
                         "presence": "always"
                     },
                     "video_src": {
-                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\nvideo/x-vp8:\nvideo/x-vp9:\nvideo/x-av1:\n  stream-format: obu-stream\n      alignment: tu\n",
+                        "caps": "video/x-h264:\n  stream-format: { (string)avc, (string)avc3 }\n      alignment: au\nvideo/x-h265:\n  stream-format: { (string)hvc1, (string)hev1 }\n      alignment: au\nvideo/x-h266:\n  stream-format: { (string)vvc1, (string)vvi1 }\n      alignment: au\nvideo/x-vp8:\nvideo/x-vp9:\nvideo/x-av1:\n  stream-format: obu-stream\n      alignment: tu\n",
                         "direction": "src",
                         "presence": "always"
                     }
