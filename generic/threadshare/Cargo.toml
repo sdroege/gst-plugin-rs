@@ -45,7 +45,7 @@ gst-app = { workspace = true, features = [ "v1_20" ] }
 clap = { version = "4", features = ["derive"] }
 ctrlc = "3.5"
 gst-plugin-rtp.workspace = true
-itertools = "0.14"
+itertools = "0.15"
 
 [lib]
 name = "gstthreadshare"

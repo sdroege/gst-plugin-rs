@@ -35,7 +35,7 @@ time = { version = "0.3", default-features = false, features = ["std"] }
 # TODO: experiment with other async executors (mio, async-std, etc)
 tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "time", "sync"] }
 tokio-util = "0.7.15"
-itertools = "0.14"
+itertools = "0.15"
 
 [dev-dependencies]
 # Used by examples
