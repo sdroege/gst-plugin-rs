@@ -148,6 +148,7 @@ You will find the following plugins in this repository:
       - `ts-appsrc`: Thread-sharing app source.
       - `ts-audiotestsrc`: Thread-sharing audio test source.
       - `ts-blocking-adapter`: Converts a blocking downstream branch into an async backpressure.
+      - `ts-clocksync`: Asynchronously synchronizes buffers to the clock.
       - `ts-input-selector`: Simple input selector element.
       - `ts-intersink`: Thread-sharing inter-pipelines sink.
       - `ts-intersrc`: Thread-sharing inter-pipelines source.
