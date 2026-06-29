@@ -4430,7 +4430,7 @@ dependencies = [
  "gstreamer-analytics",
  "gstreamer-base",
  "gstreamer-video",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "serde",
 ]
 
@@ -4483,7 +4483,7 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-check",
  "gstreamer-video",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "pango",
  "pangocairo",
  "pretty_assertions",
@@ -4944,7 +4944,7 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-check",
  "http 1.4.2",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "quinn",
  "quinn-proto",
  "rcgen",
@@ -5036,7 +5036,7 @@ dependencies = [
  "gstreamer-rtp",
  "gstreamer-video",
  "hex",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "log",
  "rand 0.10.1",
  "rtcp-types",
@@ -5174,7 +5174,7 @@ dependencies = [
  "icu_locale",
  "icu_provider",
  "icu_segmenter",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "regex",
 ]
 
@@ -5410,7 +5410,7 @@ dependencies = [
  "human_bytes",
  "hyper-util",
  "indexmap 2.14.0",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "livekit-api",
  "livekit-protocol",
  "parse_link_header",

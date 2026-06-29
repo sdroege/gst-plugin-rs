@@ -19,7 +19,7 @@ burn-store = { version = "0.20", default-features = false, features = ["std", "p
 dirs = { version = "6", optional = true }
 serde = { version = "1.0.192", default-features = false, features = ["derive", "alloc"] }
 byte-slice-cast = "1"
-itertools = "0.14"
+itertools = "0.15"
 anyhow = "1"
 
 [build-dependencies]
