@@ -8,7 +8,9 @@ from utils import iterate_plugins
 
 # the csound version used on ci does not ship a .pc file
 # threadshare we skip in meson static build as well
-IGNORE = ['csound', 'threadshare', 'gtk4']
+# llamacpp and whisper embed ggml, they can't be linked together
+# without symbol deduplication
+IGNORE = ['csound', 'threadshare', 'gtk4', 'llamacpp', 'whisper']
 
 outdir = sys.argv[1]
 

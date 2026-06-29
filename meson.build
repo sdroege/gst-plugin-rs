@@ -785,7 +785,7 @@ foreach plugin : plugins
   )
   meson.override_dependency(plugin_name, dep)
 
-  if default_library == 'static' and plugin_name in ['gstcsound', 'gstthreadshare', 'gstgtk4']
+  if default_library == 'static' and plugin_name in ['gstcsound', 'gstthreadshare', 'gstgtk4', 'gstllamacpp', 'gstwhisper']
     warning('Static plugin @0@ is known to fail. It will not be included in libgstreamer-full.'.format(plugin_name))
   else
     gst_plugins += dep
