@@ -296,11 +296,17 @@ fn check_stsd_sanity(stsd: &mp4_atom::Stsd, expected_config: &ExpectedConfigurat
                             assert!(!(*full_range_flag));
                             true
                         }
-                        mp4_atom::Colr::Ricc { profile: _ } => {
+                        mp4_atom::Colr::Nclc { .. } => {
+                            panic!("Incorrect colr type: nclc")
+                        }
+                        mp4_atom::Colr::Ricc { .. } => {
                             panic!("Incorrect colr type: ricc")
                         }
-                        mp4_atom::Colr::Prof { profile: _ } => {
+                        mp4_atom::Colr::Prof { .. } => {
                             panic!("Incorrect colr type: prof")
+                        }
+                        _ => {
+                            panic!("Incorrect colr type: {colr:?}")
                         }
                     }
                 }));
