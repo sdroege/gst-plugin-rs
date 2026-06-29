@@ -57,11 +57,64 @@ git versions is supported as well.
 
 You will find the following plugins in this repository:
 
-  * `generic`
+  * `analytics`
 
-    - `file`: A Rust implementation of the standard `filesrc` and `filesink` elements
-      - `rsfilesink`: Write stream to a file.
-      - `rsfilesrc`: Read stream from a file.
+    - `analytics`:
+      - `analyticscombiner`: Analytics combiner / batcher element
+      - `analyticssplitter`: Analytics batch splitter element
+      - `handdetectiontensordec`: Tensor decoder for hand detection tensors.
+      - `onvifmeta2relationmeta`: Convert ONVIF metadata to relation metas
+      - `relationmeta2onvifmeta`: Convert relation metadata to ONVIF metas
+      - `yoloxtensordec`: Tensor decoder for YOLOX tensors.
+
+    - `burn`:
+      - `burn-yoloxinference`: Object detection inference element based on YOLOX.
+
+
+  * `audio`
+
+    - `audiofx`: Elements to apply audio effects to a stream
+      - `agingradio`: Filter to add age to audio input using various kinds of distortion.
+      - `audioloudnorm`: [audio normalization](http://k.ylo.ph/2016/04/04/loudnorm.html) filter.
+      - `audiornnoise`: Filter for [removing noise](https://jmvalin.ca/demo/rnnoise/).
+      - `ebur128level`: Filter for measuring audio loudness according to EBU R-128.
+      - `rsaudioecho`: a simple echo/reverb filter.
+
+    - `audioparsers`: Audio parser elements
+      - `ac4parse`: Parses AC4 audio streams.
+      - `s302mparse`: Parser for SMPTE S302M audio elementary streams.
+
+    - `claxon`: A FLAC decoder based on the [Claxon](https://github.com/ruuda/claxon) library.
+      - `claxondec`: Claxon FLAC decoder.
+
+    - `csound`: A plugin to implement audio effects using the [Csound](https://csound.com/) library.
+      - `csoundfilter`: Implement an audio filter/effects using Csound.
+
+    - `demucs`: An audio source separation plugin using [demucs](https://github.com/adefossez/demucs).
+
+    - `elevenlabs`:
+      - `elevenlabssynthesizer`: Generate audio speech from text using the [ElevenLabs](https://elevenlabs.io) API/service.
+      - `elevenlabsvoicecloner`: ElevenLabs Voice Cloner.
+
+    - `hrtf`: Filters for rendering audio according to a [head-related transferfunction](https://en.wikipedia.org/wiki/Head-related_transfer_function).
+      - `hrtfrender`: Read and render filters from IRCAM binary files.
+      - `sofalizer`:  Read and render filters from SOFA files.
+
+    - `lewton`: A Vorbis decoder based on the [lewton](https://github.com/RustAudio/lewton) library.
+      - `lewtondec`: lewton Vorbis decoder.
+
+    - `speechmatics`:
+      - `speechmaticstranscriber`: Speech to text transcription using [Speechmatics](https://www.speechmatics.com/speech-to-text)
+
+    - `spotify`: A plugin to access content from [Spotify](https://www.spotify.com/) based on the [librespot](https://github.com/librespot-org/) library.
+      - `spotifyaudiosrc`: Spotify source.
+      - `spotifylyricssrc`: Spotify lyrics source.
+
+    - `whisper`:
+      - `whispertranscriber`: Speech to text transcription using [whisper-cpp](github.com/ggml-org/whisper.cpp/)
+
+
+  * `generic`
 
     - `compress`: General purpose lossless compression plugin.
       - `brotlicompress`: Compress data using Brotli.
@@ -71,19 +124,19 @@ You will find the following plugins in this repository:
       - `zlibcompress`: Compress data using zlib (with checksum).
       - `zlibdecompress`: Decompress zlib-compressed data.
 
+    - `file`: A Rust implementation of the standard `filesrc` and `filesink` elements
+      - `rsfilesink`: Write stream to a file.
+      - `rsfilesrc`: Read stream from a file.
+
     - `gopbuffer`: Stores a minimum duration of data delimited by discrete GOPs (Group of Picture).
 
     - `inter`: 1:N wormhole for sending data from one pipeline to another within the same process using the [`StreamProducer` API](https://docs.rs/gstreamer-utils/latest/gstreamer_utils/struct.StreamProducer.html).
-
       - `intersink`: send data to one or more `intersrc` within the same process.
-
       - `intersrc`: receive data from an `intersink` in the same process.
 
     - `originalbuffer`:
-
-      - `originalbuffersave`: Saves a reference to the buffer in a meta so it can later be restored again after transformations such as downscaling before inference.
-
       - `originalbufferrestore`: Restores the original buffer previously saved by `originalbuffersave`.
+      - `originalbuffersave`: Saves a reference to the buffer in a meta so it can later be restored again after transformations such as downscaling before inference.
 
     - `sodium`: Elements to perform encryption and decryption using [libsodium](https://libsodium.org).
       - `sodiumdecrypter`: libsodium-based file decrypter.
@@ -107,6 +160,21 @@ You will find the following plugins in this repository:
       - `ts-udpsink`: Thread-sharing UDP sink.
       - `ts-udpsrc`: Receives data over the network via UDP.
 
+
+  * `mux`
+
+    - `flavors`: FLV demuxer based on the [flavors](https://github.com/rust-av/flavors) library.
+      - `rsflvdemux`: Demuxes FLV Streams.
+
+    - `isobmff`: A MP4/ISOBMFF/CMAF muxer for generating fragmented (e.g. DASH/HLS media) and non-fragmented (MP4) files.
+      - `cmafmux`: CMAF fragmented MP4 muxer.
+      - `dashmp4mux`: DASH fragmented MP4 muxer.
+      - `isofmp4mux`: ISO fragmented MP4 muxer.
+      - `isomp4mux`: ISO MP4 muxer.
+      - `onviffmp4mux`: ONVIF fragmented MP4 muxer.
+      - `onvifmp4mux`: ONVIF MP4 muxer.
+
+
   * `net`
 
     - `aws`: Various elements for Amazon AWS services using the [AWS SDK](https://awslabs.github.io/aws-sdk-rust/) library
@@ -115,15 +183,15 @@ You will find the following plugins in this repository:
       - `awss3putobjectsink`: Writes an object to Amazon S3 using PutObject (mostly useful for small files).
       - `awss3sink`: Writes an object to Amazon S3.
       - `awss3src`: Reads an object from Amazon S3.
+      - `awstranscribeparse`: an element parsing the packets of the AWS Transcriber service.
       - `awstranscriber`: an element wrapping the AWS Transcriber service.
       - `awstranscriber2`: Speech to Text filter, using AWS transcribe.
-      - `awstranscribeparse`: an element parsing the packets of the AWS Transcriber service.
       - `awstranslate`: Translates text.
+
+    - `dashsink2`: An element for generating MPEG-DASH streams.
 
     - `deepgram`: Wrapper elements to talk to the [Deepgram API](https://developers.deepgram.com/home)
       - `deepgramtranscriber`: an element wrapping the Deepgram Speech-to-Text service
-
-    - `dashsink2`: An element for generating MPEG-DASH streams.
 
     - `hlsmultivariantsink`: Create multi-variant HLS playlists with alternate renditions and variant streams.
 
@@ -132,11 +200,9 @@ You will find the following plugins in this repository:
       - `hlswebvttsink`: HTTP Live Streaming WebVTT Sink.
 
     - `icecast`:
-
       - `icecastsink`: shout2send-like element to send audio to an Icecast server
 
     - `mpegtslive`:
-
       - `mpegtslivesrc`: Wraps MPEG-TS sources such as `udpsrc` or `srtsrc` and provides a live clock based on the stream's PCR.
 
     - `ndi`: An [NDI](https://www.newtek.com/ndi/) plugin containing a source, sink and device provider.
@@ -154,12 +220,12 @@ You will find the following plugins in this repository:
       - `rtponvifmetadatapay`: ONVIF metadata RTP payloader.
 
     - `quinn`: Transfer data over the network using QUIC
+      - `quinnquicdemux`: Demultiplexes multiple streams and datagram for QUIC
+      - `quinnquicmux`: Multiplexes multiple streams and datagram for QUIC
       - `quinnquicsink`: Send data over the network via QUIC
       - `quinnquicsrc`: Receive data over the network via QUIC
-      - `quinnquicmux`: Multiplexes multiple streams and datagram for QUIC
-      - `quinnquicdemux`: Demultiplexes multiple streams and datagram for QUIC
-      - `quinnroqmux`: Multiplexes multiple RTP streams over QUIC
       - `quinnroqdemux`: Demultiplexes multiple RTP streams over QUIC
+      - `quinnroqmux`: Multiplexes multiple RTP streams over QUIC
       - `quinnwtsink`: Send data over the network via WebTransport
       - `quinnwtsrc`: Receive data over the network via WebTransport
 
@@ -171,10 +237,6 @@ You will find the following plugins in this repository:
       - `reqwesthttpsrc`: Read stream from an HTTP/HTTPS location.
 
     - `rtp`:
-      - `rtpav1pay`: Payload AV1 as RTP packets.
-      - `rtpav1depay`: Depayload AV1 from RTP packets.
-
-      - `rtpgccbwe`: RTP bandwidth estimator based on the Google Congestion Control algorithm.
       - `rtpL16depay2`: Depayload 16-bit raw audio (L16) from RTP packets.
       - `rtpL16pay2`: Payload 16-bit raw audio (L16) into RTP packets (RFC 3551).
       - `rtpL20depay`: Depayload 20-bit raw audio (L20) from RTP packets.
@@ -187,6 +249,9 @@ You will find the following plugins in this repository:
       - `rtpac3pay2`: Payload an AC-3 Audio Elementary Stream into RTP packets (RFC 4184).
       - `rtpamrdepay2`: Depayload an AMR audio stream from RTP packets (RFC 3267).
       - `rtpamrpay2`: Payload an AMR audio stream into RTP packets (RFC 3267).
+      - `rtpav1depay`: Depayload AV1 from RTP packets.
+      - `rtpav1pay`: Payload AV1 as RTP packets.
+      - `rtpgccbwe`: RTP bandwidth estimator based on the Google Congestion Control algorithm.
       - `rtpjpegdepay2`: Depayload a JPEG Video stream from RTP packets (RFC 2435).
       - `rtpjpegpay2`: Payload a JPEG Video stream to RTP packets (RFC 2435).
       - `rtpklvdepay2`: Depayload an SMPTE ST 336 KLV metadata stream from RTP packets (RFC 6597).
@@ -220,7 +285,6 @@ You will find the following plugins in this repository:
       - `rtpvrawpay2`: Payload a Raw Uncompressed Video Stream into RTP packets (RFC 4175).
 
     - `rtsp`:
-
       - `rtspsrc2`: New Rust implementation of a Real Time Streaming Protocol (RTSP) (RFC 2326, 7826) source element.
 
     - `udp`:
@@ -240,57 +304,76 @@ You will find the following plugins in this repository:
       - `whipclientsink`: WebRTC sink with WHIP client signaller.
       - `whipserversrc`: WebRTC source element using WHIP Server as the signaller.
 
+    - `webrtcbin2`: new WebRTC elements with less threads based on `rtpsend`/`rtprecv`.
+      - `webrtcrecv`: Receive streams using WebRTC.
+      - `webrtcsend`: Send half of a WebRTC session.
+
     - `webrtchttp`: Simple WebRTC HTTP elements (WHIP/WHEP).
       - `whepsrc`: A bin to stream media using the WebRTC HTTP Egress Protocol (WHEP).
       - `whipsink`: A bin to stream RTP media using the WebRTC HTTP Ingestion Protocol (WHIP).
 
-    - `webrtcbin2`: new WebRTC elements with less threads based on `rtpsend`/`rtprecv`.
-      - `webrtcsend`: Send half of a WebRTC session.
-      - `webrtcrecv`: Receive streams using WebRTC.
 
-  * `audio`
-    - `audiofx`: Elements to apply audio effects to a stream
-      - `rsaudioecho`: a simple echo/reverb filter.
-      - `agingradio`: Filter to add age to audio input using various kinds of distortion.
-      - `audioloudnorm`: [audio normalization](http://k.ylo.ph/2016/04/04/loudnorm.html) filter.
-      - `audiornnoise`: Filter for [removing noise](https://jmvalin.ca/demo/rnnoise/).
-      - `ebur128level`: Filter for measuring audio loudness according to EBU R-128.
-    - `audioparsers`: Audio parser elements
-      - `s302mparse`: Parser for SMPTE S302M audio elementary streams.
-      - `ac4parse`: Parses AC4 audio streams.
+  * `text`
 
-    - `claxon`: A FLAC decoder based on the [Claxon](https://github.com/ruuda/claxon) library.
-      - `claxondec`: Claxon FLAC decoder.
+    - `accumulate`: A plugin for segmenting text, designed to work in a live context
+      - `textaccumulate`: Accumulates text.
 
-    - `csound`: A plugin to implement audio effects using the [Csound](https://csound.com/) library.
-      - `csoundfilter`: Implement an audio filter/effects using Csound.
+    - `ahead`: A plugin to display upcoming text buffers ahead.
+      - `textahead`: Display upcoming text buffers ahead.
 
-    - `demucs`: An audio source separation plugin using [demucs](https://github.com/adefossez/demucs).
+    - `json`: A plugin to convert a stream of JSON objects to a higher level wrapped NDJSON output.
+      - `jsongstenc`: Wraps buffers containing any valid top-level JSON structures into higher level JSON objects, and outputs those as ndjson.
+      - `jsongstparse`: Parses ndjson as output by jsongstenc.
 
-    - `elevenlabs`:
+    - `regex`: A regular expression text filter plugin.
 
-      - `elevenlabssynthesizer`: Generate audio speech from text using the [ElevenLabs](https://elevenlabs.io) API/service.
-      - `elevenlabsvoicecloner`: ElevenLabs Voice Cloner.
-    - `hrtf`: Filters for rendering audio according to a [head-related transferfunction](https://en.wikipedia.org/wiki/Head-related_transfer_function).
-      - `hrtfrender`: Read and render filters from IRCAM binary files.
-      - `sofalizer`:  Read and render filters from SOFA files.
+    - `wrap`: A plugin to perform text wrapping with hyphenation.
+      - `textwrap`: Breaks text into fixed-size lines, with optional hyphenation.
 
-    - `lewton`: A Vorbis decoder based on the [lewton](https://github.com/RustAudio/lewton) library.
-      - `lewtondec`: lewton Vorbis decoder.
 
-    - `speechmatics`:
+  * `utils`
 
-      - `speechmaticstranscriber`: Speech to text transcription using [Speechmatics](https://www.speechmatics.com/speech-to-text)
+    - `debugseimetainserter`: Element to insert SEI metadata into a video stream
+      for debugging purposes.
 
-    - `spotify`: A plugin to access content from [Spotify](https://www.spotify.com/) based on the [librespot](https://github.com/librespot-org/) library.
-      - `spotifyaudiosrc`: Spotify source.
-      - `spotifylyricssrc`: Spotify lyrics source.
+    - `fallbackswitch`:
+      - `fallbacksrc`: Element similar to `urisourcebin` that allows
+        configuring a fallback audio/video if there are problems with the main
+        source.
+      - `fallbackswitch`: An element that allows falling back to different
+        sink pads after a timeout based on the sink pads' priorities.
 
-    - `whisper`:
+    - `livesync`: Element to maintain a continuous live stream from a
+      potentially unstable source.
 
-      - `whispertranscriber`: Speech to text transcription using [whisper-cpp](github.com/ggml-org/whisper.cpp/)
+    - `togglerecord`: Element to enable starting and stopping multiple streams together.
+
+    - `tracers`: Plugin with multiple tracers:
+      - `buffer-lateness`: Records lateness of buffers and the reported
+        latency for each pad in a CSV file. Contains a script for
+        visualization.
+      - `chrometracing`: GStreamer tracer that outputs events in Chrome JSON tracing format.
+        The generated trace files can be opened in [perfetto](https://ui.perfetto.dev/).
+      - `fmttracing`: GStreamer tracer that uses the tracing-subscriber fmt formatter.
+        This tracer provides human-readable output using `tracing_subscriber::fmt`.
+      - `memory-tracer`: Memory tracer.
+      - `pad-push-timings`: Records push timings for pads.
+      - `pcap-writer`: Writes network packets to a pcap file.
+      - `perfetto`: GStreamer tracer that outputs events in Perfetto native format.
+        The generated trace files can be opened in [perfetto](https://ui.perfetto.dev/).
+      - `pipeline-snapshot`: Creates a .dot file of all pipelines in the
+        application whenever requested.
+      - `queue-levels`: Records queue levels for each queue in a CSV file.
+        Contains a script for visualization.
+      - `rusttracing`: GStreamer tracer that integrates with the Rust tracing ecosystem.
+        This tracer provides spans for GStreamer pad operations, allowing
+        for integration with the Rust tracing ecosystem.
+
+    - `uriplaylistbin`: Helper bin to gaplessly play a list of URIs.
+
 
   * `video`
+
     - `cdg`: A parser and renderer for [CD+G karaoke data](https://docs.rs/cdg/0.1.0/cdg/).
       - `cdgdec`: CDG decoder.
       - `cdgparse`: CDG parser.
@@ -357,12 +440,11 @@ You will find the following plugins in this repository:
       - `rav1enc`: rav1e AV1 encoder.
 
     - `skia`:
-
       - `skiacompositor`: Video compositor based on [Skia](https://skia.org) graphics library.
 
     - `videofx`: Plugin with various video filters.
-      - `roundedcorners`: Element to make the corners of a video rounded via the alpha channel.
       - `colordetect`: A pass-through filter able to detect the dominant color(s) on incoming frames, using [color-thief](https://github.com/RazrFalcon/color-thief-rs).
+      - `roundedcorners`: Element to make the corners of a video rounded via the alpha channel.
       - `videocompare`: Compare similarity of video frames. The element can use different hashing algorithms like [Blockhash](https://github.com/commonsmachinery/blockhash-rfc), [DSSIM](https://kornel.ski/dssim), and others.
 
     - `viuer`: Terminal-based video sink making use of the [viuer](https://github.com/atanunq/viuer) crate.
@@ -373,92 +455,7 @@ You will find the following plugins in this repository:
     - `webp`: WebP decoder based on the [libwebp-sys-2](https://github.com/qnighy/libwebp-sys2-rs) library.
       - `rswebpdec`: Decodes potentially animated WebP images.
 
-  * `mux`
-    - `flavors`: FLV demuxer based on the [flavors](https://github.com/rust-av/flavors) library.
-      - `rsflvdemux`: Demuxes FLV Streams.
 
-    - `isobmff`: A MP4/ISOBMFF/CMAF muxer for generating fragmented (e.g. DASH/HLS media) and non-fragmented (MP4) files.
-      - `cmafmux`: CMAF fragmented MP4 muxer.
-      - `dashmp4mux`: DASH fragmented MP4 muxer.
-      - `isofmp4mux`: ISO fragmented MP4 muxer.
-      - `isomp4mux`: ISO MP4 muxer.
-      - `onviffmp4mux`: ONVIF fragmented MP4 muxer.
-      - `onvifmp4mux`: ONVIF MP4 muxer.
-
-  * `text`
-    - `accumulate`: A plugin for segmenting text, designed to work in a live context
-      - `textaccumulate`: Accumulates text.
-
-    - `ahead`: A plugin to display upcoming text buffers ahead.
-      - `textahead`: Display upcoming text buffers ahead.
-
-    - `json`: A plugin to convert a stream of JSON objects to a higher level wrapped NDJSON output.
-      - `jsongstenc`: Wraps buffers containing any valid top-level JSON structures into higher level JSON objects, and outputs those as ndjson.
-      - `jsongstparse`: Parses ndjson as output by jsongstenc.
-
-    - `regex`: A regular expression text filter plugin.
-
-    - `wrap`: A plugin to perform text wrapping with hyphenation.
-      - `textwrap`: Breaks text into fixed-size lines, with optional hyphenation.
-
-  * `utils`
-    - `fallbackswitch`:
-      - `fallbackswitch`: An element that allows falling back to different
-        sink pads after a timeout based on the sink pads' priorities.
-      - `fallbacksrc`: Element similar to `urisourcebin` that allows
-        configuring a fallback audio/video if there are problems with the main
-        source.
-
-    - `livesync`: Element to maintain a continuous live stream from a
-      potentially unstable source.
-
-    - `togglerecord`: Element to enable starting and stopping multiple streams together.
-
-    - `tracers`: Plugin with multiple tracers:
-      - `buffer-lateness`: Records lateness of buffers and the reported
-        latency for each pad in a CSV file. Contains a script for
-        visualization.
-      - `chrometracing`: GStreamer tracer that outputs events in Chrome JSON tracing format.
-        The generated trace files can be opened in [perfetto](https://ui.perfetto.dev/).
-      - `fmttracing`: GStreamer tracer that uses the tracing-subscriber fmt formatter.
-        This tracer provides human-readable output using `tracing_subscriber::fmt`.
-      - `memory-tracer`: Memory tracer.
-      - `pad-push-timings`: Records push timings for pads.
-      - `pcap-writer`: Writes network packets to a pcap file.
-      - `perfetto`: GStreamer tracer that outputs events in Perfetto native format.
-        The generated trace files can be opened in [perfetto](https://ui.perfetto.dev/).
-      - `pipeline-snapshot`: Creates a .dot file of all pipelines in the
-        application whenever requested.
-      - `queue-levels`: Records queue levels for each queue in a CSV file.
-        Contains a script for visualization.
-      - `rusttracing`: GStreamer tracer that integrates with the Rust tracing ecosystem.
-        This tracer provides spans for GStreamer pad operations, allowing
-        for integration with the Rust tracing ecosystem.
-
-    - `uriplaylistbin`: Helper bin to gaplessly play a list of URIs.
-
-    - `debugseimetainserter`: Element to insert SEI metadata into a video stream
-      for debugging purposes.
-
-  * `analytics`
-
-    - `analytics`:
-
-      - `analyticscombiner`: Analytics combiner / batcher element
-
-      - `analyticssplitter`: Analytics batch splitter element
-
-      - `onvifmeta2relationmeta`: Convert ONVIF metadata to relation metas
-
-      - `relationmeta2onvifmeta`: Convert relation metadata to ONVIF metas
-
-      - `handdetectiontensordec`: Tensor decoder for hand detection tensors.
-
-      - `yoloxtensordec`: Tensor decoder for YOLOX tensors.
-
-    - `burn`:
-
-      - `burn-yoloxinference`: Object detection inference element based on YOLOX.
 
 ## Building
 
