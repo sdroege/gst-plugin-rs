@@ -75,15 +75,15 @@ You will find the following plugins in this repository:
 
     - `inter`: 1:N wormhole for sending data from one pipeline to another within the same process using the [`StreamProducer` API](https://docs.rs/gstreamer-utils/latest/gstreamer_utils/struct.StreamProducer.html).
 
-        - `intersink`: send data to one or more `intersrc` within the same process.
+      - `intersink`: send data to one or more `intersrc` within the same process.
 
-        - `intersrc`: receive data from an `intersink` in the same process.
+      - `intersrc`: receive data from an `intersink` in the same process.
 
     - `originalbuffer`:
 
-        - `originalbuffersave`: Saves a reference to the buffer in a meta so it can later be restored again after transformations such as downscaling before inference.
+      - `originalbuffersave`: Saves a reference to the buffer in a meta so it can later be restored again after transformations such as downscaling before inference.
 
-        - `originalbufferrestore`: Restores the original buffer previously saved by `originalbuffersave`.
+      - `originalbufferrestore`: Restores the original buffer previously saved by `originalbuffersave`.
 
     - `sodium`: Elements to perform encryption and decryption using [libsodium](https://libsodium.org).
       - `sodiumdecrypter`: libsodium-based file decrypter.
@@ -110,9 +110,6 @@ You will find the following plugins in this repository:
   * `net`
 
     - `aws`: Various elements for Amazon AWS services using the [AWS SDK](https://awslabs.github.io/aws-sdk-rust/) library
-      - `s3src`/`s3sink`: A source and sink element to talk to the Amazon S3 object storage system.
-      - `s3putobjectsink`: A sink element to talk to Amazon S3. Uses `PutObject` instead of multi-part upload like `s3sink`.
-      - `s3hlssink`: A sink element to store HLS streams on Amazon S3.
       - `awspolly`: Text to Speech filter, using AWS polly.
       - `awss3hlssink`: Streams HLS data to S3.
       - `awss3putobjectsink`: Writes an object to Amazon S3 using PutObject (mostly useful for small files).
@@ -157,15 +154,12 @@ You will find the following plugins in this repository:
       - `rtponvifmetadatapay`: ONVIF metadata RTP payloader.
 
     - `quinn`: Transfer data over the network using QUIC
-      - `quinnquicsink`/`quinnquicsrc`: Send and receive data using QUIC
-      - `quinnquicmux`/`quinnquicdemux`: Multiplex and de-multiplex streams and datagram using QUIC
-      - `quinnroqmux`/`quinnroqdemux`: Multiplex and de-multiplex RTP streams over QUIC
-      - `quinnquicdemux`: Demultiplexes multiple streams and datagram for QUIC
-      - `quinnquicmux`: Multiplexes multiple streams and datagram for QUIC
       - `quinnquicsink`: Send data over the network via QUIC
       - `quinnquicsrc`: Receive data over the network via QUIC
-      - `quinnroqdemux`: Demultiplexes multiple RTP streams over QUIC
+      - `quinnquicmux`: Multiplexes multiple streams and datagram for QUIC
+      - `quinnquicdemux`: Demultiplexes multiple streams and datagram for QUIC
       - `quinnroqmux`: Multiplexes multiple RTP streams over QUIC
+      - `quinnroqdemux`: Demultiplexes multiple RTP streams over QUIC
       - `quinnwtsink`: Send data over the network via WebTransport
       - `quinnwtsrc`: Receive data over the network via WebTransport
 
@@ -177,7 +171,8 @@ You will find the following plugins in this repository:
       - `reqwesthttpsrc`: Read stream from an HTTP/HTTPS location.
 
     - `rtp`:
-      - `rtpav1pay` / `rtpav1depay`: RTP (de)payloader for the AV1 video codec.
+      - `rtpav1pay`: Payload AV1 as RTP packets.
+      - `rtpav1depay`: Depayload AV1 from RTP packets.
 
       - `rtpgccbwe`: RTP bandwidth estimator based on the Google Congestion Control algorithm.
       - `rtpL16depay2`: Depayload 16-bit raw audio (L16) from RTP packets.
@@ -192,8 +187,6 @@ You will find the following plugins in this repository:
       - `rtpac3pay2`: Payload an AC-3 Audio Elementary Stream into RTP packets (RFC 4184).
       - `rtpamrdepay2`: Depayload an AMR audio stream from RTP packets (RFC 3267).
       - `rtpamrpay2`: Payload an AMR audio stream into RTP packets (RFC 3267).
-      - `rtpav1depay`: Depayload AV1 from RTP packets.
-      - `rtpav1pay`: Payload AV1 as RTP packets.
       - `rtpjpegdepay2`: Depayload a JPEG Video stream from RTP packets (RFC 2435).
       - `rtpjpegpay2`: Payload a JPEG Video stream to RTP packets (RFC 2435).
       - `rtpklvdepay2`: Depayload an SMPTE ST 336 KLV metadata stream from RTP packets (RFC 6597).
@@ -209,8 +202,6 @@ You will find the following plugins in this repository:
       - `rtpmparobustdepay2`: Depayload MPEG Audio Robust elementary streams from RTP packets (RFC 5219).
       - `rtpmpvdepay2`: Depayload an MPEG-1 or MPEG-2 Elementary Stream from RTP packets (RFC 2250).
       - `rtpmpvpay2`: Payload an MPEG-1 or MPEG-2 Elementary Stream into RTP packets (RFC 2250).
-      - `rtponvifmetadatadepay`: ONVIF metadata RTP depayloader.
-      - `rtponvifmetadatapay`: ONVIF metadata RTP payloader.
       - `rtpopusdepay2`: Depayload an Opus audio stream from RTP packets (RFC 7587).
       - `rtpopuspay2`: Payload an Opus audio stream into RTP packets (RFC 7587).
       - `rtppcmadepay2`: Depayload A-law from RTP packets (RFC 3551).
@@ -329,7 +320,6 @@ You will find the following plugins in this repository:
       - `st2038anctocc`: Converts ST-2038 ANC to Closed Captions.
       - `st2038combiner`: Combines video input stream and ST2038 stream in GstAncillaryMeta.
       - `st2038extractor`: Extracts ST2038 stream in GstAncillaryMeta from video input stream.
-      - `st2038tocc`: Convert an ancillary ST-2038 stream into closed captions.
       - `transcriberbin`: Convenience bin around transcriber elements like `aws_transcriber`.
       - `translationbin`: Convenience bin around transcriber and translation
         elements.
@@ -354,8 +344,8 @@ You will find the following plugins in this repository:
       - `gtk4paintablesink`: A GTK 4 Paintable sink.
 
     - `hsv`: Plugin with various elements to work with video data in hue, saturation, value format
-       - `hsvdetector`: Mark pixels that are close to a configured color in HSV format.
-       - `hsvfilter`: Apply various transformations in the HSV colorspace.
+      - `hsvdetector`: Mark pixels that are close to a configured color in HSV format.
+      - `hsvfilter`: Apply various transformations in the HSV colorspace.
 
     - `imagers`: multi-format plugin based on the [image](https://github.com/image-rs/image) crate
        - `imagersoverlay`: Overlays an image on top of a video stream. It is a reimplementation of `gdkpixbufoverlay` entirely in Rust.
