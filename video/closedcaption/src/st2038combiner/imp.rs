@@ -96,16 +96,31 @@ impl State {
         Self::sort_anc_by_line_and_offset(all)
     }
 
-    fn has_in_window_st2038(&self) -> bool {
+    fn is_running_time_in_video_window(&self, running_time: gst::ClockTime) -> bool {
         let (Some(v_start), Some(v_end)) = (
             self.current_video_running_time,
             self.current_video_running_time_end,
         ) else {
             return false;
         };
+        v_start <= running_time && running_time < v_end
+    }
+
+    fn has_in_window_st2038(&self) -> bool {
         self.current_frame_st2038
             .iter()
-            .any(|c| c.running_time >= v_start && c.running_time < v_end)
+            .any(|c| self.is_running_time_in_video_window(c.running_time))
+    }
+
+    /// MARKER signals the end of a frame; frame-aligned buffers also complete
+    /// a frame when producers don't set MARKER.
+    fn should_stop_after_st2038_buffer(&self, running_time: gst::ClockTime, marker: bool) -> bool {
+        self.is_running_time_in_video_window(running_time)
+            && (marker || self.alignment == Alignment::Frame)
+    }
+
+    fn collected_anc_packet_count(&self) -> usize {
+        self.current_frame_st2038.iter().map(|c| c.anc.len()).sum()
     }
 
     /// Whether an empty ST-2038 pad peek means collection for this video frame is done.
@@ -608,21 +623,19 @@ impl AggregatorImpl for St2038Combiner {
     fn peek_next_sample(&self, pad: &gst_base::AggregatorPad) -> Option<gst::Sample> {
         let state = self.state.lock().unwrap();
 
-        if self.is_st2038_pad(pad) {
-            if !state.current_frame_st2038.is_empty() {
-                let mut anc_data_buffer = gst::Buffer::new();
-                let buffer_mut = anc_data_buffer.make_mut();
+        if self.is_st2038_pad(pad) && state.collected_anc_packet_count() > 0 {
+            let mut anc_data_buffer = gst::Buffer::new();
+            let buffer_mut = anc_data_buffer.make_mut();
 
-                add_ancillary_meta_to_buffer(buffer_mut, state.flattened_anc_sorted());
+            add_ancillary_meta_to_buffer(buffer_mut, state.flattened_anc_sorted());
 
-                return Some(
-                    gst::Sample::builder()
-                        .buffer(&anc_data_buffer)
-                        .segment(&pad.segment())
-                        .caps(&pad.pad_template_caps())
-                        .build(),
-                );
-            }
+            return Some(
+                gst::Sample::builder()
+                    .buffer(&anc_data_buffer)
+                    .segment(&pad.segment())
+                    .caps(&pad.pad_template_caps())
+                    .build(),
+            );
         } else if let (Some(video_buffer), Some(video_caps)) =
             (&state.current_video_buffer, &state.current_video_caps)
         {
@@ -686,9 +699,6 @@ impl St2038Combiner {
     ) -> Result<usize, gst::FlowError> {
         let mut anc = Vec::new();
         self.buffer_to_ancdata(&mut anc, buffer)?;
-        if anc.is_empty() {
-            return Ok(0);
-        }
         let anc_packets = anc.len();
         state
             .current_frame_st2038
@@ -840,6 +850,7 @@ impl St2038Combiner {
             }
 
             // This ST-2038 buffer has to be collected
+            let marker = buffer.flags().contains(gst::BufferFlags::MARKER);
             st2038_sinkpad.drop_buffer();
 
             state.last_st2038_ts = buffer.pts();
@@ -850,20 +861,31 @@ impl St2038Combiner {
                 "Collected ST-2038 buffer with running time {st2038_time:?} ({anc_packets} ANC packets in buffer) for current_video_running_time_end: {:?}",
                 state.current_video_running_time_end
             );
+            if state.should_stop_after_st2038_buffer(st2038_time, marker) {
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "ST-2038 buffer completed video window at {st2038_time:?} (marker: {marker}, alignment: {:?}), stopping collection",
+                    state.alignment
+                );
+                break;
+            }
         }
 
+        let anc_packets = state.collected_anc_packet_count();
         gst::log!(
             CAT,
             imp = self,
-            "Collected {} ST-2038 buffers for current_video_running_time_end: {:?}",
+            "Collected {} ST-2038 buffers ({} ANC packets) for current_video_running_time_end: {:?}",
             state.current_frame_st2038.len(),
+            anc_packets,
             state.current_video_running_time_end
         );
 
         // We validated the presence of a video buffer at the start
         let mut video_buf = state.current_video_buffer.take().unwrap();
 
-        if !state.current_frame_st2038.is_empty() {
+        if anc_packets > 0 {
             let anc = state.take_flattened_anc_sorted();
 
             if CAT.above_threshold(gst::DebugLevel::Trace) {
@@ -881,8 +903,10 @@ impl St2038Combiner {
                 }
             }
             add_ancillary_meta_to_buffer(video_buf.make_mut(), anc);
-        } else {
+        } else if state.current_frame_st2038.is_empty() {
             gst::log!(CAT, imp = self, "No ST-2038 for video buffer");
+        } else {
+            state.current_frame_st2038.clear();
         }
 
         self.collect_st2038_done(state, &video_buf);
