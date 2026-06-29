@@ -428,10 +428,22 @@ You will find the following plugins in this repository:
       - `buffer-lateness`: Records lateness of buffers and the reported
         latency for each pad in a CSV file. Contains a script for
         visualization.
+      - `chrometracing`: GStreamer tracer that outputs events in Chrome JSON tracing format.
+        The generated trace files can be opened in [perfetto](https://ui.perfetto.dev/).
+      - `fmttracing`: GStreamer tracer that uses the tracing-subscriber fmt formatter.
+        This tracer provides human-readable output using `tracing_subscriber::fmt`.
+      - `memory-tracer`: Memory tracer.
+      - `pad-push-timings`: Records push timings for pads.
+      - `pcap-writer`: Writes network packets to a pcap file.
+      - `perfetto`: GStreamer tracer that outputs events in Perfetto native format.
+        The generated trace files can be opened in [perfetto](https://ui.perfetto.dev/).
       - `pipeline-snapshot`: Creates a .dot file of all pipelines in the
         application whenever requested.
       - `queue-levels`: Records queue levels for each queue in a CSV file.
         Contains a script for visualization.
+      - `rusttracing`: GStreamer tracer that integrates with the Rust tracing ecosystem.
+        This tracer provides spans for GStreamer pad operations, allowing
+        for integration with the Rust tracing ecosystem.
 
     - `uriplaylistbin`: Helper bin to gaplessly play a list of URIs.
 

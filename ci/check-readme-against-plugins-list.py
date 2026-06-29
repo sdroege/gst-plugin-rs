@@ -36,6 +36,7 @@ plugins_remap = {
     'textahead': 'ahead',
     'textwrap': 'wrap',
     'textaccumulate': 'accumulate',
+    'rstracers': 'tracers',
 }
 
 factories_remap = {}
@@ -66,6 +67,10 @@ for plugin_name in plugins:
     plugin_name = name
 
     factories = list(plugin['elements'].keys())
+
+    # Also check for tracers in any plugin that has a "tracers" key
+    if 'tracers' in plugin:
+        factories += list(plugin['tracers'].keys())
 
     for factory_name in factories:
         name = factories_remap.get(factory_name, factory_name)
