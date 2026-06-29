@@ -458,6 +458,39 @@ You will find the following plugins in this repository:
 
 
 
+### List of Essential and Important Plugins for Packagers
+
+Some of the above plugins are more important or more widely used than others.
+
+This section aims to provide a list of "essential" and "important" plugins,
+so packagers can know which to prioritise.
+
+Essential plugins are plugins we consider essential for a fully-functional
+GStreamer installation and without them future GStreamer installations may
+well not work correctly, especially as we start moving plugins from other
+modules into gst-plugin-rs or start relying on plugins from gst-plugins-rs
+in components in other modules.
+
+#### Essential Plugins
+
+- **generic**: inter, gopbuffer
+- **net**: rtp, rtsp, udp, webrtc
+- **audio**: audioparsers
+- **video**: closedcaption, dav1d, gtk4, imagers
+- **mux**: isobmff
+- **text**: accumulate, wrap
+- **utils**: fallbackswitch, livesync, tracers
+- **analytics**: analytics
+
+#### Important Plugins
+
+- **generic**: originalbuffer, threadshare
+- **net**: dashsink2, hlssink3, hlsmultivariantsink, icecast, mpegtslive, reqwest, webrtcbin2
+- **audio**: audiofx, claxon, lewton, whisper
+- **video**: vvdec, videofx, skia
+- **text**: regex
+- **utils**: togglerecord
+
 ## Building
 
 gst-plugins-rs relies on [cargo-c](https://github.com/lu-zero/cargo-c/) to
