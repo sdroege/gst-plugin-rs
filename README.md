@@ -60,11 +60,16 @@ You will find the following plugins in this repository:
   * `generic`
 
     - `file`: A Rust implementation of the standard `filesrc` and `filesink` elements
+      - `rsfilesink`: Write stream to a file.
+      - `rsfilesrc`: Read stream from a file.
 
     - `compress`: General purpose lossless compression plugin.
-
-      - flate: compress and decompress data using zlib and deflate
-      - brotli: compress and decompress data using brotli
+      - `brotlicompress`: Compress data using Brotli.
+      - `brotlidecompress`: Decompress data using Brotli.
+      - `deflatecompress`: Compress data using deflate (no checksum).
+      - `deflatedecompress`: Decompress deflate-compressed data.
+      - `zlibcompress`: Compress data using zlib (with checksum).
+      - `zlibdecompress`: Decompress zlib-compressed data.
 
     - `gopbuffer`: Stores a minimum duration of data delimited by discrete GOPs (Group of Picture).
 
@@ -81,10 +86,26 @@ You will find the following plugins in this repository:
         - `originalbufferrestore`: Restores the original buffer previously saved by `originalbuffersave`.
 
     - `sodium`: Elements to perform encryption and decryption using [libsodium](https://libsodium.org).
+      - `sodiumdecrypter`: libsodium-based file decrypter.
+      - `sodiumencrypter`: libsodium-based file encrypter.
 
     - `streamgrouper`: Filter element that makes all the incoming streams use the same group-id.
 
     - `threadshare`: Some popular threaded elements reimplemented using common thread-sharing infrastructure.
+      - `ts-appsrc`: Thread-sharing app source.
+      - `ts-audiotestsrc`: Thread-sharing audio test source.
+      - `ts-blocking-adapter`: Converts a blocking downstream branch into an async backpressure.
+      - `ts-input-selector`: Simple input selector element.
+      - `ts-intersink`: Thread-sharing inter-pipelines sink.
+      - `ts-intersrc`: Thread-sharing inter-pipelines source.
+      - `ts-jitterbuffer`: Simple jitterbuffer.
+      - `ts-proxysink`: Thread-sharing proxy sink.
+      - `ts-proxysrc`: Thread-sharing proxy source.
+      - `ts-queue`: Simple data queue.
+      - `ts-rtpdtmfsrc`: Thread-sharing RTP DTMF packet (RFC2833) source.
+      - `ts-tcpclientsrc`: Receives data over the network via TCP.
+      - `ts-udpsink`: Thread-sharing UDP sink.
+      - `ts-udpsrc`: Receives data over the network via UDP.
 
   * `net`
 
@@ -92,8 +113,15 @@ You will find the following plugins in this repository:
       - `s3src`/`s3sink`: A source and sink element to talk to the Amazon S3 object storage system.
       - `s3putobjectsink`: A sink element to talk to Amazon S3. Uses `PutObject` instead of multi-part upload like `s3sink`.
       - `s3hlssink`: A sink element to store HLS streams on Amazon S3.
+      - `awspolly`: Text to Speech filter, using AWS polly.
+      - `awss3hlssink`: Streams HLS data to S3.
+      - `awss3putobjectsink`: Writes an object to Amazon S3 using PutObject (mostly useful for small files).
+      - `awss3sink`: Writes an object to Amazon S3.
+      - `awss3src`: Reads an object from Amazon S3.
       - `awstranscriber`: an element wrapping the AWS Transcriber service.
+      - `awstranscriber2`: Speech to Text filter, using AWS transcribe.
       - `awstranscribeparse`: an element parsing the packets of the AWS Transcriber service.
+      - `awstranslate`: Translates text.
 
     - `deepgram`: Wrapper elements to talk to the [Deepgram API](https://developers.deepgram.com/home)
       - `deepgramtranscriber`: an element wrapping the Deepgram Speech-to-Text service
@@ -103,6 +131,8 @@ You will find the following plugins in this repository:
     - `hlsmultivariantsink`: Create multi-variant HLS playlists with alternate renditions and variant streams.
 
     - `hlssink3`: An element for generating MPEG-TS HLS streams.
+      - `hlscmafsink`: HTTP Live Streaming CMAF Sink.
+      - `hlswebvttsink`: HTTP Live Streaming WebVTT Sink.
 
     - `icecast`:
 
@@ -113,22 +143,90 @@ You will find the following plugins in this repository:
       - `mpegtslivesrc`: Wraps MPEG-TS sources such as `udpsrc` or `srtsrc` and provides a live clock based on the stream's PCR.
 
     - `ndi`: An [NDI](https://www.newtek.com/ndi/) plugin containing a source, sink and device provider.
+      - `ndisink`: NewTek NDI Sink.
+      - `ndisinkcombiner`: NewTek NDI sink audio/video combiner.
+      - `ndisrc`: NewTek NDI Source.
+      - `ndisrcdemux`: NewTek NDI source demuxer.
 
     - `onvif`: Various elements for parsing, RTP (de)payloading, overlaying of ONVIF timed metadata.
+      - `onvifmetadatacombiner`: ONVIF metadata combiner.
+      - `onvifmetadataextractor`: Extract the ONVIF GstMeta into a separate stream.
+      - `onvifmetadataoverlay`: Renders ONVIF analytics meta over raw video frames.
+      - `onvifmetadataparse`: Parses ONVIF Timed XML Metadata.
+      - `rtponvifmetadatadepay`: ONVIF metadata RTP depayloader.
+      - `rtponvifmetadatapay`: ONVIF metadata RTP payloader.
 
     - `quinn`: Transfer data over the network using QUIC
       - `quinnquicsink`/`quinnquicsrc`: Send and receive data using QUIC
       - `quinnquicmux`/`quinnquicdemux`: Multiplex and de-multiplex streams and datagram using QUIC
       - `quinnroqmux`/`quinnroqdemux`: Multiplex and de-multiplex RTP streams over QUIC
+      - `quinnquicdemux`: Demultiplexes multiple streams and datagram for QUIC
+      - `quinnquicmux`: Multiplexes multiple streams and datagram for QUIC
+      - `quinnquicsink`: Send data over the network via QUIC
+      - `quinnquicsrc`: Receive data over the network via QUIC
+      - `quinnroqdemux`: Demultiplexes multiple RTP streams over QUIC
+      - `quinnroqmux`: Multiplexes multiple RTP streams over QUIC
+      - `quinnwtsink`: Send data over the network via WebTransport
+      - `quinnwtsrc`: Receive data over the network via WebTransport
 
     - `raptorq`: Encoder/decoder element for RaptorQ RTP FEC mechanism.
+      - `raptorqdec`: Performs FEC using RaptorQ (RFC6681, RFC6682).
+      - `raptorqenc`: Performs FEC using RaptorQ (RFC6681, RFC6682).
 
     - `reqwest`: An HTTP source element based on the [reqwest](https://github.com/seanmonstar/reqwest) library.
+      - `reqwesthttpsrc`: Read stream from an HTTP/HTTPS location.
 
     - `rtp`:
       - `rtpav1pay` / `rtpav1depay`: RTP (de)payloader for the AV1 video codec.
 
       - `rtpgccbwe`: RTP bandwidth estimator based on the Google Congestion Control algorithm.
+      - `rtpL16depay2`: Depayload 16-bit raw audio (L16) from RTP packets.
+      - `rtpL16pay2`: Payload 16-bit raw audio (L16) into RTP packets (RFC 3551).
+      - `rtpL20depay`: Depayload 20-bit raw audio (L20) from RTP packets.
+      - `rtpL20pay`: Payload 20-bit raw audio (L20) into RTP packets (RFC 3551).
+      - `rtpL24depay2`: Depayload 24-bit raw audio (L24) from RTP packets.
+      - `rtpL24pay2`: Payload 24-bit raw audio (L24) into RTP packets (RFC 3551).
+      - `rtpL8depay2`: Depayload 8-bit raw audio (L8) from RTP packets.
+      - `rtpL8pay2`: Payload 8-bit raw audio (L8) into RTP packets (RFC 3551).
+      - `rtpac3depay2`: Depayload an AC-3 Audio Stream from RTP packets (RFC 4184).
+      - `rtpac3pay2`: Payload an AC-3 Audio Elementary Stream into RTP packets (RFC 4184).
+      - `rtpamrdepay2`: Depayload an AMR audio stream from RTP packets (RFC 3267).
+      - `rtpamrpay2`: Payload an AMR audio stream into RTP packets (RFC 3267).
+      - `rtpav1depay`: Depayload AV1 from RTP packets.
+      - `rtpav1pay`: Payload AV1 as RTP packets.
+      - `rtpjpegdepay2`: Depayload a JPEG Video stream from RTP packets (RFC 2435).
+      - `rtpjpegpay2`: Payload a JPEG Video stream to RTP packets (RFC 2435).
+      - `rtpklvdepay2`: Depayload an SMPTE ST 336 KLV metadata stream from RTP packets (RFC 6597).
+      - `rtpklvpay2`: Payload an SMPTE ST 336 KLV metadata stream into RTP packets (RFC 6597).
+      - `rtpmp2tdepay2`: Depayload an MPEG Transport Stream from RTP packets (RFC 2250).
+      - `rtpmp2tpay2`: Payload an MPEG Transport Stream into RTP packets (RFC 2250).
+      - `rtpmp4adepay2`: Depayload an MPEG-4 Audio bitstream (e.g. AAC) from RTP packets (RFC 3016).
+      - `rtpmp4apay2`: Payload an MPEG-4 Audio bitstream (e.g. AAC) into RTP packets (RFC 3016).
+      - `rtpmp4gdepay2`: Depayload MPEG-4 Generic elementary streams from RTP packets (RFC 3640).
+      - `rtpmp4gpay2`: Payload an MPEG-4 Generic elementary stream into RTP packets (RFC 3640).
+      - `rtpmpadepay2`: Depayload an MPEG Audio Elementary Stream from RTP packets (RFC 2038, RFC 2250).
+      - `rtpmpapay2`: Payload an MPEG Audio Elementary Stream into RTP packets (RFC 2038, RFC 2250).
+      - `rtpmparobustdepay2`: Depayload MPEG Audio Robust elementary streams from RTP packets (RFC 5219).
+      - `rtpmpvdepay2`: Depayload an MPEG-1 or MPEG-2 Elementary Stream from RTP packets (RFC 2250).
+      - `rtpmpvpay2`: Payload an MPEG-1 or MPEG-2 Elementary Stream into RTP packets (RFC 2250).
+      - `rtponvifmetadatadepay`: ONVIF metadata RTP depayloader.
+      - `rtponvifmetadatapay`: ONVIF metadata RTP payloader.
+      - `rtpopusdepay2`: Depayload an Opus audio stream from RTP packets (RFC 7587).
+      - `rtpopuspay2`: Payload an Opus audio stream into RTP packets (RFC 7587).
+      - `rtppcmadepay2`: Depayload A-law from RTP packets (RFC 3551).
+      - `rtppcmapay2`: Payload A-law Audio into RTP packets (RFC 3551).
+      - `rtppcmudepay2`: Depayload µ-law from RTP packets (RFC 3551).
+      - `rtppcmupay2`: Payload µ-law Audio into RTP packets (RFC 3551).
+      - `rtprecv`: RTP sessions management (receiver).
+      - `rtpsend`: RTP session management (sender).
+      - `rtpsmpte291depay`: Depayload an SMPTE ST291-1 ANC stream from RTP packets (RFC 8331).
+      - `rtpsmpte291pay`: Payload an SMPTE ST291-1 ANC stream into RTP packets (RFC 8331).
+      - `rtpvp8depay2`: Depayload VP8 from RTP packets.
+      - `rtpvp8pay2`: Payload VP8 as RTP packets.
+      - `rtpvp9depay2`: Depayload VP9 from RTP packets.
+      - `rtpvp9pay2`: Payload VP9 as RTP packets.
+      - `rtpvrawdepay2`: Depayload a Raw Uncompressed Video Stream from RTP packets (RFC 4175).
+      - `rtpvrawpay2`: Payload a Raw Uncompressed Video Stream into RTP packets (RFC 4175).
 
     - `rtsp`:
 
@@ -138,12 +236,26 @@ You will find the following plugins in this repository:
       - `udpsrc2`: New version of the `udpsrc` with a lot better performance.
 
     - `webrtc`: WebRTC elements, with batteries included Sink elements for specific signalling protocols.
+      - `awskvswebrtcsink`: WebRTC sink with kinesis video streams signaller.
+      - `janusvrwebrtcsink`: WebRTC sink with Janus Video Room signaller.
+      - `janusvrwebrtcsrc`: WebRTC source with Janus Video Room signaller.
+      - `livekitwebrtcsink`: WebRTC sink with LiveKit signaller.
+      - `livekitwebrtcsrc`: WebRTC source with LiveKit signaller.
+      - `uepswebrtcsink`: WebRTC sink for signalling on an Unreal Engine Pixelstreaming compliant Signalling Server.
+      - `webrtcsink`: WebRTC sink with custom protocol signaller.
+      - `webrtcsrc`: WebRTC src.
+      - `whepclientsrc`: WebRTC source element using WHEP Client as the signaller.
+      - `whepserversink`: WebRTC sink with WHEP server signaller.
+      - `whipclientsink`: WebRTC sink with WHIP client signaller.
+      - `whipserversrc`: WebRTC source element using WHIP Server as the signaller.
 
     - `webrtchttp`: Simple WebRTC HTTP elements (WHIP/WHEP).
+      - `whepsrc`: A bin to stream media using the WebRTC HTTP Egress Protocol (WHEP).
+      - `whipsink`: A bin to stream RTP media using the WebRTC HTTP Ingestion Protocol (WHIP).
 
     - `webrtcbin2`: new WebRTC elements with less threads based on `rtpsend`/`rtprecv`.
       - `webrtcsend`: Send half of a WebRTC session.
-      - `webrtcreceive`: Receive half of a WebRTC session.
+      - `webrtcrecv`: Receive streams using WebRTC.
 
   * `audio`
     - `audiofx`: Elements to apply audio effects to a stream
@@ -154,27 +266,34 @@ You will find the following plugins in this repository:
       - `ebur128level`: Filter for measuring audio loudness according to EBU R-128.
     - `audioparsers`: Audio parser elements
       - `s302mparse`: Parser for SMPTE S302M audio elementary streams.
+      - `ac4parse`: Parses AC4 audio streams.
 
     - `claxon`: A FLAC decoder based on the [Claxon](https://github.com/ruuda/claxon) library.
+      - `claxondec`: Claxon FLAC decoder.
 
     - `csound`: A plugin to implement audio effects using the [Csound](https://csound.com/) library.
+      - `csoundfilter`: Implement an audio filter/effects using Csound.
 
     - `demucs`: An audio source separation plugin using [demucs](https://github.com/adefossez/demucs).
 
     - `elevenlabs`:
 
       - `elevenlabssynthesizer`: Generate audio speech from text using the [ElevenLabs](https://elevenlabs.io) API/service.
+      - `elevenlabsvoicecloner`: ElevenLabs Voice Cloner.
     - `hrtf`: Filters for rendering audio according to a [head-related transferfunction](https://en.wikipedia.org/wiki/Head-related_transfer_function).
       - `hrtfrender`: Read and render filters from IRCAM binary files.
       - `sofalizer`:  Read and render filters from SOFA files.
 
     - `lewton`: A Vorbis decoder based on the [lewton](https://github.com/RustAudio/lewton) library.
+      - `lewtondec`: lewton Vorbis decoder.
 
     - `speechmatics`:
 
       - `speechmaticstranscriber`: Speech to text transcription using [Speechmatics](https://www.speechmatics.com/speech-to-text)
 
     - `spotify`: A plugin to access content from [Spotify](https://www.spotify.com/) based on the [librespot](https://github.com/librespot-org/) library.
+      - `spotifyaudiosrc`: Spotify source.
+      - `spotifylyricssrc`: Spotify lyrics source.
 
     - `whisper`:
 
@@ -182,6 +301,8 @@ You will find the following plugins in this repository:
 
   * `video`
     - `cdg`: A parser and renderer for [CD+G karaoke data](https://docs.rs/cdg/0.1.0/cdg/).
+      - `cdgdec`: CDG decoder.
+      - `cdgparse`: CDG parser.
 
     - `closedcaption`: Plugin to deal with closed caption streams
       - `ccdetect`: Detects if a stream contains active Closed Captions.
@@ -205,6 +326,9 @@ You will find the following plugins in this repository:
       - `st2038ancdemux`: Split individual ancillary streams from a ST-2038
         stream.
       - `st2038ancmux`: Mux togehter multiple ancillary ST-2038 streams.
+      - `st2038anctocc`: Converts ST-2038 ANC to Closed Captions.
+      - `st2038combiner`: Combines video input stream and ST2038 stream in GstAncillaryMeta.
+      - `st2038extractor`: Extracts ST2038 stream in GstAncillaryMeta from video input stream.
       - `st2038tocc`: Convert an ancillary ST-2038 stream into closed captions.
       - `transcriberbin`: Convenience bin around transcriber elements like `aws_transcriber`.
       - `translationbin`: Convenience bin around transcriber and translation
@@ -217,12 +341,17 @@ You will find the following plugins in this repository:
       RGB video streams.
 
     - `dav1d`: AV1 decoder based on the [dav1d](https://code.videolan.org/videolan/dav1d) library.
+      - `dav1ddec`: Decode AV1 video streams with dav1d.
 
     - `ffv1`: FFV1 decoder based on the [ffv1](https://github.com/rust-av/ffv1) library.
+      - `ffv1dec`: Decode FFV1 video streams.
 
     - `gif`: A GIF encoder based on the [gif](https://github.com/image-rs/image-gif) library.
+      - `gifdec`: Decodes GIF images.
+      - `gifenc`: GIF encoder.
 
     - `gtk4`: A [GTK4](https://www.gtk.org) video sink that provides a `GdkPaintable` for UI integration.
+      - `gtk4paintablesink`: A GTK 4 Paintable sink.
 
     - `hsv`: Plugin with various elements to work with video data in hue, saturation, value format
        - `hsvdetector`: Mark pixels that are close to a configured color in HSV format.
@@ -232,8 +361,10 @@ You will find the following plugins in this repository:
        - `imagersoverlay`: Overlays an image on top of a video stream. It is a reimplementation of `gdkpixbufoverlay` entirely in Rust.
 
     - `png`: PNG encoder based on the [png](https://github.com/image-rs/image-png) library.
+      - `rspngenc`: PNG encoder.
 
     - `rav1e`: AV1 encoder based on the [rav1e](https://github.com/xiph/rav1e) library.
+      - `rav1enc`: rav1e AV1 encoder.
 
     - `skia`:
 
@@ -245,26 +376,40 @@ You will find the following plugins in this repository:
       - `videocompare`: Compare similarity of video frames. The element can use different hashing algorithms like [Blockhash](https://github.com/commonsmachinery/blockhash-rfc), [DSSIM](https://kornel.ski/dssim), and others.
 
     - `viuer`: Terminal-based video sink making use of the [viuer](https://github.com/atanunq/viuer) crate.
+      - `viuersink`: Renders video to the terminal using viuer.
 
     - `vvdec`: VVC/H.266 decoder based on [VVdeC](https://github.com/fraunhoferhhi/vvdec), the Fraunhofer Versatile Video Decoder.
 
     - `webp`: WebP decoder based on the [libwebp-sys-2](https://github.com/qnighy/libwebp-sys2-rs) library.
+      - `rswebpdec`: Decodes potentially animated WebP images.
 
   * `mux`
     - `flavors`: FLV demuxer based on the [flavors](https://github.com/rust-av/flavors) library.
+      - `rsflvdemux`: Demuxes FLV Streams.
 
     - `isobmff`: A MP4/ISOBMFF/CMAF muxer for generating fragmented (e.g. DASH/HLS media) and non-fragmented (MP4) files.
+      - `cmafmux`: CMAF fragmented MP4 muxer.
+      - `dashmp4mux`: DASH fragmented MP4 muxer.
+      - `isofmp4mux`: ISO fragmented MP4 muxer.
+      - `isomp4mux`: ISO MP4 muxer.
+      - `onviffmp4mux`: ONVIF fragmented MP4 muxer.
+      - `onvifmp4mux`: ONVIF MP4 muxer.
 
   * `text`
     - `accumulate`: A plugin for segmenting text, designed to work in a live context
+      - `textaccumulate`: Accumulates text.
 
     - `ahead`: A plugin to display upcoming text buffers ahead.
+      - `textahead`: Display upcoming text buffers ahead.
 
     - `json`: A plugin to convert a stream of JSON objects to a higher level wrapped NDJSON output.
+      - `jsongstenc`: Wraps buffers containing any valid top-level JSON structures into higher level JSON objects, and outputs those as ndjson.
+      - `jsongstparse`: Parses ndjson as output by jsongstenc.
 
     - `regex`: A regular expression text filter plugin.
 
     - `wrap`: A plugin to perform text wrapping with hyphenation.
+      - `textwrap`: Breaks text into fixed-size lines, with optional hyphenation.
 
   * `utils`
     - `fallbackswitch`:
