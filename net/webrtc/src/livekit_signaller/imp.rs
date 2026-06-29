@@ -786,7 +786,8 @@ impl SignallableImpl for Signaller {
 
             gst::debug!(CAT, imp = imp, "Connecting to {}", wsurl);
 
-            let res = signal_client::SignalClient::connect(&wsurl, &auth_token, options).await;
+            let res =
+                signal_client::SignalClient::connect(&wsurl, &auth_token, options, None).await;
             let (signal_client, join_response, signal_events) = match res {
                 Err(err) => {
                     imp.obj()
