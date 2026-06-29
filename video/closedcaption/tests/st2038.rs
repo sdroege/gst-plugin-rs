@@ -229,6 +229,21 @@ fn video_buffer_at(pts: gst::ClockTime) -> gst::Buffer {
     video_buffer
 }
 
+fn test_frame_alignment_keeps_first_in_window_only(use_same_pts: bool) {
+    let pipeline = setup_combiner_pipeline(Some("frame"), false);
+
+    let pair = &st2038_buffers(use_same_pts)[..BUFFERS_PER_FRAME];
+    pipeline.push_st2038(pair[0].clone());
+    pipeline.push_st2038(pair[1].clone());
+    pipeline.push_video(gst::ClockTime::ZERO);
+    pipeline.eos();
+
+    let output = pipeline.pull();
+    assert_eq!(output.iter_meta::<AncillaryMeta>().count(), 1);
+
+    pipeline.stop();
+}
+
 fn test_st2038_combiner_extractor(
     with_meta: bool,
     remove_meta: bool,
@@ -368,6 +383,18 @@ fn test_st2038_extractor_combiner_without_st2038() {
 #[test]
 fn test_st2038_extractor_combiner_with_multiple_st2038_same_pts() {
     test_st2038_combiner_extractor(true, false, true, 2, 2);
+}
+
+/// Frame alignment: only the first in-window ST-2038 buffer is attached per picture.
+#[test]
+fn test_st2038_combiner_frame_one_in_window_buffer() {
+    test_frame_alignment_keeps_first_in_window_only(false);
+}
+
+/// Frame alignment: a second ST-2038 buffer at the same PTS is not merged.
+#[test]
+fn test_st2038_combiner_frame_same_pts_keeps_first() {
+    test_frame_alignment_keeps_first_in_window_only(true);
 }
 
 fn st2038_buffer(packet: [u8; 100], pts: gst::ClockTime) -> gst::Buffer {
