@@ -41,7 +41,10 @@ use crate::BackendType;
 
 use burn::{
     backend,
-    tensor::{Device, Tensor, TensorData, backend::Backend},
+    tensor::{
+        Device, Tensor, TensorData,
+        backend::{Backend, BackendTypes},
+    },
 };
 
 const YOLOX_OUT: &glib::GStr = glib::gstr!("yolox-out");
@@ -508,7 +511,7 @@ impl Model {
 
                         Device::<backend::Vulkan>::from_id(DeviceId {
                             type_id: type_id as u16,
-                            index_id,
+                            index_id: index_id as u16,
                         })
                     }
                 };
@@ -528,7 +531,7 @@ impl Model {
     ) -> (Vec<f32>, usize, usize) {
         // Create tensor from image data
         let img_tensor = Tensor::<B, 3>::from_data(
-            TensorData::new(input, [height, width, 3]).convert::<<B as Backend>::FloatElem>(),
+            TensorData::new(input, [height, width, 3]).convert::<<B as BackendTypes>::FloatElem>(),
             device,
         )
         // [H, W, C] -> [C, H, W]
