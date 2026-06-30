@@ -14,7 +14,7 @@ mod imp;
 
 /**
  * SECTION:element-llamacpp-texttransform
- * @see_also: textwrap, textaccumulate.
+ * @see_also: textwrap, textaccumulate, whispertranscriber.
  *
  * [llama.cpp](https://github.com/ggml-org/llama.cpp)-based text transformation element that
  * passes text through a LLM and forwards the output.
@@ -48,14 +48,31 @@ mod imp;
  * For subtitle translations of Rated R movies, for example, it might be necessary to use an
  * abliterated / decensored model like [this](https://huggingface.co/llmfan46/Qwen3.5-9B-ultra-uncensored-heretic-v2-GGUF).
  *
- * ## Example
+ * ## Examples
+ *
+ * ### Subtitle translation
  *
  * |[
  * gst-launch-1.0 filesrc location=subtitles.eng.srt ! subparse ! llamacpp-texttransform model-path=/path/to/Hunyuan-MT-7B.Q4_K_M.gguf system-prompt="Translate the following segments into German, without additional explanation." history-size=5 ! overlay.text_sink \
- *     filesrc location=movie.mp4 ! decodebin name=dbin \
+ *     filesrc location=movie.mp4 ! decodebin3 name=dbin \
  *     dbin. ! queue ! videoconvert ! textoverlay name=overlay ! videoconvert ! navseek ! autovideosink \
  *     dbin. ! queue ! audioconvert ! autoaudiosink
  * |] Plays a movie with English subtitles and translates them to German before overlaying.
+ *
+ * ### Audio transcription and translation
+ *
+ * |[
+ * gst-launch-1.0 filesrc location=movie.mp4 ! decodebin3 name=dbin \
+ *     dbin. ! audio/x-raw ! tee name=audio-tee
+ *     audio-tee. ! queue max-size-time=10000000000 max-size-buffers=0 max-size-bytes=0 ! audioconvert ! audioresample ! \
+ *         whispertranscriber model-path=whisper-ggml-large-v3.bin model-preset=large-v3 chunk-duration=4000 ! \
+ *         textaccumulate latency=0 ! queue max-size-time=10000000000 max-size-buffers=0 max-size-bytes=0 ! \
+ *         llamacpp-texttransform model-path=Hunyuan-MT-7B.Q4_K_M.gguf system-prompt="Translate the following segments into German, without additional explanation." history-size=5 ! \
+ *         textwrap columns=72 ! overlay.text_sink \
+ *     dbin. ! queue max-size-time=10000000000 max-size-buffers=0 max-size-bytes=0 ! videoconvert ! \
+ *         textoverlay name=overlay ! videoconvert ! autovideosink
+ *     audio-tee. ! queue max-size-time=10000000000 max-size-buffers=0 max-size-bytes=0 ! audioconvert ! autoaudiosink
+ * |] Plays a movie, transcribes the audio to text, translates the text to German and overlays it on top of the video.
  *
  * Since: plugins-rs-0.16.0
  */
