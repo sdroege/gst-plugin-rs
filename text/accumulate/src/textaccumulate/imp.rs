@@ -32,6 +32,8 @@ const DEFAULT_NO_TIMEOUT: bool = false;
 const DEFAULT_INCOMPLETE_SENTENCE_THRESHOLD: Option<gst::ClockTime> = gst::ClockTime::NONE;
 const DEFAULT_INCOMPLETE_SENTENCE_LIMIT: Option<gst::ClockTime> = gst::ClockTime::NONE;
 
+const STANDARD_JOINABLE_PUNCTUATION: &str = "!.?,:;";
+
 #[derive(Debug, Clone)]
 struct Settings {
     latency_ms: u32,
@@ -726,8 +728,10 @@ impl Accumulate {
         let mut bufferlist = gst::BufferList::new();
         let bufferlist_mut = bufferlist.get_mut().unwrap();
         let mut new_position = gst::ClockTime::NONE;
+        let mut to_push_it = to_push.into_iter().peekable();
+        let mut full_sentence = vec![];
 
-        for item in to_push.drain(..) {
+        while let Some(item) = to_push_it.next() {
             gst::trace!(
                 CAT,
                 imp = self,
@@ -737,13 +741,33 @@ impl Accumulate {
                 item.pts + item.duration,
             );
 
-            let mut buf = gst::Buffer::from_mut_slice(item.content.into_bytes());
+            let suffix = match to_push_it.peek() {
+                Some(next_item) => {
+                    let starts_with_joinable_punctuation = next_item
+                        .content
+                        .chars()
+                        .next()
+                        .map(|c| STANDARD_JOINABLE_PUNCTUATION.contains(c))
+                        .unwrap_or(false);
+
+                    if starts_with_joinable_punctuation {
+                        ""
+                    } else {
+                        " "
+                    }
+                }
+                None => "",
+            };
+
+            full_sentence.push(format!("{}{}", item.content, suffix));
+
+            let mut buf = gst::Buffer::from_slice(item.content.into_bytes());
             {
                 let buf_mut = buf.get_mut().unwrap();
                 buf_mut.set_pts(item.pts);
                 buf_mut.set_duration(item.duration);
 
-                if let Some(original_buffer) = item.buffer {
+                if let Some(ref original_buffer) = item.buffer {
                     let _ = original_buffer.copy_into(buf_mut, gst::BufferCopyFlags::META, ..);
                 }
             }
@@ -812,7 +836,26 @@ impl Accumulate {
             }
         };
 
-        self.srcpad.push_list(bufferlist)?;
+        let first_buffer_pts = bufferlist.get(0).unwrap().pts().unwrap();
+        let last_buffer_end_time = {
+            let buf = bufferlist.get(bufferlist.len() - 1).unwrap();
+            buf.pts().unwrap() + buf.duration().unwrap()
+        };
+
+        let full_sentence = full_sentence.join("");
+
+        let mut outbuf = gst::Buffer::from_mut_slice(full_sentence.into_bytes());
+
+        {
+            let buf_mut = outbuf.get_mut().unwrap();
+            buf_mut.set_pts(first_buffer_pts);
+            buf_mut.set_duration(last_buffer_end_time - first_buffer_pts);
+            if let Ok(mut m) = gst::meta::CustomMeta::add(buf_mut, "TextAccumulateSentenceMeta") {
+                m.mut_structure().set("words", bufferlist);
+            }
+        }
+
+        self.srcpad.push(outbuf)?;
 
         if let Some(gap) = gap {
             self.srcpad.push_event(gap);
