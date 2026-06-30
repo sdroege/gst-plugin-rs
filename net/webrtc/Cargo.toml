@@ -159,6 +159,3 @@ name = "renegotiation-client"
 [[example]]
 name = "whepserver"
 required-features = [ "whep" ]
-
-[package.metadata.gstreamer]
-release_date = "2026-06-30"

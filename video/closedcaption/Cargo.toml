@@ -73,6 +73,3 @@ name = "passthrough-notify"
 
 [[example]]
 name = "passthrough-transcriber-switch"
-
-[package.metadata.gstreamer]
-release_date = "2026-06-30"
