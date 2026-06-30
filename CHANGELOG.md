@@ -5,6 +5,39 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.15.3] - 2026-06-30
+### Fixed
+- fmp4mux: Fix draining in chunk mode after partial GOPs were drained.
+- fmp4mux: Fix fragment / chunk decision for chunk-mode=keyframe.
+- fmp4mux: Fix late GOP handling.
+- fmp4mux: Fix delayed push when GOPs start after fragment end.
+- fmp4mux: Split oversized GOPs at fragment boundary.
+- onvifmeta2relatiometa: Fix inversion between width and height.
+- rtspsrc2: Handle parse errors with TCP interleaved RTSP more gracefully.
+- rtprecv: Fix buffer list split handling.
+- webrtc: Set level in negotiated caps only if level asymmetry not allowed.
+- webrtcsrc: Fix `.fixate()` causing panic during SDP renegotiation.
+- webrtcsrc: Prevent duplicate src pad creation for existing streams.
+- webrtcsrc: Set transceiver direction to Inactive for removed streams before
+  renegotiation.
+- webrtcsink: Allow renegotiation if caps is missing interlace-mode.
+- webrtcsink: Allow change of interlace-mode in the input caps.
+- webrtcsink: Fix negotiation for nvh264enc in the GLMemory case.
+- webrtcsink: Handle payloader timestamp-offset prop type variants.
+- webrtcsink: Read rav1enc bitrate as i32.
+
+### Added
+- gopbuffer: Add support for H.266/VVC.
+- rtspsrc2: Add support for authentication, client auth with TLS, HTTP tunneling,
+  keep alive, latency configuration, SRTP, SET_PARAMETER / GET_PARAMETER via
+  signals, stream support, TLS validation flags, user-agent in tunnel requests,
+  and URI handler updates.
+- threadshare: Add ts-clocksync.
+- webrtcsink: Add support for h264 profile constrained-high.
+
+### Changed
+- Various dependencies were updated.
+
 ## [0.15.2] - 2026-05-11
 ### Fixed
 - fallbacksrc: Send select-streams to the actual stream collection source.
@@ -1064,7 +1097,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.15.2...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.15.3...HEAD
+[0.15.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.15.2...0.15.3
 [0.15.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.15.1...0.15.2
 [0.15.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.15.0...0.15.1
 [0.15.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.14.4...0.15.0
