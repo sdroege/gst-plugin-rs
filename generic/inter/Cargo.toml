@@ -61,3 +61,6 @@ path = "examples/basic.rs"
 [[example]]
 name = "inter-basic-gl"
 path = "examples/basic-gl.rs"
+
+[package.metadata.gstreamer]
+release_date = "2026-06-30"
