@@ -9,7 +9,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-gst.workspace = true
+gst = { workspace = true, features = ["v1_20"] }
 anyhow = "1"
 icu_segmenter = { version = "2", default-features = false, features = ["compiled_data"] }
 icu_locale = { version = "2", default-features = false }

@@ -18,6 +18,11 @@ mod textaccumulate;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     textaccumulate::register(plugin)?;
+
+    if !gst::meta::CustomMeta::is_registered("TextAccumulateSentenceMeta") {
+        gst::meta::CustomMeta::register("TextAccumulateSentenceMeta", &[]);
+    }
+
     Ok(())
 }
 

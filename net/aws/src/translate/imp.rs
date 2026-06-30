@@ -589,9 +589,17 @@ impl Translate {
 
     fn sink_chain(
         &self,
-        _pad: &gst::Pad,
+        pad: &gst::Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        if let Some(words_list) =
+            gst::meta::CustomMeta::from_buffer(&buffer, "TextAccumulateSentenceMeta")
+                .ok()
+                .and_then(|m| m.structure().get::<gst::BufferList>("words").ok())
+        {
+            return self.sink_chain_list(pad, words_list);
+        }
+
         self.ensure_connection().map_err(|err| {
             gst::error!(CAT, "Failed to connect to AWS: {err:?}");
             gst::element_imp_error!(
