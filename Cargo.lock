@@ -361,25 +361,6 @@ dependencies = [
 
 [[package]]
 name = "async-tungstenite"
-version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e308e9866b891743e3fdf9dfd6b57f85c5062ca01ce4fed6f393e76eb5accea4"
-dependencies = [
- "atomic-waker",
- "futures-core",
- "futures-io",
- "futures-task",
- "futures-util",
- "log",
- "native-tls",
- "pin-project-lite",
- "tokio",
- "tokio-native-tls",
- "tungstenite 0.27.0",
-]
-
-[[package]]
-name = "async-tungstenite"
 version = "0.34.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8447f02eaa65412035e2d3eeaa3fc82bbb8d7137c84c5976b4af685136012ee9"
@@ -5060,7 +5041,7 @@ version = "0.16.0-alpha"
 dependencies = [
  "anyhow",
  "async-channel",
- "async-tungstenite 0.34.1",
+ "async-tungstenite",
  "futures",
  "glib",
  "gst-plugin-version-helper",
@@ -5684,7 +5665,7 @@ dependencies = [
 name = "gst-plugin-speechmatics"
 version = "0.16.0-alpha"
 dependencies = [
- "async-tungstenite 0.34.1",
+ "async-tungstenite",
  "atomic_refcell",
  "futures",
  "gst-plugin-version-helper",
@@ -5817,7 +5798,7 @@ name = "gst-plugin-tracers"
 version = "0.16.0-alpha"
 dependencies = [
  "anyhow",
- "async-tungstenite 0.34.1",
+ "async-tungstenite",
  "atomic_refcell",
  "chrono",
  "etherparse",
@@ -5975,7 +5956,7 @@ name = "gst-plugin-webrtc"
 version = "0.16.0-alpha"
 dependencies = [
  "anyhow",
- "async-tungstenite 0.34.1",
+ "async-tungstenite",
  "aws-config",
  "aws-credential-types",
  "aws-sdk-kinesisvideo",
@@ -6043,7 +6024,7 @@ name = "gst-plugin-webrtc-signalling"
 version = "0.16.0-alpha"
 dependencies = [
  "anyhow",
- "async-tungstenite 0.34.1",
+ "async-tungstenite",
  "clap",
  "futures",
  "gst-plugin-webrtc-signalling-protocol",
@@ -6075,7 +6056,7 @@ name = "gst-plugin-webrtcbin2"
 version = "0.16.0-alpha"
 dependencies = [
  "anyhow",
- "async-tungstenite 0.30.0",
+ "async-tungstenite",
  "clap",
  "futures",
  "gst-plugin-rtp",
@@ -6088,6 +6069,7 @@ dependencies = [
  "librice",
  "openssl",
  "rand 0.9.4",
+ "rustls 0.23.41",
  "sdp-types",
  "serde",
  "serde_derive",
@@ -8494,23 +8476,6 @@ checksum = "706bf8a5e8c8ddb99128c3291d31bd21f4bcde17f0f4c20ec678d85c74faa149"
 dependencies = [
  "jobserver",
  "log",
-]
-
-[[package]]
-name = "native-tls"
-version = "0.2.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "465500e14ea162429d264d44189adc38b199b62b1c21eea9f69e4b73cb03bbf2"
-dependencies = [
- "libc",
- "log",
- "openssl",
- "openssl-probe 0.2.1",
- "openssl-sys",
- "schannel",
- "security-framework 3.7.0",
- "security-framework-sys",
- "tempfile",
 ]
 
 [[package]]
@@ -11945,16 +11910,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-native-tls"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbae76ab933c85776efabc971569dd6119c580d8f5d448769dec1764bf796ef2"
-dependencies = [
- "native-tls",
- "tokio",
-]
-
-[[package]]
 name = "tokio-rustls"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12440,7 +12395,6 @@ dependencies = [
  "http 1.4.2",
  "httparse",
  "log",
- "native-tls",
  "rand 0.9.4",
  "rustls 0.23.41",
  "rustls-pki-types",
