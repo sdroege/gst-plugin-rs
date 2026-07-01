@@ -191,3 +191,5 @@ gst-plugin-gtk4 = { path="video/gtk4", version = "0.15.0" }
 gst-plugin-rtp = { path="net/rtp", version = "0.15.0" }
 gst-plugin-hlssink3 = { path="net/hlssink3", version = "0.15.0" }
 lru = "0.18"
+rustls = { version = "0.23", default-features = false, features = ["std"] }
+rustls-platform-verifier = "0.7"

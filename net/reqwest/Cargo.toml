@@ -10,8 +10,9 @@ rust-version.workspace = true
 
 [dependencies]
 url = "2.1"
-reqwest = { version = "0.12", default-features = false, features = ["charset", "http2", "system-proxy", "rustls-tls", "cookies", "gzip", "rustls-tls-native-roots"] }
-rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+reqwest = { version = "0.13", default-features = false, features = ["charset", "http2", "system-proxy", "rustls-no-provider", "cookies", "gzip"] }
+rustls.workspace = true
+rustls-platform-verifier.workspace = true
 futures = "0.3"
 headers = "0.4"
 mime = "0.3"
@@ -38,6 +39,8 @@ gst-plugin-version-helper.workspace = true
 static = []
 capi = []
 doc = ["gst/v1_18"]
+rustls-ring = ["rustls/ring"]
+default = ["rustls-ring"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

@@ -14,8 +14,9 @@ rust-version.workspace = true
 gst.workspace = true
 gst-webrtc = { workspace = true, features = ["v1_18"] }
 gst-sdp.workspace = true
-reqwest = { version = "0.12", default-features = false, features = ["charset", "http2", "system-proxy", "rustls-tls", "rustls-tls-native-roots"] }
-rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+reqwest = { version = "0.13", default-features = false, features = ["charset", "http2", "system-proxy", "rustls-no-provider"] }
+rustls.workspace = true
+rustls-platform-verifier.workspace = true
 parse_link_header = {version = "0.4", features = ["url"]}
 tokio = { version = "1.20.1", default-features = false, features = ["time", "rt-multi-thread"] }
 futures = "0.3.23"
@@ -31,11 +32,12 @@ path = "src/lib.rs"
 gst-plugin-version-helper.workspace = true
 
 [features]
-default = ["v1_24"]
+default = ["v1_24", "rustls-ring"]
 static = []
 capi = []
 doc = []
 v1_24 = ["gst/v1_24"]
+rustls-ring = ["rustls/ring"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

@@ -48,6 +48,22 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         from the rswebrtc plugin instead of `whipsink` and `whepsrc`.",
     );
 
+    #[cfg(feature = "rustls-ring")]
+    {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+    #[cfg(not(feature = "rustls-ring"))]
+    {
+        if rustls::crypto::CryptoProvider::get_default().is_none() {
+            panic!(
+                "No rustls crypto provider is configured. \
+        Application must install a crypto provider. For example: \
+        `rustls::crypto::ring::default_provider().install_default().unwrap();` \
+        See https://docs.rs/rustls/latest/rustls/#cryptography-providers for details."
+            );
+        }
+    }
+
     whipsink::register(plugin)?;
     whepsrc::register(plugin)?;
 

@@ -19,7 +19,8 @@ gst-app.workspace = true
 url = "2.2"
 more-asserts = "0.3"
 tempfile = "3"
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "charset", "http2", "system-proxy", "rustls-tls-native-roots"] }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "charset", "http2", "system-proxy", "rustls-no-provider"] }
+rustls.workspace = true
 
 [lib]
 name = "gsturiplaylistbin"
@@ -38,6 +39,8 @@ gst-plugin-version-helper.workspace = true
 static = []
 capi = []
 doc = ["gst/v1_18"]
+default = ["rustls-ring"]
+rustls-ring = ["rustls/ring"]
 
 [package.metadata.capi]
 min_version = "0.9.21"
