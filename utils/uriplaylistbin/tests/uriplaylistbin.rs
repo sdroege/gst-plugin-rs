@@ -555,6 +555,8 @@ fn infinite_to_finite() {
 fn cache() {
     let media = TestMedia::mkv_http();
 
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     if let Err(err) = reqwest::blocking::get(&media.uri) {
         println!("skipping test as {} is not available: {}", media.uri, err);
         return;
