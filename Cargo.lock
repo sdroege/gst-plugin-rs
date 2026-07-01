@@ -4871,6 +4871,7 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-video",
  "itertools 0.15.0",
+ "rustls 0.23.41",
  "serde",
 ]
 
@@ -5695,6 +5696,7 @@ dependencies = [
  "librespot-core",
  "librespot-metadata",
  "librespot-playback",
+ "rustls 0.23.41",
  "tokio",
  "url",
 ]
@@ -10271,7 +10273,6 @@ checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
 dependencies = [
  "base64 0.22.1",
  "bytes",
- "encoding_rs",
  "futures-channel",
  "futures-core",
  "futures-util",
@@ -10284,7 +10285,6 @@ dependencies = [
  "hyper-util",
  "js-sys",
  "log",
- "mime",
  "percent-encoding",
  "pin-project-lite",
  "quinn",
@@ -10320,6 +10320,7 @@ dependencies = [
  "cookie",
  "cookie_store",
  "encoding_rs",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "h2 0.4.15",
