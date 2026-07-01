@@ -12,7 +12,10 @@ use super::imp::CAT;
 use super::imp::RtspError;
 use super::imp::RtspProtocol;
 use gst::prelude::*;
-use mykey::{MikeyMessage, payload::Payload::Kemac};
+use mykey::{
+    MikeyMessage,
+    payload::{Payload::Kemac, SrtpParamType},
+};
 use rtsp_types::headers::RtpProfile;
 use sdp_types::Attribute;
 use sdp_types::Connection;
@@ -465,8 +468,15 @@ fn parse_key_mgmt(key_mgmt: &str, s: &mut gst::Structure, has_mikey: &mut bool) 
 
 // Adapted from `gst_mikey_message_to_caps` in `gstmikey.c`.
 fn mikey_to_caps(mikey: MikeyMessage, s: &mut gst::Structure) -> bool {
-    let mut srtp_cipher = "aes-128-icm";
-    let mut srtp_auth = "hmac-sha1-80";
+    let mut srtp_cipher: &str = "aes-128-icm";
+    let mut srtp_auth: &str = "hmac-sha1-80";
+
+    let mut srtcp_cipher: &str = "aes-128-icm";
+    let mut srtcp_auth: &str = "hmac-sha1-80";
+
+    let mut srtp_enc_on: Option<u8> = None;
+    let mut srtcp_enc_on: Option<u8> = None;
+    let mut srtp_auth_on: Option<u8> = None;
 
     // Look for first crypto session (SRTP-ID map entry)
     let srtp = match mikey.header.cs_id_map.first() {
@@ -491,8 +501,7 @@ fn mikey_to_caps(mikey: MikeyMessage, s: &mut gst::Structure) -> bool {
 
         for param in &sp_payload.params {
             match param.param_type {
-                // Encryption algorithm (SrtpParamType::EncryptionAlg = 0)
-                0 => {
+                t if t == SrtpParamType::EncryptionAlg as u8 => {
                     if let Some(&enc_alg) = param.param_value.first() {
                         match enc_alg {
                             0 => srtp_cipher = "null",
@@ -509,8 +518,7 @@ fn mikey_to_caps(mikey: MikeyMessage, s: &mut gst::Structure) -> bool {
                         }
                     }
                 }
-                // Encryption key length (SrtpParamType::SessionEncKeyLen = 1)
-                1 => {
+                t if t == SrtpParamType::SessionEncKeyLen as u8 => {
                     if let Some(&key_len) = param.param_value.first() {
                         match key_len {
                             16 => { /* already set correctly by enc_alg or default */ }
@@ -531,8 +539,7 @@ fn mikey_to_caps(mikey: MikeyMessage, s: &mut gst::Structure) -> bool {
                         }
                     }
                 }
-                // Authentication algorithm (SrtpParamType::AuthAlg = 2)
-                2 => {
+                t if t == SrtpParamType::AuthAlg as u8 => {
                     if let Some(&auth_alg) = param.param_value.first() {
                         match auth_alg {
                             0 => srtp_auth = "null",
@@ -547,8 +554,7 @@ fn mikey_to_caps(mikey: MikeyMessage, s: &mut gst::Structure) -> bool {
                         }
                     }
                 }
-                // Authentication key length (SrtpParamType::SessionAuthKeyLen = 3)
-                3 => {
+                t if t == SrtpParamType::SessionAuthKeyLen as u8 => {
                     if let Some(&auth_key_len) = param.param_value.first() {
                         match auth_key_len {
                             4 => srtp_auth = "hmac-sha1-32",
@@ -563,11 +569,33 @@ fn mikey_to_caps(mikey: MikeyMessage, s: &mut gst::Structure) -> bool {
                         }
                     }
                 }
+                t if t == SrtpParamType::SrtpEncryption as u8 => {
+                    srtp_enc_on = param.param_value.first().copied();
+                }
+                t if t == SrtpParamType::SrtcpEncryption as u8 => {
+                    srtcp_enc_on = param.param_value.first().copied();
+                }
+                t if t == SrtpParamType::SrtpAuthentication as u8 => {
+                    srtp_auth_on = param.param_value.first().copied();
+                }
                 param_type => {
                     gst::warning!(CAT, "Unexpected parameter type: {param_type}");
                     break;
                 }
             }
+        }
+
+        srtcp_cipher = srtp_cipher;
+        srtcp_auth = srtp_auth;
+
+        if srtp_enc_on == Some(0) {
+            srtp_cipher = "null";
+        }
+        if srtcp_enc_on == Some(0) {
+            srtcp_cipher = "null";
+        }
+        if srtp_auth_on == Some(0) {
+            srtp_auth = "null";
         }
     }
 
@@ -629,8 +657,8 @@ fn mikey_to_caps(mikey: MikeyMessage, s: &mut gst::Structure) -> bool {
 
     s.set("srtp-cipher", srtp_cipher.to_send_value());
     s.set("srtp-auth", srtp_auth.to_send_value());
-    s.set("srtcp-cipher", srtp_cipher.to_send_value());
-    s.set("srtcp-auth", srtp_auth.to_send_value());
+    s.set("srtcp-cipher", srtcp_cipher.to_send_value());
+    s.set("srtcp-auth", srtcp_auth.to_send_value());
 
     match srtp_key {
         Some(buf) => {
