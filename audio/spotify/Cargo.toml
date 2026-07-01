@@ -22,6 +22,7 @@ tokio = { version = "1.0", features = ["rt-multi-thread"] }
 futures = "0.3"
 anyhow = "1.0"
 url = "2.3"
+rustls.workspace = true
 
 [lib]
 name = "gstspotify"
@@ -35,6 +36,8 @@ gst-plugin-version-helper.workspace = true
 static = []
 capi = []
 doc = ["gst/v1_18"]
+rustls-ring = ["rustls/ring"]
+default = ["rustls-ring"]
 
 [package.metadata.capi]
 min_version = "0.9.21"
