@@ -927,7 +927,12 @@ impl St2038Combiner {
         mut state: MutexGuard<'a, State>,
         video_buffer: &gst::Buffer,
     ) {
-        self.obj().src_pad().segment().set_position(
+        // Advance the source pad segment position to the end of this picture so
+        // simple_get_next_time() times the next aggregation out at the end of the
+        // following picture's window, giving its ST-2038 the full window to
+        // arrive. set_position() writes the live srcpad segment in place; the
+        // AggregatorPad::segment() accessor only returns an owned copy.
+        self.obj().set_position(
             video_buffer
                 .pts()
                 .zip(video_buffer.duration())
@@ -986,10 +991,7 @@ impl St2038Combiner {
 
     fn reset(&self, is_flush: bool) {
         if is_flush {
-            self.obj()
-                .src_pad()
-                .segment()
-                .set_position(None::<gst::ClockTime>);
+            self.obj().set_position(None::<gst::ClockTime>);
         }
 
         let mut state = self.state.lock().unwrap();
