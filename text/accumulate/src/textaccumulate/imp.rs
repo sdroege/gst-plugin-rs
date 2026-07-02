@@ -31,6 +31,7 @@ const DEFAULT_EXTENDED_DURATION_GAP: gst::ClockTime = gst::ClockTime::from_mseco
 const DEFAULT_NO_TIMEOUT: bool = false;
 
 const STANDARD_JOINABLE_PUNCTUATION: &str = "!.?,:;";
+const FRENCH_JOINABLE_PUNCTUATION: &str = ".,";
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -246,6 +247,7 @@ struct State {
     seqnum: gst::Seqnum,
     timeout_terminators_regex: Option<Regex>,
     task_started: bool,
+    language_code: Option<String>,
 }
 
 impl Default for State {
@@ -259,6 +261,7 @@ impl Default for State {
             seqnum: gst::Seqnum::next(),
             timeout_terminators_regex: None,
             task_started: false,
+            language_code: None,
         }
     }
 }
@@ -551,6 +554,27 @@ impl Accumulate {
 
                 true
             }
+            Tag(ev) => {
+                let tag = ev.tag();
+                if let Some(tag_value) = tag.get::<gst::tags::LanguageCode>() {
+                    let lang = tag_value.get();
+                    gst::log!(
+                        CAT,
+                        imp = self,
+                        "Received language code from tags: {:?}",
+                        lang
+                    );
+                    self.state.lock().unwrap().language_code = Some(lang.to_string());
+                }
+
+                let accumulate_tx = self.state.lock().unwrap().accumulate_tx.clone();
+
+                if let Some(tx) = accumulate_tx {
+                    let _ = tx.send(AccumulateInput::Event(event));
+                }
+
+                true
+            }
             _ => {
                 if event.is_serialized() {
                     let accumulate_tx = self.state.lock().unwrap().accumulate_tx.clone();
@@ -664,6 +688,20 @@ impl Accumulate {
         let mut to_push_it = to_push.into_iter().peekable();
         let mut full_sentence = vec![];
 
+        let joinable_punctuation = if self
+            .state
+            .lock()
+            .unwrap()
+            .language_code
+            .as_ref()
+            .map(|l| l.starts_with("fr"))
+            .unwrap_or(false)
+        {
+            FRENCH_JOINABLE_PUNCTUATION
+        } else {
+            STANDARD_JOINABLE_PUNCTUATION
+        };
+
         while let Some(item) = to_push_it.next() {
             gst::trace!(
                 CAT,
@@ -680,7 +718,7 @@ impl Accumulate {
                         .content
                         .chars()
                         .next()
-                        .map(|c| STANDARD_JOINABLE_PUNCTUATION.contains(c))
+                        .map(|c| joinable_punctuation.contains(c))
                         .unwrap_or(false);
 
                     if starts_with_joinable_punctuation {
