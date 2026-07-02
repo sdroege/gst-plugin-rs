@@ -346,9 +346,14 @@ impl Accumulate {
             FlushStart(_) => {
                 gst::info!(CAT, imp = self, "received flush start, pausing");
                 let ret = gst::Pad::event_default(pad, Some(&*self.obj()), event);
+
                 let _ = self.state.lock().unwrap().accumulate_tx.take();
                 let _ = self.srcpad.stop_task();
-                self.state.lock().unwrap().task_started = false;
+
+                let mut state = self.state.lock().unwrap();
+                let timeout_terminators_regex = state.timeout_terminators_regex.take();
+                *state = State::default();
+                state.timeout_terminators_regex = timeout_terminators_regex;
                 ret
             }
             FlushStop(_) => {
