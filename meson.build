@@ -719,6 +719,14 @@ endif
 # get cmdline for rust
 extra_env += {'RUSTC': ' '.join(rustc.cmd_array())}
 
+# openssl-sys on Windows only supports vcpkg, not pkg-config
+if deps_cache.has_key('openssl') and host_system == 'windows'
+  openssl = deps_cache.get('openssl')
+  if openssl.found()
+    extra_env += {'OPENSSL_DIR': openssl.get_variable('prefix')}
+  endif
+endif
+
 # Build plugins in the plugins subdirectory
 subdir('plugins')
 
