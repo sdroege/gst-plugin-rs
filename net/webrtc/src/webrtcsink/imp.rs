@@ -845,7 +845,7 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property("key-int-max", 256u32);
                 enc.set_property_from_str("rate-control", "cbr");
             }
-            "nvv4l2h264enc" => {
+            "nvv4l2h264enc" | "nvv4l2h265enc" => {
                 enc.set_property("bitrate", start_bitrate);
                 if enc.has_property("preset-level") {
                     enc.set_property_from_str("preset-level", "UltraFastPreset");
@@ -1261,6 +1261,7 @@ impl VideoEncoder {
                 | "vaapivp9enc"
                 | "qsvh264enc"
                 | "nvv4l2h264enc"
+                | "nvv4l2h265enc"
                 | "qtic2venc"
                 | "nvv4l2vp8enc"
                 | "nvv4l2vp9enc"
@@ -1294,9 +1295,8 @@ impl VideoEncoder {
             | "vah264lpenc" | "vah265enc" | "vah265lpenc" | "vaav1enc" | "vaav1lpenc" => {
                 (self.element.property::<u32>("bitrate") * 1000) as i32
             }
-            "openh264enc" | "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "nvv4l2av1enc" => {
-                (self.element.property::<u32>("bitrate")) as i32
-            }
+            "openh264enc" | "nvv4l2h264enc" | "nvv4l2h265enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc"
+            | "nvv4l2av1enc" => (self.element.property::<u32>("bitrate")) as i32,
             "rav1enc" => self.element.property::<i32>("bitrate"),
             "qtic2venc" => (self.element.property::<u32>("target-bitrate")) as i32,
             "v4l2h264enc" => {
@@ -1347,7 +1347,8 @@ impl VideoEncoder {
                 self.element
                     .set_property("bitrate", (bitrate / 1000) as u32);
             }
-            "openh264enc" | "nvv4l2h264enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc" | "nvv4l2av1enc" => {
+            "openh264enc" | "nvv4l2h264enc" | "nvv4l2h265enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc"
+            | "nvv4l2av1enc" => {
                 self.element.set_property("bitrate", bitrate as u32);
             }
             "v4l2h264enc" => {
