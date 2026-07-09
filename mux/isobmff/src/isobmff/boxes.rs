@@ -167,6 +167,7 @@ fn write_moov(v: &mut Vec<u8>, cfg: &PresentationConfiguration) -> Result<(), Er
                         s.name().as_str(),
                         "video/x-h264"
                             | "video/x-h265"
+                            | "video/x-h266"
                             | "image/jpeg"
                             | "video/x-raw"
                             | "video/x-bayer"
@@ -262,8 +263,8 @@ fn write_minf(
     let s = caps.structure(0).unwrap();
 
     match s.name().as_str() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
-        | "image/jpeg" | "video/x-raw" | "video/x-bayer" => {
+        "video/x-h264" | "video/x-h265" | "video/x-h266" | "video/x-vp8" | "video/x-vp9"
+        | "video/x-av1" | "image/jpeg" | "video/x-raw" | "video/x-bayer" => {
             // Flags are always 1 for unspecified reasons
             write_full_box(v, b"vmhd", FULL_BOX_VERSION_0, 1, write_vmhd)?
         }
@@ -1000,8 +1001,8 @@ pub(crate) fn write_hdlr_box(
 fn write_hdlr_for_stream(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error> {
     let s = stream.caps().structure(0).unwrap();
     let (handler_type, name) = match s.name().as_str() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
-        | "image/jpeg" | "video/x-raw" | "video/x-bayer" => {
+        "video/x-h264" | "video/x-h265" | "video/x-h266" | "video/x-vp8" | "video/x-vp9"
+        | "video/x-av1" | "image/jpeg" | "video/x-raw" | "video/x-bayer" => {
             if stream.image_sequence {
                 // See ISO/IEC 23008-12:2022 Section 7.2.2
                 (b"pict", b"PictureHandler\0".as_slice())
@@ -1115,8 +1116,8 @@ fn write_tkhd(
 
     // Width/height
     match s.name().as_str() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
-        | "image/jpeg" | "video/x-raw" | "video/x-bayer" => {
+        "video/x-h264" | "video/x-h265" | "video/x-h266" | "video/x-vp8" | "video/x-vp9"
+        | "video/x-av1" | "image/jpeg" | "video/x-raw" | "video/x-bayer" => {
             let (width, height) = find_width_and_height(&stream.caps);
 
             v.extend((width << 16).to_be_bytes());
@@ -1373,8 +1374,10 @@ pub(crate) fn write_stsd(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result
 
     let s = stream.caps().structure(0).unwrap();
     match s.name().as_str() {
-        "video/x-h264" | "video/x-h265" | "video/x-vp8" | "video/x-vp9" | "video/x-av1"
-        | "image/jpeg" | "video/x-raw" | "video/x-bayer" => write_visual_sample_entry(v, stream)?,
+        "video/x-h264" | "video/x-h265" | "video/x-h266" | "video/x-vp8" | "video/x-vp9"
+        | "video/x-av1" | "image/jpeg" | "video/x-raw" | "video/x-bayer" => {
+            write_visual_sample_entry(v, stream)?
+        }
         "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
         | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" | "audio/x-raw" => {
             write_audio_sample_entry(v, stream)?
@@ -1434,6 +1437,14 @@ fn get_video_fourcc(s: &gst::StructureRef) -> Result<&[u8; 4], Error> {
             match stream_format {
                 "hvc1" => b"hvc1",
                 "hev1" => b"hev1",
+                _ => unreachable!(),
+            }
+        }
+        "video/x-h266" => {
+            let stream_format = s.get::<&str>("stream-format").context("no stream-format")?;
+            match stream_format {
+                "vvc1" => b"vvc1",
+                "vvi1" => b"vvi1",
                 _ => unreachable!(),
             }
         }
@@ -1540,6 +1551,18 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                         .map_readable()
                         .context("codec_data not mappable")?;
                     write_box(v, b"hvcC", move |v| {
+                        v.extend_from_slice(&map);
+                        Ok(())
+                    })?;
+                }
+                "video/x-h266" => {
+                    let codec_data = s
+                        .get::<&gst::BufferRef>("codec_data")
+                        .context("no codec_data")?;
+                    let map = codec_data
+                        .map_readable()
+                        .context("codec_data not mappable")?;
+                    write_full_box(v, b"vvcC", 0, 0, move |v| {
                         v.extend_from_slice(&map);
                         Ok(())
                     })?;

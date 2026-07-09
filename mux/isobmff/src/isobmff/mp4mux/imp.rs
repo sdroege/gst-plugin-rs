@@ -1588,7 +1588,7 @@ impl MP4Mux {
             let mut chnl_layout_info = None;
 
             match s.name().as_str() {
-                "video/x-h264" | "video/x-h265" => {
+                "video/x-h264" | "video/x-h265" | "video/x-h266" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
                         gst::error!(CAT, obj = pad, "Received caps without codec_data");
                         return Err(gst::FlowError::NotNegotiated);
@@ -2724,6 +2724,12 @@ impl ElementImpl for ISOMP4Mux {
                         .field("width", gst::IntRange::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::new(1, u16::MAX as i32))
                         .build(),
+                    gst::Structure::builder("video/x-h266")
+                        .field("stream-format", gst::List::new(["vvc1", "vvi1"]))
+                        .field("alignment", "au")
+                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
+                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
+                        .build(),
                     gst::Structure::builder("video/x-vp8")
                         .field("width", gst::IntRange::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::new(1, u16::MAX as i32))
@@ -2946,6 +2952,12 @@ impl ElementImpl for ONVIFMP4Mux {
                         .field("alignment", "au")
                         .field("width", gst::IntRange::<i32>::new(1, u16::MAX as i32))
                         .field("height", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .build(),
+                    gst::Structure::builder("video/x-h266")
+                        .field("stream-format", gst::List::new(["vvc1", "vvi1"]))
+                        .field("alignment", "au")
+                        .field("width", gst::IntRange::new(1, u16::MAX as i32))
+                        .field("height", gst::IntRange::new(1, u16::MAX as i32))
                         .build(),
                     gst::Structure::builder("image/jpeg")
                         .field("width", gst::IntRange::<i32>::new(1, u16::MAX as i32))
