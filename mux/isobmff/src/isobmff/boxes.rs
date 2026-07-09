@@ -168,6 +168,7 @@ fn write_moov(v: &mut Vec<u8>, cfg: &PresentationConfiguration) -> Result<(), Er
                         s.name().as_str(),
                         "video/x-h264"
                             | "video/x-h265"
+                            | "video/x-h266"
                             | "image/jpeg"
                             | "video/x-raw"
                             | "video/x-bayer"
@@ -268,6 +269,7 @@ fn write_minf(
     match s.name().as_str() {
         "video/x-h264"
         | "video/x-h265"
+        | "video/x-h266"
         | "video/x-vp8"
         | "video/x-vp9"
         | "video/x-av1"
@@ -1015,6 +1017,7 @@ fn write_hdlr_for_stream(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result
     let (handler_type, name) = match s.name().as_str() {
         "video/x-h264"
         | "video/x-h265"
+        | "video/x-h266"
         | "video/x-vp8"
         | "video/x-vp9"
         | "video/x-av1"
@@ -1142,6 +1145,7 @@ fn write_tkhd(
     match s.name().as_str() {
         "video/x-h264"
         | "video/x-h265"
+        | "video/x-h266"
         | "video/x-vp8"
         | "video/x-vp9"
         | "video/x-av1"
@@ -1409,6 +1413,7 @@ pub(crate) fn write_stsd(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result
     match s.name().as_str() {
         "video/x-h264"
         | "video/x-h265"
+        | "video/x-h266"
         | "video/x-vp8"
         | "video/x-vp9"
         | "video/x-av1"
@@ -1477,6 +1482,14 @@ fn get_video_fourcc(s: &gst::StructureRef) -> Result<&[u8; 4], Error> {
             match stream_format {
                 "hvc1" => b"hvc1",
                 "hev1" => b"hev1",
+                _ => unreachable!(),
+            }
+        }
+        "video/x-h266" => {
+            let stream_format = s.get::<&str>("stream-format").context("no stream-format")?;
+            match stream_format {
+                "vvc1" => b"vvc1",
+                "vvi1" => b"vvi1",
                 _ => unreachable!(),
             }
         }
@@ -1598,6 +1611,18 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                         .map_readable()
                         .context("codec_data not mappable")?;
                     write_box(v, b"hvcC", move |v| {
+                        v.extend_from_slice(&map);
+                        Ok(())
+                    })?;
+                }
+                "video/x-h266" => {
+                    let codec_data = s
+                        .get::<&gst::BufferRef>("codec_data")
+                        .context("no codec_data")?;
+                    let map = codec_data
+                        .map_readable()
+                        .context("codec_data not mappable")?;
+                    write_full_box(v, b"vvcC", 0, 0, move |v| {
                         v.extend_from_slice(&map);
                         Ok(())
                     })?;
