@@ -305,7 +305,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
                                 imp = self,
                                 "Unsupported BT2100 transfer characteristic system {tsc}, assuming PQ"
                             );
-                            VideoColorimetry::from_str("bt2100-pg").ok()
+                            VideoColorimetry::from_str("bt2100-pq").ok()
                         }
                         _ => {
                             gst::warning!(
@@ -313,7 +313,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
                                 imp = self,
                                 "Unspecified BT2100 transfer characteristic system, assuming PQ"
                             );
-                            VideoColorimetry::from_str("bt2100-pg").ok()
+                            VideoColorimetry::from_str("bt2100-pq").ok()
                         }
                     }
                 }
