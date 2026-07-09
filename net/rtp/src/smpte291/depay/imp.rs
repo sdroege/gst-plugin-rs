@@ -144,7 +144,7 @@ impl RtpBaseDepay2Impl for RtpSmpte291Depay {
                  length {length}, ANC count {anc_count} and field {field}",
             );
 
-            for _ in 0..anc_count {
+            for i in 0..anc_count {
                 // Maximum size of one ST2038 packet
                 let mut packet = Vec::with_capacity(328);
 
@@ -192,8 +192,18 @@ impl RtpBaseDepay2Impl for RtpSmpte291Depay {
                 }
                 w.flush().context("flush")?;
 
+                // Each ANC packet in the RTP payload is padded with word_align
+                // bits to the next 32-bit boundary (RFC 8331 section 2.1). Skip
+                // them so a following ANC packet is read from the right offset.
+                let off = r.position_in_bits().context("reader position")? % 32;
+                if off != 0 {
+                    r.skip((32 - off) as u32).context("word_align")?;
+                }
+
                 let mut buffer = gst::Buffer::from_mut_slice(packet);
-                if marker_bit {
+                // The RTP marker bit marks the last packet of a frame's ANC, so
+                // set MARKER only on the last ANC packet of a marked RTP packet.
+                if marker_bit && i == anc_count - 1 {
                     let buffer = buffer.get_mut().unwrap();
                     buffer.set_flags(gst::BufferFlags::MARKER);
                 }
