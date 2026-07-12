@@ -30,16 +30,16 @@ mod imp;
  * can be downloaded e.g. from [Hugging Face](https://huggingface.co). Models that are known to work
  * well are
  *
- *   * [Gemma 4 E4B](https://huggingface.co/google/gemma-4-E4B-it), for example
- *     [these](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF) quantizations.
- *   * [Gemma 4 E2B](https://huggingface.co/google/gemma-4-E4B-it), for example
- *     [these](https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF) quantizations.
- *   * [Qwen 3.5 9B](https://huggingface.co/Qwen/Qwen3.5-9B), for example
- *     [these](https://huggingface.co/unsloth/Qwen3.5-9B-GGUF) quantizations.
- *   * [Qwen 3.5 4B](https://huggingface.co/Qwen/Qwen3.5-4B), for example
- *     [these](https://huggingface.co/unsloth/Qwen3.5-4B-GGUF) quantizations.
- *   * [Hunyuan MT 7B](https://huggingface.co/tencent/Hunyuan-MT-7B), for example
- *     [these](https://huggingface.co/mradermacher/Hunyuan-MT-7B-GGUF) quantizations.
+ *   * [Gemma 4 E4B](https://huggingface.co/google/gemma-4-E4B-it) ([quantizations](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF)) or
+ *     [Gemma 4 E2B](https://huggingface.co/google/gemma-4-E2B-it) ([quantizations](https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF)),
+ *   * [Qwen 3.5 9B](https://huggingface.co/Qwen/Qwen3.5-9B) ([quantizations](https://huggingface.co/unsloth/Qwen3.5-9B-GGUF)) or
+ *     [Qwen 3.5 4B](https://huggingface.co/Qwen/Qwen3.5-4B) ([quantizations](https://huggingface.co/unsloth/Qwen3.5-4B-GGUF)),
+ *   * [Ministral 3 14B Instruct](https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512) ([quantizations](https://huggingface.co/unsloth/Ministral-3-14B-Instruct-2512-GGUF)) or
+ *     [Ministral 3 8B Instruct](https://huggingface.co/mistralai/Ministral-3-8B-Instruct-2512) ([quantizations](https://huggingface.co/unsloth/Ministral-3-8B-Instruct-2512-GGUF)) or
+ *     [Ministral 3 3B Instruct](https://huggingface.co/mistralai/Ministral-3-3B-Instruct-2512) ([quantizations](https://huggingface.co/unsloth/Ministral-3-3B-Instruct-2512-GGUF)),
+ *   * [Hunyuan MT 7B](https://huggingface.co/tencent/Hunyuan-MT-7B) ([quantizations](https://huggingface.co/mradermacher/Hunyuan-MT-7B-GGUF)).
+ *     This model is specifically trained for translations and expects a system
+ *     prompt in a specific format that is described on the Hugging Face page.
  *
  * It generally makes no sense to use huge models for this element, and even smaller ones than the
  * ones above will give useful results.
@@ -57,7 +57,9 @@ mod imp;
  *     filesrc location=movie.mp4 ! decodebin3 name=dbin \
  *     dbin. ! queue ! videoconvert ! textoverlay name=overlay ! videoconvert ! navseek ! autovideosink \
  *     dbin. ! queue ! audioconvert ! autoaudiosink
- * |] Plays a movie with English subtitles and translates them to German before overlaying.
+ * |]
+ *
+ * Plays a movie with English subtitles and translates them to German before overlaying.
  *
  * ### Audio transcription and translation
  *
@@ -72,7 +74,9 @@ mod imp;
  *     dbin. ! queue max-size-time=10000000000 max-size-buffers=0 max-size-bytes=0 ! videoconvert ! \
  *         textoverlay name=overlay ! videoconvert ! autovideosink
  *     audio-tee. ! queue max-size-time=10000000000 max-size-buffers=0 max-size-bytes=0 ! audioconvert ! autoaudiosink
- * |] Plays a movie, transcribes the audio to text, translates the text to German and overlays it on top of the video.
+ * |]
+ *
+ * Plays a movie, transcribes the audio to text, translates the text to German and overlays it on top of the video.
  *
  * Since: plugins-rs-0.16.0
  */
