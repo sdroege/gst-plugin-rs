@@ -1,0 +1,45 @@
+[package]
+name = "gst-plugin-pcap"
+version.workspace = true
+authors = ["Sanchayan Maity <sanchayan@centricular.com>"]
+repository.workspace = true
+license = "MPL-2.0"
+edition.workspace = true
+description = "GStreamer Plugin for PCAP"
+rust-version.workspace = true
+
+[dependencies]
+glib.workspace = true
+gst.workspace = true
+pcap-parser = "0.17.0"
+etherparse = "0.21"
+
+[dev-dependencies]
+gst-check = { workspace = true, features = ["v1_20"] }
+
+[lib]
+name = "gstpcap"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper.workspace = true
+
+[features]
+static = []
+capi = []
+doc = []
+
+[package.metadata.capi]
+min_version = "0.9.21"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+import_library = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gobject-2.0, glib-2.0"

@@ -227,6 +227,9 @@ You will find the following plugins in this repository:
       - `rtponvifmetadatadepay`: ONVIF metadata RTP depayloader.
       - `rtponvifmetadatapay`: ONVIF metadata RTP payloader.
 
+    - `pcap`: Plugins for dealing with PCAP capture file format.
+      - `pcapparse2`: Extracts payloads from PCAP capture file format.
+
     - `quinn`: Transfer data over the network using QUIC
       - `quinnquicdemux`: Demultiplexes multiple streams and datagram for QUIC
       - `quinnquicmux`: Multiplexes multiple streams and datagram for QUIC

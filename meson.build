@@ -192,6 +192,7 @@ plugins = {
   'gtk4': {},
   'hsv': {'library': 'libgsthsv'},
   'imagers': {'library': 'libgstimagers'},
+  'pcap': {'library': 'libgstpcap'},
   'png': {
     'library': 'libgstrspng',
     'examples': ['pngenc'],

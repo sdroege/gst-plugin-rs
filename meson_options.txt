@@ -45,6 +45,7 @@ option('icecast', type: 'feature', value: 'auto', description: 'Build icecast pl
 option('mpegtslive', type: 'feature', value: 'auto', description: 'Build mpegtslive plugin')
 option('ndi', type: 'feature', value: 'auto', description: 'Build ndi plugin')
 option('onvif', type: 'feature', value: 'auto', description: 'Build onvif plugin')
+option('pcap', type: 'feature', value: 'auto', description: 'Build pcap plugin')
 option('raptorq', type: 'feature', value: 'auto', description: 'Build raptorq plugin')
 option('reqwest', type: 'feature', value: 'auto', description: 'Build reqwest plugin')
 option('rtsp', type: 'feature', value: 'auto', description: 'Build rtsp plugin')

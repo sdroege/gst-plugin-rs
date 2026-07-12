@@ -8604,6 +8604,122 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "pcap": {
+        "description": "GStreamer Plugin for PCAP",
+        "elements": {
+            "pcapparse2": {
+                "author": "Sanchayan Maity <sanchayan@centricular.com>",
+                "description": "Parses PCAP stream",
+                "hierarchy": [
+                    "GstPcapParse2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "raw/x-pcap:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "caps": {
+                        "blurb": "The caps of the source pad",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstCaps",
+                        "writable": true
+                    },
+                    "dst-ip": {
+                        "blurb": "Destination IP to restrict to",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "dst-port": {
+                        "blurb": "Destination port to restrict to",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "65535",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "src-ip": {
+                        "blurb": "Source IP to restrict to",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "src-port": {
+                        "blurb": "Source port to restrict to",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "65535",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "ts-offset": {
+                        "blurb": "Relative timestamp offset (ns) to apply (gst::ClockTime::None = Use absolute packet time)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    }
+                },
+                "rank": "marginal"
+            }
+        },
+        "filename": "gstpcap",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-pcap",
+        "source": "gst-plugin-pcap",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "quinn": {
         "description": "GStreamer Plugin for QUIC",
         "elements": {
