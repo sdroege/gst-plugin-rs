@@ -411,6 +411,7 @@ impl ObjectImpl for UdpSrc {
         let obj = self.obj();
         obj.set_live(true);
         obj.set_format(gst::Format::Time);
+        obj.set_do_timestamp(true);
         obj.set_element_flags(gst::ElementFlags::REQUIRE_CLOCK);
     }
 
