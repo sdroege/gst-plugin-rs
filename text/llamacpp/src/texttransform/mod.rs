@@ -57,7 +57,7 @@ mod imp;
  *     filesrc location=movie.mp4 ! decodebin3 name=dbin \
  *     dbin. ! queue ! videoconvert ! textoverlay name=overlay ! videoconvert ! navseek ! autovideosink \
  *     dbin. ! queue ! audioconvert ! autoaudiosink
- * |]
+ * ]|
  *
  * Plays a movie with English subtitles and translates them to German before overlaying.
  *
@@ -74,7 +74,7 @@ mod imp;
  *     dbin. ! queue max-size-time=10000000000 max-size-buffers=0 max-size-bytes=0 ! videoconvert ! \
  *         textoverlay name=overlay ! videoconvert ! autovideosink
  *     audio-tee. ! queue max-size-time=10000000000 max-size-buffers=0 max-size-bytes=0 ! audioconvert ! autoaudiosink
- * |]
+ * ]|
  *
  * Plays a movie, transcribes the audio to text, translates the text to German and overlays it on top of the video.
  *
