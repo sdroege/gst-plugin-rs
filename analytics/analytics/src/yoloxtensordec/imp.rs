@@ -19,7 +19,7 @@
  *     ! burn-yoloxinference ! yoloxtensordec label-file=COCO_classes.txt \
  *     ! videoconvertscale ! objectdetectionoverlay \
  *     ! videoconvertscale ! imagefreeze ! autovideosink -v
- * |] This takes a JPEG, performs object detection via `burn-yoloxinference` on it, decodes the
+ * ]| This takes a JPEG, performs object detection via `burn-yoloxinference` on it, decodes the
  * inferred tensors with `yoloxtensordec` and then overlays the detected objects on the frame via
  * `objectdetectionoverlay`.
  *
