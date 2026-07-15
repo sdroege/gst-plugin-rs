@@ -9,8 +9,12 @@ use gst::prelude::MulDiv as _;
 
 use std::sync::OnceLock;
 
-// time between the NTP time at 1900-01-01 and the unix EPOCH (1970-01-01)
-const NTP_OFFSET: Duration = Duration::from_secs((365 * 70 + 17) * 24 * 60 * 60);
+/// Offset as a Duration between NTP time (UTC epoch) and UNIX time
+pub const UNIX_TO_NTP_TIME_OFFSET: Duration =
+    Duration::from_secs(gst::UNIX_TO_NTP_TIME_OFFSET_SECONDS);
+
+// One second as nanoseconds
+pub const SECOND: u64 = 1_000_000_000;
 
 static CURRENT_TIME: OnceLock<SystemTime> = OnceLock::new();
 
@@ -21,7 +25,7 @@ pub fn get_or_init_current_time<'a>() -> &'a SystemTime {
 pub fn ntp_era_from_system_time(st: &SystemTime) -> u64 {
     st.duration_since(SystemTime::UNIX_EPOCH)
         .expect("NTP time is before unix epoch?!")
-        .add(NTP_OFFSET)
+        .add(UNIX_TO_NTP_TIME_OFFSET)
         .as_secs()
         / (1 << 32)
 }
@@ -33,7 +37,7 @@ impl NtpTime {
     pub fn from_duration(dur: Duration) -> Self {
         let seconds = dur.as_secs();
         let fractional = (dur.subsec_nanos() as u64)
-            .mul_div_ceil(1 << 32, 1_000_000_000)
+            .mul_div_ceil(1 << 32, SECOND)
             .unwrap();
 
         let ntp = seconds << 32 | fractional;
@@ -59,7 +63,7 @@ impl NtpTime {
 
         let nanos = self
             .0
-            .mul_div_ceil(1_000_000_000, 1 << 32)
+            .mul_div_ceil(SECOND, 1 << 32)
             .expect("result doesn't fit?!");
 
         Duration::from_nanos(nanos) + Duration::from_secs(timestamp_era << 32)
@@ -94,7 +98,7 @@ pub fn system_time_to_ntp_time_u64(time: SystemTime) -> NtpTime {
     let dur = time
         .duration_since(SystemTime::UNIX_EPOCH)
         .expect("time is before unix epoch?!")
-        + NTP_OFFSET;
+        + UNIX_TO_NTP_TIME_OFFSET;
 
     NtpTime::from_duration(dur)
 }

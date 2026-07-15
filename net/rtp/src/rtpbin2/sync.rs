@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use crate::utils::ExtendedTimestamp;
 
-use super::time::NtpTime;
+use super::time::{NtpTime, SECOND};
 
 #[derive(Default, Debug)]
 struct Ssrc {
@@ -195,7 +195,7 @@ impl Context {
         let rtp_ext_ns = ssrc
             .extended_timestamp
             .next(timestamp)
-            .mul_div_round(1_000_000_000, clock_rate)
+            .mul_div_round(SECOND, clock_rate)
             .unwrap();
 
         // Now potentially correct the skew by observing how RTP times and arrival times progress
@@ -255,9 +255,7 @@ impl Context {
         if let Some((last_sr_ntp, last_sr_rtp_ext)) =
             ssrc.last_sr_ntp_timestamp.zip(ssrc.last_sr_rtp_ext)
         {
-            let last_sr_rtp_ext_ns = last_sr_rtp_ext
-                .mul_div_round(1_000_000_000, clock_rate)
-                .unwrap();
+            let last_sr_rtp_ext_ns = last_sr_rtp_ext.mul_div_round(SECOND, clock_rate).unwrap();
 
             // We have a new SR, we can now figure out an NTP time and calculate how it
             // relates to arrival times
