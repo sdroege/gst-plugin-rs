@@ -16,6 +16,7 @@ use gst::subclass::prelude::*;
 
 use librice::agent::Agent;
 use librice::agent::AgentMessage;
+use librice::agent::{TurnConfig, TurnCredentials};
 use librice::candidate::Candidate;
 use librice::candidate::TransportType;
 use librice::component::ComponentConnectionState;
@@ -108,6 +109,7 @@ pub(crate) struct State {
     transports: Vec<Transport>,
 
     stun_servers: Vec<StunServer>,
+    turn_servers: Vec<TurnServer>,
     // TODO: sctp_transport, data_channels, last_created_offer/answer, early_candidates,
     // ice_connection_state, ice_gathering_state, connection_state,
     // local_ice_credentials_to_replace
@@ -974,6 +976,7 @@ impl WebRTCSession {
             }
         }
         let stun_servers = state.stun_servers.clone();
+        let turn_servers = state.turn_servers.clone();
         let bundle_idx = sdp.bundle_idx();
         for (i, media) in sdp.media.iter().enumerate() {
             let transport_id = if media
@@ -1106,6 +1109,46 @@ impl WebRTCSession {
                     ice.agent
                         .add_stun_server(transport, SocketAddr::new(addr, stun.port));
                 }
+
+                for turn in turn_servers.iter() {
+                    if turn.scheme == TurnScheme::Turns {
+                        // TURN over TLS is not currently supported
+                        continue;
+                    }
+
+                    let Ok(addr) = IpAddr::from_str(&turn.addr) else {
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "DNS resolution of TURN server {} is not complete yet. Ignored",
+                            turn.addr
+                        );
+                        continue;
+                    };
+
+                    let credentials = TurnCredentials::new(&turn.username, &turn.password);
+
+                    for transport in &turn.transports {
+                        let transport = match transport {
+                            TurnTransport::Udp => TransportType::Udp,
+                            TurnTransport::Tcp => TransportType::Tcp,
+                        };
+
+                        gst::debug!(
+                            CAT,
+                            imp = self,
+                            "Adding turn server with addr: {addr}, port: {}",
+                            turn.port
+                        );
+
+                        ice.agent.add_turn_server(TurnConfig::new(
+                            transport,
+                            SocketAddr::new(addr, turn.port).into(),
+                            credentials.clone(),
+                        ));
+                    }
+                }
+
                 stream.set_local_credentials(&credentials);
                 let stream = stream.clone();
                 crate::RUNTIME.spawn(async move {
@@ -1300,44 +1343,67 @@ impl WebRTCSession {
                     .add_stun_server(transport, SocketAddr::new(addr, serv.port));
             }
         } else {
-            let _guard = RUNTIME.enter();
-            RUNTIME.spawn(async move {
-                gst::debug!(CAT, "dns lookup of {}", serv.addr);
-                let Ok(lookup) = tokio::net::lookup_host(format!("{}:{}", serv.addr, serv.port))
-                    .await
-                    .inspect_err(|e| gst::warning!(CAT, "Error resolving {}: {e:?}", serv.addr))
-                else {
+            resolve_server_dns(
+                serv.clone(),
+                serv.addr.clone(),
+                serv.port,
+                weak_self,
+                |state| &mut state.stun_servers,
+            );
+        }
+    }
+
+    fn add_turn_server(&self, turn_server: &str) {
+        let weak_self = self.downgrade();
+        let mut state = self.state.lock().unwrap();
+        let Some(serv) = parse_turn_server(turn_server) else {
+            gst::warning!(
+                CAT,
+                imp = self,
+                "Failed to parse turn server: {turn_server}"
+            );
+            return;
+        };
+
+        state.turn_servers.push(serv.clone());
+
+        if let Ok(addr) = IpAddr::from_str(&serv.addr) {
+            if let Some(ice) = state.ice.as_ref() {
+                if serv.scheme == TurnScheme::Turns {
+                    gst::warning!(CAT, imp = self, "TURN over TCP + TLS not supported");
                     return;
-                };
-                let Some(this) = weak_self.upgrade() else {
-                    return;
-                };
-                let mut state = this.state.lock().unwrap();
-                let mut handled = false;
-                for sock in lookup {
-                    gst::debug!(CAT, "dns lookup of {} resulted in {sock}", serv.addr);
-                    if !handled {
-                        let addr = sock.ip().to_string();
-                        for stun in state.stun_servers.iter_mut() {
-                            if stun.addr == serv.addr {
-                                gst::debug!(
-                                    CAT,
-                                    "replacing existing stun server address {} with {addr}",
-                                    serv.addr
-                                );
-                                stun.addr = addr.clone();
-                                handled = true;
-                            }
-                        }
-                    }
-                    if !handled {
-                        gst::debug!(CAT, "adding stun server address {}", sock.ip());
-                        let mut stun = serv.clone();
-                        stun.addr = sock.ip().to_string();
-                        state.stun_servers.push(stun);
-                    }
                 }
-            });
+
+                let credentials = TurnCredentials::new(&serv.username, &serv.password);
+
+                for transport in &serv.transports {
+                    let transport = match transport {
+                        TurnTransport::Udp => TransportType::Udp,
+                        TurnTransport::Tcp => TransportType::Tcp,
+                    };
+
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "Adding turn server with addr: {addr}, port: {}",
+                        serv.port
+                    );
+
+                    ice.agent.add_turn_server(TurnConfig::new(
+                        transport,
+                        SocketAddr::new(addr, serv.port).into(),
+                        credentials.clone(),
+                    ));
+                }
+            }
+        } else {
+            resolve_server_dns(
+                serv.clone(),
+                serv.addr.clone(),
+                serv.port,
+                weak_self,
+                |state| &mut state.turn_servers,
+            );
         }
     }
 
@@ -1708,6 +1774,16 @@ impl ObjectImpl for WebRTCSession {
                         None
                     })
                     .build(),
+                glib::subclass::Signal::builder("add-turn-server")
+                    .param_types([String::static_type()])
+                    .action()
+                    .class_handler(move |args| {
+                        let this = args[0].get::<super::WebRTCSession>().unwrap();
+                        let turn_server = args[1].get::<&str>().unwrap();
+                        this.imp().add_turn_server(turn_server);
+                        None
+                    })
+                    .build(),
                 glib::subclass::Signal::builder("create-answer")
                     .param_types([
                         Option::<gst::Structure>::static_type(),
@@ -1868,6 +1944,158 @@ fn parse_stun_server(stun_server: &str) -> Option<StunServer> {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum TurnScheme {
+    Turn,
+    Turns,
+}
+
+impl TurnScheme {
+    fn default_port(&self) -> u16 {
+        match self {
+            Self::Turn => 3478,
+            Self::Turns => 5349,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum TurnTransport {
+    Udp,
+    Tcp,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TurnServer {
+    scheme: TurnScheme,
+    addr: String,
+    port: u16,
+    username: String,
+    password: String,
+    transports: Vec<TurnTransport>,
+}
+
+fn parse_turn_server(turn_server: &str) -> Option<TurnServer> {
+    let serv = url::Url::parse(turn_server).ok()?;
+    let scheme = match serv.scheme() {
+        "turns" => TurnScheme::Turns,
+        "turn" => TurnScheme::Turn,
+        _ => return None,
+    };
+
+    if serv.username().is_empty() || serv.password().is_none() {
+        return None;
+    }
+
+    let transports = match serv.query_pairs().find(|(key, _)| key == "transport") {
+        Some((_, value)) => match value.as_ref() {
+            "udp" => vec![TurnTransport::Udp],
+            "tcp" => vec![TurnTransport::Tcp],
+            _ => return None,
+        },
+        None => vec![TurnTransport::Udp, TurnTransport::Tcp],
+    };
+
+    if let Some(host) = serv.host() {
+        let port = serv.port().unwrap_or_else(|| scheme.default_port());
+
+        Some(TurnServer {
+            scheme,
+            addr: host.to_string(),
+            port,
+            username: serv.username().to_string(),
+            password: serv.password().unwrap().to_string(),
+            transports,
+        })
+    } else {
+        // TODO: turn: format in RFC 7065
+        None
+    }
+}
+
+trait HasAddr {
+    fn addr(&self) -> &str;
+    fn set_addr(&mut self, addr: String);
+}
+
+impl HasAddr for StunServer {
+    fn addr(&self) -> &str {
+        &self.addr
+    }
+
+    fn set_addr(&mut self, addr: String) {
+        self.addr = addr;
+    }
+}
+
+impl HasAddr for TurnServer {
+    fn addr(&self) -> &str {
+        &self.addr
+    }
+
+    fn set_addr(&mut self, addr: String) {
+        self.addr = addr;
+    }
+}
+
+fn resolve_server_dns<T>(
+    serv: T,
+    serv_addr: String,
+    serv_port: u16,
+    weak_self: glib::subclass::ObjectImplWeakRef<WebRTCSession>,
+    get_servers: impl FnOnce(&mut State) -> &mut Vec<T> + Send + Sync + 'static,
+) where
+    T: HasAddr + Clone + Send + Sync + 'static,
+{
+    let _guard = RUNTIME.enter();
+
+    RUNTIME.spawn(async move {
+        gst::debug!(CAT, "dns lookup of {serv_addr}");
+
+        let Ok(lookup) = tokio::net::lookup_host(format!("{serv_addr}:{serv_port}"))
+            .await
+            .inspect_err(|e| gst::warning!(CAT, "Error resolving {serv_addr}: {e:?}"))
+        else {
+            return;
+        };
+
+        let Some(this) = weak_self.upgrade() else {
+            return;
+        };
+        let mut state = this.state.lock().unwrap();
+        let servers = get_servers(&mut state);
+        let mut handled = false;
+
+        for sock in lookup {
+            gst::debug!(CAT, "dns lookup of {serv_addr} resulted in {sock}");
+
+            if !handled {
+                let addr = sock.ip().to_string();
+
+                for entry in servers.iter_mut() {
+                    if entry.addr() == serv_addr {
+                        gst::debug!(
+                            CAT,
+                            "replacing existing server address {serv_addr} with {addr}",
+                        );
+
+                        entry.set_addr(addr.clone());
+                        handled = true;
+                    }
+                }
+            }
+
+            if !handled {
+                gst::debug!(CAT, "adding server address {}", sock.ip());
+
+                let mut entry = serv.clone();
+                entry.set_addr(sock.ip().to_string());
+                servers.push(entry);
+            }
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use crate::webrtcsession::sdp::{DtlsSetup, MediaSpecifics, MediaType, RtpMap, RtpMedia};
@@ -1893,6 +2121,58 @@ mod tests {
             }
         );
         assert!(parse_stun_server("http://192.168.0.1").is_none())
+    }
+
+    #[test]
+    fn parse_turn() {
+        assert_eq!(
+            parse_turn_server("turn://username:password@192.168.0.1:3478").unwrap(),
+            TurnServer {
+                scheme: TurnScheme::Turn,
+                addr: "192.168.0.1".to_string(),
+                port: 3478,
+                username: "username".to_string(),
+                password: "password".to_string(),
+                transports: vec![TurnTransport::Udp, TurnTransport::Tcp],
+            }
+        );
+        assert_eq!(
+            parse_turn_server("turns://username:password@192.168.0.1:3478").unwrap(),
+            TurnServer {
+                scheme: TurnScheme::Turns,
+                addr: "192.168.0.1".to_string(),
+                port: 3478,
+                username: "username".to_string(),
+                password: "password".to_string(),
+                transports: vec![TurnTransport::Udp, TurnTransport::Tcp],
+            }
+        );
+        assert_eq!(
+            parse_turn_server("turn://username:password@192.168.0.1:3478?transport=tcp").unwrap(),
+            TurnServer {
+                scheme: TurnScheme::Turn,
+                addr: "192.168.0.1".to_string(),
+                port: 3478,
+                username: "username".to_string(),
+                password: "password".to_string(),
+                transports: vec![TurnTransport::Tcp],
+            }
+        );
+        assert_eq!(
+            parse_turn_server("turn://username:password@192.168.0.1:3478?transport=udp").unwrap(),
+            TurnServer {
+                scheme: TurnScheme::Turn,
+                addr: "192.168.0.1".to_string(),
+                port: 3478,
+                username: "username".to_string(),
+                password: "password".to_string(),
+                transports: vec![TurnTransport::Udp],
+            }
+        );
+        assert!(
+            parse_turn_server("turn://username:password@192.168.0.1:3478?transport=foo").is_none()
+        );
+        assert!(parse_turn_server("turn://192.168.0.1:3478").is_none());
     }
 
     fn init() {

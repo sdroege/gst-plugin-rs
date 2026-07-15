@@ -19827,6 +19827,17 @@
                         "return-type": "void",
                         "when": "last"
                     },
+                    "add-turn-server": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
                     "create-answer": {
                         "action": true,
                         "args": [
