@@ -365,7 +365,7 @@ fn filter(
             move |id, body, server| async move { post_handler(body, server, Some(id)).await },
         );
 
-    let patch_filter = warp::post()
+    let patch_filter = warp::patch()
         .and(warp::path(RESOURCE_PATH))
         .and(warp::path::param::<String>())
         .and(warp::path::end())
