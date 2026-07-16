@@ -35,6 +35,7 @@ const RESOURCE_PATH: &str = "resource";
 const DEFAULT_HOST_ADDR: &str = "http://127.0.0.1:9090";
 const DEFAULT_STUN_SERVER: Option<&str> = Some("stun://stun.l.google.com:19303");
 const CONTENT_SDP: &str = "application/sdp";
+const CONTENT_TRICKLE_ICE: &str = "application/trickle-ice-sdpfrag";
 
 struct Settings {
     stun_server: Option<String>,
@@ -148,6 +149,39 @@ impl WhepServer {
                         Ok(CONTENT_SDP) => {
                             send_counter_offer &= true;
                         }
+                        Ok(CONTENT_TRICKLE_ICE) => match gst_sdp::SDPMessage::parse_buffer(body) {
+                            Ok(sdp) => {
+                                gst::debug!(CAT, imp = self, "Handling trickle ICE");
+                                gst::trace!(CAT, imp = self, "{:?}", sdp.as_text());
+                                for (sdp_m_line_index, m) in sdp.medias().enumerate() {
+                                    for a in m.attributes() {
+                                        if a.key() == "candidate"
+                                            && let Some(value) = a.value()
+                                        {
+                                            let sdp_mid: Option<String> = None;
+                                            self.obj().emit_by_name::<()>(
+                                                "handle-ice",
+                                                &[
+                                                    &id,
+                                                    &(sdp_m_line_index as u32),
+                                                    &sdp_mid,
+                                                    &format!("a=candidate:{}", value),
+                                                ],
+                                            );
+                                        }
+                                    }
+                                }
+
+                                return http::StatusCode::NO_CONTENT;
+                            }
+                            Err(err) => {
+                                gst::error!(
+                                    CAT,
+                                    imp = self,
+                                    "Could not parse trickle ICE SDP fragment: {err}"
+                                );
+                            }
+                        },
                         Ok(t) => gst::info!(CAT, imp = self, "Unhandled content type: {t}"),
                         Err(e) => gst::error!(CAT, imp = self, "Error getting content type {e}"),
                     },
@@ -174,8 +208,7 @@ impl WhepServer {
                 }
             }
         } else {
-            // FIXME: implement ICE Trickle and ICE restart
-            // emit signal `handle-ice` to for ICE trickle
+            // FIXME: implement ICE restart
             //FIXME: add state checking once ICE trickle is implemented
             http::StatusCode::NOT_IMPLEMENTED
         }
