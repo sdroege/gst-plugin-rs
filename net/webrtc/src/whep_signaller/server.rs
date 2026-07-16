@@ -902,7 +902,7 @@ impl ObjectImpl for WhepServer {
                         let headers = args[3]
                             .get::<gst::Structure>()
                             .expect("request body as GstStructure as third parameter");
-                        let promise = args[3]
+                        let promise = args[4]
                             .get::<gst::Promise>()
                             .expect("GstPromise as fourth parameter");
 
