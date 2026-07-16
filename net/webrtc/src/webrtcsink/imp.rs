@@ -2976,6 +2976,10 @@ impl BaseWebRTCSink {
                 codec.set_pt(payload);
                 for (user_caps, codecs_and_caps) in ordered_codecs_and_caps.iter_mut() {
                     if codec.caps.is_subset(user_caps) {
+                        if encoding_name == "H264" && s.get("level-asymmetry-allowed") == Ok("1") {
+                            s.remove_field("profile-level-id");
+                        }
+
                         codecs_and_caps.push((codec, caps));
                         break;
                     }
@@ -3016,8 +3020,14 @@ impl BaseWebRTCSink {
                     extension_configuration_type,
                 )
                 .await
-                .map(|s| {
+                .map(|mut s| {
                     let mut codec = codec.clone();
+                    let encoding_name = s.get::<String>("encoding-name").unwrap();
+
+                    if encoding_name == "H264" && s.get("level-asymmetry-allowed") == Ok("1") {
+                        s.remove_field("profile-level-id");
+                    }
+
                     codec.set_output_filter([s].into_iter().collect());
                     codec
                 })
