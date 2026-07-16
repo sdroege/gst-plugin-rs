@@ -540,13 +540,9 @@ fn setup_pipeline(
 
     let clock_join_handle = std::thread::spawn(move || {
         loop {
-            while let Some(clock_id) = clock.peek_next_pending_id().and_then(|clock_id| {
+            while let Some(clock_id) = clock.peek_next_pending_id().filter(|clock_id| {
                 // Process if the clock ID is in the past or now
-                if clock.time() >= clock_id.time() {
-                    Some(clock_id)
-                } else {
-                    None
-                }
+                clock.time() >= clock_id.time()
             }) {
                 debug!(
                     TEST_CAT,

@@ -187,10 +187,9 @@ impl BayerInfo {
         // Parse bit depth and endianness
         let (num_str, is_little_endian) = if let Some(bits_str) = suffix.strip_suffix("le") {
             (bits_str, true)
-        } else if let Some(bits_str) = suffix.strip_suffix("be") {
-            (bits_str, false)
         } else {
-            return None;
+            let bits_str = suffix.strip_suffix("be")?;
+            (bits_str, false)
         };
 
         // Parse bit depth

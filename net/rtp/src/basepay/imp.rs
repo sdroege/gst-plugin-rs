@@ -1069,7 +1069,7 @@ impl RtpBasePay2 {
         // the extensions list anymore. This is necessary so that the created caps stay compatible.
         {
             let caps = src_caps.make_mut();
-            for (_, ext) in extensions.iter() {
+            for ext in extensions.values() {
                 ext.set_caps_from_attributes(caps);
             }
         }

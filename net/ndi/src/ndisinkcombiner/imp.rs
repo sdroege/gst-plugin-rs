@@ -243,10 +243,7 @@ impl AggregatorImpl for NdiSinkCombiner {
         );
 
         let state_storage = self.state.lock().unwrap();
-        let state = match &*state_storage {
-            Some(state) => state,
-            None => return None,
-        };
+        let state = state_storage.as_ref()?;
 
         let duration = if duration.is_some() {
             duration
