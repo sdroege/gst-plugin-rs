@@ -12,11 +12,10 @@
  * Adds GstVideoSEIUserDataUnregisteredMeta to video buffers for testing SEI insertion.
  *
  * ## Example launch line
- * ```
- * gst-launch-1.0 videotestsrc ! x264enc ! h264parse ! \
- *   debugseimetainserter uuid=12345678-1234-1234-1234-123456789abc data="test payload" ! \
- *   h264seiinserter ! filesink location=output.h264
- * ```
+ *
+ * |[
+ * gst-launch-1.0 videotestsrc ! x264enc ! h264parse ! debugseimetainserter uuid=12345678-1234-1234-1234-123456789abc data="test payload" !  h264seiinserter ! filesink location=output.h264
+ * ]|
  *
  * Since: plugins-rs-0.15.0
  */

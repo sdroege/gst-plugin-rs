@@ -14,11 +14,9 @@
  *
  * ## Example pipeline
  *
- * ```
- * gst-launch-1.0 filesrc location=test.mp4 ! decodebin ! video/x-raw ! \
- *     videoconvert ! colorlut location=PATH/TO/LUT.cube ! \
- *     videoconvert ! autovideosink
- * ```
+ * |[
+ * gst-launch-1.0 filesrc location=test.mp4 ! decodebin ! video/x-raw ! videoconvert ! colorlut location=PATH/TO/LUT.cube !  videoconvert ! autovideosink
+ * ]|
  *
  * This pipeline converts decoded video frames to a format supported by
  * `colorlut` using `videoconvert`, then applies the parsed LUT. The processed
