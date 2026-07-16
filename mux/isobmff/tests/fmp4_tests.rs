@@ -4318,7 +4318,7 @@ fn check_frag_file_structure(
 
     let mut input = File::open(location).unwrap();
     while let Ok(header) = mp4_atom::Header::read_from(&mut input) {
-        println!("header.kind: {:?}", &header.kind);
+        println!("header.kind: {:?}", header.kind);
         assert!(required_top_level_boxes.contains(&header.kind));
         let pos = required_top_level_boxes
             .iter()

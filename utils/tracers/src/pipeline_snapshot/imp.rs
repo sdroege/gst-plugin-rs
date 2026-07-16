@@ -35,21 +35,21 @@
  * - `cleanup-mode` (enum, default: "none"): Determines how .dot files are cleaned up:
  *     - "initial": Removes all existing .dot files from the target folder when the tracer starts
  *     - "automatic": Performs cleanup before each snapshot. If folder-mode is enabled, cleans up .dot files within folders.
- *                    If folder-mode is None, cleans up .dot files directly in the target directory
+ *       If folder-mode is None, cleans up .dot files directly in the target directory
  *     - "none": Never removes any .dot files
  * - `folder-mode` (enum, default: "none"): Controls how .dot files are organized in folders:
  *     - "none": All .dot files are stored directly in the target directory without subfolder organization
  *     - "numbered": Creates a new numbered folder (starting from 0) for each snapshot operation
  *     - "timed": Creates a new folder named with the current timestamp for each snapshot operation
  * - `dots-viewer-websocket-url`: A websocket URL to connect to a dots-viewer server instance,
- *                                allowing the user to snapshot running pipelines from the web
-*                                page. To trigger a snapshot, the user should send a json message
-*                                with the following format:
-*                                ```json
-*                                {
-*                                    "type": "Snapshot"
-*                                }
-*                                ```
+ *   allowing the user to snapshot running pipelines from the web
+ *   page. To trigger a snapshot, the user should send a json message
+ *   with the following format:
+ *   ```json
+ *   {
+ *       "type": "Snapshot"
+ *   }
+ *   ```
  *
  * Examples:
  *
