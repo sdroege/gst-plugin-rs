@@ -18238,7 +18238,7 @@
                 "klass": "Sink/Network/WebRTC",
                 "pad-templates": {
                     "audio_%%u": {
-                        "caps": "audio/x-raw:\naudio/x-opus:\n",
+                        "caps": "audio/x-raw:\naudio/x-opus:\nchannel-mapping-family: 0\naudio/x-opus:\nchannel-mapping-family: 1\n",
                         "direction": "sink",
                         "presence": "request",
                         "type": "GstWebRTCSinkPad"
@@ -18297,13 +18297,13 @@
                 "klass": "Source/Network/WebRTC",
                 "pad-templates": {
                     "audio_%%u": {
-                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
+                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\nchannel-mapping-family: 0\naudio/x-opus:\nchannel-mapping-family: 1\n",
                         "direction": "src",
                         "presence": "sometimes",
                         "type": "GstWebRTCSrcPad"
                     },
                     "req_audio_%%u": {
-                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
+                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\nchannel-mapping-family: 0\naudio/x-opus:\nchannel-mapping-family: 1\n",
                         "direction": "src",
                         "presence": "request",
                         "type": "GstWebRTCSrcPad"
@@ -18433,7 +18433,7 @@
                 "klass": "Sink/Network/WebRTC",
                 "pad-templates": {
                     "audio_%%u": {
-                        "caps": "audio/x-raw:\naudio/x-opus:\n",
+                        "caps": "audio/x-raw:\naudio/x-opus:\nchannel-mapping-family: 0\naudio/x-opus:\nchannel-mapping-family: 1\n",
                         "direction": "sink",
                         "presence": "request",
                         "type": "GstWebRTCSinkPad"
@@ -18466,7 +18466,7 @@
                 "klass": "Sink/Network/WebRTC",
                 "pad-templates": {
                     "audio_%%u": {
-                        "caps": "audio/x-raw:\naudio/x-opus:\n",
+                        "caps": "audio/x-raw:\naudio/x-opus:\nchannel-mapping-family: 0\naudio/x-opus:\nchannel-mapping-family: 1\n",
                         "direction": "sink",
                         "presence": "request",
                         "type": "GstWebRTCSinkPad"
@@ -18587,13 +18587,13 @@
                 "long-name": "WebRTCSrc",
                 "pad-templates": {
                     "audio_%%u": {
-                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
+                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\nchannel-mapping-family: 0\naudio/x-opus:\nchannel-mapping-family: 1\n",
                         "direction": "src",
                         "presence": "sometimes",
                         "type": "GstWebRTCSrcPad"
                     },
                     "req_audio_%%u": {
-                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
+                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\nchannel-mapping-family: 0\naudio/x-opus:\nchannel-mapping-family: 1\n",
                         "direction": "src",
                         "presence": "request",
                         "type": "GstWebRTCSrcPad"
@@ -18645,13 +18645,13 @@
                 "klass": "Source/Network/WebRTC",
                 "pad-templates": {
                     "audio_%%u": {
-                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
+                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\nchannel-mapping-family: 0\naudio/x-opus:\nchannel-mapping-family: 1\n",
                         "direction": "src",
                         "presence": "sometimes",
                         "type": "GstWebRTCSrcPad"
                     },
                     "req_audio_%%u": {
-                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
+                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\nchannel-mapping-family: 0\naudio/x-opus:\nchannel-mapping-family: 1\n",
                         "direction": "src",
                         "presence": "request",
                         "type": "GstWebRTCSrcPad"
@@ -18690,7 +18690,7 @@
                 "klass": "Sink/Network/WebRTC",
                 "pad-templates": {
                     "audio_%%u": {
-                        "caps": "audio/x-raw:\naudio/x-opus:\n",
+                        "caps": "audio/x-raw:\naudio/x-opus:\nchannel-mapping-family: 0\naudio/x-opus:\nchannel-mapping-family: 1\n",
                         "direction": "sink",
                         "presence": "request",
                         "type": "GstWebRTCSinkPad"
@@ -18723,7 +18723,7 @@
                 "klass": "Sink/Network/WebRTC",
                 "pad-templates": {
                     "audio_%%u": {
-                        "caps": "audio/x-raw:\naudio/x-opus:\n",
+                        "caps": "audio/x-raw:\naudio/x-opus:\nchannel-mapping-family: 0\naudio/x-opus:\nchannel-mapping-family: 1\n",
                         "direction": "sink",
                         "presence": "request",
                         "type": "GstWebRTCSinkPad"
@@ -18755,13 +18755,13 @@
                 "klass": "Source/Network/WebRTC",
                 "pad-templates": {
                     "audio_%%u": {
-                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
+                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\nchannel-mapping-family: 0\naudio/x-opus:\nchannel-mapping-family: 1\n",
                         "direction": "src",
                         "presence": "sometimes",
                         "type": "GstWebRTCSrcPad"
                     },
                     "req_audio_%%u": {
-                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\n",
+                        "caps": "audio/x-raw(ANY):\napplication/x-rtp:\naudio/x-opus:\nchannel-mapping-family: 0\naudio/x-opus:\nchannel-mapping-family: 1\n",
                         "direction": "src",
                         "presence": "request",
                         "type": "GstWebRTCSrcPad"
@@ -18801,12 +18801,12 @@
                 "kind": "object",
                 "properties": {
                     "audio-caps": {
-                        "blurb": "Governs what audio codecs will be proposed. Valid values: [audio/x-opus; audio/x-raw, rate=(int)[ 1, 2147483647 ], channels=(int)[ 1, 2147483647 ], layout=(string)interleaved, format=(string)S24BE; audio/x-raw, rate=(int)[ 1, 2147483647 ], channels=(int)[ 1, 2147483647 ], layout=(string)interleaved, format=(string)S16BE; audio/x-raw, rate=(int)[ 1, 2147483647 ], channels=(int)[ 1, 2147483647 ], layout=(string)interleaved, format=(string)U8]",
+                        "blurb": "Governs what audio codecs will be proposed. Valid values: [audio/x-opus, channel-mapping-family=(int)0; audio/x-opus, channel-mapping-family=(int)1; audio/x-raw, rate=(int)[ 1, 2147483647 ], channels=(int)[ 1, 2147483647 ], layout=(string)interleaved, format=(string)S24BE; audio/x-raw, rate=(int)[ 1, 2147483647 ], channels=(int)[ 1, 2147483647 ], layout=(string)interleaved, format=(string)S16BE; audio/x-raw, rate=(int)[ 1, 2147483647 ], channels=(int)[ 1, 2147483647 ], layout=(string)interleaved, format=(string)U8]",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "audio/x-opus",
+                        "default": "audio/x-opus, channel-mapping-family=(int)0; audio/x-opus, channel-mapping-family=(int)1",
                         "mutable": "ready",
                         "readable": true,
                         "type": "GstCaps",
@@ -19278,7 +19278,7 @@
                 "kind": "object",
                 "properties": {
                     "audio-codecs": {
-                        "blurb": "Names of audio codecs to be be used during the SDP negotiation. Valid values: [OPUS, L24, L16, L8]",
+                        "blurb": "Names of audio codecs to be be used during the SDP negotiation. Valid values: [OPUS, MULTIOPUS, L24, L16, L8]",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
