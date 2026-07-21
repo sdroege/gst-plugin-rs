@@ -57,10 +57,6 @@ multiple-versions = "deny"
 highlight = "all"
 wildcards = "allow"
 
-# Increases binary size considerably, see https://github.com/aws/aws-lc-rs/issues/745
-[[bans.deny]]
-name = "aws-lc-rs"
-
 # Various crates depend on an older version of base64
 [[bans.skip]]
 name = "base64"

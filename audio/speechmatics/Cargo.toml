@@ -31,12 +31,13 @@ path = "src/lib.rs"
 gst-plugin-version-helper.workspace = true
 
 [features]
-default = ["rustls-ring"]
+default = ["rustls-aws-lc-rs"]
 static = []
 capi = []
 doc = ["gst/v1_18"]
 v1_30 = ["gst/v1_30"]
 rustls-ring = ["rustls/ring"]
+rustls-aws-lc-rs = ["rustls/aws-lc-rs"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

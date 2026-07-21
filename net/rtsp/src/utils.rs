@@ -1,6 +1,13 @@
 use crate::rtspsrc::RtspSrc2TlsValidationFlags;
 use gst::prelude::*;
+
+#[cfg(feature = "rustls-aws-lc-rs")]
+use rustls::crypto::aws_lc_rs::sign::any_supported_type;
+#[cfg(all(feature = "rustls-ring", not(feature = "rustls-aws-lc-rs")))]
 use rustls::crypto::ring::sign::any_supported_type;
+#[cfg(all(not(feature = "rustls-ring"), not(feature = "rustls-aws-lc-rs")))]
+compile_error!("Either rustls-ring or rustls-aws-lc-rs feature must be enabled");
+
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -52,7 +59,10 @@ fn client_config(
     use rustls_platform_verifier::BuilderVerifierExt;
 
     let resolver = ClientCertResolver::new(rtsp_src, certificate_file, private_key_file);
+    #[cfg(all(feature = "rustls-ring", not(feature = "rustls-aws-lc-rs")))]
     let provider = Arc::new(rustls::crypto::ring::default_provider());
+    #[cfg(feature = "rustls-aws-lc-rs")]
+    let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
 
     if tls_validation_flags == RtspSrc2TlsValidationFlags::ValidateAll {
         let builder = ClientConfig::builder_with_provider(provider)

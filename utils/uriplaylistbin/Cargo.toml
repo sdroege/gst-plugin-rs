@@ -39,9 +39,10 @@ gst-plugin-version-helper.workspace = true
 static = []
 capi = []
 doc = ["gst/v1_18"]
-default = ["rustls-ring"]
+default = ["rustls-aws-lc-rs"]
 rustls-ring = ["rustls/ring"]
 v1_30 = ["gst/v1_30"]
+rustls-aws-lc-rs = ["rustls/aws-lc-rs"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

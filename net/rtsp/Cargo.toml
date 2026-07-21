@@ -25,7 +25,8 @@ sdp-types.workspace = true
 socket2 = { version = "0.6", features = ["all"] }
 thiserror = "2"
 tokio = { version = "1.0", default-features = false, features = ["io-util", "macros", "net", "time", "rt-multi-thread", "sync"] }
-tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12", "ring"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"] }
+rustls.workspace = true
 rustls-pki-types = "1"
 rustls-platform-verifier.workspace = true
 tokio-stream = "0.1"
@@ -39,7 +40,7 @@ base64 = "0.23"
 bytes = "1"
 tokio-util = "0.7"
 mykey = "1"
-x509-parser = "0.18"
+x509-parser = { version = "0.18", default-features = false, features = ["verify-aws", "validate"] }
 
 [dev-dependencies]
 ctrlc = "3.4"
@@ -60,6 +61,9 @@ capi = []
 doc = ["gst/v1_18"]
 v1_28 = ["gst/v1_28"]
 v1_30 = ["gst/v1_30"]
+rustls-ring = ["rustls/ring", "tokio-rustls/ring"]
+rustls-aws-lc-rs = ["rustls/aws-lc-rs", "tokio-rustls/aws-lc-rs"]
+default = ["rustls-aws-lc-rs"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

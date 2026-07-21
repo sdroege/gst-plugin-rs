@@ -14,14 +14,15 @@ rust-version.workspace = true
 async-stream = "0.3.4"
 base32 = "0.5"
 aws-config = { version = "1.0", default-features = false, features = ["credentials-process", "rt-tokio"] }
-aws-sdk-sso = { version = "1.0", default-features = false, features = ["rt-tokio", "rustls"] }
-aws-sdk-sts = { version = "1.0", default-features = false, features = ["rt-tokio", "rustls"]}
-aws-sdk-s3 = { version = "1.0", default-features = false, features = ["rt-tokio", "rustls", "sigv4a"] }
-aws-sdk-transcribestreaming = { version = "1.0", default-features = false, features = ["rt-tokio", "rustls"] }
-aws-sdk-translate = { version = "1.0", default-features = false, features = ["rt-tokio", "rustls"] }
+aws-sdk-sso = { version = "1.0", default-features = false, features = ["rt-tokio"] }
+aws-sdk-sts = { version = "1.0", default-features = false, features = ["rt-tokio"] }
+aws-sdk-s3 = { version = "1.0", default-features = false, features = ["rt-tokio", "sigv4a"] }
+aws-sdk-transcribestreaming = { version = "1.0", default-features = false, features = ["rt-tokio"] }
+aws-sdk-translate = { version = "1.0", default-features = false, features = ["rt-tokio"] }
+aws-smithy-runtime = { version = "1.0", default-features = false, features = ["default-https-client"] }
 aws-types = "1.0"
 aws-credential-types = "1.0"
-aws-sdk-polly = { version = "1.0", default-features = false, features = ["rt-tokio", "rustls"] }
+aws-sdk-polly = { version = "1.0", default-features = false, features = ["rt-tokio"] }
 bytes = "1.0"
 futures = "0.3"
 gio.workspace = true

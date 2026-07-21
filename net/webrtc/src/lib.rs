@@ -32,11 +32,15 @@ mod whep_signaller;
 mod whip_signaller;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    #[cfg(feature = "rustls-ring")]
+    #[cfg(all(feature = "rustls-ring", not(feature = "rustls-aws-lc-rs")))]
     {
         let _ = rustls::crypto::ring::default_provider().install_default();
     }
-    #[cfg(not(feature = "rustls-ring"))]
+    #[cfg(feature = "rustls-aws-lc-rs")]
+    {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    }
+    #[cfg(all(not(feature = "rustls-ring"), not(feature = "rustls-aws-lc-rs")))]
     {
         if rustls::crypto::CryptoProvider::get_default().is_none() {
             panic!(
