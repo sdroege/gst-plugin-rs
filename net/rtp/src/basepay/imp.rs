@@ -562,7 +562,7 @@ impl RtpBasePay2 {
                         rtp_diff
                     };
 
-                    packet_rtptime = base_rtptime + (rtp_diff & 0xffff_ffff) as u32;
+                    packet_rtptime = base_rtptime.wrapping_add((rtp_diff & 0xffff_ffff) as u32);
                 }
             }
         } else {

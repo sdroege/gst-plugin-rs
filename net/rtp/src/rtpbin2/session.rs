@@ -855,8 +855,8 @@ impl Session {
                             "last_rtp_ts: {last_rtp_ts}, dur since last rtp: {dur_since_last_rtp:?}"
                         );
                         // get the clock-rate for this source
-                        last_rtp_ts
-                            + sender
+                        last_rtp_ts.wrapping_add(
+                            sender
                                 .payload_type()
                                 .and_then(|pt| self.clock_rate_from_pt(pt))
                                 .and_then(|clock_rate| {
@@ -870,7 +870,8 @@ impl Session {
                                         )
                                         .map(|v| (v & 0xffff_ffff) as u32)
                                 })
-                                .unwrap_or(0)
+                                .unwrap_or(0),
+                        )
                     })
                     .unwrap_or(0);
 
