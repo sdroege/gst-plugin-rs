@@ -1745,12 +1745,24 @@ impl RtpRecv {
         let mut items_to_pre_push: smallvec::SmallVec<[HeldRecvItem; 4]> =
             smallvec::SmallVec::with_capacity(list.len() + 2);
         let mut held_buffers: smallvec::SmallVec<[HeldRecvBuffer; 4]> = Default::default();
-        // recv src pads for retained buffers, in case we end up needing to split the list
-        let mut recv_src_pads = RtpRecvSrcPads::default();
+
+        enum ForwardPacketDetails {
+            Rtp(RtpRecvSrcPad),
+            Rtcp,
+        }
+        let mut forward_packet_details: smallvec::SmallVec<
+            [ForwardPacketDetails; SRC_PAD_SMALL_VEC_CAPACITY],
+        > = Default::default();
+
         let mut split_bufferlist = false;
         let mut previous_recv_src_pad = None;
         let list_mut = list.make_mut();
         let mut ret = Ok(());
+
+        // First pass to determine whether the buffer list needs to be split.
+        // The list will be pushed as is, only if it ends up containing
+        // RTP packets to be pushed to the same src pad,
+        // otherwise we'll split it.
         list_mut.foreach_mut(|buffer, _i| {
             match self.handle_buffer_locked(
                 pad,
@@ -1765,18 +1777,13 @@ impl RtpRecv {
                     ControlFlow::Continue(None)
                 }
                 Ok(RecvRtpBuffer::IsRtcp(buffer)) => {
-                    match Self::rtcp_sink_chain(self, pad, id, buffer) {
-                        Ok(_buf) => ControlFlow::Continue(None),
-                        Err(e) => {
-                            ret = Err(e);
-                            ControlFlow::Break(None)
-                        }
-                    }
+                    forward_packet_details.push(ForwardPacketDetails::Rtcp);
+                    split_bufferlist = true;
+                    ControlFlow::Continue(Some(buffer))
                 }
                 Ok(RecvRtpBuffer::Drop) => ControlFlow::Continue(None),
                 Ok(RecvRtpBuffer::Forward((buffer, recv_src_pad))) => {
-                    // if all the buffers do not end up in the same jitterbuffer, then we need to
-                    // split
+                    // if all the buffers do not end up in the same jitterbuffer, then we need to split
                     if !split_bufferlist
                         && previous_recv_src_pad
                             .as_ref()
@@ -1786,7 +1793,7 @@ impl RtpRecv {
                     {
                         split_bufferlist = true;
                     }
-                    recv_src_pads.push(recv_src_pad.clone());
+                    forward_packet_details.push(ForwardPacketDetails::Rtp(recv_src_pad.clone()));
                     previous_recv_src_pad = Some(recv_src_pad);
                     ControlFlow::Continue(Some(buffer))
                 }
@@ -1804,38 +1811,26 @@ impl RtpRecv {
         self.handle_ssrc_collision(session, ssrc_collision)?;
         state = self.handle_push_jitterbuffer(state, id, items_to_pre_push)?;
         if split_bufferlist {
-            assert!(!list_mut.is_empty());
-
-            // this abomination is to work around passing state through handle_push_jitterbuffer
-            // inside a closure
-            let mut maybe_state = Some(state);
-            let mut recv_src_pad_iter = recv_src_pads.drain(..);
-            list_mut.foreach_mut({
-                let maybe_state = &mut maybe_state;
-                |buffer, _i| match self.handle_push_jitterbuffer(
-                    maybe_state.take().unwrap(),
-                    id,
-                    [HeldRecvItem::Buffer(HeldRecvBuffer {
-                        hold_id: None,
-                        arrival_time: arrival_time.instant,
-                        buffer,
-                        recv_src_pad: recv_src_pad_iter
-                            .next()
-                            .expect("pushed recv_src_pad for each retained buffers"),
-                    })],
-                ) {
-                    Ok(state) => {
-                        *maybe_state = Some(state);
-                        ControlFlow::Continue(None)
+            for (buffer, packet_details) in
+                std::iter::zip(list_mut.drain(..), forward_packet_details.drain(..))
+            {
+                state = match packet_details {
+                    ForwardPacketDetails::Rtp(recv_src_pad) => self.handle_push_jitterbuffer(
+                        state,
+                        id,
+                        [HeldRecvItem::Buffer(HeldRecvBuffer {
+                            hold_id: None,
+                            arrival_time: arrival_time.instant,
+                            buffer,
+                            recv_src_pad,
+                        })],
+                    )?,
+                    ForwardPacketDetails::Rtcp => {
+                        Self::rtcp_sink_chain_locked(self, pad, state, id, buffer)?;
+                        self.state.lock().unwrap()
                     }
-                    Err(e) => {
-                        ret = Err(e);
-                        ControlFlow::Break(None)
-                    }
-                }
-            });
-            ret?;
-            state = maybe_state.expect("no errors => maybe_state restored");
+                };
+            }
         } else if !list.is_empty() {
             state = self.handle_push_jitterbuffer(
                 state,
@@ -1890,8 +1885,7 @@ impl RtpRecv {
                 return self.handle_ssrc_collision(session, [ssrc]);
             }
             RecvRtpBuffer::IsRtcp(buffer) => {
-                drop(state);
-                return Self::rtcp_sink_chain(self, pad, id, buffer);
+                return self.rtcp_sink_chain_locked(pad, state, id, buffer);
             }
             RecvRtpBuffer::Drop => None,
             RecvRtpBuffer::Forward((buffer, jb)) => Some((buffer, jb)),
@@ -1926,7 +1920,18 @@ impl RtpRecv {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::trace!(CAT, obj = pad, "id {id}: {buffer:?}");
 
-        let state = self.state.lock().unwrap();
+        self.rtcp_sink_chain_locked(pad, self.state.lock().unwrap(), id, buffer)
+    }
+
+    fn rtcp_sink_chain_locked<'a>(
+        &self,
+        pad: &gst::Pad,
+        state: MutexGuard<'a, State>,
+        id: usize,
+        buffer: gst::Buffer,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst::trace!(CAT, obj = pad, "id {id}: {buffer:?}");
+
         let Some(session) = state.session_by_id(id) else {
             return Err(gst::FlowError::Error);
         };

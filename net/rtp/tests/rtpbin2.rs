@@ -15,6 +15,7 @@ use std::sync::{
 
 use gst::{Caps, prelude::*};
 use gst_check::Harness;
+use rtcp_types::{RtcpPacketWriter, RtcpPacketWriterExt};
 use rtp_types::*;
 
 static ELEMENT_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -860,4 +861,56 @@ fn recv_multiple_ssrc_buffer_list() {
     }
 
     panic!("recv failed");
+}
+
+#[test]
+// make sure we don't deadlock pushing a buffer list with muxed RTP & RTCP packets
+fn push_buffer_list_muxed_rtp_and_rtcp_packets() {
+    init();
+
+    let id = next_element_counter();
+
+    let clock = gst::SystemClock::obtain();
+    let elem = gst::ElementFactory::make("rtprecv")
+        .property("rtp-id", id.to_string())
+        .build()
+        .unwrap();
+    elem.set_clock(Some(&clock)).unwrap();
+    elem.set_state(gst::State::Playing).unwrap();
+    let sinkpad = elem.request_pad_simple("rtp_sink_0").unwrap();
+    let stream_start = gst::event::StreamStart::new("random");
+    sinkpad.send_event(stream_start);
+    let caps = Caps::builder("application/x-rtp")
+        .field("media", "audio")
+        .field("payload", TEST_PT as i32)
+        .field("clock-rate", TEST_CLOCK_RATE as i32)
+        .field("encoding-name", "custom-test")
+        .build();
+    sinkpad.send_event(gst::event::Caps::new(&caps));
+    let segment = gst::FormattedSegment::<gst::ClockTime>::new();
+    sinkpad.send_event(gst::event::Segment::new(&segment));
+
+    let rtcp_app = rtcp_types::App::builder(0x1234, "test");
+    let mut rtcp_app_buf = gst::Buffer::with_size(rtcp_app.calculate_size().unwrap()).unwrap();
+    {
+        let rtc_app_buf = rtcp_app_buf.get_mut().unwrap();
+        rtcp_app
+            .write_into(rtc_app_buf.map_writable().unwrap().as_mut_slice())
+            .unwrap();
+    }
+
+    let buf_list = gst::BufferList::from([
+        PacketInfo {
+            seq_no: 30,
+            rtp_ts: 10,
+            payload_len: 4,
+            ssrc: TEST_DEFAULT_SSRC,
+        }
+        .generate_buffer(Some(gst::ClockTime::from_mseconds(50))),
+        rtcp_app_buf,
+    ]);
+
+    sinkpad.chain_list(buf_list).unwrap();
+
+    elem.set_state(gst::State::Null).unwrap();
 }
