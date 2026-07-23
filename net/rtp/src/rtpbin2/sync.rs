@@ -184,7 +184,7 @@ impl Context {
     pub fn calculate_pts(
         &mut self,
         ssrc_val: u32,
-        timestamp: u32,
+        rtp_timestamp: u32,
         arrival_time: u64,
     ) -> (u64, Option<NtpTime>) {
         let ssrc = self.ssrcs.get_mut(&ssrc_val).unwrap();
@@ -194,7 +194,7 @@ impl Context {
         // from that point on
         let rtp_ext_ns = ssrc
             .extended_timestamp
-            .next(timestamp)
+            .next(rtp_timestamp)
             .mul_div_round(SECOND, clock_rate)
             .unwrap();
 
@@ -245,13 +245,11 @@ impl Context {
         // Now subtract the base PTS we calculated
         pts = pts.saturating_sub(base_pts);
         trace!("{ssrc_val:#08x} ({ssrc_val}) subtracted base PTS: {base_pts}");
-
         trace!("{ssrc_val:#08x} ({ssrc_val}) PTS prior to potential SR offsetting: {pts}");
-
-        let mut ntp_time: Option<NtpTime> = None;
 
         // TODO: add property for enabling / disabling offsetting based on
         // NTP / RTP mapping, ie inter-stream synchronization
+        let mut ntp_time: Option<NtpTime> = None;
         if let Some((last_sr_ntp, last_sr_rtp_ext)) =
             ssrc.last_sr_ntp_timestamp.zip(ssrc.last_sr_rtp_ext)
         {

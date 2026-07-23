@@ -46,7 +46,9 @@ use futures::future::{AbortHandle, Abortable};
 use gst::{glib, prelude::*, subclass::prelude::*};
 use std::sync::LazyLock;
 
-use super::internal::{GstRustLogger, SharedRtpState, SharedSession, pt_clock_rate_from_caps};
+use super::internal::{
+    GstRustLogger, RtpPacketIdentification, SharedRtpState, SharedSession, pt_clock_rate_from_caps,
+};
 use super::session::{RTCP_MIN_REPORT_INTERVAL, RtcpSendReply, RtpProfile, SendReply};
 use super::source::SourceState;
 
@@ -384,37 +386,6 @@ impl RtpSend {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut capture_time = now;
 
-        // The capture time of the packet is different from the current system time,
-        // apply an offset to now derived from the buffer timestamp and the current
-        // element running time.
-        let buffer_running_time = buffer.pts().map(|pts| {
-            srcpad
-                .sticky_event::<gst::event::Segment>(0)
-                .expect("RTP src pad doesn't have a segment?!")
-                .segment()
-                .to_running_time(pts)
-        });
-
-        if let Some((current_running_time, buffer_running_time)) =
-            current_running_time.zip(buffer_running_time)
-            && let gst::GenericFormattedValue::Time(Some(t)) = buffer_running_time
-        {
-            let buffer_running_time_ns = t.nseconds();
-            let current_running_time_ns = current_running_time.nseconds();
-
-            if buffer_running_time_ns > current_running_time_ns {
-                // The packet was captured in the future, that should not happen
-                // but we accept it
-                capture_time += std::time::Duration::from_nanos(
-                    buffer_running_time_ns - current_running_time_ns,
-                );
-            } else {
-                capture_time -= std::time::Duration::from_nanos(
-                    current_running_time_ns - buffer_running_time_ns,
-                );
-            }
-        }
-
         let mapped = buffer.map_readable().map_err(|e| {
             gst::error!(CAT, obj = sinkpad, "Failed to map input buffer {e:?}");
             gst::FlowError::Error
@@ -430,6 +401,45 @@ impl RtpSend {
                 return Ok(gst::FlowSuccess::Ok);
             }
         };
+
+        // The capture time of the packet is different from the current system time,
+        // apply an offset to now derived from the buffer timestamp and the current
+        // element running time.
+        let buffer_running_time = buffer.pts().map(|pts| {
+            srcpad
+                .sticky_event::<gst::event::Segment>(0)
+                .expect("RTP src pad doesn't have a segment?!")
+                .segment()
+                .to_running_time(pts)
+        });
+
+        if let Some((current_running_time, buffer_running_time)) =
+            current_running_time.zip(buffer_running_time)
+            && let gst::GenericFormattedValue::Time(Some(buffer_rt)) = buffer_running_time
+        {
+            let buffer_running_time_ns = buffer_rt.nseconds();
+            let current_running_time_ns = current_running_time.nseconds();
+
+            if buffer_running_time_ns > current_running_time_ns {
+                // The packet was captured in the future, that should not happen
+                // but we accept it
+                capture_time += std::time::Duration::from_nanos(
+                    buffer_running_time_ns - current_running_time_ns,
+                );
+            } else {
+                capture_time -= std::time::Duration::from_nanos(
+                    current_running_time_ns - buffer_running_time_ns,
+                );
+            }
+
+            gst::log!(
+                CAT,
+                imp = self,
+                "{}, buffer clock time: {}",
+                RtpPacketIdentification::from(&rtp),
+                (buffer_rt + self.obj().base_time().unwrap()).nseconds(),
+            );
+        }
 
         let mut session_inner = internal_session.inner.lock().unwrap();
 

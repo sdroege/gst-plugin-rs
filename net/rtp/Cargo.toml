@@ -28,6 +28,7 @@ log = "0.4"
 rand = "0.10"
 rtp-types = { version = "0.1" }
 rtcp-types = { version = "0.3" }
+sdp-types.workspace = true
 slab = "0.4.9"
 smallvec = { version = "1.11", features = ["union", "write", "const_generics", "const_new"] }
 thiserror = "2"
@@ -40,9 +41,11 @@ itertools = "0.15"
 [dev-dependencies]
 # Used by examples
 clap = { version = "4", features = ["derive"] }
+ctrlc = "3.5"
 env_logger = "0.11"
 gst-check = { workspace = true, features = ["v1_20"] }
 gst-app   = { workspace = true, features = ["v1_20"] }
+gst-plugin-udp = { path = "../udp" }
 tokio = { version = "1", default-features = false, features = ["macros", "signal"] }
 
 [build-dependencies]
@@ -73,6 +76,14 @@ path = "examples/rtpbin2-send-bundle.rs"
 [[example]]
 name = "rtpbin2-recv-bundle"
 path = "examples/rtpbin2-recv-bundle.rs"
+
+[[example]]
+name = "rtpbin2-precise-sync-send"
+path = "examples/rtpbin2-precise-sync-send.rs"
+
+[[example]]
+name = "rtpbin2-precise-sync-recv"
+path = "examples/rtpbin2-precise-sync-recv.rs"
 
 [package.metadata.capi]
 min_version = "0.9.21"

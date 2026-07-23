@@ -73,7 +73,7 @@ mod imp {
 
             for (key, value) in pt_map.iter() {
                 let Ok(pt) = key.parse::<u8>() else {
-                    gst::warning!(CAT, "failed to parse key as a pt");
+                    gst::warning!(CAT, "failed to parse {key} as a pt");
                     continue;
                 };
                 match value.get::<gst::Caps>() {
@@ -97,6 +97,45 @@ mod imp {
 
             for (pt, caps) in session.pt_map() {
                 ret = ret.field(pt.to_string(), caps);
+            }
+
+            ret.build()
+        }
+
+        pub fn set_clock_map(&self, clock_map: Option<gst::Structure>) {
+            let Some(session) = self.session() else {
+                return;
+            };
+            let mut session = session.lock().unwrap();
+            session.clear_signalled_clocks();
+            let Some(clock_map) = clock_map else {
+                return;
+            };
+
+            for (key, value) in clock_map.iter() {
+                match value.get::<gst::Clock>() {
+                    Ok(clock) => {
+                        if let Err(err) = session.add_clock(key, clock) {
+                            gst::error!(CAT, "{key}: error adding clock: {err}");
+                        }
+                    }
+                    _ => {
+                        gst::warning!(CAT, "{key} does not contain a gst::Clock value");
+                        continue;
+                    }
+                }
+            }
+        }
+
+        pub fn clock_map(&self) -> gst::Structure {
+            let mut ret = gst::Structure::builder("application/x-rtp2-clock-map");
+            let Some(session) = self.session() else {
+                return ret.build();
+            };
+            let session = session.lock().unwrap();
+
+            for (refclk, clock) in session.clock_map() {
+                ret = ret.field(refclk.to_string(), clock.gst_clock.clone());
             }
 
             ret.build()
@@ -200,6 +239,10 @@ mod imp {
                         .nick("RTP Payload Type Map")
                         .blurb("Mapping of RTP payload type to caps")
                         .build(),
+                    glib::ParamSpecBoxed::builder::<gst::Structure>("clock-map")
+                        .nick("RFC7273 Clock Map")
+                        .blurb("Mapping of RFC7273 ts-refclk string to synced gst::Clock")
+                        .build(),
                     glib::ParamSpecBoxed::builder::<gst::Structure>("sdes")
                         .nick("SDES")
                         .blurb("The SDES items of this session")
@@ -218,6 +261,7 @@ mod imp {
         fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
             match pspec.name() {
                 "pt-map" => self.pt_map().to_value(),
+                "clock-map" => self.clock_map().to_value(),
                 "sdes" => self.sdes().to_value(),
                 "stats" => self.stats().to_value(),
                 _ => unreachable!(),
@@ -227,6 +271,11 @@ mod imp {
         fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
             match pspec.name() {
                 "pt-map" => self.set_pt_map(
+                    value
+                        .get::<Option<gst::Structure>>()
+                        .expect("Type checked upstream"),
+                ),
+                "clock-map" => self.set_clock_map(
                     value
                         .get::<Option<gst::Structure>>()
                         .expect("Type checked upstream"),

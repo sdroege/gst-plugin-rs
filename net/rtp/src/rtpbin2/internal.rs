@@ -2,6 +2,7 @@
 
 use std::{
     collections::HashMap,
+    fmt,
     sync::{Arc, Mutex, Weak},
     task::Waker,
     time::Duration,
@@ -10,6 +11,7 @@ use std::{
 use gst::{glib, prelude::*};
 use std::sync::{LazyLock, OnceLock};
 
+use super::clock::{ClockError, SignalledClock, SignalledClocks, SourceLevelClock};
 use super::config::Rtp2Session;
 use super::session::{RtpProfile, Session};
 use super::source::ReceivedRb;
@@ -135,6 +137,7 @@ pub(crate) struct SharedSessionInner {
     pub(crate) session: Session,
 
     pub(crate) pt_map: HashMap<u8, gst::Caps>,
+    pub(crate) signalled_clocks: SignalledClocks,
 
     pub(crate) rtcp_waker: Option<Waker>,
     pub(crate) rtp_send_sinkpad: Option<gst::Pad>,
@@ -148,6 +151,8 @@ impl SharedSessionInner {
             session: Session::new(cname),
 
             pt_map: HashMap::default(),
+            signalled_clocks: Default::default(),
+
             rtcp_waker: None,
             rtp_send_sinkpad: None,
         }
@@ -158,15 +163,20 @@ impl SharedSessionInner {
     }
 
     pub fn add_caps(&mut self, caps: gst::Caps) {
+        gst::debug!(CAT, "{caps}");
+
         let Some((pt, clock_rate)) = pt_clock_rate_from_caps(&caps) else {
             return;
         };
         let caps_clone = caps.clone();
+        self.session.set_pt_clock_rate(pt, clock_rate);
+
+        self.signalled_clocks.add_or_update_from_caps(pt, &caps);
+
         self.pt_map
             .entry(pt)
             .and_modify(move |entry| *entry = caps)
             .or_insert_with(move || caps_clone);
-        self.session.set_pt_clock_rate(pt, clock_rate);
     }
 
     pub(crate) fn caps_from_pt(&self, pt: u8) -> gst::Caps {
@@ -179,6 +189,39 @@ impl SharedSessionInner {
 
     pub fn pt_map(&self) -> impl Iterator<Item = (u8, &gst::Caps)> + '_ {
         self.pt_map.iter().map(|(&k, v)| (k, v))
+    }
+
+    pub fn clear_signalled_clocks(&mut self) {
+        self.signalled_clocks.clear();
+    }
+
+    pub fn add_clock(
+        &mut self,
+        refclk_str: &glib::GStr,
+        clock: gst::Clock,
+    ) -> Result<(), ClockError> {
+        gst::debug!(CAT, "adding: {refclk_str}, {clock:?}");
+
+        self.signalled_clocks.add(refclk_str, clock)?;
+
+        for (pt, caps) in self.pt_map.iter() {
+            self.signalled_clocks.add_or_update_from_caps(*pt, caps);
+        }
+
+        Ok(())
+    }
+
+    /// Init the reference clock for this SSRC if it has been signalled
+    pub fn maybe_init_reference_clock(&mut self, ssrc: u32, pt: u8) {
+        self.signalled_clocks.maybe_init_reference_clock(ssrc, pt)
+    }
+
+    pub fn get_reference_clock(&self, ssrc: u32) -> Option<&SourceLevelClock> {
+        self.signalled_clocks.get_reference_clock(ssrc)
+    }
+
+    pub fn clock_map(&self) -> impl Iterator<Item = (&glib::GStr, &SignalledClock)> + '_ {
+        self.signalled_clocks.clock_map()
     }
 
     pub fn set_sdes(&mut self, sdes: HashMap<u8, String>) {
@@ -335,6 +378,35 @@ impl SharedSessionInner {
     }
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub struct RtpPacketIdentification {
+    pub pt: u8,
+    pub ssrc: u32,
+    pub seqnum: u16,
+    pub rtptime: u32,
+}
+
+impl<'a> From<&'a rtp_types::RtpPacket<'a>> for RtpPacketIdentification {
+    fn from(packet: &'a rtp_types::RtpPacket<'a>) -> Self {
+        RtpPacketIdentification {
+            pt: packet.payload_type(),
+            ssrc: packet.ssrc(),
+            seqnum: packet.sequence_number(),
+            rtptime: packet.timestamp(),
+        }
+    }
+}
+
+impl fmt::Display for RtpPacketIdentification {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "ssrc: {:#08x} ({}), seqnum: {}, rtp time: {}",
+            self.ssrc, self.ssrc, self.seqnum, self.rtptime,
+        )
+    }
+}
+
 pub fn pt_clock_rate_from_caps(caps: &gst::CapsRef) -> Option<(u8, u32)> {
     let Some(s) = caps.structure(0) else {
         gst::debug!(CAT, "no structure!");
@@ -440,4 +512,190 @@ impl log::Log for GstRustLogger {
     }
 
     fn flush(&self) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::rtpbin2::clock::get_media_clock_offset;
+
+    const SSRC: u32 = 1234;
+
+    #[test]
+    fn media_level_clock() {
+        const PT_LOCAL: u8 = 96;
+        const MEDIA_CLOCK_OFFSET: u32 = 12345689;
+
+        gst::init().unwrap();
+
+        let media_level_meta_ref = gst::Caps::new_empty_simple("timestamp/x-sender");
+
+        let caps_media_level = gst::Caps::builder("application/x-rtp")
+            .field("media", "audio")
+            .field("payload", PT_LOCAL as i32)
+            .field("clock-rate", 48_000i32)
+            .field("encoding-name", "L24")
+            .field("a-ts-refclk", "local")
+            .field("a-mediaclk", format!("direct={MEDIA_CLOCK_OFFSET}"))
+            .build();
+
+        let mut shared_session = SharedSessionInner::new(SSRC as usize, "test");
+        // clock doesn't need to match the definition for this test
+        shared_session
+            .add_clock(
+                glib::gstr!("local"),
+                glib::Object::builder::<gst::SystemClock>()
+                    .property("clock-type", gst::ClockType::Realtime)
+                    .build()
+                    .upcast(),
+            )
+            .unwrap();
+        shared_session.add_caps(caps_media_level.clone());
+
+        shared_session.maybe_init_reference_clock(SSRC, PT_LOCAL);
+        let ssrc_level_clock = shared_session.get_reference_clock(SSRC).unwrap();
+        assert_eq!(ssrc_level_clock.ts_meta_ref(), &media_level_meta_ref);
+        assert_eq!(
+            get_media_clock_offset(ssrc_level_clock.mediaclk.as_ref().unwrap()),
+            Ok(MEDIA_CLOCK_OFFSET),
+        );
+
+        // ensure we can also register the media before the clock
+
+        let mut shared_session = SharedSessionInner::new(SSRC as usize, "test");
+        shared_session.add_caps(caps_media_level.clone());
+        // clock doesn't need to match the definition for this test
+        shared_session
+            .add_clock(
+                glib::gstr!("local"),
+                glib::Object::builder::<gst::SystemClock>()
+                    .property("clock-type", gst::ClockType::Realtime)
+                    .build()
+                    .upcast(),
+            )
+            .unwrap();
+
+        shared_session.maybe_init_reference_clock(SSRC, PT_LOCAL);
+        let ssrc_level_clock = shared_session.get_reference_clock(SSRC).unwrap();
+        assert_eq!(ssrc_level_clock.ts_meta_ref(), &media_level_meta_ref);
+        assert_eq!(
+            get_media_clock_offset(ssrc_level_clock.mediaclk.as_ref().unwrap()),
+            Ok(MEDIA_CLOCK_OFFSET),
+        );
+    }
+
+    #[test]
+    fn media_and_src_level_clocks() {
+        const PT_LOCAL: u8 = 96;
+        const MEDIA_CLOCK_OFFSET: u32 = 12345689;
+        const SSRC_CLOCK_OFFSET: u32 = 987654321;
+        const OTHER_SSRC: u32 = 4321;
+        const NTP_HOST: &str = "pool.ntp.org";
+        const NTP_PORT: u16 = 123;
+
+        gst::init().unwrap();
+
+        let media_level_meta_ref = gst::Caps::new_empty_simple("timestamp/x-sender");
+        let ssrc_level_meta_ref = gst::Caps::builder("timestamp/x-ntp")
+            .field("host", NTP_HOST)
+            .build();
+
+        let caps_media_level = gst::Caps::builder("application/x-rtp")
+            .field("media", "audio")
+            .field("payload", PT_LOCAL as i32)
+            .field("clock-rate", 48_000i32)
+            .field("encoding-name", "L24")
+            .field("a-ts-refclk", "local")
+            .field("a-mediaclk", format!("direct={MEDIA_CLOCK_OFFSET}"))
+            .field(
+                format!("a-ssrc-{SSRC}-ts-refclk"),
+                format!("ntp={NTP_HOST}"),
+            )
+            .field(
+                format!("a-ssrc-{SSRC}-mediaclk"),
+                format!("direct={SSRC_CLOCK_OFFSET}"),
+            )
+            .build();
+
+        let mut shared_session = SharedSessionInner::new(SSRC as usize, "test");
+        // clock doesn't need to match the definition for this test
+        shared_session
+            .add_clock(
+                glib::gstr!("local"),
+                glib::Object::builder::<gst::SystemClock>()
+                    .property("clock-type", gst::ClockType::Realtime)
+                    .build()
+                    .upcast(),
+            )
+            .unwrap();
+        shared_session
+            .add_clock(
+                glib::GString::from(format!("ntp={NTP_HOST}")).as_gstr(),
+                glib::Object::builder::<gst_net::NtpClock>()
+                    .property("address", NTP_HOST)
+                    .property("port", NTP_PORT as i32)
+                    .build()
+                    .upcast(),
+            )
+            .unwrap();
+        shared_session.add_caps(caps_media_level.clone());
+
+        shared_session.maybe_init_reference_clock(SSRC, PT_LOCAL);
+        let ssrc_level_clock = shared_session.get_reference_clock(SSRC).unwrap();
+        assert_eq!(ssrc_level_clock.ts_meta_ref(), &ssrc_level_meta_ref);
+        assert_eq!(
+            get_media_clock_offset(ssrc_level_clock.mediaclk.as_ref().unwrap()),
+            Ok(SSRC_CLOCK_OFFSET),
+        );
+
+        // this one doesn't come with a specific ssrc-level clock definition
+        shared_session.maybe_init_reference_clock(OTHER_SSRC, PT_LOCAL);
+        let other_ssrc_level_clock = shared_session.get_reference_clock(OTHER_SSRC).unwrap();
+        assert_eq!(other_ssrc_level_clock.ts_meta_ref(), &media_level_meta_ref);
+        assert_eq!(
+            get_media_clock_offset(other_ssrc_level_clock.mediaclk.as_ref().unwrap()),
+            Ok(MEDIA_CLOCK_OFFSET),
+        );
+
+        // ensure we can also register the media before the clock
+
+        let mut shared_session = SharedSessionInner::new(SSRC as usize, "test");
+        shared_session.add_caps(caps_media_level.clone());
+        // clock doesn't need to match the definition for this test
+        shared_session
+            .add_clock(
+                glib::gstr!("local"),
+                glib::Object::builder::<gst::SystemClock>()
+                    .property("clock-type", gst::ClockType::Realtime)
+                    .build()
+                    .upcast(),
+            )
+            .unwrap();
+        shared_session
+            .add_clock(
+                glib::GString::from(format!("ntp={NTP_HOST}")).as_gstr(),
+                glib::Object::builder::<gst::SystemClock>()
+                    .property("clock-type", gst::ClockType::Realtime)
+                    .build()
+                    .upcast(),
+            )
+            .unwrap();
+
+        shared_session.maybe_init_reference_clock(SSRC, PT_LOCAL);
+        let ssrc_level_clock = shared_session.get_reference_clock(SSRC).unwrap();
+        assert_eq!(ssrc_level_clock.ts_meta_ref(), &ssrc_level_meta_ref);
+        assert_eq!(
+            get_media_clock_offset(ssrc_level_clock.mediaclk.as_ref().unwrap()),
+            Ok(SSRC_CLOCK_OFFSET),
+        );
+
+        // this one doesn't come with a specific ssrc-level clock definition
+        shared_session.maybe_init_reference_clock(OTHER_SSRC, PT_LOCAL);
+        let other_ssrc_level_clock = shared_session.get_reference_clock(OTHER_SSRC).unwrap();
+        assert_eq!(other_ssrc_level_clock.ts_meta_ref(), &media_level_meta_ref);
+        assert_eq!(
+            get_media_clock_offset(other_ssrc_level_clock.mediaclk.as_ref().unwrap()),
+            Ok(MEDIA_CLOCK_OFFSET),
+        );
+    }
 }

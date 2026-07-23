@@ -5,6 +5,8 @@ use gst::prelude::*;
 use std::sync::{LazyLock, OnceLock};
 use std::time::Duration;
 use tokio::runtime;
+
+mod clock;
 mod config;
 mod internal;
 mod jitterbuffer;

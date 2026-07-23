@@ -51,7 +51,9 @@ use futures::{StreamExt, stream};
 use gst::{glib, prelude::*, subclass::prelude::*};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
-use super::internal::{GstRustLogger, SharedRtpState, SharedSession, pt_clock_rate_from_caps};
+use super::internal::{
+    GstRustLogger, RtpPacketIdentification, SharedRtpState, SharedSession, pt_clock_rate_from_caps,
+};
 use super::jitterbuffer::{self, JitterBuffer};
 use super::session::{
     KeyUnitRequestType, RTCP_MIN_REPORT_INTERVAL, RecvReply, RequestRemoteKeyUnitReply,
@@ -1120,6 +1122,83 @@ impl RtpRecv {
         gst::Iterator::from_vec(vec![])
     }
 
+    fn set_buffer_ts(
+        &self,
+        session_inner: &mut super::internal::SharedSessionInner,
+        rtp_packet_id: RtpPacketIdentification,
+        buffer: &mut gst::Buffer,
+        pts: gst::ClockTime,
+        sr_ntp_time: Option<super::time::NtpTime>,
+    ) {
+        let buf_mut = buffer.make_mut();
+        buf_mut.set_pts(pts);
+
+        if self.settings.lock().unwrap().add_reference_timestamp_meta {
+            if let Some(media_clock) = session_inner.get_reference_clock(rtp_packet_id.ssrc)
+                && !media_clock.is_same_as(&self.obj().clock().expect("known at this stage"))
+            {
+                let ref_time_from_clock = media_clock.get_reference_time(
+                    rtp_packet_id.rtptime,
+                    session_inner
+                        .session
+                        .clock_rate_from_pt(rtp_packet_id.pt)
+                        .expect("known at this stage"),
+                );
+
+                if let Some(sr_ntp_time) = sr_ntp_time {
+                    let sr_ref_time = media_clock.to_reference_time(sr_ntp_time);
+
+                    gst::log!(
+                        CAT,
+                        imp = self,
+                        "{rtp_packet_id}, ref clock time: {}, \
+                         SR interpolated ref time: {}, SR interpolated NTP time: {}",
+                        ref_time_from_clock.nseconds(),
+                        sr_ref_time.nseconds(),
+                        sr_ntp_time.as_nanos(),
+                    );
+
+                    gst::ReferenceTimestampMeta::add(
+                        buf_mut,
+                        &TIMESTAMP_NTP_CAPS,
+                        gst::ClockTime::from_nseconds(sr_ntp_time.as_nanos()),
+                        None,
+                    );
+                } else {
+                    gst::log!(
+                        CAT,
+                        imp = self,
+                        "{rtp_packet_id}, ref clock time: {}, \
+                         SR interpolated ref time: N/A, SR interpolated NTP time: N/A",
+                        ref_time_from_clock.nseconds(),
+                    );
+                }
+
+                gst::ReferenceTimestampMeta::add(
+                    buf_mut,
+                    media_clock.ts_meta_ref(),
+                    ref_time_from_clock,
+                    None,
+                );
+            } else if let Some(sr_ntp_time) = sr_ntp_time {
+                gst::log!(
+                    CAT,
+                    imp = self,
+                    "{rtp_packet_id}, ref clock time: N/A, SR interpolated ref time: N/A, \
+                     SR interpolated NTP time: {}",
+                    sr_ntp_time.as_nanos(),
+                );
+
+                gst::ReferenceTimestampMeta::add(
+                    buf_mut,
+                    &TIMESTAMP_NTP_CAPS,
+                    gst::ClockTime::from_nseconds(sr_ntp_time.as_nanos()),
+                    None,
+                );
+            }
+        }
+    }
+
     fn handle_buffer_locked<const H: usize, const P: usize>(
         &self,
         pad: &gst::Pad,
@@ -1176,7 +1255,7 @@ impl RtpRecv {
         let internal_session = session.internal_session.clone();
         let mut session_inner = internal_session.inner.lock().unwrap();
 
-        let (pts, ntp_time) = {
+        let (pts, sr_ntp_time) = {
             let mut sync_context = self.sync_context.lock().unwrap();
             let sync_context = sync_context.as_mut().unwrap();
             if !sync_context.has_clock_rate(rtp.ssrc()) {
@@ -1212,6 +1291,7 @@ impl RtpRecv {
                     }
                 };
                 sync_context.set_clock_rate(rtp.ssrc(), clock_rate);
+                session_inner.maybe_init_reference_clock(rtp.ssrc(), rtp.payload_type());
             }
 
             sync_context.calculate_pts(
@@ -1242,27 +1322,19 @@ impl RtpRecv {
                     session_inner = internal_session.inner.lock().unwrap();
                 }
                 RecvReply::Hold(hold_id) => {
-                    let pt = rtp.payload_type();
-                    let ssrc = rtp.ssrc();
+                    let rtp_packet_id = RtpPacketIdentification::from(&rtp);
                     drop(mapped);
-                    {
-                        let buf_mut = buffer.make_mut();
-                        buf_mut.set_pts(pts);
 
-                        if self.settings.lock().unwrap().add_reference_timestamp_meta
-                            && let Some(ntp_time) = ntp_time
-                        {
-                            gst::ReferenceTimestampMeta::add(
-                                buf_mut,
-                                &TIMESTAMP_NTP_CAPS,
-                                gst::ClockTime::from_nseconds(
-                                    ntp_time.as_duration().as_nanos() as u64
-                                ),
-                                None,
-                            );
-                        }
-                    }
-                    let (recv_src_pad, is_new_pad) = session.get_or_create_rtp_src(self, pt, ssrc);
+                    self.set_buffer_ts(
+                        &mut session_inner,
+                        rtp_packet_id,
+                        &mut buffer,
+                        pts,
+                        sr_ntp_time,
+                    );
+
+                    let (recv_src_pad, is_new_pad) =
+                        session.get_or_create_rtp_src(self, rtp_packet_id.pt, rtp_packet_id.ssrc);
                     if is_new_pad {
                         items_to_pre_push.push(HeldRecvItem::NewPad(recv_src_pad.clone()));
                     }
@@ -1302,27 +1374,22 @@ impl RtpRecv {
                 }
                 RecvReply::Ignore => return Ok(RecvRtpBuffer::Drop),
                 RecvReply::Passthrough => {
-                    let pt = rtp.payload_type();
-                    let ssrc = rtp.ssrc();
+                    let rtp_packet_header = RtpPacketIdentification::from(&rtp);
                     drop(mapped);
-                    {
-                        let buf_mut = buffer.make_mut();
-                        buf_mut.set_pts(pts);
 
-                        if self.settings.lock().unwrap().add_reference_timestamp_meta
-                            && let Some(ntp_time) = ntp_time
-                        {
-                            gst::ReferenceTimestampMeta::add(
-                                buf_mut,
-                                &TIMESTAMP_NTP_CAPS,
-                                gst::ClockTime::from_nseconds(
-                                    ntp_time.as_duration().as_nanos() as u64
-                                ),
-                                None,
-                            );
-                        }
-                    }
-                    let (recv_src_pad, is_new_pad) = session.get_or_create_rtp_src(self, pt, ssrc);
+                    self.set_buffer_ts(
+                        &mut session_inner,
+                        rtp_packet_header,
+                        &mut buffer,
+                        pts,
+                        sr_ntp_time,
+                    );
+
+                    let (recv_src_pad, is_new_pad) = session.get_or_create_rtp_src(
+                        self,
+                        rtp_packet_header.pt,
+                        rtp_packet_header.ssrc,
+                    );
                     if is_new_pad {
                         items_to_pre_push.push(HeldRecvItem::NewPad(recv_src_pad.clone()));
                     }

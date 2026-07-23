@@ -15768,6 +15768,18 @@
                 ],
                 "kind": "object",
                 "properties": {
+                    "clock-map": {
+                        "blurb": "Mapping of RFC7273 ts-refclk string to synced gst::Clock",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "application/x-rtp2-clock-map;",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": true
+                    },
                     "pt-map": {
                         "blurb": "Mapping of RTP payload type to caps",
                         "conditionally-available": false,

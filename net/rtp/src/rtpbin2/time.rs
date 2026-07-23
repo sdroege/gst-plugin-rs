@@ -2,12 +2,11 @@
 
 use std::{
     ops::{Add, Sub},
+    sync::OnceLock,
     time::{Duration, SystemTime},
 };
 
 use gst::prelude::MulDiv as _;
-
-use std::sync::OnceLock;
 
 /// Offset as a Duration between NTP time (UTC epoch) and UNIX time
 pub const UNIX_TO_NTP_TIME_OFFSET: Duration =
@@ -71,12 +70,18 @@ impl NtpTime {
 
     /// Middle 32 bit of the NTP timestamp (16.16 seconds).
     pub fn as_u32(self) -> u32 {
-        ((self.0 >> 16) & 0xffffffff) as u32
+        ((self.0 >> 16) & 0xffff_ffff) as u32
     }
 
     /// Full 64 bit NTP timestamp (32.32 seconds).
     pub fn as_u64(self) -> u64 {
         self.0
+    }
+
+    pub fn as_nanos(self) -> u64 {
+        self.0
+            .mul_div_ceil(SECOND, 1 << 32)
+            .expect("result doesn't fit?!")
     }
 }
 
@@ -91,6 +96,12 @@ impl Add for NtpTime {
     type Output = NtpTime;
     fn add(self, rhs: Self) -> Self::Output {
         NtpTime(self.0 + rhs.0)
+    }
+}
+
+impl std::fmt::Display for NtpTime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{:?}", self.as_duration()))
     }
 }
 
