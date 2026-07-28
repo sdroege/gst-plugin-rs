@@ -61,6 +61,8 @@ const VA_MEMORY_FEATURE: &str = "memory:VAMemory";
 const RTP_TWCC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
 
+const RTP_HDREXT_COLORSPACE_URI: &str = "http://www.webrtc.org/experiments/rtp-hdrext/color-space";
+
 const TLS_HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 const DEFAULT_STUN_SERVER: Option<&str> = Some("stun://stun.l.google.com:19302");
@@ -1993,6 +1995,69 @@ impl BaseWebRTCSink {
         Ok(())
     }
 
+    /// Add the color-space RTP header extension to video payloaders: it
+    /// carries the colorimetry and HDR metadata of the input caps, which
+    /// VP8/VP9 cannot signal in-band. Added unconditionally so the extmap
+    /// is negotiated even when the colorimetry only becomes known
+    /// mid-stream.
+    fn configure_color_space_extension(&self, payloader: &gst::Element) {
+        // GstRTPBasePayload::extensions property is only available since GStreamer 1.24
+        if !payloader.has_property_with_type("extensions", gst::Array::static_type()) {
+            gst::debug!(
+                CAT,
+                obj = payloader,
+                "'extensions' property is not available: not adding the color-space extension"
+            );
+            return;
+        }
+
+        if payloader
+            .property::<gst::Array>("extensions")
+            .iter()
+            .any(|value| {
+                value
+                    .get::<gst_rtp::RTPHeaderExtension>()
+                    .unwrap()
+                    .uri()
+                    .is_some_and(|uri| uri == RTP_HDREXT_COLORSPACE_URI)
+            })
+        {
+            gst::debug!(
+                CAT,
+                obj = payloader,
+                "color-space extension already configured by application"
+            );
+            return;
+        }
+
+        let Some(ext) = gst_rtp::RTPHeaderExtension::create_from_uri(RTP_HDREXT_COLORSPACE_URI)
+        else {
+            gst::debug!(
+                CAT,
+                obj = payloader,
+                "color-space extension not available, colorimetry and HDR metadata will not be \
+                 signalled over RTP"
+            );
+            return;
+        };
+
+        let ext_id = utils::find_smallest_available_ext_id(
+            payloader
+                .property::<gst::Array>("extensions")
+                .iter()
+                .map(|value| value.get::<gst_rtp::RTPHeaderExtension>().unwrap().id()),
+        );
+
+        gst::debug!(
+            CAT,
+            obj = payloader,
+            "Mapping color-space extension to ID {ext_id}"
+        );
+
+        ext.set_id(ext_id);
+        payloader.emit_by_name::<()>("add-extension", &[&ext]);
+    }
+
     fn has_connected_payloader_setup_slots(&self) -> bool {
         use glib::{signal, subclass};
 
@@ -2177,7 +2242,22 @@ impl BaseWebRTCSink {
             }
         }
 
-        self.configure_congestion_control(payloader, codec, extension_configuration_type)
+        // Only in Auto mode: in Apply mode the extension set is driven by the
+        // remote's SDP, and adding extensions the remote did not negotiate
+        // could collide with its extension IDs.
+        let add_color_space = codec.is_video()
+            && matches!(
+                extension_configuration_type,
+                ExtensionConfigurationType::Auto
+            );
+
+        self.configure_congestion_control(payloader, codec, extension_configuration_type)?;
+
+        if add_color_space {
+            self.configure_color_space_extension(payloader);
+        }
+
+        Ok(())
     }
 
     fn generate_ssrc(&self, ssrcs: &mut HashSet<u32>) -> u32 {
