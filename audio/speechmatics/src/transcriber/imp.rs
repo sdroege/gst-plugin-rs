@@ -1514,7 +1514,7 @@ impl Transcriber {
                     async_tungstenite::tungstenite::handshake::client::generate_key(),
                 )
                 .header("Sec-Websocket-Version", "13")
-                .header("Authorization", format!("Bearer {}", &api_key))
+                .header("Authorization", format!("Bearer {}", api_key))
                 .body(())
                 .unwrap();
 
