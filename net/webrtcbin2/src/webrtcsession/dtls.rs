@@ -287,7 +287,7 @@ impl std::io::Read for Bio {
         gst::trace!(CAT, "returning {n} bytes");
         buf[..n].copy_from_slice(&self.incoming[..n]);
         if n == self.incoming.len() {
-            self.incoming.truncate(0);
+            self.incoming.clear();
         } else {
             self.incoming.drain(..n);
         }

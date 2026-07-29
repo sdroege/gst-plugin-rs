@@ -402,12 +402,8 @@ fn build_codec_string_for_variants(state: &mut State) -> Result<(), glib::BoolEr
     state.old_variants.clone_from(&state.variants);
 
     for variant in state.variants.iter_mut() {
-        match build_codec_string_for_variant(variant, &state.codecs) {
-            Ok(codec_str) => {
-                variant.codecs = codec_str;
-            }
-            Err(e) => return Err(e),
-        }
+        let codec_str = build_codec_string_for_variant(variant, &state.codecs)?;
+        variant.codecs = codec_str;
     }
 
     Ok(())
