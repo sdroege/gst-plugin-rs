@@ -24,7 +24,7 @@ fn aac_hbr_not_fragmented() {
 
     let mut expected_pay = Vec::with_capacity(102);
     for i in 0..102 {
-        let position = i * 1024;
+        let position = (i * 1024u64).saturating_sub(2048);
 
         expected_pay.push(vec![
             ExpectedPacket::builder()
@@ -45,7 +45,7 @@ fn aac_hbr_not_fragmented() {
 
     let mut expected_depay = Vec::with_capacity(102);
     for i in 0..102 {
-        let position = i * 1024;
+        let position = (i * 1024u64).saturating_sub(2048);
 
         expected_depay.push(vec![
             ExpectedBuffer::builder()
@@ -77,7 +77,7 @@ fn aac_hbr_fragmented() {
 
     let mut expected_pay = Vec::with_capacity(102);
     for i in 0..102 {
-        let position = i * 1024;
+        let position = (i * 1024u64).saturating_sub(2048);
 
         let pts = gst::ClockTime::from_nseconds(
             position
@@ -108,7 +108,7 @@ fn aac_hbr_fragmented() {
 
     let mut expected_depay = Vec::with_capacity(102);
     for i in 0..102 {
-        let position = i * 1024;
+        let position = (i * 1024u64).saturating_sub(2048);
 
         expected_depay.push(vec![
             ExpectedBuffer::builder()
