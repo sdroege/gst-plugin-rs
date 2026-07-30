@@ -10,12 +10,14 @@ use gst::glib::WeakRef;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
+use sdp_types::Direction;
+use sdp_types::ExtMap;
+use sdp_types::Fmtp;
+use sdp_types::MediaType;
+use sdp_types::RtpMap;
+
 use crate::webrtcsend::WebRTCSendSinkPad;
-use crate::webrtcsession::sdp::Direction;
 use crate::webrtcsession::sdp::MediaSpecifics;
-use crate::webrtcsession::sdp::MediaType;
-use crate::webrtcsession::sdp::RtpExtension;
-use crate::webrtcsession::sdp::RtpMap;
 use crate::webrtcsession::sdp::WebRTCSdp;
 use crate::webrtcsession::sdp::WebRTCSdpMedia;
 
@@ -250,12 +252,11 @@ pub(crate) fn rtp_caps_to_media(caps: &gst::Caps) -> Option<WebRTCSdpMedia> {
                 }
                 let val = s.value(field).unwrap();
                 if val.is_type(glib::Type::STRING) {
-                    rtp.extmap.insert(RtpExtension {
+                    rtp.extmap.insert(ExtMap::with_direction(
                         id,
-                        direction: Direction::SendRecv,
-                        name: val.get::<String>().ok()?,
-                        params: None,
-                    });
+                        Direction::SendRecv,
+                        val.get::<String>().ok()?,
+                    ));
                 } else if val.is_type(gst::Array::static_type()) {
                     let arr = val.get::<gst::Array>().ok()?;
                     if arr.len() != 3 {
@@ -274,12 +275,12 @@ pub(crate) fn rtp_caps_to_media(caps: &gst::Caps) -> Option<WebRTCSdpMedia> {
                     } else {
                         Some(params)
                     };
-                    rtp.extmap.insert(RtpExtension {
-                        id,
-                        direction,
-                        name,
-                        params,
-                    });
+                    rtp.extmap.insert(
+                        ExtMap::builder(id, name)
+                            .direction(direction)
+                            .attributes_if_some(params)
+                            .build(),
+                    );
                 }
             } else if field.starts_with("a-") || field.starts_with("x-") {
                 // TODO handle
@@ -296,17 +297,15 @@ pub(crate) fn rtp_caps_to_media(caps: &gst::Caps) -> Option<WebRTCSdpMedia> {
             // TODO: rid
         }
         rtp.formats.push(payload);
-        if !fmtp.is_empty() {
+        if let Ok(fmtp) = fmtp.parse::<Fmtp>() {
             rtp.fmtps.insert(payload, fmtp);
         }
         if let Some(encoding_name) = encoding_name {
             rtp.rtpmaps.insert(
                 payload,
-                RtpMap {
-                    name: encoding_name,
-                    clock_rate: clock_rate? as u32,
-                    params: encoding_params,
-                },
+                RtpMap::builder(payload, encoding_name, clock_rate? as u32)
+                    .encoding_params_if_some(encoding_params)
+                    .build(),
             );
         }
     }

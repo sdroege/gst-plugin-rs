@@ -409,13 +409,13 @@ pub fn parse_connections(conns: &Vec<Connection>) -> (BTreeSet<RtspProtocol>, bo
     let mut is_ipv4 = true;
     let mut conn_protocols = BTreeSet::new();
     for conn in conns {
-        if conn.nettype != "IN" {
+        if conn.nettype != sdp_types::NetType::In {
             continue;
         }
         // XXX: For now, assume that all connections use the same addrtype
-        match conn.addrtype.as_str() {
-            "IP4" => is_ipv4 = true,
-            "IP6" => is_ipv4 = false,
+        match conn.addrtype {
+            sdp_types::AddrType::Ip4 => is_ipv4 = true,
+            sdp_types::AddrType::Ip6 => is_ipv4 = false,
             _ => continue,
         };
         // Strip subnet mask, if any

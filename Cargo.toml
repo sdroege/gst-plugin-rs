@@ -207,4 +207,4 @@ gst-plugin-rtp = { path="net/rtp", version = "0.16.0-alpha" }
 gst-plugin-hlssink3 = { path="net/hlssink3", version = "0.16.0-alpha" }
 rustls = { version = "0.23", default-features = false, features = ["std"] }
 rustls-platform-verifier = "0.7"
-sdp-types = "0.1"
+sdp-types = "0.2"

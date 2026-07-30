@@ -2987,7 +2987,6 @@ impl RtspTaskState {
         self.aggregate_control = sdp
             .get_first_attribute_value("control")
             // No attribute and no value have the same meaning for us
-            .ok()
             .flatten()
             .and_then(|v| sdp::parse_control_path(v, &base));
     }
@@ -3031,7 +3030,6 @@ impl RtspTaskState {
             let media_control = m
                 .get_first_attribute_value("control")
                 // No attribute and no value have the same meaning for us
-                .ok()
                 .flatten()
                 .and_then(|v| sdp::parse_control_path(v, &base));
             let aggregate_control = self.aggregate_control.clone();

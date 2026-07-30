@@ -24,6 +24,11 @@ use librice::stream::Credentials;
 use librice::stream::Stream;
 use tokio::task::JoinHandle;
 
+use sdp_types::Direction;
+use sdp_types::Fingerprint;
+use sdp_types::HashFunc;
+use sdp_types::MediaType;
+
 use crate::RUNTIME;
 use crate::transceiver::Transceiver;
 use crate::transceiver::imp::rtp_caps_to_media;
@@ -33,12 +38,8 @@ use crate::webrtcsession::dtls::DtlsEvent;
 use crate::webrtcsession::dtls::DtlsPollRet;
 use crate::webrtcsession::dtls::KeyMaterial;
 use crate::webrtcsession::dtls::TlsImpl;
-use crate::webrtcsession::sdp::Direction;
 use crate::webrtcsession::sdp::DtlsSetup;
-use crate::webrtcsession::sdp::Fingerprint;
-use crate::webrtcsession::sdp::HashFunc;
 use crate::webrtcsession::sdp::MediaSpecifics;
-use crate::webrtcsession::sdp::MediaType;
 use crate::webrtcsession::sdp::WebRTCSdpMedia;
 use crate::webrtcsession::sdp::{WebRTCSdp, WebRTCSdpType};
 
@@ -468,11 +469,11 @@ impl State {
             && sdp
                 .fingerprints
                 .iter()
-                .all(|sdp_fp| sdp_fp.func() == HashFunc::Sha256 && sdp_fp.value() != fp)
+                .all(|sdp_fp| sdp_fp.hash_func == HashFunc::Sha256 && sdp_fp.fingerprint != fp)
             && media
                 .fingerprints
                 .iter()
-                .all(|sdp_fp| sdp_fp.func() == HashFunc::Sha256 && sdp_fp.value() != fp)
+                .all(|sdp_fp| sdp_fp.hash_func == HashFunc::Sha256 && sdp_fp.fingerprint != fp)
         {
             gst::fixme!(CAT, "DTLS fingerprint does not match SDP!");
             return;
@@ -652,9 +653,10 @@ impl WebRTCSession {
                 new_media.ice_ufrag = Some(librice::random_string(8));
                 new_media.ice_pwd = Some(librice::random_string(32));
             };
-            new_media
-                .fingerprints
-                .push(Fingerprint::new(HashFunc::Sha256, dtls.local_fingerprint()));
+            new_media.fingerprints.push(Fingerprint::with_fingerprint(
+                HashFunc::Sha256,
+                dtls.local_fingerprint(),
+            ));
             let mid = idx.to_string();
             new_media.mid = Some(mid.clone());
             if desc.group_bundle.is_empty() {
@@ -806,9 +808,10 @@ impl WebRTCSession {
             } else if bundle_idx.is_some() {
                 new_media.port = 0;
             }
-            new_media
-                .fingerprints
-                .push(Fingerprint::new(HashFunc::Sha256, dtls.local_fingerprint()));
+            new_media.fingerprints.push(Fingerprint::with_fingerprint(
+                HashFunc::Sha256,
+                dtls.local_fingerprint(),
+            ));
             if let Some(mid) = media.mid.as_ref() {
                 desc.group_bundle.push(mid.clone());
             }
@@ -1072,7 +1075,7 @@ impl WebRTCSession {
                                 && dtls
                                     .expected_remote_fingerprint
                                     .iter()
-                                    .any(|expected| expected.value() == remote_fp)
+                                    .any(|expected| expected.fingerprint == remote_fp)
                             {
                                 gst::info!(CAT, "found valid remote dtls certificate fingerprint");
                                 valid_fingerprint = true;
@@ -1244,7 +1247,7 @@ impl WebRTCSession {
                             let caps = gst::Caps::builder("application/x-rtp")
                                 .field("payload", *format as i32)
                                 .field("clock-rate", rtpmap.clock_rate as i32)
-                                .field("encoding-name", rtpmap.name.to_ascii_uppercase())
+                                .field("encoding-name", rtpmap.encoding_name.to_ascii_uppercase())
                                 .field("media", media_str)
                                 .build();
                             pt_map = pt_map.field(format.to_string(), caps);
@@ -2098,7 +2101,8 @@ fn resolve_server_dns<T>(
 
 #[cfg(test)]
 mod tests {
-    use crate::webrtcsession::sdp::{DtlsSetup, MediaSpecifics, MediaType, RtpMap, RtpMedia};
+    use crate::webrtcsession::sdp::{DtlsSetup, MediaSpecifics, RtpMedia};
+    use sdp_types::{MediaType, RtpMap};
 
     use super::*;
 
@@ -2280,7 +2284,7 @@ mod tests {
         let offer = rx.recv().unwrap();
         let sdp = WebRTCSdp::parse(WebRTCSdpType::Offer, &offer).unwrap();
         let mut media0 = crate::webrtcsession::sdp::RtpMedia {
-            direction: crate::webrtcsession::sdp::Direction::SendRecv,
+            direction: Direction::SendRecv,
             rtcp_mux: true,
             rtcp_mux_only: true,
             rtcp_rsize: false,
@@ -2291,18 +2295,12 @@ mod tests {
             rtcp_fbs: Default::default(),
             fmtps: Default::default(),
         };
-        media0.rtpmaps.insert(
-            11,
-            RtpMap {
-                name: "L16".to_string(),
-                clock_rate: 44100,
-                params: None,
-            },
-        );
+        let rtpmap = RtpMap::new(11, "L16", 44_100);
+        media0.rtpmaps.insert(rtpmap.payload_type, rtpmap);
         let expected_offer = ExpectedSdp {
             typ: WebRTCSdpType::Offer,
             media: vec![ExpectedSdpMedia {
-                media: crate::webrtcsession::sdp::MediaType::Audio,
+                media: MediaType::Audio,
                 ice_ufrag: Some(true),
                 ice_pwd: Some(true),
                 setup: Some(DtlsSetup::ActPass),
@@ -2382,7 +2380,7 @@ mod tests {
         let offer = rx.recv().unwrap();
         let sdp = WebRTCSdp::parse(WebRTCSdpType::Offer, &offer).unwrap();
         let mut media0 = crate::webrtcsession::sdp::RtpMedia {
-            direction: crate::webrtcsession::sdp::Direction::SendRecv,
+            direction: Direction::SendRecv,
             rtcp_mux: true,
             rtcp_mux_only: true,
             rtcp_rsize: false,
@@ -2393,16 +2391,10 @@ mod tests {
             rtcp_fbs: Default::default(),
             fmtps: Default::default(),
         };
-        media0.rtpmaps.insert(
-            11,
-            RtpMap {
-                name: "L16".to_string(),
-                clock_rate: 44100,
-                params: None,
-            },
-        );
+        let rtpmap = RtpMap::new(11, "L16", 44_100);
+        media0.rtpmaps.insert(rtpmap.payload_type, rtpmap);
         let mut media1 = crate::webrtcsession::sdp::RtpMedia {
-            direction: crate::webrtcsession::sdp::Direction::SendRecv,
+            direction: Direction::SendRecv,
             rtcp_mux: true,
             rtcp_mux_only: true,
             rtcp_rsize: false,
@@ -2413,19 +2405,13 @@ mod tests {
             rtcp_fbs: Default::default(),
             fmtps: Default::default(),
         };
-        media1.rtpmaps.insert(
-            96,
-            RtpMap {
-                name: "VP8".to_string(),
-                clock_rate: 90000,
-                params: None,
-            },
-        );
+        let rtpmap = RtpMap::new(96, "VP8", 90_000);
+        media1.rtpmaps.insert(rtpmap.payload_type, rtpmap);
         let expected_offer = ExpectedSdp {
             typ: WebRTCSdpType::Offer,
             media: vec![
                 ExpectedSdpMedia {
-                    media: crate::webrtcsession::sdp::MediaType::Audio,
+                    media: MediaType::Audio,
                     ice_ufrag: Some(true),
                     ice_pwd: Some(true),
                     setup: Some(DtlsSetup::ActPass),
@@ -2435,7 +2421,7 @@ mod tests {
                     rtp: Some(media0),
                 },
                 ExpectedSdpMedia {
-                    media: crate::webrtcsession::sdp::MediaType::Video,
+                    media: MediaType::Video,
                     ice_ufrag: Some(false),
                     ice_pwd: Some(false),
                     setup: None,

@@ -7,6 +7,7 @@ use std::sync::LazyLock;
 use std::{collections::BTreeSet, fmt::Display};
 
 use librice::candidate::{Candidate, ParseCandidateError};
+use sdp_types::{Direction, ExtMap, Fingerprint, Fmtp, MediaType, RtpMap, TransportProto};
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -111,11 +112,11 @@ impl WebRTCSdp {
                 "ice-lite" => ice_lite = true,
                 "fingerprint" => fingerprints.push(
                     attr.value
-                        .clone()
-                        .and_then(|val| parse_fingerprint(&val))
+                        .as_ref()
                         .ok_or_else(|| {
                             ParseWebRTCSdpError::InvalidAttribute("fingerprint".to_string())
-                        })?,
+                        })?
+                        .parse::<Fingerprint>()?,
                 ),
                 "setup" => {
                     setup = Some(parse_unique_attribute_with_value(
@@ -249,76 +250,35 @@ impl WebRTCSdp {
     }
 
     pub fn to_sdp_string(&self) -> String {
-        let mut session = sdp_types::Session {
-            origin: sdp_types::Origin {
-                username: Some("-".to_string()),
-                sess_id: self.id.clone(),
-                sess_version: 0,
-                nettype: "IN".to_owned(),
-                addrtype: "IP4".to_owned(),
-                unicast_address: "0.0.0.0".to_owned(),
-            },
-            session_name: "-".to_owned(),
-            session_description: None,
-            uri: None,
-            emails: vec![],
-            phones: vec![],
-            connection: None,
-            bandwidths: vec![],
-            times: vec![sdp_types::Time {
-                start_time: 0,
-                stop_time: 0,
-                repeats: vec![],
-            }],
-            time_zones: vec![],
-            key: None,
-            attributes: vec![sdp_types::Attribute {
-                attribute: "ice-options".to_owned(),
-                value: Some("trickle".to_string()),
-            }],
-            medias: self
-                .media
+        let session = sdp_types::Session::builder(
+            sdp_types::Origin::builder_with_ip_addr(
+                self.id.clone(),
+                0,
+                std::net::Ipv4Addr::UNSPECIFIED,
+            )
+            .username("-")
+            .build(),
+            "-",
+        )
+        .attribute_with_value("ice-options", "trickle")
+        .medias(self.media.iter().map(|media| media.to_sdp_types()))
+        .attribute_from_str_if("ice-lite", self.ice_lite)
+        .attribute_with_value_if_some("ice-ufrag", self.ice_ufrag.clone())
+        .attribute_with_value_if_some("ice-pwd", self.ice_pwd.clone())
+        .attributes(self.fingerprints.clone())
+        .attribute_with_value_if(
+            "group",
+            self.group_bundle
                 .iter()
-                .map(|media| media.to_sdp_types())
-                .collect(),
-        };
+                .fold("BUNDLE".to_string(), |mut value, bundle_tag| {
+                    value.push(' ');
+                    value.push_str(bundle_tag);
 
-        if self.ice_lite {
-            session.attributes.push(sdp_types::Attribute {
-                attribute: "ice-lite".to_owned(),
-                value: None,
-            });
-        }
-        if let Some(ufrag) = self.ice_ufrag.clone() {
-            session.attributes.push(sdp_types::Attribute {
-                attribute: "ice-ufrag".to_owned(),
-                value: Some(ufrag),
-            });
-        }
-        if let Some(pwd) = self.ice_pwd.clone() {
-            session.attributes.push(sdp_types::Attribute {
-                attribute: "ice-pwd".to_owned(),
-                value: Some(pwd),
-            });
-        }
-        for fingerprint in self.fingerprints.iter() {
-            session.attributes.push(sdp_types::Attribute {
-                attribute: "fingerprint".to_owned(),
-                value: Some(fingerprint.to_sdp_attribute_value()),
-            });
-        }
-        if !self.group_bundle.is_empty() {
-            let mut value = String::from("BUNDLE");
-
-            for bundle_tag in self.group_bundle.iter() {
-                value.push(' ');
-                value.push_str(bundle_tag);
-            }
-            session.attributes.push(sdp_types::Attribute {
-                attribute: "group".to_string(),
-                value: Some(value),
-            });
-        }
+                    value
+                }),
+            !self.group_bundle.is_empty(),
+        )
+        .build();
 
         let mut ret = vec![];
         session.write(&mut ret).unwrap();
@@ -419,7 +379,7 @@ impl WebRTCSdpMedia {
         mline: u32,
         media: &sdp_types::Media,
     ) -> Result<Self, ParseWebRTCSdpError> {
-        let media_type = parse_media_type(&media.media)?;
+        let media_type = media.media.parse::<MediaType>()?;
         let is_rtp = [MediaType::Audio, MediaType::Video].contains(&media_type)
             && is_valid_rtp_profile(&media.proto);
         let is_sctp = [MediaType::Application].contains(&media_type)
@@ -523,11 +483,11 @@ impl WebRTCSdpMedia {
                 }
                 "fingerprint" => fingerprints.push(
                     attr.value
-                        .clone()
-                        .and_then(|val| parse_fingerprint(&val))
+                        .as_ref()
                         .ok_or_else(|| {
                             ParseWebRTCSdpError::InvalidAttribute("fingerprint".to_string())
-                        })?,
+                        })?
+                        .parse::<Fingerprint>()?,
                 ),
                 key if !KNOWN_RTP_MEDIA_ATTRIBUTES.contains(&key)
                     && !KNOWN_SCTP_MEDIA_ATTRIBUTES.contains(&key) =>
@@ -593,180 +553,78 @@ impl WebRTCSdpMedia {
             String::new()
         };
         let proto = if self.specifics.rtp().is_some() {
-            "UDP/TLS/RTP/SAVPF".to_string()
+            TransportProto::UdpTlsRtpSavpf
         } else {
-            "UDP/DTLS/SCTP".to_string()
+            TransportProto::UdpDtlsSctp
         };
-        let mut ret = sdp_types::Media {
-            media: self.media.as_str().to_owned(),
-            port: self.port,
-            num_ports: None,
-            proto,
-            fmt,
-            media_title: None,
-            connections: vec![sdp_types::Connection {
-                nettype: "IN".to_string(),
-                addrtype: "IP4".to_string(),
-                connection_address: "0.0.0.0".to_string(),
-            }],
-            bandwidths: vec![],
-            key: None,
-            attributes: vec![],
-        };
+        let mut builder = sdp_types::Media::builder(self.media, self.port, proto, fmt)
+            .connection(sdp_types::Connection::from_ip_addr(
+                std::net::Ipv4Addr::UNSPECIFIED,
+            ))
+            .attribute_with_value_if_some("ice-ufrag", self.ice_ufrag.clone())
+            .attribute_with_value_if_some("ice-pwd", self.ice_pwd.clone())
+            .attribute_with_value_if_some("setup", self.setup.map(|setup| setup.as_str()))
+            .attribute_with_value_if_some("mid", self.mid.clone())
+            .attribute_from_str_if("bundle-only", self.bundle_only)
+            .attributes(self.candidates.iter().map(|cand| {
+                let mut s = cand.to_sdp_string();
+                if s.starts_with("a=candidate:") {
+                    s = s[12..].to_string();
+                }
+                sdp_types::Attribute::with_value("candidate", s)
+            }))
+            .attribute_from_str_if("end-of-candidates", self.end_of_candidates)
+            .attributes(self.fingerprints.clone());
 
-        if let Some(ufrag) = self.ice_ufrag.clone() {
-            ret.attributes.push(sdp_types::Attribute {
-                attribute: "ice-ufrag".to_owned(),
-                value: Some(ufrag),
-            });
-        }
-        if let Some(pwd) = self.ice_pwd.clone() {
-            ret.attributes.push(sdp_types::Attribute {
-                attribute: "ice-pwd".to_owned(),
-                value: Some(pwd),
-            });
-        }
-        if let Some(setup) = self.setup {
-            ret.attributes.push(sdp_types::Attribute {
-                attribute: "setup".to_owned(),
-                value: Some(setup.as_str().to_owned()),
-            });
-        }
-        if let Some(mid) = self.mid.clone() {
-            ret.attributes.push(sdp_types::Attribute {
-                attribute: "mid".to_owned(),
-                value: Some(mid),
-            });
-        }
-        if self.bundle_only {
-            ret.attributes.push(sdp_types::Attribute {
-                attribute: "bundle-only".to_owned(),
-                value: None,
-            });
-        }
-
-        for cand in self.candidates.iter() {
-            let mut s = cand.to_sdp_string();
-            if s.starts_with("a=candidate:") {
-                s = s[12..].to_string();
-            }
-            ret.attributes.push(sdp_types::Attribute {
-                attribute: "candidate".to_owned(),
-                value: Some(s),
-            });
-        }
-        if self.end_of_candidates {
-            ret.attributes.push(sdp_types::Attribute {
-                attribute: "end-of-candidates".to_owned(),
-                value: None,
-            });
-        }
-        for fingerprint in self.fingerprints.iter() {
-            ret.attributes.push(sdp_types::Attribute {
-                attribute: "fingerprint".to_owned(),
-                value: Some(fingerprint.to_sdp_attribute_value()),
-            });
-        }
-
-        match &self.specifics {
+        builder = match &self.specifics {
             MediaSpecifics::Rtp(rtp) => {
-                if rtp.rtcp_mux {
-                    ret.attributes.push(sdp_types::Attribute {
-                        attribute: "rtcp-mux".to_owned(),
-                        value: None,
-                    });
-                }
-                if rtp.rtcp_mux_only {
-                    ret.attributes.push(sdp_types::Attribute {
-                        attribute: "rtcp-mux-only".to_owned(),
-                        value: None,
-                    });
-                }
-                if rtp.rtcp_rsize {
-                    ret.attributes.push(sdp_types::Attribute {
-                        attribute: "rtcp-rsize".to_owned(),
-                        value: None,
-                    });
-                }
-                ret.attributes.push(sdp_types::Attribute {
-                    attribute: rtp.direction.as_str().to_owned(),
-                    value: None,
-                });
+                builder = builder
+                    .attribute_from_str_if("rtcp-mux", rtp.rtcp_mux)
+                    .attribute_from_str_if("rtcp-mux-only", rtp.rtcp_mux_only)
+                    .attribute_from_str_if("rtcp-rsize", rtp.rtcp_rsize)
+                    .attribute_from_str(rtp.direction);
+
                 for (payload, fb) in rtp
                     .rtcp_fbs
                     .iter()
                     .map(|(pt, fb)| (pt.to_string(), fb))
                     .chain(rtp.rtcp_fb.iter().map(|fb| ("*".to_string(), fb)))
                 {
-                    if fb.nack {
-                        ret.attributes.push(sdp_types::Attribute {
-                            attribute: "rtcp-fb".to_string(),
-                            value: Some(format!("{payload} nack")),
-                        });
-                    }
-                    if fb.nack_pli {
-                        ret.attributes.push(sdp_types::Attribute {
-                            attribute: "rtcp-fb".to_string(),
-                            value: Some(format!("{payload} nack pli")),
-                        });
-                    }
-                    if fb.ccm_fir {
-                        ret.attributes.push(sdp_types::Attribute {
-                            attribute: "rtcp-fb".to_string(),
-                            value: Some(format!("{payload} ccm fir")),
-                        });
-                    }
-                    if fb.transport_cc {
-                        ret.attributes.push(sdp_types::Attribute {
-                            attribute: "rtcp-fb".to_string(),
-                            value: Some(format!("{payload} transport-cc")),
-                        });
-                    }
+                    builder = builder
+                        .attribute_with_value_if("rtcp-fb", format!("{payload} nack"), fb.nack)
+                        .attribute_with_value_if(
+                            "rtcp-fb",
+                            format!("{payload} nack pli"),
+                            fb.nack_pli,
+                        )
+                        .attribute_with_value_if(
+                            "rtcp-fb",
+                            format!("{payload} ccm fir"),
+                            fb.ccm_fir,
+                        )
+                        .attribute_with_value_if(
+                            "rtcp-fb",
+                            format!("{payload} transport-cc"),
+                            fb.transport_cc,
+                        );
                 }
-                for ext in rtp.extmap.iter() {
-                    let mut val = ext.id.to_string();
-                    if ext.direction != Direction::SendRecv {
-                        val.push('/');
-                        val.push_str(ext.direction.as_str());
-                    }
-                    val.push(' ');
-                    val.push_str(&ext.name);
-                    val.push(' ');
-                    if let Some(params) = ext.params.as_ref() {
-                        val.push_str(params);
-                    }
-                    ret.attributes.push(sdp_types::Attribute {
-                        attribute: "extmap".to_string(),
-                        value: Some(val),
-                    });
-                }
-                for (pt, map) in rtp.rtpmaps.iter() {
-                    let mut val = format!("{pt} {}/{}", map.name, map.clock_rate);
-                    if let Some(params) = map.params.as_ref() {
-                        val.push('/');
-                        val.push_str(params);
-                    }
-                    ret.attributes.push(sdp_types::Attribute {
-                        attribute: "rtpmap".to_string(),
-                        value: Some(val),
-                    });
-                }
-                for (pt, fmtp) in rtp.fmtps.iter() {
-                    ret.attributes.push(sdp_types::Attribute {
-                        attribute: "fmtp".to_string(),
-                        value: Some(format!("{pt} {fmtp}")),
-                    });
-                }
+
+                builder
+                    .attributes(rtp.extmap.iter().cloned().map(|mut ext| {
+                        if let Some(Direction::SendRecv) = ext.direction {
+                            ext.direction = None;
+                        }
+                        ext
+                    }))
+                    .attributes(rtp.rtpmaps.values().cloned())
+                    .attributes(rtp.fmtps.values().cloned())
             }
             MediaSpecifics::Datachannel(channel) => {
-                ret.attributes.push(sdp_types::Attribute {
-                    attribute: "sctp-port".to_owned(),
-                    value: Some(channel.sctp_port.to_string()),
-                });
+                builder.attribute_with_value("sctp-port", channel.sctp_port)
             }
-        }
+        };
 
-        ret
+        builder.build()
     }
 
     pub fn intersect(&self, other: &Self) -> Option<Self> {
@@ -796,47 +654,6 @@ impl WebRTCSdpMedia {
     }
 }
 
-fn parse_media_type(media: &str) -> Result<MediaType, ParseWebRTCSdpError> {
-    MediaType::from_str(media)
-        .map_err(|_| ParseWebRTCSdpError::InvalidAttribute("media".to_string()))
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum MediaType {
-    Audio,
-    Video,
-    Text,
-    Application,
-    Message,
-}
-
-impl MediaType {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::Audio => "audio",
-            Self::Video => "video",
-            Self::Text => "text",
-            Self::Application => "application",
-            Self::Message => "message",
-        }
-    }
-}
-
-impl FromStr for MediaType {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "audio" => Ok(Self::Audio),
-            "video" => Ok(Self::Video),
-            "text" => Ok(Self::Text),
-            "application" => Ok(Self::Application),
-            "message" => Ok(Self::Message),
-            _ => Err(()),
-        }
-    }
-}
-
 fn parse_ice_attribute(
     mline: Option<u32>,
     key: &str,
@@ -848,27 +665,6 @@ fn parse_ice_attribute(
     } else {
         Err(ParseWebRTCSdpError::InvalidAttribute(key.to_string()).with_mline(mline))
     }
-}
-
-fn parse_fingerprint(fingerprint: &str) -> Option<Fingerprint> {
-    let mut it = fingerprint.split(" ");
-    let hash_func = HashFunc::from_str(it.next()?).ok()?;
-    let hash_str = it.next()?;
-    if it.next().is_some() {
-        // we are not expecting another value
-        return None;
-    }
-
-    let mut hash_value = vec![];
-    for byte in hash_str.split(":") {
-        let byte = u8::from_str_radix(byte, 16).ok()?;
-        hash_value.push(byte);
-    }
-
-    Some(Fingerprint {
-        hash_func,
-        hash_value,
-    })
 }
 
 fn parse_setup(setup: &str) -> Result<DtlsSetup, ParseWebRTCSdpError> {
@@ -991,85 +787,6 @@ fn is_valid_datachannel_profile(profile: &str) -> bool {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Fingerprint {
-    hash_func: HashFunc,
-    hash_value: Vec<u8>,
-}
-
-impl Fingerprint {
-    pub fn new(func: HashFunc, value: Vec<u8>) -> Self {
-        Self {
-            hash_func: func,
-            hash_value: value,
-        }
-    }
-
-    fn to_sdp_attribute_value(&self) -> String {
-        let mut ret = self.hash_func.as_str().to_owned();
-        self.hash_value.iter().fold(false, |first_run, byte| {
-            if !first_run {
-                ret.push(' ');
-            } else {
-                ret.push(':');
-            }
-            ret.push_str(&format!("{byte:02X?}"));
-            true
-        });
-        ret
-    }
-
-    pub fn func(&self) -> HashFunc {
-        self.hash_func
-    }
-
-    pub fn value(&self) -> &[u8] {
-        &self.hash_value
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HashFunc {
-    Sha1,
-    Sha224,
-    Sha256,
-    Sha384,
-    Sha512,
-    Md5,
-    Md2,
-}
-
-impl HashFunc {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::Sha1 => "sha-1",
-            Self::Sha224 => "sha-224",
-            Self::Sha256 => "sha-256",
-            Self::Sha384 => "sha-384",
-            Self::Sha512 => "sha-512",
-            Self::Md5 => "md5",
-            Self::Md2 => "md2",
-        }
-    }
-}
-
-impl FromStr for HashFunc {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "sha-1" => Ok(Self::Sha1),
-            "sha-224" => Ok(Self::Sha224),
-            "sha-256" => Ok(Self::Sha256),
-            "sha-384" => Ok(Self::Sha384),
-            "sha-512" => Ok(Self::Sha512),
-            "md5" => Ok(Self::Md5),
-            "md2" => Ok(Self::Md2),
-            _ => Err(()),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MediaSpecifics {
     Rtp(RtpMedia),
     Datachannel(DataChannelMedia),
@@ -1085,36 +802,6 @@ impl MediaSpecifics {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct RtpMap {
-    pub name: String,
-    pub clock_rate: u32,
-    pub params: Option<String>,
-}
-
-impl RtpMap {
-    fn from_str(s: &str) -> Result<(u8, Self), ()> {
-        let mut s = s.splitn(2, " ");
-        let pt = s.next().and_then(parse_payload).ok_or(())?;
-        let params = s.next().ok_or(())?;
-        let mut s = params.split("/");
-        let enc_name = s.next().ok_or(())?;
-        let clock_rate = s.next().and_then(|cr| cr.parse::<u32>().ok()).ok_or(())?;
-        let enc_params = s.next().map(|s| s.to_string());
-        if s.next().is_some() {
-            return Err(());
-        }
-        Ok((
-            pt,
-            RtpMap {
-                name: enc_name.to_string(),
-                clock_rate,
-                params: enc_params,
-            },
-        ))
-    }
-}
-
 fn parse_payload(s: &str) -> Option<u8> {
     let pt = s.parse::<u8>().ok()?;
     if pt > 127 {
@@ -1123,6 +810,7 @@ fn parse_payload(s: &str) -> Option<u8> {
     Some(pt)
 }
 
+// Note: very different from the sdp_types version
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct RtcpFb {
     pub nack: bool,
@@ -1308,14 +996,6 @@ impl RtcpFb {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct RtpExtension {
-    pub id: u8,
-    pub direction: Direction,
-    pub name: String,
-    pub params: Option<String>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RtpMedia {
     pub direction: Direction,
@@ -1323,11 +1003,11 @@ pub struct RtpMedia {
     pub rtcp_mux_only: bool,
     pub rtcp_rsize: bool,
     pub rtcp_fb: Option<RtcpFb>,
-    pub extmap: BTreeSet<RtpExtension>,
+    pub extmap: BTreeSet<ExtMap>,
     pub formats: Vec<u8>,
     pub rtpmaps: BTreeMap<u8, RtpMap>,
     pub rtcp_fbs: BTreeMap<u8, RtcpFb>,
-    pub fmtps: BTreeMap<u8, String>,
+    pub fmtps: BTreeMap<u8, Fmtp>,
 }
 
 impl RtpMedia {
@@ -1347,7 +1027,7 @@ impl RtpMedia {
         let mut rtcp_fb_all = None;
         let mut rtpmaps = BTreeMap::<u8, RtpMap>::new();
         let extmap = BTreeSet::new();
-        let mut fmtps = BTreeMap::<u8, String>::new();
+        let mut fmtps = BTreeMap::<u8, Fmtp>::new();
         let mut rtcp_fbs = BTreeMap::<u8, RtcpFb>::new();
         let formats = media.fmt.split(" ").try_fold(vec![], |mut fmts, item| {
             parse_payload(item)
@@ -1452,17 +1132,8 @@ impl RtpMedia {
                     let Some(ref fb) = attr.value else {
                         return Err(ParseWebRTCSdpError::InvalidAttribute("fmtp".to_string()));
                     };
-                    let mut s = fb.splitn(2, " ");
-                    let Some(payload) = s.next().and_then(parse_payload) else {
-                        return Err(ParseWebRTCSdpError::InvalidAttribute("fmtp".to_string()));
-                    };
-                    if !formats.contains(&payload) {
-                        return Err(ParseWebRTCSdpError::InvalidAttribute("fmtp".to_string()));
-                    }
-                    let Some(fmtp) = s.next() else {
-                        return Err(ParseWebRTCSdpError::InvalidAttribute("fmtp".to_string()));
-                    };
-                    match fmtps.entry(payload) {
+                    let fmtp = fb.parse::<Fmtp>()?;
+                    match fmtps.entry(fmtp.fmt) {
                         std::collections::btree_map::Entry::Occupied(_occupied) => {
                             return Err(ParseWebRTCSdpError::MultipleMediaAttributes(
                                 mline,
@@ -1470,7 +1141,7 @@ impl RtpMedia {
                             ));
                         }
                         std::collections::btree_map::Entry::Vacant(vacant) => {
-                            vacant.insert(fmtp.to_string());
+                            vacant.insert(fmtp);
                         }
                     }
                 }
@@ -1478,9 +1149,8 @@ impl RtpMedia {
                     let Some(ref rtpmap) = attr.value else {
                         return Err(ParseWebRTCSdpError::InvalidAttribute("rtpmap".to_string()));
                     };
-                    let (payload, rtpmap) = RtpMap::from_str(rtpmap)
-                        .map_err(|_| ParseWebRTCSdpError::InvalidAttribute("rtpmap".to_string()))?;
-                    match rtpmaps.entry(payload) {
+                    let rtpmap = rtpmap.parse::<RtpMap>()?;
+                    match rtpmaps.entry(rtpmap.payload_type) {
                         std::collections::btree_map::Entry::Vacant(vacant) => {
                             vacant.insert(rtpmap);
                         }
@@ -1543,9 +1213,11 @@ impl RtpMedia {
             if offer_rtpmap.is_none() != answer_rtpmap.is_none()
                 && offer_rtpmap.is_some_and(|offer| {
                     answer_rtpmap.is_some_and(|answer| {
-                        !offer.name.eq_ignore_ascii_case(&answer.name)
+                        !offer
+                            .encoding_name
+                            .eq_ignore_ascii_case(&answer.encoding_name)
                             || offer.clock_rate != answer.clock_rate
-                            || offer.params != answer.params
+                            || offer.encoding_params != answer.encoding_params
                     })
                 })
             {
@@ -1563,7 +1235,7 @@ impl RtpMedia {
                     && !name.eq_ignore_ascii_case("telephone-event")
             };
             if let Some(rtpmap) = offer_rtpmap
-                && !is_supported_rtpmap(rtpmap.name.as_str())
+                && !is_supported_rtpmap(&rtpmap.encoding_name)
             {
                 continue;
             }
@@ -1595,71 +1267,6 @@ impl RtpMedia {
             todo!("extmaps are not supported yet");
         }
         ret
-    }
-}
-
-#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Direction {
-    #[default]
-    SendRecv,
-    SendOnly,
-    RecvOnly,
-    Inactive,
-}
-
-impl Direction {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::SendRecv => "sendrecv",
-            Self::SendOnly => "sendonly",
-            Self::RecvOnly => "recvonly",
-            Self::Inactive => "inactive",
-        }
-    }
-
-    pub fn has_send(self) -> bool {
-        matches!(self, Self::SendRecv | Self::SendOnly)
-    }
-
-    pub fn has_recv(self) -> bool {
-        matches!(self, Self::SendRecv | Self::RecvOnly)
-    }
-
-    pub fn reverse(self) -> Self {
-        match self {
-            Self::SendRecv => Self::SendRecv,
-            Self::SendOnly => Self::RecvOnly,
-            Self::RecvOnly => Self::SendOnly,
-            Self::Inactive => Self::Inactive,
-        }
-    }
-
-    pub fn intersect_with_remote(self, remote: Self) -> Self {
-        match (self, remote) {
-            (Self::Inactive, _)
-            | (_, Self::Inactive)
-            | (Self::RecvOnly, Self::RecvOnly)
-            | (Self::SendOnly, Self::SendOnly) => Self::Inactive,
-            (Self::SendRecv, Self::SendRecv) => Self::SendRecv,
-            (Self::SendOnly, Self::RecvOnly | Self::SendRecv)
-            | (Self::SendRecv, Self::RecvOnly) => Self::SendOnly,
-            (Self::RecvOnly, Self::SendRecv | Self::SendOnly)
-            | (Self::SendRecv, Self::SendOnly) => Self::RecvOnly,
-        }
-    }
-}
-
-impl FromStr for Direction {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "sendrecv" => Ok(Self::SendRecv),
-            "sendonly" => Ok(Self::SendOnly),
-            "recvonly" => Ok(Self::RecvOnly),
-            "inactive" => Ok(Self::Inactive),
-            _ => Err(()),
-        }
     }
 }
 
@@ -1711,7 +1318,11 @@ impl DataChannelMedia {
 #[derive(Debug, thiserror::Error)]
 pub enum ParseWebRTCSdpError {
     #[error("Syntax error: {0}")]
-    Syntax(sdp_types::ParserError),
+    Syntax(#[from] sdp_types::ParserError),
+    #[error("{}", .0)]
+    SdpTypesAttributeError(#[from] sdp_types::AttributeError),
+    #[error("{}", .0)]
+    SdpTypesParseEnumError(#[from] sdp_types::ParseEnumError),
     #[error("Multiple '{}' attributes were discovered", .0)]
     MultipleAttributes(String),
     #[error("Invalid '{}' attribute", .0)]
@@ -1742,12 +1353,6 @@ impl ParseWebRTCSdpError {
         } else {
             self
         }
-    }
-}
-
-impl From<sdp_types::ParserError> for ParseWebRTCSdpError {
-    fn from(value: sdp_types::ParserError) -> Self {
-        Self::Syntax(value)
     }
 }
 
@@ -1869,8 +1474,8 @@ a=rtcp-mux-only";
         assert_eq!(
             media.fingerprints,
             vec![Fingerprint {
-                hash_func: HashFunc::Sha256,
-                hash_value: vec![
+                hash_func: sdp_types::HashFunc::Sha256,
+                fingerprint: vec![
                     0x9b, 0x7b, 0xad, 0x68, 0xec, 0x00, 0x86, 0x1a, 0xcd, 0x09, 0x01, 0xe7, 0x7e,
                     0xc5, 0x53, 0x29, 0x1f, 0x91, 0xd8, 0x9e, 0x41, 0x72, 0x5c, 0x5d, 0xd1, 0xa1,
                     0x38, 0xb2, 0x6c, 0x35, 0x22, 0x58
@@ -1889,14 +1494,7 @@ a=rtcp-mux-only";
         assert_eq!(rtp.formats, vec![96]);
         assert_eq!(
             rtp.rtpmaps,
-            BTreeMap::from_iter([(
-                96,
-                RtpMap {
-                    name: String::from("OPUS"),
-                    clock_rate: 48000,
-                    params: None,
-                }
-            )])
+            BTreeMap::from_iter([(96, RtpMap::new(96, "OPUS", 48_000))]),
         );
         assert_eq!(
             rtp.rtcp_fbs,
