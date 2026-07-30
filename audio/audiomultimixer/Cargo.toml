@@ -1,0 +1,44 @@
+[package]
+name = "gst-plugin-audiomultimixer"
+version.workspace = true
+authors = ["Tim-Philipp Müller <tim@centricular.com>"]
+repository.workspace = true
+license = "MPL-2.0"
+description = "Audio Multimixer Plugin"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+byte-slice-cast = "1.0"
+glib.workspace = true
+gst = { workspace = true, features = ["v1_24"] }
+gst-base = { workspace = true, features = ["v1_24"] }
+gst-audio = { workspace = true, features = ["v1_24"] }
+
+[lib]
+name = "gstaudiomultimixer"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[dev-dependencies]
+gst-app = { workspace = true, features = ["v1_24"] }
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../../version-helper" }
+
+[features]
+static = []
+capi = []
+
+[package.metadata.capi]
+min_version = "0.8.0"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gstreamer-audio-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

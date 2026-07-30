@@ -80,6 +80,9 @@ You will find the following plugins in this repository:
       - `ebur128level`: Filter for measuring audio loudness according to EBU R-128.
       - `rsaudioecho`: a simple echo/reverb filter.
 
+    - `audiomultimixer`:
+      - `minus1mixer`: Minus-1 mixer element, creates for each input an output mix that contains all the other inputs.
+
     - `audioparsers`: Audio parser elements
       - `ac4parse`: Parses AC4 audio streams.
       - `s302mparse`: Parser for SMPTE S302M audio elementary streams.

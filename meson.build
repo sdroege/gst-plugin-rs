@@ -66,6 +66,9 @@ plugins = {
   'audiofx': {
     'library': 'libgstrsaudiofx',
   },
+  'audiomultimixer': {
+    'library': 'libgstaudiomultimixer',
+  },
   'audioparsers': {
     'library': 'libgstrsaudioparsers',
   },

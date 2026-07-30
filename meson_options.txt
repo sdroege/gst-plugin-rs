@@ -6,6 +6,7 @@ option('burn', type: 'feature', value: 'auto', description: 'Build burn plugin')
 
 # audio
 option('audiofx', type: 'feature', value: 'auto', description: 'Build audiofx plugin')
+option('audiomultimixer', type: 'feature', value: 'auto', description: 'Build audiomultimixer plugin')
 option('audioparsers', type: 'feature', value: 'auto', description: 'Build audioparsers plugin')
 option('claxon', type: 'feature', value: 'auto', description: 'Build claxon plugin')
 option('csound', type: 'feature', value: 'auto', description: 'Build csound plugin')

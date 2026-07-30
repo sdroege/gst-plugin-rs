@@ -4838,6 +4838,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-audiomultimixer"
+version = "0.16.0-alpha"
+dependencies = [
+ "byte-slice-cast",
+ "glib",
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-app",
+ "gstreamer-audio",
+ "gstreamer-base",
+]
+
+[[package]]
 name = "gst-plugin-audioparsers"
 version = "0.16.0-alpha"
 dependencies = [

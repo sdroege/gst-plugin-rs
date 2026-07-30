@@ -9,6 +9,7 @@ members = [
     "analytics/burn",
 
     "audio/audiofx",
+    "audio/audiomultimixer",
     "audio/audioparsers",
     "audio/claxon",
     "audio/csound",
@@ -93,8 +94,9 @@ default-members = [
     "analytics/analytics",
     "analytics/burn",
 
-    "audio/audioparsers",
     "audio/audiofx",
+    "audio/audiomultimixer",
+    "audio/audioparsers",
     "audio/claxon",
     "audio/demucs",
     "audio/lewton",

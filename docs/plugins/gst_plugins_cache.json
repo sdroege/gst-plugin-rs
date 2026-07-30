@@ -1,4 +1,195 @@
 {
+    "audiomultimixer": {
+        "description": "Audio Multimixer Plugin",
+        "elements": {
+            "minus1mixer": {
+                "author": "Tim-Philipp Müller <tim@centricular.com>",
+                "description": "Minus-1 Audio Mixer",
+                "hierarchy": [
+                    "GstMinus1Mixer",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Audio/Mixer",
+                "pad-templates": {
+                    "minus_%%u": {
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: 1\n         layout: interleaved\n         format: { S16LE, F32LE }\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    },
+                    "sink_%%u": {
+                        "caps": "audio/x-raw:\n           rate: [ 1, 2147483647 ]\n       channels: 1\n         layout: interleaved\n         format: { S16LE, F32LE }\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    }
+                },
+                "properties": {
+                    "alignment-threshold": {
+                        "blurb": "Timestamp alignment threshold in nanoseconds",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "40000000",
+                        "max": "18446744073709551614",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "discont-wait": {
+                        "blurb": "Window of time in nanoseconds to wait before creating a discontinuity",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1000000000",
+                        "max": "18446744073709551614",
+                        "min": "0",
+                        "mutable": "playing",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "force-live": {
+                        "blurb": "Always operate in live mode and aggregate on timeout regardless of whether any live sources are linked upstream",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "ignore-inactive-pads": {
+                        "blurb": "Avoid timing out waiting for inactive pads",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "latency": {
+                        "blurb": "Additional latency in live mode to allow upstream to take longer to produce buffers for the current position (in nanoseconds)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "min-upstream-latency": {
+                        "blurb": "When sources with a higher latency are expected to be plugged in dynamically after the aggregator has started playing, this allows overriding the minimum latency reported by the initial source(s). This is only taken into account when larger than the actually reported minimum latency. (nanoseconds)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "output-buffer-duration": {
+                        "blurb": "Output block size in nanoseconds",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "10000000",
+                        "max": "18446744073709551614",
+                        "min": "1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "output-buffer-duration-fraction": {
+                        "blurb": "Output block size in nanoseconds, expressed as a fraction",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1/100",
+                        "max": "2147483647/1",
+                        "min": "1/2147483647",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstFraction",
+                        "writable": true
+                    },
+                    "sample-rate": {
+                        "blurb": "Sample rate to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": true,
+                        "controllable": false,
+                        "default": "48000",
+                        "max": "2147483647",
+                        "min": "1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    },
+                    "start-time": {
+                        "blurb": "Start time to use if start-time-selection=set",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "18446744073709551615",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "start-time-selection": {
+                        "blurb": "Decides which start time is output",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "zero (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstAggregatorStartTimeSelection",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstaudiomultimixer",
+        "license": "MPL-2.0",
+        "other-types": {},
+        "package": "gst-plugin-audiomultimixer",
+        "source": "gst-plugin-audiomultimixer",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "aws": {
         "description": "GStreamer Amazon Web Services plugin",
         "elements": {
