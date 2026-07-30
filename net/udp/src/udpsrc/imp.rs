@@ -9,7 +9,7 @@
 
 /**
  * SECTION:element-udpsrc2
- * @see_also: udpsrc, udpsink, multiudpsink.
+ * @see_also: udpsink2, multiudpsink2, udpsrc.
  *
  * `udpsrc2` is a network source that reads UDP packets from the network.
  * It can be combined with RTP depayloaders to implement RTP streaming.
@@ -71,19 +71,19 @@
  *
  * ## Examples
  * |[
- * gst-launch-1.0 -v udpsrc2 ! fakesink dump=1
- * ]| A pipeline to read from the default port and dump the UDP packets.
+ * gst-launch-1.0 -v udpsrc2 port=5000 ! fakesink dump=1
+ * ]| A pipeline to read UDP packets from port 5000 and dump them.
  *
- * To actually generate UDP packets on the default port one can use the
- * `udpsink` element. When running the following pipeline in another terminal, the
- * above mentioned pipeline should dump data packets to the console.
+ * To actually generate UDP packets one can use the `udpsink2` element. When
+ * running the following pipeline in another terminal, the above mentioned
+ * pipeline should dump data packets to the console.
  * |[
- * gst-launch-1.0 -v audiotestsrc ! udpsink
+ * gst-launch-1.0 -v audiotestsrc ! udpsink2 host=127.0.0.1 port=5000
  * ]|
  *
  * |[
- * gst-launch-1.0 -v udpsrc port=0 ! fakesink
- * ]| read UDP packets from a free port.
+ * gst-launch-1.0 -v udpsrc2 port=0 ! fakesink
+ * ]| Read UDP packets from a free port.
  *
  * Since: plugins-rs-0.16.0
  */
@@ -94,11 +94,11 @@ use gst_base::{
 };
 
 use std::{
-    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::{Arc, LazyLock, Mutex},
 };
 
-use crate::net;
+use crate::{net, uri::Host};
 use atomic_refcell::AtomicRefCell;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
@@ -115,7 +115,7 @@ const DEFAULT_MULTICAST_IFACE: Option<&str> = None;
 
 #[derive(Debug, Clone)]
 struct Settings {
-    address: IpAddr,
+    address: Host,
     port: u16,
     buffer_size: u32,
     mtu: u32,
@@ -139,7 +139,7 @@ struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
-            address: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+            address: Host::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
             port: 5000,
             buffer_size: 0,
             mtu: 1500,
@@ -165,7 +165,7 @@ impl Default for Settings {
 struct State {
     poll: Option<mio::Poll>,
     events: mio::Events,
-    socket: Option<net::UdpSocket>,
+    socket: Option<net::UdpRecvSocket>,
     waker: Option<Arc<mio::Waker>>,
 }
 
@@ -418,38 +418,34 @@ impl ObjectImpl for UdpSrc {
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "address" => {
-                let mut settings = self.settings.lock().unwrap();
                 let address = value.get::<Option<&str>>().expect("type checked upstream");
-
-                let address = match address {
-                    Some(address) => address,
-                    None => {
-                        gst::info!(
-                            CAT,
-                            imp = self,
-                            "Changing address from {} to 0.0.0.0",
-                            settings.address,
-                        );
-                        settings.address = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
-                        return;
-                    }
-                };
-
-                let address = match address.parse::<IpAddr>() {
-                    Ok(address) => address,
-                    Err(err) => {
-                        gst::error!(CAT, imp = self, "Failed parsing address {address}: {err}",);
-                        return;
-                    }
-                };
-
-                gst::info!(
-                    CAT,
-                    imp = self,
-                    "Changing address from {} to {address}",
-                    settings.address,
-                );
-                settings.address = address;
+                let mut settings = self.settings.lock().unwrap();
+                if let Some(address) = address {
+                    let resolved = match Host::resolve(address) {
+                        Ok(h) => h,
+                        Err(err) => {
+                            gst::error!(CAT, imp = self, "{err}");
+                            return;
+                        }
+                    };
+                    gst::info!(
+                        CAT,
+                        imp = self,
+                        "Changing address from {} to {}",
+                        settings.address.as_str(),
+                        resolved.as_str()
+                    );
+                    settings.address = resolved;
+                } else {
+                    gst::info!(
+                        CAT,
+                        imp = self,
+                        "Changing address from {} to {}",
+                        settings.address.as_str(),
+                        Settings::default().address.as_str(),
+                    );
+                    settings.address = Settings::default().address;
+                }
             }
             "port" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -463,9 +459,15 @@ impl ObjectImpl for UdpSrc {
                 settings.port = u16::try_from(port).unwrap_or(0);
             }
             "uri" => {
-                let uri = value.get().expect("type checked upstream");
-                if let Err(err) = self.obj().set_uri(uri) {
-                    gst::warning!(CAT, imp = self, "Failed setting URI '{uri}': {err}");
+                let uri = value.get::<Option<&str>>().expect("type checked upstream");
+                if let Some(uri) = uri {
+                    if let Err(err) = self.obj().set_uri(uri) {
+                        gst::warning!(CAT, imp = self, "Failed setting URI '{uri}': {err}");
+                    }
+                } else {
+                    let mut settings = self.settings.lock().unwrap();
+                    settings.address = Settings::default().address;
+                    settings.port = Settings::default().port;
                 }
             }
             "buffer-size" => {
@@ -519,7 +521,7 @@ impl ObjectImpl for UdpSrc {
                     .expect("type checked upstream")
                     .unwrap_or("");
 
-                match parse_source_filter(source_filter) {
+                match crate::uri::parse_source_filter(source_filter) {
                     Err(err) => {
                         gst::warning!(
                             CAT,
@@ -677,7 +679,7 @@ impl ObjectImpl for UdpSrc {
         match pspec.name() {
             "address" => {
                 let settings = self.settings.lock().unwrap();
-                settings.address.to_string().to_value()
+                settings.address.as_str().to_value()
             }
             "port" => {
                 let settings = self.settings.lock().unwrap();
@@ -848,14 +850,14 @@ impl UdpSrc {
             *waker_storage = Some(waker.clone());
         }
 
-        let saddr = SocketAddr::new(settings.address, settings.port);
+        let saddr = SocketAddr::new(settings.address.addr, settings.port);
 
         let mut notify_address = false;
         let mut notify_port = false;
         let mut socket;
 
         if let Some(ref set_socket) = settings.socket {
-            socket = net::UdpSocket::wrap_socket(
+            socket = net::UdpRecvSocket::wrap_socket(
                 &*self.obj(),
                 set_socket,
                 &settings.source_filter,
@@ -876,11 +878,11 @@ impl UdpSrc {
             let local_addr = socket.local_addr();
             gst::debug!(CAT, imp = self, "Application socket bound to {local_addr}");
             settings.port = local_addr.port();
-            settings.address = local_addr.ip();
+            settings.address = Host::new(local_addr.ip());
             notify_port = true;
             notify_address = true;
         } else {
-            socket = net::UdpSocket::bind(
+            socket = net::UdpRecvSocket::bind(
                 &*self.obj(),
                 saddr,
                 settings.reuse,
@@ -1144,11 +1146,7 @@ impl URIHandlerImpl for UdpSrc {
 
     fn uri(&self) -> Option<String> {
         let settings = self.settings.lock().unwrap();
-        let mut uri = if settings.address.is_ipv6() {
-            format!("udp://[{}]:{}", settings.address, settings.port)
-        } else {
-            format!("udp://{}:{}", settings.address, settings.port)
-        };
+        let mut uri = format!("udp://{}:{}", settings.address.uri_string(), settings.port);
 
         if !settings.source_filter.is_empty() {
             uri.push_str("?source-filter=");
@@ -1167,17 +1165,18 @@ impl URIHandlerImpl for UdpSrc {
     }
 
     fn set_uri(&self, uri: &str) -> Result<(), glib::Error> {
-        let (addr, port, source_filter, source_filter_exclusive) = parse_uri(uri)?;
+        let (host, port, source_filter, source_filter_exclusive) =
+            crate::uri::parse_uri_for_src(uri)?;
 
         let mut settings = self.settings.lock().unwrap();
 
         gst::debug!(
             CAT,
             imp = self,
-            "Setting address to {addr} and port to {port}"
+            "Setting address to {host} and port to {port}"
         );
 
-        settings.address = addr;
+        settings.address = host;
         settings.port = port;
 
         gst::debug!(
@@ -1196,376 +1195,5 @@ impl URIHandlerImpl for UdpSrc {
         self.obj().notify("source-filter-exclusive");
 
         Ok(())
-    }
-}
-
-fn parse_uri(uri: &str) -> Result<(IpAddr, u16, Vec<IpAddr>, bool), glib::Error> {
-    let Some((scheme, remainder)) = uri.split_once("://") else {
-        return Err(glib::Error::new(
-            gst::URIError::BadUri,
-            "Invalid URI format",
-        ));
-    };
-
-    if scheme.to_lowercase() != "udp" {
-        return Err(glib::Error::new(
-            gst::URIError::UnsupportedProtocol,
-            format!("Unsupported URI scheme {scheme}").as_str(),
-        ));
-    }
-
-    let (addr, remainder) = if let Some(remainder) = remainder.strip_prefix('[') {
-        let Some((ip, remainder)) = remainder.split_once(']') else {
-            return Err(glib::Error::new(
-                gst::URIError::BadUri,
-                "Invalid IPv6 address in URI",
-            ));
-        };
-
-        let Some(remainder) = remainder.strip_prefix(':') else {
-            return Err(glib::Error::new(
-                gst::URIError::BadUri,
-                "Missing port in URI",
-            ));
-        };
-
-        (
-            IpAddr::V6(ip.parse::<Ipv6Addr>().map_err(|err| {
-                glib::Error::new(
-                    gst::URIError::BadUri,
-                    format!("Invalid URI IPv6 address: {err}").as_str(),
-                )
-            })?),
-            remainder,
-        )
-    } else {
-        let Some((host, remainder)) = remainder.split_once(':') else {
-            return Err(glib::Error::new(
-                gst::URIError::BadUri,
-                "Missing port in URI",
-            ));
-        };
-
-        let ip = if let Ok(ip) = host.parse::<Ipv4Addr>() {
-            IpAddr::V4(ip)
-        } else {
-            use std::net::ToSocketAddrs;
-
-            if host.is_empty() {
-                return Err(glib::Error::new(
-                    gst::URIError::BadUri,
-                    "Invalid empty URI host",
-                ));
-            }
-
-            let saddr = (host, 0u16)
-                .to_socket_addrs()
-                .map_err(|err| {
-                    glib::Error::new(
-                        gst::URIError::BadUri,
-                        format!("Couldn't resolve URI host: {err}").as_str(),
-                    )
-                })?
-                .next()
-                .ok_or_else(|| {
-                    glib::Error::new(gst::URIError::BadUri, "Couldn't resolve URI host")
-                })?;
-
-            saddr.ip()
-        };
-
-        (ip, remainder)
-    };
-
-    let (port, source_filter, source_filter_exclusive) = if let Some((port, query)) =
-        remainder.split_once('?')
-    {
-        let mut source_filter = Vec::new();
-        let mut source_filter_exclusive = false;
-
-        for (key, value) in query.split('&').filter_map(|s| s.split_once('=')) {
-            match key {
-                "source-filter" => {
-                    source_filter = parse_source_filter(value)?;
-                }
-                "source-filter-exclusive" => {
-                    source_filter_exclusive = match value {
-                        "true" | "1" => true,
-                        "false" | "0" => false,
-                        _ => {
-                            return Err(glib::Error::new(
-                                gst::URIError::BadUri,
-                                format!("Invalid source-filter-exclusive value {value}").as_str(),
-                            ));
-                        }
-                    };
-                }
-                "multicast-source" => {
-                    // Backwards compatibility with old udpsrc. Theoretically it supported mixed
-                    // inclusive and exclusive filters, which made no sense and only inclusive
-                    // filters we supported anyway so that's what we do here as a best effort.
-                    source_filter = parse_multicast_source(value)?;
-                    source_filter_exclusive = false;
-                }
-                _ => {}
-            }
-        }
-
-        (port, source_filter, source_filter_exclusive)
-    } else {
-        (remainder, Vec::new(), false)
-    };
-
-    let port = match port.parse::<u16>() {
-        Ok(port) => port,
-        Err(err) => {
-            return Err(glib::Error::new(
-                gst::URIError::BadUri,
-                format!("Invalid URI port: {err}").as_str(),
-            ));
-        }
-    };
-
-    Ok((addr, port, source_filter, source_filter_exclusive))
-}
-
-fn parse_source_filter(source_filter: &str) -> Result<Vec<IpAddr>, glib::Error> {
-    let mut addrs = Vec::new();
-
-    if source_filter.is_empty() {
-        return Ok(addrs);
-    }
-
-    for addr_str in source_filter.split(',') {
-        if addr_str.is_empty() {
-            continue;
-        }
-
-        let addr = match addr_str.parse::<IpAddr>() {
-            Ok(addr) => addr,
-            Err(_err) => {
-                use std::net::ToSocketAddrs;
-
-                let saddr = (addr_str, 0u16)
-                    .to_socket_addrs()
-                    .map_err(|err| {
-                        glib::Error::new(
-                            gst::URIError::BadUri,
-                            format!("Couldn't resolve source filter address: {err}").as_str(),
-                        )
-                    })?
-                    .next()
-                    .ok_or_else(|| {
-                        glib::Error::new(
-                            gst::URIError::BadUri,
-                            "Couldn't resolve source filter address",
-                        )
-                    })?;
-
-                saddr.ip()
-            }
-        };
-
-        if !addrs.contains(&addr) {
-            addrs.push(addr);
-        }
-    }
-
-    Ok(addrs)
-}
-
-fn parse_multicast_source(mut multicast_source: &str) -> Result<Vec<IpAddr>, glib::Error> {
-    let mut addrs = Vec::new();
-
-    while !multicast_source.is_empty() {
-        let (positive, remainder) = if let Some(remainder) = multicast_source.strip_prefix('+') {
-            (true, remainder)
-        } else if let Some(remainder) = multicast_source.strip_prefix('-') {
-            (false, remainder)
-        } else {
-            // Assume it's a positive source
-            (true, multicast_source)
-        };
-
-        let next_idx = remainder.match_indices(['+', '-']).next();
-        let (addr, remainder) = next_idx
-            .map(|(next_idx, _)| remainder.split_at(next_idx))
-            .unwrap_or((remainder, ""));
-
-        let addr = {
-            use std::net::ToSocketAddrs;
-
-            if addr.is_empty() {
-                return Err(glib::Error::new(
-                    gst::URIError::BadUri,
-                    "Invalid empty URI host",
-                ));
-            }
-
-            let saddr = (addr, 0u16)
-                .to_socket_addrs()
-                .map_err(|err| {
-                    glib::Error::new(
-                        gst::URIError::BadUri,
-                        format!("Couldn't resolve URI host: {err}").as_str(),
-                    )
-                })?
-                .next()
-                .ok_or_else(|| {
-                    glib::Error::new(gst::URIError::BadUri, "Couldn't resolve URI host")
-                })?;
-
-            saddr.ip()
-        };
-
-        if positive {
-            if !addrs.contains(&addr) {
-                addrs.push(addr);
-            }
-        } else {
-            // Negative filters are ignored here as old udpsrc did not support them anyway.
-        }
-
-        multicast_source = remainder;
-    }
-
-    Ok(addrs)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_uri() {
-        let (addr, port, _source_filter, _exclusive) = parse_uri("udp://0.0.0.0:5000").unwrap();
-        assert_eq!(addr, Ipv4Addr::new(0, 0, 0, 0));
-        assert_eq!(port, 5000);
-
-        let (addr, port, _source_filter, _exclusive) = parse_uri("udp://[::]:5000").unwrap();
-        assert_eq!(addr, Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0));
-        assert_eq!(port, 5000);
-
-        let (_addr, port, _source_filter, _exclusive) = parse_uri("udp://localhost:5000").unwrap();
-        // We don't know what localhost actually maps to
-        assert_eq!(port, 5000);
-
-        let (addr, port, _source_filter, _exclusive) = parse_uri("udp://0.0.0.0:5000?").unwrap();
-        assert_eq!(addr, Ipv4Addr::new(0, 0, 0, 0));
-        assert_eq!(port, 5000);
-
-        let (addr, port, _source_filter, _exclusive) =
-            parse_uri("udp://0.0.0.0:5000?foo=bar&baz=baz").unwrap();
-        assert_eq!(addr, Ipv4Addr::new(0, 0, 0, 0));
-        assert_eq!(port, 5000);
-
-        let (addr, port, source_filter, exclusive) =
-            parse_uri("udp://0.0.0.0:5000?foo=bar&multicast-source=+127.0.0.1").unwrap();
-        assert_eq!(addr, Ipv4Addr::new(0, 0, 0, 0));
-        assert_eq!(port, 5000);
-        assert_eq!(source_filter, vec![Ipv4Addr::new(127, 0, 0, 1)]);
-        assert!(!exclusive);
-
-        let (addr, port, source_filter, exclusive) =
-            parse_uri("udp://0.0.0.0:5000?multicast-source=+127.0.0.1+127.0.0.2").unwrap();
-        assert_eq!(addr, Ipv4Addr::new(0, 0, 0, 0));
-        assert_eq!(port, 5000);
-        assert_eq!(
-            source_filter,
-            vec![Ipv4Addr::new(127, 0, 0, 1), Ipv4Addr::new(127, 0, 0, 2)]
-        );
-        assert!(!exclusive);
-
-        let (addr, port, source_filter, exclusive) =
-            parse_uri("udp://0.0.0.0:5000?multicast-source=127.0.0.1-127.0.0.2").unwrap();
-        assert_eq!(addr, Ipv4Addr::new(0, 0, 0, 0));
-        assert_eq!(port, 5000);
-        assert_eq!(source_filter, vec![Ipv4Addr::new(127, 0, 0, 1)]);
-        assert!(!exclusive);
-
-        let (addr, port, source_filter, exclusive) =
-            parse_uri("udp://0.0.0.0:5000?multicast-source=-127.0.0.1").unwrap();
-        assert_eq!(addr, Ipv4Addr::new(0, 0, 0, 0));
-        assert_eq!(port, 5000);
-        assert!(source_filter.is_empty());
-        assert!(!exclusive);
-
-        let (addr, port, source_filter, exclusive) =
-            parse_uri("udp://0.0.0.0:5000?source-filter=127.0.0.1,127.0.0.2").unwrap();
-        assert_eq!(addr, Ipv4Addr::new(0, 0, 0, 0));
-        assert_eq!(port, 5000);
-        assert_eq!(
-            source_filter,
-            vec![Ipv4Addr::new(127, 0, 0, 1), Ipv4Addr::new(127, 0, 0, 2)]
-        );
-        assert!(!exclusive);
-
-        let (addr, port, source_filter, exclusive) = parse_uri(
-            "udp://0.0.0.0:5000?source-filter=127.0.0.1,127.0.0.2&source-filter-exclusive=false",
-        )
-        .unwrap();
-        assert_eq!(addr, Ipv4Addr::new(0, 0, 0, 0));
-        assert_eq!(port, 5000);
-        assert_eq!(
-            source_filter,
-            vec![Ipv4Addr::new(127, 0, 0, 1), Ipv4Addr::new(127, 0, 0, 2)]
-        );
-        assert!(!exclusive);
-
-        let (addr, port, source_filter, exclusive) =
-            parse_uri("udp://0.0.0.0:5000?source-filter=127.0.0.1&source-filter-exclusive=true")
-                .unwrap();
-        assert_eq!(addr, Ipv4Addr::new(0, 0, 0, 0));
-        assert_eq!(port, 5000);
-        assert_eq!(source_filter, vec![Ipv4Addr::new(127, 0, 0, 1)]);
-        assert!(exclusive);
-
-        let Err(err) = parse_uri("udp://") else {
-            unreachable!();
-        };
-        assert_eq!(err.kind::<gst::URIError>(), Some(gst::URIError::BadUri));
-
-        let Err(err) = parse_uri("udpppp://") else {
-            unreachable!();
-        };
-        assert_eq!(
-            err.kind::<gst::URIError>(),
-            Some(gst::URIError::UnsupportedProtocol)
-        );
-
-        let Err(err) = parse_uri("udp://::1:5000") else {
-            unreachable!();
-        };
-        assert_eq!(err.kind::<gst::URIError>(), Some(gst::URIError::BadUri));
-
-        let Err(err) = parse_uri("udp://127.0.0.1") else {
-            unreachable!();
-        };
-        assert_eq!(err.kind::<gst::URIError>(), Some(gst::URIError::BadUri));
-
-        let Err(err) = parse_uri("udp://:1") else {
-            unreachable!();
-        };
-        assert_eq!(err.kind::<gst::URIError>(), Some(gst::URIError::BadUri));
-
-        let Err(err) = parse_uri("udp://::1") else {
-            unreachable!();
-        };
-        assert_eq!(err.kind::<gst::URIError>(), Some(gst::URIError::BadUri));
-
-        let Err(err) = parse_uri("udp://[::1]") else {
-            unreachable!();
-        };
-        assert_eq!(err.kind::<gst::URIError>(), Some(gst::URIError::BadUri));
-
-        let Err(err) = parse_uri("udp://[localhost]") else {
-            unreachable!();
-        };
-        assert_eq!(err.kind::<gst::URIError>(), Some(gst::URIError::BadUri));
-
-        let Err(err) = parse_uri("udp://0.0.0.0/test") else {
-            unreachable!();
-        };
-        assert_eq!(err.kind::<gst::URIError>(), Some(gst::URIError::BadUri));
     }
 }

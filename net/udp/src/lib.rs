@@ -6,18 +6,29 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+#[cfg(feature = "doc")]
+use gst::prelude::*;
+
 /**
  * plugin-rsudp:
  *
  * Since: plugins-rs-0.16.0
  */
+mod baseudpsink;
+mod multiudpsink;
 mod net;
+mod udpsink;
 mod udpsrc;
+mod uri;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "v1_30")]
     plugin.set_static_features_flag();
 
+    #[cfg(feature = "doc")]
+    baseudpsink::BaseUdpSink::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    udpsink::register(plugin)?;
+    multiudpsink::register(plugin)?;
     udpsrc::register(plugin)?;
 
     Ok(())

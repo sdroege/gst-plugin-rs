@@ -6009,11 +6009,13 @@ dependencies = [
  "gstreamer-base",
  "gstreamer-check",
  "gstreamer-net",
+ "indexmap 2.14.1",
  "itertools 0.15.0",
  "libc",
  "lru 0.18.3",
  "mio",
  "socket2 0.6.5",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

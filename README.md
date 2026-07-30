@@ -301,6 +301,8 @@ You will find the following plugins in this repository:
       - `rtspsrc2`: New Rust implementation of a Real Time Streaming Protocol (RTSP) (RFC 2326, 7826) source element.
 
     - `udp`:
+      - `multiudpsink2`: New version of the `multiudpsink`.
+      - `udpsink2`: New version of the `udpsink`.
       - `udpsrc2`: New version of the `udpsrc` with a lot better performance.
 
     - `webrtc`: WebRTC elements, with batteries included Sink elements for specific signalling protocols.

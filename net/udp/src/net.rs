@@ -1,6 +1,4 @@
-// GStreamer
-//
-// Copyright (C) 2015-2026 Sebastian Dröge <sebastian@centricular.com>
+// Copyright (C) 2024-2026 Sebastian Dröge <sebastian@centricular.com>
 //
 // This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at
@@ -9,7 +7,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     io, mem,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     sync::LazyLock,
@@ -19,6 +17,11 @@ use gst::prelude::*;
 
 use getifaddrs::Interface;
 
+#[cfg(windows)]
+use windows_sys::Win32::Networking::WinSock::{
+    AF_INET, AF_INET6, SOCKADDR_IN, SOCKADDR_IN6, SOCKADDR_STORAGE,
+};
+
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "udp2",
@@ -27,7 +30,85 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     )
 });
 
-pub struct UdpSocket {
+#[cfg(not(windows))]
+pub(crate) fn fill_sockaddr(addr: &SocketAddr) -> (libc::sockaddr_storage, u32) {
+    let mut storage: libc::sockaddr_storage = unsafe { mem::zeroed() };
+    let namelen = match addr {
+        SocketAddr::V4(v4) => {
+            let sa = unsafe {
+                &mut *(&mut storage as *mut libc::sockaddr_storage as *mut libc::sockaddr_in)
+            };
+            sa.sin_family = libc::AF_INET as u16;
+            sa.sin_port = v4.port().to_be();
+            sa.sin_addr.s_addr = u32::from_ne_bytes(v4.ip().octets());
+            mem::size_of::<libc::sockaddr_in>() as u32
+        }
+        SocketAddr::V6(v6) => {
+            let sa = unsafe {
+                &mut *(&mut storage as *mut libc::sockaddr_storage as *mut libc::sockaddr_in6)
+            };
+            sa.sin6_family = libc::AF_INET6 as u16;
+            sa.sin6_port = v6.port().to_be();
+            sa.sin6_addr.s6_addr = v6.ip().octets();
+            sa.sin6_flowinfo = 0;
+            sa.sin6_scope_id = 0;
+            mem::size_of::<libc::sockaddr_in6>() as u32
+        }
+    };
+    (storage, namelen)
+}
+
+#[cfg(windows)]
+pub(crate) fn fill_sockaddr(addr: &SocketAddr) -> (SOCKADDR_STORAGE, u32) {
+    let mut storage: SOCKADDR_STORAGE = unsafe { mem::zeroed() };
+    let namelen = match addr {
+        SocketAddr::V4(v4) => {
+            let sa = unsafe { &mut *(&mut storage as *mut SOCKADDR_STORAGE as *mut SOCKADDR_IN) };
+            sa.sin_family = AF_INET;
+            sa.sin_port = v4.port().to_be();
+            sa.sin_addr.S_un.S_addr = u32::from_ne_bytes(v4.ip().octets());
+            mem::size_of::<SOCKADDR_IN>() as u32
+        }
+        SocketAddr::V6(v6) => {
+            let sa = unsafe { &mut *(&mut storage as *mut SOCKADDR_STORAGE as *mut SOCKADDR_IN6) };
+            sa.sin6_family = AF_INET6;
+            sa.sin6_port = v6.port().to_be();
+            sa.sin6_addr.u.Byte = v6.ip().octets();
+            sa.sin6_flowinfo = 0;
+            sa.Anonymous.sin6_scope_id = 0;
+            mem::size_of::<SOCKADDR_IN6>() as u32
+        }
+    };
+    (storage, namelen)
+}
+
+#[cfg(not(windows))]
+pub(crate) fn sockaddr_to_addr(storage: &libc::sockaddr_storage) -> SocketAddr {
+    unsafe {
+        match storage.ss_family as i32 {
+            libc::AF_INET => {
+                let addr = &*(storage as *const libc::sockaddr_storage as *const libc::sockaddr_in);
+                SocketAddr::V4(SocketAddrV4::new(
+                    Ipv4Addr::from(addr.sin_addr.s_addr.to_ne_bytes()),
+                    u16::from_be(addr.sin_port),
+                ))
+            }
+            libc::AF_INET6 => {
+                let addr =
+                    &*(storage as *const libc::sockaddr_storage as *const libc::sockaddr_in6);
+                SocketAddr::V6(SocketAddrV6::new(
+                    Ipv6Addr::from(addr.sin6_addr.s6_addr),
+                    u16::from_be(addr.sin6_port),
+                    addr.sin6_flowinfo,
+                    addr.sin6_scope_id,
+                ))
+            }
+            _ => unreachable!("storage.ss_family == {}", storage.ss_family),
+        }
+    }
+}
+
+pub struct UdpRecvSocket {
     element: gst::Element,
     socket: SocketAndWrappedSocket,
     local_addr: SocketAddr,
@@ -57,10 +138,10 @@ pub struct UdpSocket {
     recvmsg_cache: Vec<Ctrl>,
 }
 
-unsafe impl Send for UdpSocket {}
-unsafe impl Sync for UdpSocket {}
+unsafe impl Send for UdpRecvSocket {}
+unsafe impl Sync for UdpRecvSocket {}
 
-impl UdpSocket {
+impl UdpRecvSocket {
     pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
     }
@@ -357,12 +438,15 @@ impl UdpSocket {
         )?;
 
         if saddr.ip().is_multicast() && auto_multicast {
-            socket.join_multicast(
+            let joined_ifaces_and_sources = join_multicast(
+                element.as_ref(),
+                &mut socket.socket,
                 saddr.ip(),
                 multicast_iface,
                 source_filter,
                 source_filter_exclusive,
             )?;
+            socket.multicast_joined = Some((saddr.ip(), joined_ifaces_and_sources));
         }
 
         Ok(socket)
@@ -581,585 +665,6 @@ impl UdpSocket {
         }
     }
 
-    fn join_multicast(
-        &mut self,
-        addr: IpAddr,
-        ifaces: Option<&str>,
-        source_filter: &[IpAddr],
-        source_filter_exclusive: bool,
-    ) -> Result<(), anyhow::Error> {
-        use anyhow::Context as _;
-
-        if let Some(ifaces) = ifaces {
-            gst::debug!(
-                CAT,
-                obj = self.element,
-                "Joining multicast group {addr} for interfaces {ifaces}"
-            );
-        } else {
-            gst::debug!(CAT, obj = self.element, "Joining multicast group {addr}");
-        }
-
-        if !source_filter.is_empty() {
-            gst::debug!(
-                CAT,
-                obj = self.element,
-                "Using source-filter {source_filter:?} (exclusive: {source_filter_exclusive})"
-            );
-        }
-
-        if !addr.is_multicast() {
-            gst::warning!(CAT, obj = self.element, "{addr} is not a multicast address");
-            return Ok(());
-        }
-
-        let mut joined_ifaces = vec![];
-
-        if let Some(ifaces) = ifaces {
-            let ifaces = ifaces
-                .split(',')
-                .map(|s| s.to_string())
-                .collect::<Vec<String>>();
-
-            let iter = getifaddrs::getifaddrs().context("Failed to get interfaces")?;
-
-            for iface in iter {
-                // Skip interfaces of the wrong address family
-                if iface.address.is_ipv4() && addr.is_ipv6()
-                    || iface.address.is_ipv6() && addr.is_ipv4()
-                    || (!iface.address.is_ipv6() && !iface.address.is_ipv4())
-                {
-                    continue;
-                }
-
-                if !ifaces.iter().any(|selected_iface| {
-                    if &iface.name == selected_iface {
-                        return true;
-                    }
-
-                    // check if name matches the interface description (Friendly name) on Windows
-                    #[cfg(windows)]
-                    if &iface.description == selected_iface {
-                        return true;
-                    }
-
-                    false
-                }) {
-                    continue;
-                }
-
-                if !iface.flags.contains(getifaddrs::InterfaceFlags::MULTICAST) {
-                    gst::warning!(
-                        CAT,
-                        obj = self.element,
-                        "Skipping interface {}: does not support multicast",
-                        iface.name
-                    );
-                    continue;
-                }
-
-                if !iface.flags.contains(getifaddrs::InterfaceFlags::UP) {
-                    gst::warning!(
-                        CAT,
-                        obj = self.element,
-                        "Skipping interface {}: not up",
-                        iface.name
-                    );
-                    continue;
-                }
-
-                gst::trace!(
-                    CAT,
-                    obj = self.element,
-                    "Selecting interface {}",
-                    iface.name
-                );
-
-                joined_ifaces.push(iface);
-            }
-        }
-
-        if joined_ifaces.is_empty() {
-            joined_ifaces.push(getifaddrs::Interface {
-                name: "default".to_owned(),
-                #[cfg(windows)]
-                description: "default".to_owned(),
-
-                address: if addr.is_ipv4() {
-                    getifaddrs::Address::V4(getifaddrs::NetworkAddress {
-                        address: Ipv4Addr::UNSPECIFIED,
-                        netmask: None,
-                        associated_address: None,
-                    })
-                } else {
-                    getifaddrs::Address::V6(getifaddrs::NetworkAddress {
-                        address: Ipv6Addr::UNSPECIFIED,
-                        netmask: None,
-                        associated_address: None,
-                    })
-                },
-                flags: getifaddrs::InterfaceFlags::UP,
-                index: Some(0),
-            });
-        }
-
-        let mut joined_ifaces_and_sources = Vec::new();
-
-        match addr {
-            IpAddr::V4(ref addr) => {
-                for iface in &joined_ifaces {
-                    // Only use source filter if there is one, it's not
-                    // exclusive and this platform supports it.
-                    //
-                    // Otherwise just join the multicast group as usual.
-                    let use_source_filter = !source_filter.is_empty()
-                        && !source_filter_exclusive
-                        && cfg!(not(any(
-                            target_os = "dragonfly",
-                            target_os = "haiku",
-                            target_os = "hurd",
-                            target_os = "netbsd",
-                            target_os = "openbsd",
-                            target_os = "redox",
-                            target_os = "fuchsia",
-                            target_os = "nto",
-                            target_os = "espidf",
-                            target_os = "vita",
-                        )));
-
-                    if !use_source_filter {
-                        gst::trace!(
-                            CAT,
-                            obj = self.element,
-                            "Joining the multicast group {addr} with interface {}",
-                            iface.name
-                        );
-
-                        self.multicast_group_operation_v4(addr, iface, true)
-                            .with_context(|| {
-                                format!(
-                                    "Joining the multicast group {addr} with interface {}",
-                                    iface.name
-                                )
-                            })?;
-                        joined_ifaces_and_sources.push((iface.clone(), Vec::new()));
-                    } else {
-                        let socket = socket2::SockRef::from(&*self.socket);
-                        let mut sources = Vec::new();
-                        for source in source_filter {
-                            let source = match source {
-                                IpAddr::V4(ip) => ip,
-                                IpAddr::V6(_) => continue,
-                            };
-
-                            let iface_addr = match iface.address {
-                                getifaddrs::Address::V4(ref network_address) => {
-                                    network_address.address
-                                }
-                                getifaddrs::Address::V6(_) | getifaddrs::Address::Mac(_) => {
-                                    unreachable!()
-                                }
-                            };
-
-                            gst::trace!(
-                                CAT,
-                                obj = self.element,
-                                "Joining the multicast group {addr} with interface {} and source {source}",
-                                iface.name
-                            );
-
-                            #[cfg(not(any(
-                                target_os = "dragonfly",
-                                target_os = "haiku",
-                                target_os = "hurd",
-                                target_os = "netbsd",
-                                target_os = "openbsd",
-                                target_os = "redox",
-                                target_os = "fuchsia",
-                                target_os = "nto",
-                                target_os = "espidf",
-                                target_os = "vita",
-                            )))]
-                            {
-                                socket.join_ssm_v4(source, addr, &iface_addr)
-                                    .with_context(|| {
-                                        format!(
-                                            "Joining the multicast group {addr} with interface {} and source {source}",
-                                            iface.name
-                                        )
-                                    })?;
-                            }
-                            #[cfg(any(
-                                target_os = "dragonfly",
-                                target_os = "haiku",
-                                target_os = "hurd",
-                                target_os = "netbsd",
-                                target_os = "openbsd",
-                                target_os = "redox",
-                                target_os = "fuchsia",
-                                target_os = "nto",
-                                target_os = "espidf",
-                                target_os = "vita",
-                            ))]
-                            {
-                                // Checked above
-                                unreachable!();
-                            }
-
-                            sources.push(IpAddr::V4(*source));
-                        }
-                        joined_ifaces_and_sources.push((iface.clone(), sources));
-                    }
-                }
-            }
-            IpAddr::V6(ref addr) => {
-                for iface in &joined_ifaces {
-                    let socket = socket2::SockRef::from(&*self.socket);
-
-                    // Only use source filter if there is one, it's not
-                    // exclusive and this platform supports it.
-                    //
-                    // Otherwise just join the multicast group as usual.
-                    let use_source_filter = !source_filter.is_empty()
-                        && !source_filter_exclusive
-                        && cfg!(any(target_os = "linux", target_os = "android"));
-
-                    if !use_source_filter {
-                        gst::trace!(
-                            CAT,
-                            obj = self.element,
-                            "Joining the multicast group {addr} with interface {}",
-                            iface.name
-                        );
-
-                        socket
-                            .join_multicast_v6(addr, iface.index.unwrap_or(0))
-                            .with_context(|| {
-                                format!(
-                                    "Joining the multicast group {addr} with interface {}",
-                                    iface.name
-                                )
-                            })?;
-                        joined_ifaces_and_sources.push((iface.clone(), Vec::new()));
-                    } else {
-                        let mut sources = Vec::new();
-                        for source in source_filter {
-                            let source = match source {
-                                IpAddr::V6(ip) => ip,
-                                IpAddr::V4(_) => continue,
-                            };
-
-                            gst::trace!(
-                                CAT,
-                                obj = self.element,
-                                "Joining the multicast group {addr} with interface {} and source {source}",
-                                iface.name
-                            );
-
-                            self.multicast_group_operation_v6_ssm(addr, iface, source, true)
-                                    .with_context(|| {
-                                        format!(
-                                            "Joining the multicast group {addr} with interface {} and source {source}",
-                                            iface.name
-                                        )
-                                    })?;
-                            sources.push(IpAddr::V6(*source));
-                        }
-                        joined_ifaces_and_sources.push((iface.clone(), sources));
-                    }
-                }
-            }
-        }
-
-        self.multicast_joined = Some((addr, joined_ifaces_and_sources));
-
-        Ok(())
-    }
-
-    pub fn leave_multicast(&mut self) {
-        let Some((addr, joined_ifaces)) = self.multicast_joined.take() else {
-            return;
-        };
-
-        match addr {
-            IpAddr::V4(addr) => {
-                for (iface, sources) in joined_ifaces {
-                    if sources.is_empty() {
-                        gst::debug!(
-                            CAT,
-                            obj = self.element,
-                            "interface {} leaving the multicast {addr}",
-                            iface.name
-                        );
-
-                        // use the custom written API to be able to pass the interface index
-                        // for all types of target OS
-                        if let Err(err) = self.multicast_group_operation_v4(&addr, &iface, false) {
-                            gst::warning!(
-                                CAT,
-                                obj = self.element,
-                                "Failed to leave multicast group: {err}"
-                            );
-                        }
-                    } else {
-                        for source in sources {
-                            let source = match source {
-                                IpAddr::V4(ip) => ip,
-                                IpAddr::V6(_) => continue,
-                            };
-
-                            let iface_addr = match iface.address {
-                                getifaddrs::Address::V4(ref network_address) => {
-                                    network_address.address
-                                }
-                                getifaddrs::Address::V6(_) | getifaddrs::Address::Mac(_) => {
-                                    unreachable!()
-                                }
-                            };
-
-                            gst::debug!(
-                                CAT,
-                                obj = self.element,
-                                "interface {} leaving the multicast {addr} and source {source}",
-                                iface.name
-                            );
-
-                            #[cfg(not(any(
-                                target_os = "dragonfly",
-                                target_os = "haiku",
-                                target_os = "hurd",
-                                target_os = "netbsd",
-                                target_os = "openbsd",
-                                target_os = "redox",
-                                target_os = "fuchsia",
-                                target_os = "nto",
-                                target_os = "espidf",
-                                target_os = "vita",
-                            )))]
-                            {
-                                let socket = socket2::SockRef::from(&*self.socket);
-                                // use the custom written API to be able to pass the interface index
-                                // for all types of target OS
-                                if let Err(err) = socket.leave_ssm_v4(&source, &addr, &iface_addr) {
-                                    gst::warning!(
-                                        CAT,
-                                        obj = self.element,
-                                        "Failed to leave multicast group: {err}"
-                                    );
-                                }
-                            }
-                            #[cfg(any(
-                                target_os = "dragonfly",
-                                target_os = "haiku",
-                                target_os = "hurd",
-                                target_os = "netbsd",
-                                target_os = "openbsd",
-                                target_os = "redox",
-                                target_os = "fuchsia",
-                                target_os = "nto",
-                                target_os = "espidf",
-                                target_os = "vita",
-                            ))]
-                            {
-                                unreachable!();
-                            }
-                        }
-                    }
-                }
-            }
-            IpAddr::V6(addr) => {
-                for (iface, sources) in joined_ifaces {
-                    let socket = socket2::SockRef::from(&*self.socket);
-                    if sources.is_empty() {
-                        gst::debug!(
-                            CAT,
-                            obj = self.element,
-                            "interface {} leaving the multicast {addr}",
-                            iface.name
-                        );
-                        if let Err(err) = socket.leave_multicast_v6(&addr, iface.index.unwrap_or(0))
-                        {
-                            gst::warning!(
-                                CAT,
-                                obj = self.element,
-                                "Failed to leave multicast group: {err}"
-                            );
-                        };
-                    } else {
-                        for source in sources {
-                            let source = match source {
-                                IpAddr::V6(ip) => ip,
-                                IpAddr::V4(_) => continue,
-                            };
-
-                            gst::debug!(
-                                CAT,
-                                obj = self.element,
-                                "interface {} leaving the multicast {addr} and source {source}",
-                                iface.name
-                            );
-
-                            // use the custom written API to be able to pass the interface index
-                            // for all types of target OS
-                            if let Err(err) =
-                                self.multicast_group_operation_v6_ssm(&addr, &iface, &source, false)
-                            {
-                                gst::warning!(
-                                    CAT,
-                                    obj = self.element,
-                                    "Failed to leave multicast group: {err}"
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn multicast_group_operation_v4(
-        &mut self,
-        addr: &Ipv4Addr,
-        iface: &Interface,
-        join: bool,
-    ) -> Result<(), io::Error> {
-        let socket = socket2::SockRef::from(&*self.socket);
-
-        #[cfg(not(any(
-            target_os = "aix",
-            target_os = "haiku",
-            target_os = "illumos",
-            target_os = "netbsd",
-            target_os = "openbsd",
-            target_os = "redox",
-            target_os = "solaris",
-            target_os = "nto",
-            target_os = "espidf",
-            target_os = "vita",
-            target_os = "cygwin",
-        )))]
-        {
-            let index = iface.index.unwrap_or(0);
-
-            if join {
-                socket
-                    .join_multicast_v4_n(addr, &socket2::InterfaceIndexOrAddress::Index(index))?;
-            } else {
-                socket
-                    .leave_multicast_v4_n(addr, &socket2::InterfaceIndexOrAddress::Index(index))?;
-            }
-
-            Ok(())
-        }
-
-        #[cfg(any(
-            target_os = "aix",
-            target_os = "haiku",
-            target_os = "illumos",
-            target_os = "netbsd",
-            target_os = "openbsd",
-            target_os = "redox",
-            target_os = "solaris",
-            target_os = "nto",
-            target_os = "espidf",
-            target_os = "vita",
-            target_os = "cygwin",
-        ))]
-        {
-            let ip_addr = match iface.address {
-                getifaddrs::Address::V4(ref network_address) => network_address.address,
-                getifaddrs::Address::V6(_) | getifaddrs::Address::Mac(_) => unreachable!(),
-            };
-
-            if join {
-                socket.join_multicast_v4(addr, &ip_addr)?;
-            } else {
-                socket.leave_multicast_v4(addr, &ip_addr)?;
-            }
-
-            Ok(())
-        }
-    }
-
-    fn multicast_group_operation_v6_ssm(
-        &mut self,
-        #[allow(unused)] addr: &Ipv6Addr,
-        #[allow(unused)] iface: &Interface,
-        #[allow(unused)] source: &Ipv6Addr,
-        #[allow(unused)] join: bool,
-    ) -> Result<(), io::Error> {
-        #[cfg(any(target_os = "linux", target_os = "android",))]
-        {
-            let socket = socket2::SockRef::from(&*self.socket);
-
-            #[repr(C)]
-            struct group_source_req {
-                gsr_interface: u32,
-                gsr_group: libc::sockaddr_storage,
-                gsr_source: libc::sockaddr_storage,
-            }
-
-            let index = iface.index.unwrap_or(0);
-
-            unsafe {
-                use std::os::fd::AsRawFd;
-
-                let mut req = group_source_req {
-                    gsr_interface: index,
-                    gsr_group: mem::zeroed(),
-                    gsr_source: mem::zeroed(),
-                };
-
-                let gsr_group = &mut *(&mut req.gsr_group as *mut libc::sockaddr_storage
-                    as *mut libc::sockaddr_in6);
-                gsr_group.sin6_family = libc::AF_INET6 as u16;
-                gsr_group.sin6_addr.s6_addr = addr.octets();
-                gsr_group.sin6_port = 0;
-                gsr_group.sin6_flowinfo = 0;
-                gsr_group.sin6_scope_id = 0;
-
-                let gsr_source = &mut *(&mut req.gsr_source as *mut libc::sockaddr_storage
-                    as *mut libc::sockaddr_in6);
-                gsr_source.sin6_family = libc::AF_INET6 as u16;
-                gsr_source.sin6_addr.s6_addr = source.octets();
-                gsr_source.sin6_port = 0;
-                gsr_source.sin6_flowinfo = 0;
-                gsr_source.sin6_scope_id = 0;
-
-                let raw_fd = socket.as_raw_fd();
-                if join {
-                    if libc::setsockopt(
-                        raw_fd,
-                        libc::IPPROTO_IPV6,
-                        libc::MCAST_JOIN_SOURCE_GROUP,
-                        &req as *const group_source_req as *const _,
-                        mem::size_of_val(&req) as u32,
-                    ) != 0
-                    {
-                        return Err(io::Error::last_os_error());
-                    }
-                } else if libc::setsockopt(
-                    raw_fd,
-                    libc::IPPROTO_IPV6,
-                    libc::MCAST_LEAVE_SOURCE_GROUP,
-                    &req as *const group_source_req as *const _,
-                    mem::size_of_val(&req) as u32,
-                ) != 0
-                {
-                    return Err(io::Error::last_os_error());
-                }
-            }
-
-            Ok(())
-        }
-
-        #[cfg(not(any(target_os = "linux", target_os = "android",)))]
-        {
-            // Checked in the caller
-            unreachable!();
-        }
-    }
-
     pub fn recv(&mut self) -> Result<Option<BufferOrList>, anyhow::Error> {
         #[cfg(any(
             target_os = "android",
@@ -1251,7 +756,7 @@ impl UdpSocket {
                 iovec.iov_len = buffer.len();
             }
 
-            // hdrs are already pre-initialized correctly but reset the flags just in case
+            // re-initialize hdrs correctly
             for hdr in hdrs.iter_mut() {
                 hdr.msg_len = 0;
                 hdr.msg_hdr.msg_flags = 0;
@@ -1394,29 +899,7 @@ impl UdpSocket {
                 }
             }
 
-            let addr = unsafe {
-                match name.ss_family as i32 {
-                    libc::AF_INET => {
-                        let addr: &libc::sockaddr_in =
-                            &*(name as *const libc::sockaddr_storage as *const libc::sockaddr_in);
-                        SocketAddr::V4(SocketAddrV4::new(
-                            Ipv4Addr::from(addr.sin_addr.s_addr.to_ne_bytes()),
-                            u16::from_be(addr.sin_port),
-                        ))
-                    }
-                    libc::AF_INET6 => {
-                        let addr: &libc::sockaddr_in6 =
-                            &*(name as *const libc::sockaddr_storage as *const libc::sockaddr_in6);
-                        SocketAddr::V6(SocketAddrV6::new(
-                            Ipv6Addr::from(addr.sin6_addr.s6_addr),
-                            u16::from_be(addr.sin6_port),
-                            addr.sin6_flowinfo,
-                            addr.sin6_scope_id,
-                        ))
-                    }
-                    _ => unreachable!("name.ss_family == {}", name.ss_family),
-                }
-            };
+            let addr = sockaddr_to_addr(name);
 
             if Self::should_filter_packet(&self.source_filter, self.source_filter_exclusive, &addr)
             {
@@ -1617,7 +1100,7 @@ impl UdpSocket {
                 };
 
                 'next_packet: loop {
-                    let mut name = mem::MaybeUninit::<libc::sockaddr_storage>::uninit();
+                    let mut name = mem::MaybeUninit::<libc::sockaddr_storage>::zeroed();
                     let mut iovec = libc::iovec {
                         iov_base: buffer.as_mut_slice().as_mut_ptr() as *mut _,
                         iov_len: buffer.len(),
@@ -1712,29 +1195,7 @@ impl UdpSocket {
 
                         let name = name.assume_init();
 
-                        let addr = match name.ss_family as i32 {
-                            libc::AF_INET => {
-                                let addr: &libc::sockaddr_in = &*(&name
-                                    as *const libc::sockaddr_storage
-                                    as *const libc::sockaddr_in);
-                                SocketAddr::V4(SocketAddrV4::new(
-                                    Ipv4Addr::from(addr.sin_addr.s_addr.to_ne_bytes()),
-                                    u16::from_be(addr.sin_port),
-                                ))
-                            }
-                            libc::AF_INET6 => {
-                                let addr: &libc::sockaddr_in6 = &*(&name
-                                    as *const libc::sockaddr_storage
-                                    as *const libc::sockaddr_in6);
-                                SocketAddr::V6(SocketAddrV6::new(
-                                    Ipv6Addr::from(addr.sin6_addr.s6_addr),
-                                    u16::from_be(addr.sin6_port),
-                                    addr.sin6_flowinfo,
-                                    addr.sin6_scope_id,
-                                ))
-                            }
-                            _ => unreachable!("name.ss_family == {}", name.ss_family),
-                        };
+                        let addr = sockaddr_to_addr(&name);
 
                         if Self::should_filter_packet(
                             &self.source_filter,
@@ -2022,13 +1483,15 @@ impl BufferOrList {
     }
 }
 
-impl Drop for UdpSocket {
+impl Drop for UdpRecvSocket {
     fn drop(&mut self) {
-        self.leave_multicast();
+        if let Some((addr, joined_ifaces)) = self.multicast_joined.take() {
+            leave_multicast(&self.element, &mut self.socket, addr, joined_ifaces);
+        }
     }
 }
 
-impl mio::event::Source for UdpSocket {
+impl mio::event::Source for UdpRecvSocket {
     fn register(
         &mut self,
         registry: &mio::Registry,
@@ -2105,6 +1568,338 @@ union Ctrl {
     _buf_timespec:
         [u8; unsafe { libc::CMSG_SPACE(std::mem::size_of::<libc::timespec>() as u32) } as usize],
     _align: libc::cmsghdr,
+}
+
+pub struct UdpSendSocket {
+    element: gst::Element,
+    socket: SocketAndWrappedSocket,
+    local_addr: SocketAddr,
+    #[allow(clippy::type_complexity)]
+    multicast_joined: HashMap<IpAddr, Vec<(getifaddrs::Interface, Vec<IpAddr>)>>,
+}
+
+unsafe impl Send for UdpSendSocket {}
+unsafe impl Sync for UdpSendSocket {}
+
+impl UdpSendSocket {
+    pub fn local_addr(&self) -> SocketAddr {
+        self.local_addr
+    }
+
+    pub fn socket(&self) -> &mio::net::UdpSocket {
+        &self.socket
+    }
+
+    pub fn socket_wrapper(&self) -> &GioSocketWrapper {
+        &self.socket.wrapped_socket
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn bind(
+        element: &impl AsRef<gst::Element>,
+        #[allow(unused_variables)] multicast_iface: Option<&str>,
+        ttl: u32,
+        ttl_mc: u32,
+        multicast_loop: bool,
+        qos_dscp: i32,
+        buffer_size: u32,
+        bind_saddr: SocketAddr,
+    ) -> Result<Self, anyhow::Error> {
+        use anyhow::Context as _;
+
+        gst::debug!(
+            CAT,
+            obj = element.as_ref(),
+            "Creating socket for {bind_saddr}"
+        );
+
+        let socket = socket2::Socket::new(
+            if bind_saddr.is_ipv4() {
+                socket2::Domain::IPV4
+            } else {
+                socket2::Domain::IPV6
+            },
+            socket2::Type::DGRAM,
+            Some(socket2::Protocol::UDP),
+        )
+        .with_context(|| {
+            format!(
+                "Failed to create {} UDP socket",
+                if bind_saddr.is_ipv4() { "IPv4" } else { "IPv6" }
+            )
+        })?;
+
+        socket
+            .set_nonblocking(true)
+            .context("Failed to set socket non-blocking")?;
+
+        if buffer_size > 0 {
+            #[cfg(any(target_os = "android", target_os = "linux"))]
+            {
+                let mut force = false;
+                if let Err(err) = socket.set_send_buffer_size(buffer_size as usize) {
+                    gst::warning!(
+                        CAT,
+                        obj = element.as_ref(),
+                        "Failed to set send buffer size of {buffer_size}: {err}"
+                    );
+                    force = true;
+                }
+
+                if let Ok(set_buffer_size) = socket.send_buffer_size()
+                    && set_buffer_size < buffer_size as usize
+                {
+                    gst::warning!(
+                        CAT,
+                        obj = element.as_ref(),
+                        "Tried to set {buffer_size} as buffer size but only got {set_buffer_size}"
+                    );
+                    force = true;
+                }
+
+                if force {
+                    unsafe {
+                        use std::{mem, os::fd::AsRawFd};
+
+                        let raw_fd = socket.as_raw_fd();
+                        if libc::setsockopt(
+                            raw_fd,
+                            libc::SOL_SOCKET,
+                            libc::SO_SNDBUFFORCE,
+                            &buffer_size as *const u32 as *const _,
+                            mem::size_of_val(&buffer_size) as u32,
+                        ) != 0
+                        {
+                            let err = io::Error::last_os_error();
+                            return Err(err).context("Failed to set send buffer size");
+                        }
+                    }
+                }
+            }
+            #[cfg(not(any(target_os = "android", target_os = "linux")))]
+            {
+                socket
+                    .set_send_buffer_size(buffer_size as usize)
+                    .context("Failed to set send buffer size")?;
+            }
+
+            if let Ok(set_buffer_size) = socket.send_buffer_size()
+                && set_buffer_size < buffer_size as usize
+            {
+                gst::warning!(
+                    CAT,
+                    obj = element.as_ref(),
+                    "Tried to set {buffer_size} as buffer size but only got {set_buffer_size}"
+                );
+            }
+        }
+
+        if bind_saddr.port() == 0 && !bind_saddr.ip().is_multicast() {
+            gst::warning!(
+                CAT,
+                obj = element.as_ref(),
+                "Disabling port reuse for dynamically allocated port to avoid potential conflicts"
+            );
+        } else {
+            socket
+                .set_reuse_address(true)
+                .context("Failed to set SO_REUSEADDR")?;
+            #[cfg(not(any(
+                windows,
+                target_os = "solaris",
+                target_os = "illumos",
+                target_os = "cygwin"
+            )))]
+            {
+                socket
+                    .set_reuse_port(true)
+                    .context("Failed to set SO_REUSEPORT")?;
+            }
+        }
+
+        if bind_saddr.is_ipv4() {
+            socket
+                .set_ttl_v4(ttl)
+                .with_context(|| "Failed to set IP_TTL")?;
+        } else {
+            socket
+                .set_unicast_hops_v6(ttl)
+                .with_context(|| "Failed to set IPV6_UNICAST_HOPS")?;
+        }
+
+        if bind_saddr.is_ipv4() {
+            socket
+                .set_multicast_loop_v4(multicast_loop)
+                .with_context(|| {
+                    format!(
+                        "Failed to {}able IP_MULTICAST_LOOP",
+                        if multicast_loop { "en" } else { "dis" }
+                    )
+                })?;
+        } else {
+            socket
+                .set_multicast_loop_v6(multicast_loop)
+                .with_context(|| {
+                    format!(
+                        "Failed to {}able IPV6_MULTICAST_LOOP",
+                        if multicast_loop { "en" } else { "dis" }
+                    )
+                })?;
+        }
+
+        if bind_saddr.is_ipv4() {
+            socket
+                .set_multicast_ttl_v4(ttl_mc)
+                .with_context(|| "Failed to set IP_MULTICAST_TTL")?;
+        } else {
+            socket
+                .set_multicast_hops_v6(ttl_mc)
+                .with_context(|| "Failed to set IPV6_MULTICAST_HOPS")?;
+        }
+
+        socket
+            .set_broadcast(true)
+            .with_context(|| "Failed to set SO_BROADCAST")?;
+
+        if qos_dscp != -1 {
+            if bind_saddr.is_ipv4() {
+                #[cfg(not(any(
+                    target_os = "fuchsia",
+                    target_os = "redox",
+                    target_os = "solaris",
+                    target_os = "haiku",
+                    target_os = "wasi",
+                )))]
+                socket
+                    .set_tos_v4(qos_dscp as u32)
+                    .with_context(|| "Failed to set IP_TOS")?;
+            } else {
+                #[cfg(any(
+                    target_os = "android",
+                    target_os = "dragonfly",
+                    target_os = "freebsd",
+                    target_os = "fuchsia",
+                    target_os = "linux",
+                    target_os = "macos",
+                    target_os = "netbsd",
+                    target_os = "openbsd",
+                    target_os = "cygwin",
+                    target_os = "illumos",
+                ))]
+                socket
+                    .set_tclass_v6(qos_dscp as u32)
+                    .with_context(|| "Failed to set IPV6_TCLASS")?;
+            }
+        }
+
+        #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
+        if let Some(multicast_iface) = multicast_iface {
+            socket
+                .bind_device(Some(multicast_iface.as_bytes()))
+                .with_context(|| "Failed to set SO_BINDTODEVICE")?;
+        }
+
+        socket
+            .bind(&bind_saddr.into())
+            .with_context(|| format!("Failed to bind to {bind_saddr}"))?;
+
+        let socket = Self::wrap_socket_internal(
+            element.as_ref(),
+            SocketAndWrappedSocket::from_socket2(socket)?,
+        )?;
+
+        Ok(socket)
+    }
+
+    pub fn wrap_socket(
+        element: &impl AsRef<gst::Element>,
+        socket: &GioSocketWrapper,
+    ) -> Result<Self, anyhow::Error> {
+        let socket = Self::wrap_socket_internal(
+            element.as_ref(),
+            SocketAndWrappedSocket::from_wrapped_socket(socket)?,
+        )?;
+
+        Ok(socket)
+    }
+
+    fn wrap_socket_internal(
+        element: &gst::Element,
+        socket: SocketAndWrappedSocket,
+    ) -> Result<Self, anyhow::Error> {
+        use anyhow::Context as _;
+
+        let local_addr = socket.local_addr().context("Can't get local address")?;
+
+        Ok(Self {
+            element: element.clone(),
+            socket,
+            local_addr,
+            multicast_joined: HashMap::new(),
+        })
+    }
+
+    pub fn join_multicast(
+        &mut self,
+        addr: IpAddr,
+        ifaces: Option<&str>,
+    ) -> Result<(), anyhow::Error> {
+        // Don't join multiple times
+        if self.multicast_joined.contains_key(&addr) {
+            return Ok(());
+        }
+
+        let joined_ifaces =
+            join_multicast(&self.element, &mut self.socket, addr, ifaces, &[], false)?;
+
+        self.multicast_joined.insert(addr, joined_ifaces);
+
+        Ok(())
+    }
+
+    pub fn leave_multicast(&mut self, addr: IpAddr) {
+        let Some((addr, joined_ifaces)) = self.multicast_joined.remove_entry(&addr) else {
+            return;
+        };
+
+        leave_multicast(&self.element, &mut self.socket, addr, joined_ifaces);
+    }
+
+    fn leave_all_multicast(&mut self) {
+        for (addr, joined_ifaces) in self.multicast_joined.drain() {
+            leave_multicast(&self.element, &mut self.socket, addr, joined_ifaces);
+        }
+    }
+}
+
+impl Drop for UdpSendSocket {
+    fn drop(&mut self) {
+        self.leave_all_multicast();
+    }
+}
+
+impl mio::event::Source for UdpSendSocket {
+    fn register(
+        &mut self,
+        registry: &mio::Registry,
+        token: mio::Token,
+        interests: mio::Interest,
+    ) -> io::Result<()> {
+        self.socket.socket.register(registry, token, interests)
+    }
+
+    fn reregister(
+        &mut self,
+        registry: &mio::Registry,
+        token: mio::Token,
+        interests: mio::Interest,
+    ) -> io::Result<()> {
+        self.socket.socket.reregister(registry, token, interests)
+    }
+
+    fn deregister(&mut self, registry: &mio::Registry) -> io::Result<()> {
+        self.socket.socket.deregister(registry)
+    }
 }
 
 /// Send/Sync struct for passing around a gio::Socket
@@ -2327,5 +2122,555 @@ mod buffer_pool {
         pub fn new() -> Self {
             glib::Object::builder().build()
         }
+    }
+}
+
+fn join_multicast(
+    element: &gst::Element,
+    socket: &mut SocketAndWrappedSocket,
+    addr: IpAddr,
+    ifaces: Option<&str>,
+    source_filter: &[IpAddr],
+    source_filter_exclusive: bool,
+) -> Result<Vec<(Interface, Vec<IpAddr>)>, anyhow::Error> {
+    use anyhow::Context as _;
+
+    if let Some(ifaces) = ifaces {
+        gst::debug!(
+            CAT,
+            obj = element,
+            "Joining multicast group {addr} for interfaces {ifaces}"
+        );
+    } else {
+        gst::debug!(CAT, obj = element, "Joining multicast group {addr}");
+    }
+
+    if !source_filter.is_empty() {
+        gst::debug!(
+            CAT,
+            obj = element,
+            "Using source-filter {source_filter:?} (exclusive: {source_filter_exclusive})"
+        );
+    }
+
+    if !addr.is_multicast() {
+        gst::warning!(CAT, obj = element, "{addr} is not a multicast address");
+        return Ok(vec![]);
+    }
+
+    let mut joined_ifaces = vec![];
+
+    if let Some(ifaces) = ifaces {
+        let ifaces = ifaces
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect::<Vec<String>>();
+
+        let iter = getifaddrs::getifaddrs().context("Failed to get interfaces")?;
+
+        for iface in iter {
+            // Skip interfaces of the wrong address family
+            if iface.address.is_ipv4() && addr.is_ipv6()
+                || iface.address.is_ipv6() && addr.is_ipv4()
+                || (!iface.address.is_ipv6() && !iface.address.is_ipv4())
+            {
+                continue;
+            }
+
+            if !ifaces.iter().any(|selected_iface| {
+                if &iface.name == selected_iface {
+                    return true;
+                }
+
+                // check if name matches the interface description (Friendly name) on Windows
+                #[cfg(windows)]
+                if &iface.description == selected_iface {
+                    return true;
+                }
+
+                false
+            }) {
+                continue;
+            }
+
+            if !iface.flags.contains(getifaddrs::InterfaceFlags::MULTICAST) {
+                gst::warning!(
+                    CAT,
+                    obj = element,
+                    "Skipping interface {}: does not support multicast",
+                    iface.name
+                );
+                continue;
+            }
+
+            if !iface.flags.contains(getifaddrs::InterfaceFlags::UP) {
+                gst::warning!(
+                    CAT,
+                    obj = element,
+                    "Skipping interface {}: not up",
+                    iface.name
+                );
+                continue;
+            }
+
+            gst::trace!(CAT, obj = element, "Selecting interface {}", iface.name);
+
+            joined_ifaces.push(iface);
+        }
+    }
+
+    if joined_ifaces.is_empty() {
+        joined_ifaces.push(getifaddrs::Interface {
+            name: "default".to_owned(),
+            #[cfg(windows)]
+            description: "default".to_owned(),
+
+            address: if addr.is_ipv4() {
+                getifaddrs::Address::V4(getifaddrs::NetworkAddress {
+                    address: Ipv4Addr::UNSPECIFIED,
+                    netmask: None,
+                    associated_address: None,
+                })
+            } else {
+                getifaddrs::Address::V6(getifaddrs::NetworkAddress {
+                    address: Ipv6Addr::UNSPECIFIED,
+                    netmask: None,
+                    associated_address: None,
+                })
+            },
+            flags: getifaddrs::InterfaceFlags::UP,
+            index: Some(0),
+        });
+    }
+
+    let mut joined_ifaces_and_sources = Vec::new();
+
+    match addr {
+        IpAddr::V4(ref addr) => {
+            for iface in &joined_ifaces {
+                // Only use source filter if there is one, it's not
+                // exclusive and this platform supports it.
+                //
+                // Otherwise just join the multicast group as usual.
+                let use_source_filter = !source_filter.is_empty()
+                    && !source_filter_exclusive
+                    && cfg!(not(any(
+                        target_os = "dragonfly",
+                        target_os = "haiku",
+                        target_os = "hurd",
+                        target_os = "netbsd",
+                        target_os = "openbsd",
+                        target_os = "redox",
+                        target_os = "fuchsia",
+                        target_os = "nto",
+                        target_os = "espidf",
+                        target_os = "vita",
+                    )));
+
+                if !use_source_filter {
+                    gst::trace!(
+                        CAT,
+                        obj = element,
+                        "Joining the multicast group {addr} with interface {}",
+                        iface.name
+                    );
+
+                    multicast_group_operation_v4(socket, addr, iface, true).with_context(|| {
+                        format!(
+                            "Joining the multicast group {addr} with interface {}",
+                            iface.name
+                        )
+                    })?;
+                    joined_ifaces_and_sources.push((iface.clone(), Vec::new()));
+                } else {
+                    let socket = socket2::SockRef::from(&**socket);
+                    let mut sources = Vec::new();
+                    for source in source_filter {
+                        let source = match source {
+                            IpAddr::V4(ip) => ip,
+                            IpAddr::V6(_) => continue,
+                        };
+
+                        let iface_addr = match iface.address {
+                            getifaddrs::Address::V4(ref network_address) => network_address.address,
+                            getifaddrs::Address::V6(_) | getifaddrs::Address::Mac(_) => {
+                                unreachable!()
+                            }
+                        };
+
+                        gst::trace!(
+                            CAT,
+                            obj = element,
+                            "Joining the multicast group {addr} with interface {} and source {source}",
+                            iface.name
+                        );
+
+                        #[cfg(not(any(
+                            target_os = "dragonfly",
+                            target_os = "haiku",
+                            target_os = "hurd",
+                            target_os = "netbsd",
+                            target_os = "openbsd",
+                            target_os = "redox",
+                            target_os = "fuchsia",
+                            target_os = "nto",
+                            target_os = "espidf",
+                            target_os = "vita",
+                        )))]
+                        {
+                            socket.join_ssm_v4(source, addr, &iface_addr)
+                                    .with_context(|| {
+                                        format!(
+                                            "Joining the multicast group {addr} with interface {} and source {source}",
+                                            iface.name
+                                        )
+                                    })?;
+                        }
+                        #[cfg(any(
+                            target_os = "dragonfly",
+                            target_os = "haiku",
+                            target_os = "hurd",
+                            target_os = "netbsd",
+                            target_os = "openbsd",
+                            target_os = "redox",
+                            target_os = "fuchsia",
+                            target_os = "nto",
+                            target_os = "espidf",
+                            target_os = "vita",
+                        ))]
+                        {
+                            // Checked above
+                            unreachable!();
+                        }
+
+                        sources.push(IpAddr::V4(*source));
+                    }
+                    joined_ifaces_and_sources.push((iface.clone(), sources));
+                }
+            }
+        }
+        IpAddr::V6(ref addr) => {
+            for iface in &joined_ifaces {
+                // Only use source filter if there is one, it's not
+                // exclusive and this platform supports it.
+                //
+                // Otherwise just join the multicast group as usual.
+                let use_source_filter = !source_filter.is_empty()
+                    && !source_filter_exclusive
+                    && cfg!(any(target_os = "linux", target_os = "android"));
+
+                if !use_source_filter {
+                    let socket = socket2::SockRef::from(&**socket);
+
+                    gst::trace!(
+                        CAT,
+                        obj = element,
+                        "Joining the multicast group {addr} with interface {}",
+                        iface.name
+                    );
+
+                    socket
+                        .join_multicast_v6(addr, iface.index.unwrap_or(0))
+                        .with_context(|| {
+                            format!(
+                                "Joining the multicast group {addr} with interface {}",
+                                iface.name
+                            )
+                        })?;
+                    joined_ifaces_and_sources.push((iface.clone(), Vec::new()));
+                } else {
+                    let mut sources = Vec::new();
+                    for source in source_filter {
+                        let source = match source {
+                            IpAddr::V6(ip) => ip,
+                            IpAddr::V4(_) => continue,
+                        };
+
+                        gst::trace!(
+                            CAT,
+                            obj = element,
+                            "Joining the multicast group {addr} with interface {} and source {source}",
+                            iface.name
+                        );
+
+                        multicast_group_operation_v6_ssm(socket, addr, iface, source, true)
+                                    .with_context(|| {
+                                        format!(
+                                            "Joining the multicast group {addr} with interface {} and source {source}",
+                                            iface.name
+                                        )
+                                    })?;
+                        sources.push(IpAddr::V6(*source));
+                    }
+                    joined_ifaces_and_sources.push((iface.clone(), sources));
+                }
+            }
+        }
+    }
+
+    Ok(joined_ifaces_and_sources)
+}
+
+fn leave_multicast(
+    element: &gst::Element,
+    socket: &mut SocketAndWrappedSocket,
+    addr: IpAddr,
+    joined_ifaces: Vec<(Interface, Vec<IpAddr>)>,
+) {
+    if joined_ifaces.is_empty() {
+        return;
+    }
+
+    match addr {
+        IpAddr::V4(addr) => {
+            for (iface, sources) in joined_ifaces {
+                if sources.is_empty() {
+                    gst::debug!(
+                        CAT,
+                        obj = element,
+                        "interface {} leaving the multicast {addr}",
+                        iface.name
+                    );
+
+                    // use the custom written API to be able to pass the interface index
+                    // for all types of target OS
+                    if let Err(err) = multicast_group_operation_v4(socket, &addr, &iface, false) {
+                        gst::warning!(CAT, obj = element, "Failed to leave multicast group: {err}");
+                    }
+                } else {
+                    for source in sources {
+                        let source = match source {
+                            IpAddr::V4(ip) => ip,
+                            IpAddr::V6(_) => continue,
+                        };
+
+                        let iface_addr = match iface.address {
+                            getifaddrs::Address::V4(ref network_address) => network_address.address,
+                            getifaddrs::Address::V6(_) | getifaddrs::Address::Mac(_) => {
+                                unreachable!()
+                            }
+                        };
+
+                        gst::debug!(
+                            CAT,
+                            obj = element,
+                            "interface {} leaving the multicast {addr} and source {source}",
+                            iface.name
+                        );
+
+                        #[cfg(not(any(
+                            target_os = "dragonfly",
+                            target_os = "haiku",
+                            target_os = "hurd",
+                            target_os = "netbsd",
+                            target_os = "openbsd",
+                            target_os = "redox",
+                            target_os = "fuchsia",
+                            target_os = "nto",
+                            target_os = "espidf",
+                            target_os = "vita",
+                        )))]
+                        {
+                            let socket = socket2::SockRef::from(&**socket);
+                            // use the custom written API to be able to pass the interface index
+                            // for all types of target OS
+                            if let Err(err) = socket.leave_ssm_v4(&source, &addr, &iface_addr) {
+                                gst::warning!(
+                                    CAT,
+                                    obj = element,
+                                    "Failed to leave multicast group: {err}"
+                                );
+                            }
+                        }
+                        #[cfg(any(
+                            target_os = "dragonfly",
+                            target_os = "haiku",
+                            target_os = "hurd",
+                            target_os = "netbsd",
+                            target_os = "openbsd",
+                            target_os = "redox",
+                            target_os = "fuchsia",
+                            target_os = "nto",
+                            target_os = "espidf",
+                            target_os = "vita",
+                        ))]
+                        {
+                            unreachable!();
+                        }
+                    }
+                }
+            }
+        }
+        IpAddr::V6(addr) => {
+            for (iface, sources) in joined_ifaces {
+                if sources.is_empty() {
+                    let socket = socket2::SockRef::from(&**socket);
+                    gst::debug!(
+                        CAT,
+                        obj = element,
+                        "interface {} leaving the multicast {addr}",
+                        iface.name
+                    );
+                    if let Err(err) = socket.leave_multicast_v6(&addr, iface.index.unwrap_or(0)) {
+                        gst::warning!(CAT, obj = element, "Failed to leave multicast group: {err}");
+                    };
+                } else {
+                    for source in sources {
+                        let source = match source {
+                            IpAddr::V6(ip) => ip,
+                            IpAddr::V4(_) => continue,
+                        };
+
+                        gst::debug!(
+                            CAT,
+                            obj = element,
+                            "interface {} leaving the multicast {addr} and source {source}",
+                            iface.name
+                        );
+
+                        // use the custom written API to be able to pass the interface index
+                        // for all types of target OS
+                        if let Err(err) =
+                            multicast_group_operation_v6_ssm(socket, &addr, &iface, &source, false)
+                        {
+                            gst::warning!(
+                                CAT,
+                                obj = element,
+                                "Failed to leave multicast group: {err}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn multicast_group_operation_v4(
+    socket: &mut SocketAndWrappedSocket,
+    addr: &Ipv4Addr,
+    iface: &Interface,
+    join: bool,
+) -> Result<(), io::Error> {
+    let socket = socket2::SockRef::from(&**socket);
+
+    #[cfg(not(any(
+        target_os = "aix",
+        target_os = "haiku",
+        target_os = "illumos",
+        target_os = "netbsd",
+        target_os = "openbsd",
+        target_os = "redox",
+        target_os = "solaris",
+        target_os = "nto",
+        target_os = "espidf",
+        target_os = "vita",
+        target_os = "cygwin",
+    )))]
+    {
+        let index = iface.index.unwrap_or(0);
+
+        if join {
+            socket.join_multicast_v4_n(addr, &socket2::InterfaceIndexOrAddress::Index(index))?;
+        } else {
+            socket.leave_multicast_v4_n(addr, &socket2::InterfaceIndexOrAddress::Index(index))?;
+        }
+
+        Ok(())
+    }
+
+    #[cfg(any(
+        target_os = "aix",
+        target_os = "haiku",
+        target_os = "illumos",
+        target_os = "netbsd",
+        target_os = "openbsd",
+        target_os = "redox",
+        target_os = "solaris",
+        target_os = "nto",
+        target_os = "espidf",
+        target_os = "vita",
+        target_os = "cygwin",
+    ))]
+    {
+        let ip_addr = match iface.address {
+            getifaddrs::Address::V4(ref network_address) => network_address.address,
+            getifaddrs::Address::V6(_) | getifaddrs::Address::Mac(_) => unreachable!(),
+        };
+
+        if join {
+            socket.join_multicast_v4(addr, &ip_addr)?;
+        } else {
+            socket.leave_multicast_v4(addr, &ip_addr)?;
+        }
+
+        Ok(())
+    }
+}
+
+fn multicast_group_operation_v6_ssm(
+    #[allow(unused)] socket: &mut SocketAndWrappedSocket,
+    #[allow(unused)] addr: &Ipv6Addr,
+    #[allow(unused)] iface: &Interface,
+    #[allow(unused)] source: &Ipv6Addr,
+    #[allow(unused)] join: bool,
+) -> Result<(), io::Error> {
+    #[cfg(any(target_os = "linux", target_os = "android",))]
+    {
+        let socket = socket2::SockRef::from(&**socket);
+
+        #[repr(C)]
+        struct group_source_req {
+            gsr_interface: u32,
+            gsr_group: libc::sockaddr_storage,
+            gsr_source: libc::sockaddr_storage,
+        }
+
+        let index = iface.index.unwrap_or(0);
+
+        unsafe {
+            use std::os::fd::AsRawFd;
+
+            let (gsr_group, _) = fill_sockaddr(&SocketAddr::V6(SocketAddrV6::new(*addr, 0, 0, 0)));
+            let (gsr_source, _) =
+                fill_sockaddr(&SocketAddr::V6(SocketAddrV6::new(*source, 0, 0, 0)));
+
+            let req = group_source_req {
+                gsr_interface: index,
+                gsr_group,
+                gsr_source,
+            };
+
+            let raw_fd = socket.as_raw_fd();
+            if join {
+                if libc::setsockopt(
+                    raw_fd,
+                    libc::IPPROTO_IPV6,
+                    libc::MCAST_JOIN_SOURCE_GROUP,
+                    &req as *const group_source_req as *const _,
+                    mem::size_of_val(&req) as u32,
+                ) != 0
+                {
+                    return Err(io::Error::last_os_error());
+                }
+            } else if libc::setsockopt(
+                raw_fd,
+                libc::IPPROTO_IPV6,
+                libc::MCAST_LEAVE_SOURCE_GROUP,
+                &req as *const group_source_req as *const _,
+                mem::size_of_val(&req) as u32,
+            ) != 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "android",)))]
+    {
+        // Checked in the caller
+        unreachable!();
     }
 }

@@ -17941,6 +17941,200 @@
     "rsudp": {
         "description": "GStreamer Rust UDP Plugin",
         "elements": {
+            "multiudpsink2": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Sends UDP packets to multiple destinations",
+                "hierarchy": [
+                    "GstMultiUdpSink2",
+                    "GstBaseUdpSink2",
+                    "GstBaseSink",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Sink/Network",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "clients": {
+                        "blurb": "A comma-separated list of host:port pairs with destinations",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "send-duplicates": {
+                        "blurb": "When a destination/port pair is added multiple times, send packets multiple times as well",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    }
+                },
+                "rank": "none",
+                "signals": {
+                    "add": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gint"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "clear": {
+                        "action": true,
+                        "args": [],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "client-added": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gint"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "client-removed": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gint"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "get-stats": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gint"
+                            }
+                        ],
+                        "return-type": "GstStructure",
+                        "when": "last"
+                    },
+                    "remove": {
+                        "action": true,
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gint"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    }
+                }
+            },
+            "udpsink2": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Sends UDP packets",
+                "hierarchy": [
+                    "GstUdpSink2",
+                    "GstBaseUdpSink2",
+                    "GstBaseSink",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstURIHandler"
+                ],
+                "klass": "Sink/Network",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "host": {
+                        "blurb": "Host to send packets to",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "127.0.0.1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "port": {
+                        "blurb": "Port to send packets to",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "5004",
+                        "max": "65535",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "uri": {
+                        "blurb": "URI in the form of udp://host:port",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "udp://127.0.0.1:5004",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
             "udpsrc2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Reads an UDP stream",
@@ -18220,7 +18414,223 @@
         },
         "filename": "gstrsudp",
         "license": "MPL",
-        "other-types": {},
+        "other-types": {
+            "GstBaseUdpSink2": {
+                "hierarchy": [
+                    "GstBaseUdpSink2",
+                    "GstBaseSink",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "auto-multicast": {
+                        "blurb": "Automatically join/leave multicast groups",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "bind-address": {
+                        "blurb": "Address to bind the socket to",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "bind-port": {
+                        "blurb": "Port to bind the socket to",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "65535",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "buffer-size": {
+                        "blurb": "Size of the kernel send buffer in bytes (0 = default)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "bytes-served": {
+                        "blurb": "Total number of bytes sent to all clients",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": false
+                    },
+                    "bytes-to-serve": {
+                        "blurb": "Number of bytes received to serve to clients",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": false
+                    },
+                    "close-socket": {
+                        "blurb": "Close socket if passed as property on state change",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "loop": {
+                        "blurb": "Multicast loopback",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "multicast-iface": {
+                        "blurb": "The network interface on which to join the multicast group",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "qos-dscp": {
+                        "blurb": "Quality of Service differentiated services code point (-1 = default)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "-1",
+                        "max": "63",
+                        "min": "-1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gint",
+                        "writable": true
+                    },
+                    "socket": {
+                        "blurb": "Socket to use for UDP sending. (None == allocate)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GSocket",
+                        "writable": true
+                    },
+                    "socket-v6": {
+                        "blurb": "Socket to use for UDPv6 sending. (None == allocate)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GSocket",
+                        "writable": true
+                    },
+                    "ttl": {
+                        "blurb": "The unicast TTL parameter",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "64",
+                        "max": "255",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "ttl-mc": {
+                        "blurb": "The multicast TTL parameter",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1",
+                        "max": "255",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "used-socket": {
+                        "blurb": "Socket currently in use for UDP sending. (None = no socket)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GSocket",
+                        "writable": false
+                    },
+                    "used-socket-v6": {
+                        "blurb": "Socket currently in use for UDPv6 sending. (None = no socket)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GSocket",
+                        "writable": false
+                    }
+                }
+            }
+        },
         "package": "gst-plugin-udp",
         "source": "gst-plugin-udp",
         "tracers": {},
