@@ -349,7 +349,7 @@ fn check_stsd_sanity(stsd: &mp4_atom::Stsd, expected_config: &ExpectedConfigurat
             }
             mp4_atom::Codec::Ipcm(ipcm) => {
                 check_audio_sample_entry_sanity(&ipcm.audio, expected_config);
-                check_pcmc_sanity(&ipcm.pcmc, expected_config);
+                check_pcmc_sanity(ipcm.pcmc.as_ref().unwrap(), expected_config);
                 assert!(ipcm.btrt.is_none());
                 assert!(ipcm.chnl.is_some());
                 let chnl = ipcm.chnl.as_ref().unwrap();
@@ -357,7 +357,7 @@ fn check_stsd_sanity(stsd: &mp4_atom::Stsd, expected_config: &ExpectedConfigurat
             }
             mp4_atom::Codec::Fpcm(fpcm) => {
                 check_audio_sample_entry_sanity(&fpcm.audio, expected_config);
-                check_pcmc_sanity(&fpcm.pcmc, expected_config);
+                check_pcmc_sanity(fpcm.pcmc.as_ref().unwrap(), expected_config);
                 assert!(fpcm.btrt.is_none());
                 assert!(fpcm.chnl.is_some());
                 let chnl = fpcm.chnl.as_ref().unwrap();

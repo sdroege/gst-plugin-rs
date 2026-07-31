@@ -20,7 +20,7 @@ librice = { version = "0.4.3", default-features = false, features = ["runtime-to
 sdp-types.workspace = true
 tokio = { version = "1", features = ["net", "rt-multi-thread", "time", "sync"] }
 human_bytes = "0.4"
-rand = "0.9"
+rand = "0.10"
 openssl = "0.10"
 url = "2"
 
@@ -31,7 +31,7 @@ gst-check = { workspace = true, features = ["v1_22"] }
 gst-plugin-rtp = { path = "../rtp" }
 
 anyhow = "1"
-async-tungstenite = { version = "0.34", features = ["tokio-runtime", "tokio-rustls-native-certs"] }
+async-tungstenite = { version = "0.35", features = ["tokio-runtime", "tokio-rustls-native-certs"] }
 clap = { version = "4", features = ["derive"] }
 futures = "0.3"
 rustls.workspace = true
