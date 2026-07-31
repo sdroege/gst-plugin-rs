@@ -2,7 +2,10 @@
 
 use crate::tests::{ExpectedBuffer, ExpectedPacket, Source, run_test_pipeline_and_validate_buffer};
 use anyhow::bail;
+use gst::prelude::*;
+use gst_check::Harness;
 use gst_video::prelude::*;
+use std::str::FromStr;
 
 fn init() {
     use std::sync::Once;
@@ -299,4 +302,91 @@ fn test_rtpvraw_uyvp() {
     } else {
         eprintln!("Skipping test, libgstvideo has too small strides for odd widths for UYVP");
     }
+}
+
+#[test]
+fn test_rtpvraw_bt2100_reads_tcs() {
+    init();
+
+    let mut h = Harness::new("rtpvrawdepay2");
+    h.play();
+    h.set_src_caps(
+        gst::Caps::builder("application/x-rtp")
+            .field("media", "video")
+            .field("clock-rate", 90000i32)
+            .field("encoding-name", "RAW")
+            .field("payload", 96i32)
+            .field("sampling", "YCbCr-4:2:2")
+            .field("depth", "10")
+            .field("width", "1920")
+            .field("height", "1080")
+            .field("colorimetry", "BT2100")
+            .field("tcs", "HLG")
+            .build(),
+    );
+
+    let element = h.element().unwrap();
+    let caps = element.static_pad("src").unwrap().current_caps().unwrap();
+    let s = caps.structure(0).unwrap();
+    assert_eq!(s.get::<&str>("colorimetry"), Ok("bt2100-hlg"));
+
+    drop(h);
+    let _ = element.set_state(gst::State::Null);
+}
+
+#[test]
+fn test_rtpvraw_bt2100_defaults_to_pq() {
+    init();
+
+    let mut h = Harness::new("rtpvrawdepay2");
+    h.play();
+    h.set_src_caps(
+        gst::Caps::builder("application/x-rtp")
+            .field("media", "video")
+            .field("clock-rate", 90000i32)
+            .field("encoding-name", "RAW")
+            .field("payload", 96i32)
+            .field("sampling", "YCbCr-4:2:2")
+            .field("depth", "10")
+            .field("width", "1920")
+            .field("height", "1080")
+            .field("colorimetry", "BT2100")
+            // No TCS specified.
+            .build(),
+    );
+
+    let element = h.element().unwrap();
+    let caps = element.static_pad("src").unwrap().current_caps().unwrap();
+    let s = caps.structure(0).unwrap();
+    // GStreamer has no BT2100 colorimetry without a transfer function,
+    // so an unspecified TCS is mapped to PQ.
+    assert_eq!(s.get::<&str>("colorimetry"), Ok("bt2100-pq"));
+
+    drop(h);
+    let _ = element.set_state(gst::State::Null);
+}
+
+#[test]
+fn test_rtpvraw_bt2100_writes_tcs() {
+    init();
+
+    // Caps-only: no buffers needed to negotiate RTP colorimetry/TCS.
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::Uyvp, 1920, 1080)
+        .fps(gst::Fraction::new(25, 1))
+        .colorimetry(&gst_video::VideoColorimetry::from_str("bt2100-hlg").unwrap())
+        .build()
+        .unwrap();
+
+    let mut h = Harness::new("rtpvrawpay2");
+    h.play();
+    h.set_src_caps(video_info.to_caps().unwrap());
+
+    let element = h.element().unwrap();
+    let caps = element.static_pad("src").unwrap().current_caps().unwrap();
+    let s = caps.structure(0).unwrap();
+    assert_eq!(s.get::<&str>("colorimetry"), Ok("BT2100"));
+    assert_eq!(s.get::<&str>("tcs"), Ok("HLG"));
+
+    drop(h);
+    let _ = element.set_state(gst::State::Null);
 }

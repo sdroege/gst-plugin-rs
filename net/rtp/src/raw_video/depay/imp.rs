@@ -295,15 +295,15 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
                     }
                 }
                 "BT2100" => {
-                    let tsc = s.get::<&str>("tsc").ok();
-                    match tsc {
+                    let tcs = s.get::<&str>("tcs").ok();
+                    match tcs {
                         Some("PQ") => VideoColorimetry::from_str("bt2100-pq").ok(),
                         Some("HLG") => VideoColorimetry::from_str("bt2100-hlg").ok(),
-                        Some(tsc) => {
+                        Some(tcs) => {
                             gst::warning!(
                                 CAT,
                                 imp = self,
-                                "Unsupported BT2100 transfer characteristic system {tsc}, assuming PQ"
+                                "Unsupported BT2100 transfer characteristic system {tcs}, assuming PQ"
                             );
                             VideoColorimetry::from_str("bt2100-pq").ok()
                         }

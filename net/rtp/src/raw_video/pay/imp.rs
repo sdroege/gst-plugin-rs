@@ -219,8 +219,8 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
         // We always have the same depths for all components (we don't support 5:6:5 RGB yet)
         let depth = info.comp_depth(0);
 
-        // Assume SDR transfer system characteristic unless overridden below
-        let mut tsc = "SDR";
+        // Assume SDR transfer characteristic system unless overridden below
+        let mut tcs = "SDR";
 
         // FIXME: Should there be constants/defines for these in gst_video, to match GST_VIDEO_COLORIMETRY_*?
         let colorimetry = if info.colorimetry() == VideoColorimetry::from_str("bt601").unwrap() {
@@ -232,10 +232,10 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
         {
             "BT2020"
         } else if info.colorimetry() == VideoColorimetry::from_str("bt2100-pq").unwrap() {
-            tsc = "PQ";
+            tcs = "PQ";
             "BT2100"
         } else if info.colorimetry() == VideoColorimetry::from_str("bt2100-hlg").unwrap() {
-            tsc = "HLG";
+            tcs = "HLG";
             "BT2100"
         } else if info.colorimetry() == VideoColorimetry::from_str("smpte240m").unwrap() {
             "SMPTE240M"
@@ -290,7 +290,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
             .field("height", format!("{}", info.height()))
             .field("depth", format!("{depth}"))
             .field("colorimetry", colorimetry)
-            .field("tsc", tsc)
+            .field("tcs", tcs)
             .field_if("interlace", "true", info.is_interlaced())
             .field_if_some("exactframerate", framerate)
             .field_if_some("chroma-position", chroma_position)
