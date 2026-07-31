@@ -338,65 +338,70 @@ impl SourceLevelClock {
 
     fn get_reference_time_priv(
         &self,
-        now: gst::ClockTime,
-        rtptime: u32,
+        media_clock_now: gst::ClockTime,
+        packet_rtptime: u32,
         clock_rate: u32,
     ) -> gst::ClockTime {
         // This is a port of the relevant parts of rtp_jitter_buffer_calculate_pts
         // except that it returns the reference time relative to its actual epoch, not UTC (NTP time)
 
-        let rtptime = rtptime as u64;
+        let packet_rtptime = packet_rtptime as u64;
 
         // Get current time relative to the target reference clock epoch
         // (offset applies if it's a system clock targeting another reference clock)
-        let now_ref_clk = now.wrapping_add(self.clock.system_time_offset);
+        let ref_clk_now = media_clock_now.wrapping_add(self.clock.system_time_offset);
 
         // Current RTP time based on the estimated reference clock and the corresponding
         // RTP time period start
-        let mut rtptime_period_start = now_ref_clk
+        let mut ref_clk_period_start_rtptime = ref_clk_now
             .nseconds()
             .mul_div_floor(clock_rate as _, *gst::ClockTime::SECOND)
             .unwrap();
 
         // offset here is the RTP timestamp reference clock epoch
-        let mut rtptime_ext = (rtptime_period_start + self.offset as u64) & 0xffff_ffff;
+        let ref_clk_period_start_rtptime_ext =
+            (ref_clk_period_start_rtptime + self.offset as u64) & 0xffff_ffff;
 
         // If we're in the first period then the start of the period might be
         // before the clock epoch
-        let mut negative_rtptime_period_start = if rtptime_period_start >= rtptime_ext {
-            rtptime_period_start -= rtptime_ext;
-            false
-        } else {
-            rtptime_period_start = rtptime_ext - rtptime_period_start;
-            true
-        };
+        let mut negative_period_start =
+            if ref_clk_period_start_rtptime >= ref_clk_period_start_rtptime_ext {
+                ref_clk_period_start_rtptime -= ref_clk_period_start_rtptime_ext;
+                false
+            } else {
+                ref_clk_period_start_rtptime =
+                    ref_clk_period_start_rtptime_ext - ref_clk_period_start_rtptime;
+                true
+            };
 
         let ssrc = self.ssrc;
         let get_sign = |is_negative| -> char { if is_negative { '-' } else { '+' } };
         gst::trace!(
             CAT,
-            "{ssrc:#08x} ({ssrc}): packet rtptime {rtptime}, clock offset {}",
+            "{ssrc:#08x} ({ssrc}): packet RTP time {packet_rtptime}, clock offset {}",
             self.offset,
         );
         gst::trace!(
             CAT,
-            "{ssrc:#08x} ({ssrc}): cur reference time {now_ref_clk}"
+            "{ssrc:#08x} ({ssrc}): cur ref clock time {ref_clk_now}"
         );
         gst::trace!(
             CAT,
-            "{ssrc:#08x} ({ssrc}): cur RTP time period start {sign}{} (RTP {sign}{rtptime_period_start})",
+            "{ssrc:#08x} ({ssrc}): cur ref clock period start {sign}{} \
+             (RTP {sign}{ref_clk_period_start_rtptime})",
             gst::ClockTime::from_nseconds(
-                rtptime_period_start
+                ref_clk_period_start_rtptime
                     .mul_div_floor(*gst::ClockTime::SECOND, clock_rate as _)
                     .unwrap()
             ),
-            sign = get_sign(negative_rtptime_period_start),
+            sign = get_sign(negative_period_start),
         );
         gst::trace!(
             CAT,
-            "{ssrc:#08x} ({ssrc}): cur RTP time related to period start {} (RTP {rtptime_ext})",
+            "{ssrc:#08x} ({ssrc}): cur time related to ref clock period start {} \
+             (RTP {ref_clk_period_start_rtptime_ext})",
             gst::ClockTime::from_nseconds(
-                rtptime_ext
+                ref_clk_period_start_rtptime_ext
                     .mul_div_floor(*gst::ClockTime::SECOND, clock_rate as _)
                     .unwrap()
             ),
@@ -417,35 +422,42 @@ impl SourceLevelClock {
         // => packet  EXT: 0x_______4 fffffffe
         //
 
-        if rtptime_ext > rtptime && rtptime_ext - rtptime >= 0x8000_0000 {
-            if negative_rtptime_period_start {
-                negative_rtptime_period_start = false;
+        let rtp_time_packet_period_start = if ref_clk_period_start_rtptime_ext > packet_rtptime
+            && ref_clk_period_start_rtptime_ext - packet_rtptime >= 0x8000_0000
+        {
+            if negative_period_start {
+                negative_period_start = false;
                 // we're in the first period
-                assert!(rtptime_period_start <= 0x1_0000_0000);
-                rtptime_period_start = 0x1_0000_0000 - rtptime_period_start;
+                assert!(ref_clk_period_start_rtptime <= 0x1_0000_0000);
+                0x1_0000_0000 - ref_clk_period_start_rtptime
             } else {
-                rtptime_period_start += 0x1_0000_0000;
+                ref_clk_period_start_rtptime + 0x1_0000_0000
             }
-        } else if rtptime > rtptime_ext && rtptime - rtptime_ext >= 0x8000_0000 {
-            if negative_rtptime_period_start {
-                rtptime_period_start += 0x1_0000_0000;
-            } else if rtptime_period_start < 0x1_0000_0000 {
-                negative_rtptime_period_start = true;
-                rtptime_period_start = 0x1_0000_0000 - rtptime_period_start;
+        } else if packet_rtptime > ref_clk_period_start_rtptime_ext
+            && packet_rtptime - ref_clk_period_start_rtptime_ext >= 0x8000_0000
+        {
+            if negative_period_start {
+                ref_clk_period_start_rtptime + 0x1_0000_0000
+            } else if ref_clk_period_start_rtptime < 0x1_0000_0000 {
+                negative_period_start = true;
+                0x1_0000_0000 - ref_clk_period_start_rtptime
             } else {
-                rtptime_period_start -= 0x1_0000_0000;
+                ref_clk_period_start_rtptime - 0x1_0000_0000
             }
-        }
+        } else {
+            ref_clk_period_start_rtptime
+        };
 
         gst::trace!(
             CAT,
-            "{ssrc:#08x} ({ssrc}): wraparound adjusted RTP time period start {sign}{} (RTP {sign}{rtptime_period_start})",
+            "{ssrc:#08x} ({ssrc}): wraparound adjusted packet RTP time period start {sign}{} \
+             (RTP {sign}{rtp_time_packet_period_start})",
             gst::ClockTime::from_nseconds(
-                rtptime_period_start
+                rtp_time_packet_period_start
                     .mul_div_floor(*gst::ClockTime::SECOND, clock_rate as _)
                     .unwrap()
             ),
-            sign = get_sign(negative_rtptime_period_start),
+            sign = get_sign(negative_period_start),
         );
 
         // Packet timestamp according to the reference clock in RTP time units.
@@ -454,25 +466,26 @@ impl SourceLevelClock {
         // This is only relevant if the system clock is used as a proxy for a NTP
         // or PTP reference clock. As long as it's not that much off, we can use
         // literally any clock here for getting the correct result.
-        if negative_rtptime_period_start {
-            rtptime_ext = rtptime.saturating_sub(rtptime_period_start);
+        let packet_rtptime_ext = if negative_period_start {
+            packet_rtptime.saturating_sub(rtp_time_packet_period_start)
         } else {
-            rtptime_ext = rtptime_period_start.wrapping_add(rtptime);
-        }
+            rtp_time_packet_period_start.wrapping_add(packet_rtptime)
+        };
 
         // Packet timestamp in nanoseconds according to the reference clock
-        let ref_time = gst::ClockTime::from_nseconds(
-            rtptime_ext
+        let packet_ref_time = gst::ClockTime::from_nseconds(
+            packet_rtptime_ext
                 .mul_div_floor(*gst::ClockTime::SECOND, clock_rate as _)
                 .unwrap(),
         );
 
         gst::debug!(
             CAT,
-            "{ssrc:#08x} ({ssrc}): RFC7273 packet reference time {ref_time} (RTP ext {rtptime_ext})",
+            "{ssrc:#08x} ({ssrc}): RFC7273 packet ref time {packet_ref_time} \
+             (RTP ext {packet_rtptime_ext})",
         );
 
-        ref_time
+        packet_ref_time
     }
 
     pub fn to_reference_time(&self, ntp_time: NtpTime) -> gst::ClockTime {
