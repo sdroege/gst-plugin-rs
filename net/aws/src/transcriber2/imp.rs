@@ -28,12 +28,9 @@ use std::collections::VecDeque;
 use std::sync::LazyLock;
 
 use super::CAT;
-use crate::s3utils::RUNTIME;
+use crate::s3utils::{self, RUNTIME};
 use crate::transcriber::remote_types::{ItemDef, TranscriptDef};
 use crate::transcriber::{AwsTranscriberResultStability, AwsTranscriberVocabularyFilterMethod};
-
-static AWS_BEHAVIOR_VERSION: LazyLock<aws_config::BehaviorVersion> =
-    LazyLock::new(aws_config::BehaviorVersion::v2026_01_12);
 
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(1);
 const DEFAULT_LATENESS: gst::ClockTime = gst::ClockTime::ZERO;
@@ -886,6 +883,9 @@ impl Transcriber {
     fn prepare(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, imp = self, "Preparing");
 
+        let signal_credentials =
+            s3utils::request_credentials(self.obj().upcast_ref(), "aws-transcriber2")?;
+
         let (access_key, secret_access_key, session_token) = {
             let settings = self.settings.lock().unwrap();
             (
@@ -897,24 +897,33 @@ impl Transcriber {
 
         gst::log!(CAT, imp = self, "Loading aws config...");
 
-        let config_loader = match (access_key, secret_access_key) {
-            (Some(key), Some(secret_key)) => {
-                gst::log!(CAT, imp = self, "Using settings credentials");
-                aws_config::defaults(*AWS_BEHAVIOR_VERSION).credentials_provider(
-                    aws_sdk_translate::config::Credentials::new(
+        let cred = signal_credentials
+            .or_else(|| match (access_key, secret_access_key) {
+                (Some(key), Some(secret_key)) => {
+                    gst::log!(CAT, imp = self, "Using settings credentials");
+                    Some(aws_sdk_translate::config::Credentials::new(
                         key,
                         secret_key,
                         session_token,
                         None,
                         "translate",
-                    ),
+                    ))
+                }
+                _ => {
+                    gst::log!(CAT, imp = self, "Attempting to get credentials from env...");
+                    None
+                }
+            })
+            .map(|credentials| {
+                s3utils::SignalCredentialsProvider::new(
+                    self.obj().upcast_ref(),
+                    credentials,
+                    "aws-transcriber2",
                 )
-            }
-            _ => {
-                gst::log!(CAT, imp = self, "Attempting to get credentials from env...");
-                aws_config::defaults(*AWS_BEHAVIOR_VERSION)
-            }
-        };
+            });
+
+        let config_loader =
+            s3utils::config_loader(cred, Some(s3utils::DEFAULT_CREDENTIALS_LOAD_TIMEOUT));
 
         let config_loader = config_loader.region(
             aws_config::meta::region::RegionProviderChain::default_provider()
@@ -1115,6 +1124,37 @@ impl ObjectImpl for Transcriber {
         });
 
         PROPERTIES.as_ref()
+    }
+
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
+            vec![
+                /*
+                 * request-credentials:
+                 *
+                 * Emitted when the element needs AWS credentials: once when
+                 * preparing and again shortly before the previously provided
+                 * credentials expire, allowing the application to refresh
+                 * short-lived (e.g. STS) credentials while running.
+                 *
+                 * The handler must return a #GstStructure with the fields
+                 * "access-key" (string), "secret-access-key" (string) and
+                 * optionally "session-token" (string) and "expiration"
+                 * (guint64, Unix epoch seconds). Without an expiration the
+                 * credentials are re-requested every 15 minutes. Returning
+                 * %NULL keeps the previously provided or property-configured
+                 * credentials.
+                 *
+                 * The signal can be emitted from an internal thread while a
+                 * request is in progress; the handler must be thread-safe, must
+                 * not change the element's state and should return within 15
+                 * seconds, which bounds credentials resolution.
+                 */
+                s3utils::request_credentials_signal(),
+            ]
+        });
+
+        SIGNALS.as_ref()
     }
 
     fn constructed(&self) {

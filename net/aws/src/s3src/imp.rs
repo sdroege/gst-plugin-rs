@@ -91,25 +91,38 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 });
 
 impl S3Src {
-    fn connect(self: &S3Src) -> Result<Client, gst::ErrorMessage> {
+    fn connect(
+        self: &S3Src,
+        signal_credentials: Option<Credentials>,
+    ) -> Result<Client, gst::ErrorMessage> {
         let settings = self.settings.lock().unwrap();
         let s3url = settings.url.clone();
         let s3uri = settings.s3_uri.clone();
         let timeout_config = s3utils::timeout_config(settings.request_timeout);
 
-        let cred = match (
-            settings.access_key.as_ref(),
-            settings.secret_access_key.as_ref(),
-        ) {
-            (Some(access_key), Some(secret_access_key)) => Some(Credentials::new(
-                access_key.clone(),
-                secret_access_key.clone(),
-                settings.session_token.clone(),
-                None,
-                "aws-s3-src",
-            )),
-            _ => None,
-        };
+        let cred = signal_credentials
+            .or_else(|| {
+                match (
+                    settings.access_key.as_ref(),
+                    settings.secret_access_key.as_ref(),
+                ) {
+                    (Some(access_key), Some(secret_access_key)) => Some(Credentials::new(
+                        access_key.clone(),
+                        secret_access_key.clone(),
+                        settings.session_token.clone(),
+                        None,
+                        "aws-s3-src",
+                    )),
+                    _ => None,
+                }
+            })
+            .map(|credentials| {
+                s3utils::SignalCredentialsProvider::new(
+                    self.obj().upcast_ref(),
+                    credentials,
+                    "aws-s3-src",
+                )
+            });
 
         let region = s3url
             .as_ref()
@@ -387,6 +400,37 @@ impl ObjectImpl for S3Src {
         PROPERTIES.as_ref()
     }
 
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
+            vec![
+                /*
+                 * request-credentials:
+                 *
+                 * Emitted when the source needs AWS credentials: once when
+                 * starting and again shortly before the previously provided
+                 * credentials expire, allowing the application to refresh
+                 * short-lived (e.g. STS) credentials during a transfer.
+                 *
+                 * The handler must return a #GstStructure with the fields
+                 * "access-key" (string), "secret-access-key" (string) and
+                 * optionally "session-token" (string) and "expiration"
+                 * (guint64, Unix epoch seconds). Without an expiration the
+                 * credentials are re-requested every 15 minutes. Returning
+                 * %NULL keeps the previously provided or property-configured
+                 * credentials.
+                 *
+                 * The signal can be emitted from an internal thread while a
+                 * request is in progress; the handler must be thread-safe, must
+                 * not change the element's state and should return within the
+                 * configured request-timeout.
+                 */
+                s3utils::request_credentials_signal(),
+            ]
+        });
+
+        SIGNALS.as_ref()
+    }
+
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let mut settings = self.settings.lock().unwrap();
 
@@ -552,6 +596,9 @@ impl BaseSrcImpl for S3Src {
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
+        let signal_credentials =
+            s3utils::request_credentials(self.obj().upcast_ref(), "aws-s3-src")?;
+
         let mut state = self.state.lock().unwrap();
 
         if let StreamingState::Started { .. } = *state {
@@ -567,7 +614,7 @@ impl BaseSrcImpl for S3Src {
         }
         drop(settings);
 
-        match self.connect() {
+        match self.connect(signal_credentials) {
             Ok(s3client) => {
                 let size = self.head(&s3client)?;
                 let (bucket, key, version) = self.get_bucket_and_key();

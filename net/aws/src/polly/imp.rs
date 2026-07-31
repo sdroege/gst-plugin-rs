@@ -22,13 +22,10 @@ use std::sync::Mutex;
 use std::sync::LazyLock;
 
 use super::{AwsOverflow, AwsPollyEngine, AwsPollyLanguageCode, AwsPollyVoiceId, CAT};
-use crate::s3utils::RUNTIME;
+use crate::s3utils::{self, RUNTIME};
 use anyhow::{Error, anyhow};
 #[cfg(feature = "signalsmith_stretch")]
 use signalsmith_stretch::Stretch;
-
-static AWS_BEHAVIOR_VERSION: LazyLock<aws_config::BehaviorVersion> =
-    LazyLock::new(aws_config::BehaviorVersion::v2026_01_12);
 
 const DEFAULT_REGION: &str = "us-east-1";
 const DEFAULT_LATENCY_MS: u32 = 2_000;
@@ -771,6 +768,9 @@ impl Polly {
     fn prepare(&self) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, imp = self, "Preparing");
 
+        let signal_credentials =
+            s3utils::request_credentials(self.obj().upcast_ref(), "aws-polly")?;
+
         let (access_key, secret_access_key, session_token) = {
             let settings = self.settings.lock().unwrap();
             (
@@ -782,25 +782,34 @@ impl Polly {
 
         gst::info!(CAT, imp = self, "Loading aws config...");
 
-        let config = RUNTIME.block_on(async move {
-            let config_loader = match (access_key, secret_access_key) {
+        let cred = signal_credentials
+            .or_else(|| match (access_key, secret_access_key) {
                 (Some(key), Some(secret_key)) => {
                     gst::debug!(CAT, imp = self, "Using settings credentials");
-                    aws_config::defaults(*AWS_BEHAVIOR_VERSION).credentials_provider(
-                        aws_sdk_polly::config::Credentials::new(
-                            key,
-                            secret_key,
-                            session_token,
-                            None,
-                            "translate",
-                        ),
-                    )
+                    Some(aws_sdk_polly::config::Credentials::new(
+                        key,
+                        secret_key,
+                        session_token,
+                        None,
+                        "translate",
+                    ))
                 }
                 _ => {
                     gst::debug!(CAT, imp = self, "Attempting to get credentials from env...");
-                    aws_config::defaults(*AWS_BEHAVIOR_VERSION)
+                    None
                 }
-            };
+            })
+            .map(|credentials| {
+                s3utils::SignalCredentialsProvider::new(
+                    self.obj().upcast_ref(),
+                    credentials,
+                    "aws-polly",
+                )
+            });
+
+        let config = RUNTIME.block_on(async move {
+            let config_loader =
+                s3utils::config_loader(cred, Some(s3utils::DEFAULT_CREDENTIALS_LOAD_TIMEOUT));
 
             let config_loader = config_loader.region(
                 aws_config::meta::region::RegionProviderChain::default_provider()
@@ -1021,6 +1030,37 @@ impl ObjectImpl for Polly {
         });
 
         PROPERTIES.as_ref()
+    }
+
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
+            vec![
+                /*
+                 * request-credentials:
+                 *
+                 * Emitted when the element needs AWS credentials: once when
+                 * preparing and again shortly before the previously provided
+                 * credentials expire, allowing the application to refresh
+                 * short-lived (e.g. STS) credentials while running.
+                 *
+                 * The handler must return a #GstStructure with the fields
+                 * "access-key" (string), "secret-access-key" (string) and
+                 * optionally "session-token" (string) and "expiration"
+                 * (guint64, Unix epoch seconds). Without an expiration the
+                 * credentials are re-requested every 15 minutes. Returning
+                 * %NULL keeps the previously provided or property-configured
+                 * credentials.
+                 *
+                 * The signal can be emitted from an internal thread while a
+                 * request is in progress; the handler must be thread-safe, must
+                 * not change the element's state and should return within 15
+                 * seconds, which bounds credentials resolution.
+                 */
+                s3utils::request_credentials_signal(),
+            ]
+        });
+
+        SIGNALS.as_ref()
     }
 
     fn constructed(&self) {

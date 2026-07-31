@@ -367,7 +367,14 @@
                         "writable": true
                     }
                 },
-                "rank": "none"
+                "rank": "none",
+                "signals": {
+                    "request-credentials": {
+                        "args": [],
+                        "return-type": "GstStructure",
+                        "when": "last"
+                    }
+                }
             },
             "awss3hlssink": {
                 "author": "Daily. Co",
@@ -558,7 +565,14 @@
                         "writable": false
                     }
                 },
-                "rank": "none"
+                "rank": "none",
+                "signals": {
+                    "request-credentials": {
+                        "args": [],
+                        "return-type": "GstStructure",
+                        "when": "last"
+                    }
+                }
             },
             "awss3putobjectsink": {
                 "author": "Arun Raghavan <arun@asymptotic.io>",
@@ -880,7 +894,14 @@
                         "writable": true
                     }
                 },
-                "rank": "none"
+                "rank": "none",
+                "signals": {
+                    "request-credentials": {
+                        "args": [],
+                        "return-type": "GstStructure",
+                        "when": "last"
+                    }
+                }
             },
             "awss3sink": {
                 "author": "Marcin Kolny <mkolny@amazon.com>",
@@ -1222,7 +1243,14 @@
                         "writable": true
                     }
                 },
-                "rank": "primary"
+                "rank": "primary",
+                "signals": {
+                    "request-credentials": {
+                        "args": [],
+                        "return-type": "GstStructure",
+                        "when": "last"
+                    }
+                }
             },
             "awss3src": {
                 "author": "Arun Raghavan <arun@arunraghavan.net>",
@@ -1375,7 +1403,14 @@
                         "writable": true
                     }
                 },
-                "rank": "primary"
+                "rank": "primary",
+                "signals": {
+                    "request-credentials": {
+                        "args": [],
+                        "return-type": "GstStructure",
+                        "when": "last"
+                    }
+                }
             },
             "awstranscribeparse": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
@@ -1633,7 +1668,14 @@
                         "writable": true
                     }
                 },
-                "rank": "none"
+                "rank": "none",
+                "signals": {
+                    "request-credentials": {
+                        "args": [],
+                        "return-type": "GstStructure",
+                        "when": "last"
+                    }
+                }
             },
             "awstranscriber2": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
@@ -1822,7 +1864,14 @@
                         "writable": true
                     }
                 },
-                "rank": "none"
+                "rank": "none",
+                "signals": {
+                    "request-credentials": {
+                        "args": [],
+                        "return-type": "GstStructure",
+                        "when": "last"
+                    }
+                }
             },
             "awstranslate": {
                 "author": "Mathieu Duponchelle <mathieu@centricular.com>",
@@ -1961,7 +2010,14 @@
                         "writable": true
                     }
                 },
-                "rank": "none"
+                "rank": "none",
+                "signals": {
+                    "request-credentials": {
+                        "args": [],
+                        "return-type": "GstStructure",
+                        "when": "last"
+                    }
+                }
             }
         },
         "filename": "gstaws",

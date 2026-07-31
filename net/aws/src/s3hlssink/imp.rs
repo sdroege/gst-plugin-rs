@@ -368,37 +368,64 @@ impl S3HlsSink {
         gst::info!(CAT, imp = self, "Exiting S3 request thread",);
     }
 
-    fn s3client_from_settings(&self) -> Client {
-        let mut settings = self.settings.lock().unwrap();
+    fn s3client_from_settings(&self) -> Option<Client> {
+        if self.settings.lock().unwrap().config.is_none() {
+            // Emitted without the settings lock held as the handler may access
+            // element properties.
+            let signal_credentials =
+                match s3utils::request_credentials(self.obj().upcast_ref(), "s3-hlssink") {
+                    Ok(credentials) => credentials,
+                    Err(_) => {
+                        element_imp_error!(
+                            self,
+                            gst::ResourceError::Settings,
+                            ["Invalid structure returned by request-credentials signal handler"]
+                        );
+                        return None;
+                    }
+                };
 
-        if settings.config.is_none() {
-            let timeout_config = s3utils::timeout_config(settings.request_timeout);
-            let access_key = settings.access_key.as_ref();
-            let secret_access_key = settings.secret_access_key.as_ref();
-            let session_token = settings.session_token.clone();
+            let mut settings = self.settings.lock().unwrap();
+            if settings.config.is_none() {
+                let timeout_config = s3utils::timeout_config(settings.request_timeout);
 
-            let cred = match (access_key, secret_access_key) {
-                (Some(access), Some(secret_access)) => Some(Credentials::new(
-                    access,
-                    secret_access,
-                    session_token,
-                    None,
-                    "s3-hlssink",
-                )),
-                _ => None,
-            };
+                let cred = signal_credentials
+                    .or_else(|| {
+                        match (
+                            settings.access_key.as_ref(),
+                            settings.secret_access_key.as_ref(),
+                        ) {
+                            (Some(access), Some(secret_access)) => Some(Credentials::new(
+                                access,
+                                secret_access,
+                                settings.session_token.clone(),
+                                None,
+                                "s3-hlssink",
+                            )),
+                            _ => None,
+                        }
+                    })
+                    .map(|credentials| {
+                        s3utils::SignalCredentialsProvider::new(
+                            self.obj().upcast_ref(),
+                            credentials,
+                            "s3-hlssink",
+                        )
+                    });
 
-            let sdk_config = s3utils::wait_config(
-                &self.canceller,
-                Some(settings.s3_region.clone()),
-                timeout_config,
-                cred,
-            )
-            .expect("Failed to get SDK config");
+                let sdk_config = s3utils::wait_config(
+                    &self.canceller,
+                    Some(settings.s3_region.clone()),
+                    timeout_config,
+                    cred,
+                )
+                .expect("Failed to get SDK config");
 
-            settings.config = Some(sdk_config);
+                settings.config = Some(sdk_config);
+            }
         }
 
+        let settings = self.settings.lock().unwrap();
         let sdk_config = settings.config.as_ref().expect("SDK config must be set");
 
         let config_builder = config::Builder::from(sdk_config)
@@ -412,7 +439,7 @@ impl S3HlsSink {
             config_builder.build()
         };
 
-        Client::from_conf(config)
+        Some(Client::from_conf(config))
     }
 
     fn stop(&self) {
@@ -576,6 +603,37 @@ impl ObjectImpl for S3HlsSink {
         PROPERTIES.as_ref()
     }
 
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: LazyLock<Vec<glib::subclass::Signal>> = LazyLock::new(|| {
+            vec![
+                /*
+                 * request-credentials:
+                 *
+                 * Emitted when the sink needs AWS credentials: once before the
+                 * first S3 request and again shortly before the previously
+                 * provided credentials expire, allowing the application to
+                 * refresh short-lived (e.g. STS) credentials during a transfer.
+                 *
+                 * The handler must return a #GstStructure with the fields
+                 * "access-key" (string), "secret-access-key" (string) and
+                 * optionally "session-token" (string) and "expiration"
+                 * (guint64, Unix epoch seconds). Without an expiration the
+                 * credentials are re-requested every 15 minutes. Returning
+                 * %NULL keeps the previously provided or property-configured
+                 * credentials.
+                 *
+                 * The signal can be emitted from an internal thread while a
+                 * request is in progress; the handler must be thread-safe, must
+                 * not change the element's state and should return within the
+                 * configured request-timeout.
+                 */
+                s3utils::request_credentials_signal(),
+            ]
+        });
+
+        SIGNALS.as_ref()
+    }
+
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let mut settings = self.settings.lock().unwrap();
 
@@ -686,7 +744,9 @@ impl ObjectImpl for S3HlsSink {
             let self_weak = self.downgrade();
             move |args| -> Option<glib::Value> {
                 let self_ = self_weak.upgrade()?;
-                let s3client = self_.s3client_from_settings();
+                let Some(s3client) = self_.s3client_from_settings() else {
+                    return Some(None::<gio::OutputStream>.to_value());
+                };
                 let settings = self_.settings.lock().unwrap();
                 let mut state = self_.state.lock().unwrap();
                 match *state {
@@ -717,7 +777,9 @@ impl ObjectImpl for S3HlsSink {
             let self_weak = self.downgrade();
             move |args| -> Option<glib::Value> {
                 let self_ = self_weak.upgrade()?;
-                let s3client = self_.s3client_from_settings();
+                let Some(s3client) = self_.s3client_from_settings() else {
+                    return Some(None::<gio::OutputStream>.to_value());
+                };
                 let settings = self_.settings.lock().unwrap();
                 let mut state = self_.state.lock().unwrap();
                 match *state {
@@ -748,7 +810,20 @@ impl ObjectImpl for S3HlsSink {
             let self_weak = self.downgrade();
             move |args| -> Option<glib::Value> {
                 let self_ = self_weak.upgrade()?;
-                let s3_client = self_.s3client_from_settings();
+                // The signature on delete-fragment signal is different for
+                // hlssink2 and hlssink3.
+                let is_hlssink3 = self_
+                    .hlssink
+                    .factory()
+                    .is_some_and(|factory| factory.name() == "hlssink3");
+
+                let Some(s3_client) = self_.s3client_from_settings() else {
+                    return if is_hlssink3 {
+                        Some(false.to_value())
+                    } else {
+                        None
+                    };
+                };
                 let settings = self_.settings.lock().unwrap();
 
                 let s3_bucket = settings.s3_bucket.as_ref().unwrap().clone();
@@ -771,13 +846,7 @@ impl ObjectImpl for S3HlsSink {
 
                 let res = delete_tx.send(S3Request::Delete(delete));
 
-                // The signature on delete-fragment signal is different for
-                // hlssink2 and hlssink3.
-                if self_
-                    .hlssink
-                    .factory()
-                    .is_some_and(|factory| factory.name() == "hlssink3")
-                {
+                if is_hlssink3 {
                     if res.is_ok() {
                         Some(true.to_value())
                     } else {
