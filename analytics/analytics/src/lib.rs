@@ -27,7 +27,7 @@ mod combiner;
 mod splitter;
 
 #[cfg(feature = "v1_28")]
-mod yoloxtensordec;
+mod yolotensordec;
 
 #[cfg(feature = "v1_28")]
 mod handdetectiontensordec;
@@ -50,7 +50,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     }
 
     #[cfg(feature = "v1_28")]
-    yoloxtensordec::register(plugin)?;
+    yolotensordec::register(plugin)?;
 
     #[cfg(feature = "v1_28")]
     handdetectiontensordec::register(plugin)?;

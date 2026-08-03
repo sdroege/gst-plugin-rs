@@ -65,6 +65,9 @@ You will find the following plugins in this repository:
       - `handdetectiontensordec`: Tensor decoder for hand detection tensors.
       - `onvifmeta2relationmeta`: Convert ONVIF metadata to relation metas
       - `relationmeta2onvifmeta`: Convert relation metadata to ONVIF metas
+      - `yolov8tensordec2`: Tensor decoder for YoloV8 tensors. Supports
+        YoloV8-V10, Yolo11, Yolo12 and Yolo26, but only the one-to-many
+        (non-NMS) heads of YoloV10, Yolo11, Yolo12 and Yolo26.
       - `yoloxtensordec`: Tensor decoder for YOLOX tensors.
 
     - `burn`:

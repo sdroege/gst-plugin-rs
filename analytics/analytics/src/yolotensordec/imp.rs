@@ -6,40 +6,39 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-/**
- * SECTION:element-yoloxtensordec
- * @see_also: objectdetectionoverlay, burn-yoloxinference.
- *
- * Tensor decoder element for [YOLOX](https://github.com/Megvii-BaseDetection/YOLOX)-based object
- * detection.
- *
- * |[
- * gst-launch-1.0 souphttpsrc location=https://raw.githubusercontent.com/tracel-ai/models/ab8c64bd7e1f45e99cc321ce900a5b5e6b97910c/yolox-burn/samples/dog_bike_man.jpg \
- *     ! jpegdec ! videoconvertscale ! "video/x-raw,width=800,height=640" \
- *     ! burn-yoloxinference ! yoloxtensordec label-file=COCO_classes.txt \
- *     ! videoconvertscale ! objectdetectionoverlay \
- *     ! videoconvertscale ! imagefreeze ! autovideosink -v
- * ]| This takes a JPEG, performs object detection via `burn-yoloxinference` on it, decodes the
- * inferred tensors with `yoloxtensordec` and then overlays the detected objects on the frame via
- * `objectdetectionoverlay`.
- *
- * Since: plugins-rs-0.15.0
- */
 use gst::{glib, subclass::prelude::*};
 use gst_analytics::prelude::*;
 use gst_video::{prelude::*, subclass::prelude::*};
 
 use byte_slice_cast::*;
 
+use itertools::izip;
 use std::sync::{LazyLock, Mutex};
 
+const YOLOV8_OUT: &glib::GStr = glib::gstr!("yolo-v8-out");
 const YOLOX_OUT: &glib::GStr = glib::gstr!("yolox-out");
+
+#[derive(Clone, Copy, Debug)]
+enum YoloTensorFormat {
+    V8, // Col-major, [1, 4+C, N]
+    X,  // Row-major, [1, N, 5+C]
+}
+
+fn tensor_format_from_type(type_: glib::Type) -> YoloTensorFormat {
+    if type_ == super::YoloV8TensorDec::static_type() {
+        YoloTensorFormat::V8
+    } else if type_ == super::YoloXTensorDec::static_type() {
+        YoloTensorFormat::X
+    } else {
+        unreachable!()
+    }
+}
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
-        "yoloxtensordec",
+        "yolotensordec",
         gst::DebugColorFlags::empty(),
-        Some("YOLOX tensor decoder element"),
+        Some("YOLO tensor decoder element"),
     )
 });
 
@@ -68,19 +67,20 @@ struct State {
 }
 
 #[derive(Default)]
-pub struct YoloxTensorDec {
+pub struct YoloTensorDec {
     state: Mutex<Option<State>>,
     settings: Mutex<Settings>,
 }
 
 #[glib::object_subclass]
-impl ObjectSubclass for YoloxTensorDec {
-    const NAME: &'static str = "GstYoloxTensorDec";
-    type Type = super::YoloxTensorDec;
+impl ObjectSubclass for YoloTensorDec {
+    const ABSTRACT: bool = true;
+    const NAME: &'static str = "GstYoloTensorDec";
+    type Type = super::YoloTensorDec;
     type ParentType = gst_base::BaseTransform;
 }
 
-impl ObjectImpl for YoloxTensorDec {
+impl ObjectImpl for YoloTensorDec {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
@@ -178,71 +178,11 @@ impl ObjectImpl for YoloxTensorDec {
     }
 }
 
-impl GstObjectImpl for YoloxTensorDec {}
+impl GstObjectImpl for YoloTensorDec {}
 
-impl ElementImpl for YoloxTensorDec {
-    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
-        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
-            gst::subclass::ElementMetadata::new(
-                "YOLOX Tensor Decoder Element",
-                "Tensordecoder/Video",
-                "Decodes tensors from a YOLOX model",
-                "Sebastian Dröge <sebastian@centricular.com>",
-            )
-        });
+impl ElementImpl for YoloTensorDec {}
 
-        Some(&*ELEMENT_METADATA)
-    }
-
-    fn pad_templates() -> &'static [gst::PadTemplate] {
-        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
-            let sink_caps = gst_video::VideoCapsBuilder::new()
-                .field(
-                    "tensors",
-                    gst::Structure::builder("tensorgroups")
-                        .field(
-                            YOLOX_OUT,
-                            gst::UniqueList::new([gst::Caps::builder("tensor/strided")
-                                .field(
-                                    "dims",
-                                    gst::Array::from_values([
-                                        1i32.to_send_value(),
-                                        0i32.to_send_value(),
-                                        gst::IntRange::<i32>::new(5, i32::MAX).to_send_value(),
-                                    ]),
-                                )
-                                .field("dims-order", "row-major")
-                                .field("type", "float32")
-                                .build()]),
-                        )
-                        .build(),
-                )
-                .build();
-            let sink_pad_template = gst::PadTemplate::new(
-                "sink",
-                gst::PadDirection::Sink,
-                gst::PadPresence::Always,
-                &sink_caps,
-            )
-            .unwrap();
-
-            let src_caps = gst_video::VideoCapsBuilder::new().build();
-            let src_pad_template = gst::PadTemplate::new(
-                "src",
-                gst::PadDirection::Src,
-                gst::PadPresence::Always,
-                &src_caps,
-            )
-            .unwrap();
-
-            vec![sink_pad_template, src_pad_template]
-        });
-
-        PAD_TEMPLATES.as_ref()
-    }
-}
-
-impl BaseTransformImpl for YoloxTensorDec {
+impl BaseTransformImpl for YoloTensorDec {
     const MODE: gst_base::subclass::BaseTransformMode =
         gst_base::subclass::BaseTransformMode::AlwaysInPlace;
     const PASSTHROUGH_ON_SAME_CAPS: bool = false;
@@ -301,8 +241,8 @@ impl BaseTransformImpl for YoloxTensorDec {
             return Err(gst::FlowError::Flushing);
         };
 
-        let Some(meta) = find_yolox_tensor_meta(buffer) else {
-            gst::trace!(CAT, imp = self, "No YOLOX tensor meta found");
+        let Some(meta) = find_yolo_tensor_meta(buffer, self.obj().type_()) else {
+            gst::trace!(CAT, imp = self, "No YOLO tensor meta found");
             return Ok(gst::FlowSuccess::Ok);
         };
 
@@ -325,13 +265,26 @@ impl BaseTransformImpl for YoloxTensorDec {
             return Err(gst::FlowError::Error);
         }
 
-        let num_columns = tensor.dims()[2];
+        let tensor_format = tensor_format_from_type(self.obj().type_());
+
+        // YOLOX and YOLOv8 tensors use different memory layouts.
+        let (num_candidates, num_fields) = match tensor_format {
+            YoloTensorFormat::V8 => {
+                // YOLOv8: dims[1] = num_fields, dims[2] = num_candidates
+                // Planar / column-major: field f of candidate c is at data[c + f * stride]
+                (tensor.dims()[2], tensor.dims()[1])
+            }
+            YoloTensorFormat::X => {
+                // YOLOX: dims[1] = num_candidates, dims[2] = num_fields
+                // Interleaved / row-major: each chunk of num_fields is one candidate
+                (tensor.dims()[1], tensor.dims()[2])
+            }
+        };
+        let num_classes = num_fields - 5;
         gst::log!(
             CAT,
             imp = self,
-            "Received {} boxes with {} classes",
-            data.len() / num_columns,
-            num_columns - 4 - 1,
+            "Received {num_candidates} boxes with {num_classes} classes",
         );
 
         let settings = self.settings.lock().unwrap();
@@ -340,31 +293,67 @@ impl BaseTransformImpl for YoloxTensorDec {
         // https://github.com/tracel-ai/models/blob/main/yolox-burn/src/model/boxes.rs
 
         let mut candidate_boxes = vec![];
-        for b in data.chunks_exact(tensor.dims()[2]) {
-            // Skip boxes that have a too low confidence
-            if b[4] < settings.box_confidence_threshold {
-                continue;
-            }
+        match tensor_format {
+            YoloTensorFormat::V8 => {
+                // YOLOv8 planar layout: field f of candidate c is at data[c + f * stride]
+                // stride = dims[2] = num_candidates
+                let stride = num_candidates;
+                let (boxes, classes) = data.split_at(4 * stride);
+                let (xs, rest) = boxes.split_at(stride);
+                let (ys, rest) = rest.split_at(stride);
+                let (widths, heights) = rest.split_at(stride);
 
-            // For each box, search for the class with maximum confidence
-            let (class, confidence) = b[5..]
-                .iter()
-                .enumerate()
-                .max_by(|(_, a), (_, b)| a.total_cmp(b))
-                .unwrap();
-            if *confidence < settings.class_confidence_threshold {
-                continue;
-            }
+                for (c, (&x, &y, &width, &height)) in izip!(xs, ys, widths, heights).enumerate() {
+                    // Find max confidence across all class confidence slices
+                    let (class, max_confidence) = classes
+                        .chunks_exact(stride)
+                        .enumerate()
+                        .map(|(i, chunk)| (i as u32, chunk[c]))
+                        .max_by(|(_, a), (_, b)| a.total_cmp(b))
+                        .unwrap();
+                    if max_confidence < settings.class_confidence_threshold {
+                        continue;
+                    }
 
-            let combined_confidence = b[4] * confidence;
-            candidate_boxes.push(BoundingBox {
-                xmin: b[0] - b[2] / 2.,
-                ymin: b[1] - b[3] / 2.,
-                xmax: b[0] + b[2] / 2.,
-                ymax: b[1] + b[3] / 2.,
-                class: class as u32,
-                confidence: combined_confidence,
-            });
+                    candidate_boxes.push(BoundingBox {
+                        xmin: x - width / 2.,
+                        ymin: y - height / 2.,
+                        xmax: x + width / 2.,
+                        ymax: y + height / 2.,
+                        class,
+                        confidence: max_confidence,
+                    });
+                }
+            }
+            YoloTensorFormat::X => {
+                // YOLOX interleaved layout: contiguous chunk per candidate
+                for b in data.chunks_exact(num_fields) {
+                    // Skip boxes that have a too low confidence
+                    if b[4] < settings.box_confidence_threshold {
+                        continue;
+                    }
+
+                    // For each box, search for the class with maximum confidence
+                    let (class, confidence) = b[5..]
+                        .iter()
+                        .enumerate()
+                        .max_by(|(_, a), (_, b)| a.total_cmp(b))
+                        .unwrap();
+                    if *confidence < settings.class_confidence_threshold {
+                        continue;
+                    }
+
+                    let combined_confidence = b[4] * confidence;
+                    candidate_boxes.push(BoundingBox {
+                        xmin: b[0] - b[2] / 2.,
+                        ymin: b[1] - b[3] / 2.,
+                        xmax: b[0] + b[2] / 2.,
+                        ymax: b[1] + b[3] / 2.,
+                        class: class as u32,
+                        confidence: combined_confidence,
+                    });
+                }
+            }
         }
 
         // Sort boxes by class and then by decreasing confidence
@@ -432,16 +421,22 @@ impl BaseTransformImpl for YoloxTensorDec {
     }
 }
 
-fn find_yolox_tensor_meta(
+fn find_yolo_tensor_meta(
     buffer: &gst::BufferRef,
+    type_: glib::Type,
 ) -> Option<gst::MetaRef<'_, gst_analytics::TensorMeta>> {
     buffer
         .iter_meta::<gst_analytics::TensorMeta>()
         .find(|meta| {
+            let (model, order) = match tensor_format_from_type(type_) {
+                YoloTensorFormat::V8 => (YOLOV8_OUT, gst_analytics::TensorDimOrder::ColMajor),
+                YoloTensorFormat::X => (YOLOX_OUT, gst_analytics::TensorDimOrder::RowMajor),
+            };
+
             let Some(tensor) = meta.typed_tensor(
-                glib::Quark::from_static_str(YOLOX_OUT),
+                glib::Quark::from_static_str(model),
                 gst_analytics::TensorDataType::Float32,
-                gst_analytics::TensorDimOrder::RowMajor,
+                order,
                 &[1, usize::MAX, usize::MAX],
             ) else {
                 return false;
@@ -452,14 +447,24 @@ fn find_yolox_tensor_meta(
             }
 
             // Need at least the bounding box (4) and the box confidence (1)
-            // and at least the confidence for a single class (1)
-            if tensor.dims()[2] < 4 + 1 + 1 {
+            // and at least the confidence for a single class (1).
+            let num_fields = if type_ == super::YoloV8TensorDec::static_type() {
+                tensor.dims()[1]
+            } else if type_ == super::YoloXTensorDec::static_type() {
+                tensor.dims()[2]
+            } else {
+                unreachable!()
+            };
+
+            if num_fields < 4 + 1 + 1 {
                 return false;
             }
 
             true
         })
 }
+
+impl super::YoloTensorDecImpl for YoloTensorDec {}
 
 #[derive(Debug)]
 struct BoundingBox {
@@ -482,3 +487,177 @@ fn iou(b1: &BoundingBox, b2: &BoundingBox) -> f32 {
     let i_area = f32::max(i_xmax - i_xmin + 1.0, 0.0) * f32::max(i_ymax - i_ymin + 1.0, 0.0);
     i_area / (b1_area + b2_area - i_area)
 }
+
+#[derive(Default)]
+pub struct YoloV8TensorDec {}
+
+#[glib::object_subclass]
+impl ObjectSubclass for YoloV8TensorDec {
+    const NAME: &'static str = "GstYoloV8TensorDec";
+    type Type = super::YoloV8TensorDec;
+    type ParentType = super::YoloTensorDec;
+}
+
+impl ObjectImpl for YoloV8TensorDec {}
+
+impl GstObjectImpl for YoloV8TensorDec {}
+
+impl ElementImpl for YoloV8TensorDec {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "YOLOv8-v10, Yolo11, Yolo12 and Yolo26 Tensor Decoder Element",
+                "Tensordecoder/Video",
+                "Decodes tensors from a YOLOv8-v10, Yolo11, Yolo12 and Yolo26 model",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
+            let sink_caps = gst_video::VideoCapsBuilder::new()
+                .field(
+                    "tensors",
+                    gst::Structure::builder("tensorgroups")
+                        .field(
+                            YOLOV8_OUT,
+                            gst::UniqueList::new([gst::Caps::builder("tensor/strided")
+                                .field("tensor-id", YOLOV8_OUT)
+                                .field(
+                                    "dims",
+                                    gst::Array::from_values([
+                                        1i32.to_send_value(),
+                                        gst::IntRange::<i32>::new(5, i32::MAX).to_send_value(),
+                                        gst::IntRange::<i32>::new(0, i32::MAX).to_send_value(),
+                                    ]),
+                                )
+                                .field("dims-order", "col-major")
+                                .field("type", "float32")
+                                .build()]),
+                        )
+                        .build(),
+                )
+                .build();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &sink_caps,
+            )
+            .unwrap();
+
+            let src_caps = gst_video::VideoCapsBuilder::new().build();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &src_caps,
+            )
+            .unwrap();
+
+            vec![sink_pad_template, src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
+
+impl BaseTransformImpl for YoloV8TensorDec {
+    const MODE: gst_base::subclass::BaseTransformMode =
+        gst_base::subclass::BaseTransformMode::AlwaysInPlace;
+    const PASSTHROUGH_ON_SAME_CAPS: bool = false;
+    const TRANSFORM_IP_ON_PASSTHROUGH: bool = true;
+}
+
+impl super::YoloTensorDecImpl for YoloV8TensorDec {}
+
+#[derive(Default)]
+pub struct YoloXTensorDec {}
+
+#[glib::object_subclass]
+impl ObjectSubclass for YoloXTensorDec {
+    const NAME: &'static str = "GstYoloXTensorDec";
+    type Type = super::YoloXTensorDec;
+    type ParentType = super::YoloTensorDec;
+}
+
+impl ObjectImpl for YoloXTensorDec {}
+
+impl GstObjectImpl for YoloXTensorDec {}
+
+impl ElementImpl for YoloXTensorDec {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "YOLOX Tensor Decoder Element",
+                "Tensordecoder/Video",
+                "Decodes tensors from a YOLOX model",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
+            let sink_caps = gst_video::VideoCapsBuilder::new()
+                .field(
+                    "tensors",
+                    gst::Structure::builder("tensorgroups")
+                        .field(
+                            YOLOX_OUT,
+                            gst::UniqueList::new([gst::Caps::builder("tensor/strided")
+                                .field("tensor-id", YOLOX_OUT)
+                                .field(
+                                    "dims",
+                                    gst::Array::from_values([
+                                        1i32.to_send_value(),
+                                        gst::IntRange::<i32>::new(0, i32::MAX).to_send_value(),
+                                        gst::IntRange::<i32>::new(5, i32::MAX).to_send_value(),
+                                    ]),
+                                )
+                                .field("dims-order", "row-major")
+                                .field("type", "float32")
+                                .build()]),
+                        )
+                        .build(),
+                )
+                .build();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &sink_caps,
+            )
+            .unwrap();
+
+            let src_caps = gst_video::VideoCapsBuilder::new().build();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &src_caps,
+            )
+            .unwrap();
+
+            vec![sink_pad_template, src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
+
+impl BaseTransformImpl for YoloXTensorDec {
+    const MODE: gst_base::subclass::BaseTransformMode =
+        gst_base::subclass::BaseTransformMode::AlwaysInPlace;
+    const PASSTHROUGH_ON_SAME_CAPS: bool = false;
+    const TRANSFORM_IP_ON_PASSTHROUGH: bool = true;
+}
+
+impl super::YoloTensorDecImpl for YoloXTensorDec {}
