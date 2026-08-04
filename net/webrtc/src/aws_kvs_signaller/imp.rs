@@ -527,7 +527,7 @@ impl SignallableImpl for Signaller {
     fn start(&self) {
         let this = self.obj().clone();
         let imp = self.downgrade();
-        task::spawn(async move {
+        RUNTIME.spawn(async move {
             if let Some(imp) = imp.upgrade()
                 && let Err(err) = imp.connect().await
             {
