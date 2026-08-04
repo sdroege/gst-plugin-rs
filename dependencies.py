@@ -112,7 +112,7 @@ class CargoAnalyzer:
                 # Required for some reason for rswebrtc which has a specific feature
                 wanted_features |= {f"{cargo_data['package']['name']}/{name}"}
 
-        print(f'Enabling features: {wanted_features!r}', file=sys.stderr)
+        print(f'Enabling features: {sorted(wanted_features)!r}', file=sys.stderr)
         return wanted_features
 
     def get_library_names(self, packages):
@@ -180,6 +180,6 @@ if __name__ == "__main__":
 
     if opts.feature_deps:
         for name, deps in analyzer.get_feature_deps().items():
-            print('{}: {}'.format(name, ','.join(deps)))
+            print('{}: {}'.format(name, ','.join(sorted(deps))))
     else:
-        print(','.join(analyzer.run()))
+        print(','.join(sorted(analyzer.run())))
