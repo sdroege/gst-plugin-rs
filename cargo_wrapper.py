@@ -202,7 +202,7 @@ def setup_library_paths_for_tests(env, builddir, logfile=None):
         # Prepend all paths to the environment variable
         existing_path = env.get(lib_path_envvar, '')
         if paths:
-            new_paths = list(paths)
+            new_paths = sorted(paths)
             if existing_path:
                 new_paths.append(existing_path)
             env[lib_path_envvar] = os.pathsep.join(new_paths)
@@ -337,7 +337,7 @@ if __name__ == '__main__':
             depfile_content = ''
             # Get allowed library names if filtering by packages
             for suffix in opts.lib_suffixes:
-                for f in glob.glob(str(target_dir / f'*.{suffix}'), recursive=True):
+                for f in sorted(glob.glob(str(target_dir / f'*.{suffix}'), recursive=True)):
                     libfile = P(f)
 
                     # Filter by package if packages were specified
@@ -372,7 +372,7 @@ if __name__ == '__main__':
             depfile.write(depfile_content)
 
         # Copy generated pkg-config files
-        for f in glob.glob(str(target_dir / '*.pc'), recursive=True):
+        for f in sorted(glob.glob(str(target_dir / '*.pc'), recursive=True)):
             pc_file = P(f)
             if pc_file.stem not in allowed_lib_names:
                 print(f'Skipping {pc_file.name} (not in --packages)', file=logfile)
