@@ -21,6 +21,7 @@ pub static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 });
 
 #[test]
+#[ignore = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/work_items/816"]
 fn encoded_filter() {
     gst::init().unwrap();
     gstrswebrtc::plugin_register_static().unwrap();
