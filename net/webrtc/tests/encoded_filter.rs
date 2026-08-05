@@ -113,10 +113,10 @@ where
     let elems = [&audio_src, wsink.upcast_ref()];
     pipeline_sink.add_many(elems).unwrap();
     gst::Element::link_many(elems).unwrap();
-    pipeline_sink.set_state(gst::State::Playing).unwrap();
 
     let prod_started_cvar_pair = Arc::new((Mutex::new(false), Condvar::new()));
     wsink_signaller.connect("started", false, {
+        let test = test.to_string();
         let prod_started_cvar_pair = prod_started_cvar_pair.clone();
         move |_| {
             let (lock, cvar) = &*prod_started_cvar_pair;
@@ -124,9 +124,13 @@ where
             *prod_started = true;
             cvar.notify_one();
 
+            gst::debug!(CAT, "{test} prod started notified");
+
             None
         }
     });
+
+    pipeline_sink.set_state(gst::State::Playing).unwrap();
 
     gst::debug!(CAT, "{test} awaiting for prod to start");
     let (lock, cvar) = &*prod_started_cvar_pair;
