@@ -301,7 +301,7 @@ impl OriginalBufferSave {
         if let Some(mut meta) = buf.make_mut().meta_mut::<OriginalBufferMeta>() {
             meta.replace(inbuf, caps);
         } else {
-            OriginalBufferMeta::add(buf.make_mut(), inbuf, caps);
+            OriginalBufferMeta::add(buf.make_mut(), inbuf, caps, Vec::new());
         }
 
         self.src_pad.push(buf)

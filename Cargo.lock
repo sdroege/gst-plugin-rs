@@ -5713,6 +5713,8 @@ dependencies = [
  "glib",
  "gst-plugin-version-helper",
  "gstreamer",
+ "gstreamer-analytics",
+ "gstreamer-check",
  "gstreamer-video",
 ]
 

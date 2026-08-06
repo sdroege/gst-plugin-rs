@@ -14,26 +14,13 @@ use gst_video::prelude::*;
 use atomic_refcell::AtomicRefCell;
 
 use crate::originalbuffermeta;
-use crate::originalbuffermeta::OriginalBufferMeta;
-
-struct CapsState {
-    caps: gst::Caps,
-    vinfo: Option<gst_video::VideoInfo>,
-}
-
-impl Default for CapsState {
-    fn default() -> Self {
-        CapsState {
-            caps: gst::Caps::new_empty(),
-            vinfo: None,
-        }
-    }
-}
+use crate::originalbuffermeta::{OriginalBufferMeta, RecordedTransform};
 
 #[derive(Default)]
 struct State {
-    sinkpad_caps: CapsState,
-    meta_caps: CapsState,
+    /// Caps last pushed downstream (the original, pre-transform caps), used to
+    /// only push a new `Caps` event when it actually changes.
+    restored_caps: Option<gst::Caps>,
     sinkpad_segment: Option<gst::Event>,
 }
 
@@ -41,6 +28,94 @@ pub struct OriginalBufferRestore {
     state: AtomicRefCell<State>,
     src_pad: gst::Pad,
     sink_pad: gst::Pad,
+}
+
+/// Inverts a 3x3 matrix, returning `None` if it is singular (not invertible).
+fn invert_matrix3(m: &[[f32; 3]; 3]) -> Option<[[f32; 3]; 3]> {
+    let (a, b, c) = (m[0][0], m[0][1], m[0][2]);
+    let (d, e, f) = (m[1][0], m[1][1], m[1][2]);
+    let (g, h, i) = (m[2][0], m[2][1], m[2][2]);
+
+    let det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+    if !det.is_finite() || det.abs() < f32::EPSILON {
+        return None;
+    }
+    let inv_det = 1.0 / det;
+
+    Some([
+        [
+            (e * i - f * h) * inv_det,
+            (c * h - b * i) * inv_det,
+            (b * f - c * e) * inv_det,
+        ],
+        [
+            (f * g - d * i) * inv_det,
+            (a * i - c * g) * inv_det,
+            (c * d - a * f) * inv_det,
+        ],
+        [
+            (d * h - e * g) * inv_det,
+            (b * g - a * h) * inv_det,
+            (a * e - b * d) * inv_det,
+        ],
+    ])
+}
+
+enum ReverseTransform {
+    Matrix(gst_video::video_meta::VideoMetaTransformMatrix),
+    Scale {
+        matrix: gst_video::video_meta::VideoMetaTransformMatrix,
+        scale: gst_video::video_meta::VideoMetaTransformScale,
+    },
+    SingularMatrix,
+}
+
+fn reverse_transform(transform: &RecordedTransform) -> ReverseTransform {
+    match transform {
+        RecordedTransform::Scale { in_info, out_info } => {
+            // The buffer travelled in_info -> out_info; reverse it.
+            let scale = gst_video::video_meta::VideoMetaTransformScale::new(out_info, in_info);
+
+            let out_rect = gst_video::VideoRectangle::new(
+                0,
+                0,
+                out_info.width() as i32,
+                out_info.height() as i32,
+            );
+            let in_rect = gst_video::VideoRectangle::new(
+                0,
+                0,
+                in_info.width() as i32,
+                in_info.height() as i32,
+            );
+            // A full-frame matrix built from the (reversed) rectangles is
+            // exactly the inverse scale, no explicit inversion needed.
+            let matrix = gst_video::video_meta::VideoMetaTransformMatrix::new(
+                out_info, &out_rect, in_info, &in_rect,
+            );
+
+            ReverseTransform::Scale { matrix, scale }
+        }
+        RecordedTransform::Matrix {
+            in_info,
+            in_rectangle,
+            out_info,
+            out_rectangle,
+            matrix,
+        } => match invert_matrix3(matrix) {
+            Some(inverted) => {
+                let mut m = gst_video::video_meta::VideoMetaTransformMatrix::new(
+                    out_info,
+                    out_rectangle,
+                    in_info,
+                    in_rectangle,
+                );
+                *m.matrix_mut() = inverted;
+                ReverseTransform::Matrix(m)
+            }
+            None => ReverseTransform::SingularMatrix,
+        },
+    }
 }
 
 use std::sync::LazyLock;
@@ -177,12 +252,11 @@ impl OriginalBufferRestore {
         event: gst::Event,
     ) -> bool {
         match event.view() {
-            gst::EventView::Caps(e) => {
-                let mut state = self.state.borrow_mut();
-
-                let caps = e.caps_owned();
-                let vinfo = gst_video::VideoInfo::from_caps(&caps).ok();
-                state.sinkpad_caps = CapsState { caps, vinfo };
+            gst::EventView::Caps(_) => {
+                // The sink caps describe the transformed ("main") buffer
+                // stream; they aren't forwarded downstream as-is since the
+                // src pad's caps are the restored original caps, pushed from
+                // `sink_chain`/the `Gap` handler below instead.
                 true
             }
             gst::EventView::Segment(_) => {
@@ -196,11 +270,8 @@ impl OriginalBufferRestore {
                 if let Ok(buffer) = s.get::<gst::Buffer>("original-buffer") {
                     if let Ok(caps) = s.get::<gst::Caps>("original-caps") {
                         let mut state = self.state.borrow_mut();
-                        if state.meta_caps.caps != caps {
-                            let meta_caps = &mut state.meta_caps;
-
-                            meta_caps.caps = caps.clone();
-                            meta_caps.vinfo = gst_video::VideoInfo::from_caps(&meta_caps.caps).ok();
+                        if state.restored_caps.as_ref() != Some(&caps) {
+                            state.restored_caps = Some(caps.clone());
                             drop(state);
                             if !self.src_pad.push_event(gst::event::Caps::new(&caps)) {
                                 return false;
@@ -278,36 +349,30 @@ impl OriginalBufferRestore {
         gst::Pad::query_default(pad, parent, query)
     }
 
-    fn sink_chain(
+    /// Transfers metadata from `src` onto `dst`, applying the inverse of
+    /// `transform` (one recorded transform) to reposition it, or a plain
+    /// copy if `transform` is `None` (no recorded transform to invert) or
+    /// the meta doesn't support the attempted transform. The reverse
+    /// representation of `transform` is only computed (via
+    /// `reverse_transform`) the first time it's actually needed, i.e. when a
+    /// meta reaches the point of being repositioned, and is then reused for
+    /// the rest of this call.
+    fn transfer_metas(
         &self,
-        _pad: &gst::Pad,
-        inbuf: gst::Buffer,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let Some(ometa) = inbuf.meta::<OriginalBufferMeta>() else {
-            //gst::element_warning!(self, gst::StreamError::Failed, ["Buffer {} is missing the GstOriginalBufferMeta, put originalbuffersave upstream in your pipeline", buffer]);
-            return Ok(gst::FlowSuccess::Ok);
-        };
-        let mut state = self.state.borrow_mut();
-        let meta_caps = &mut state.meta_caps;
-        if &meta_caps.caps != ometa.caps() {
-            if !self.src_pad.push_event(gst::event::Caps::new(ometa.caps())) {
-                gst::info!(CAT, imp = self, "Failed to push caps event");
-            }
-            meta_caps.caps = ometa.caps().clone();
-            meta_caps.vinfo = gst_video::VideoInfo::from_caps(&meta_caps.caps).ok();
-        }
+        src: &gst::BufferRef,
+        dst: &mut gst::BufferRef,
+        transform: Option<&RecordedTransform>,
+    ) {
+        let mut reverse: Option<ReverseTransform> = None;
 
-        let mut outbuf = ometa.original().copy();
+        gst::trace!(
+            CAT,
+            imp = self,
+            "Reversing recorded transform: {:?}",
+            transform
+        );
 
-        inbuf
-            .copy_into(
-                outbuf.make_mut(),
-                gst::BufferCopyFlags::TIMESTAMPS | gst::BufferCopyFlags::FLAGS,
-                ..,
-            )
-            .unwrap();
-
-        for meta in inbuf.iter_meta::<gst::Meta>() {
+        for meta in src.iter_meta::<gst::Meta>() {
             if meta.api() == originalbuffermeta::OriginalBufferMeta::meta_api() {
                 continue;
             }
@@ -318,25 +383,126 @@ impl OriginalBufferRestore {
                 continue;
             }
 
-            if meta.has_tag::<gst_video::video_meta::tags::Size>()
-                && let (Some(meta_vinfo), Some(sink_vinfo)) =
-                    (&state.meta_caps.vinfo, &state.sinkpad_caps.vinfo)
-                && (meta_vinfo.width() != sink_vinfo.width()
-                    || meta_vinfo.height() != sink_vinfo.height())
-                && meta
-                    .transform(
-                        outbuf.make_mut(),
-                        &gst_video::video_meta::VideoMetaTransformScale::new(
-                            sink_vinfo, meta_vinfo,
-                        ),
-                    )
-                    .is_ok()
+            // Only pay for the matrix inversion / VideoMetaTransform
+            // construction once we actually have a meta that needs
+            // repositioning.
+            if let Some(transform) = transform
+                && reverse.is_none()
             {
+                reverse = Some(reverse_transform(transform));
+            }
+
+            if matches!(reverse, Some(ReverseTransform::SingularMatrix))
+                && meta.has_tag::<gst_video::video_meta::tags::Size>()
+            {
+                // The recorded matrix for this step can't be inverted: this
+                // meta's position can't be known, so drop it rather than
+                // keep it in the wrong place.
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Dropping meta {} that could not be repositioned: non-invertible \
+                     transform recorded ({:?})",
+                    meta.api(),
+                    transform
+                );
                 continue;
             }
 
-            let _ = meta.transform(outbuf.make_mut(), &gst::meta::MetaTransformCopy::new(..));
+            let transformed = match &reverse {
+                None | Some(ReverseTransform::SingularMatrix) => false,
+                Some(ReverseTransform::Matrix(m)) => meta.transform(dst, m).is_ok(),
+                Some(ReverseTransform::Scale { matrix, scale }) => {
+                    meta.transform(dst, matrix).is_ok() || meta.transform(dst, scale).is_ok()
+                }
+            };
+
+            gst::trace!(
+                CAT,
+                imp = self,
+                "Applied reverse of transform to meta {} with result {}",
+                meta.api(),
+                transformed
+            );
+
+            if !transformed {
+                if reverse.is_some() && meta.has_tag::<gst_video::video_meta::tags::Size>() {
+                    // A recorded geometric transform explicitly rejected
+                    // this spatial metadata (e.g. a ROI that ended up
+                    // entirely outside the valid/cropped region): don't
+                    // fall back to a plain copy, which would keep it at a
+                    // stale, now-incorrect position.
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Dropping meta {} that was rejected by the recorded transform \
+                         ({:?})",
+                        meta.api(),
+                        transform
+                    );
+                    continue;
+                }
+                let _ = meta.transform(dst, &gst::meta::MetaTransformCopy::new(..));
+            }
         }
+    }
+
+    fn sink_chain(
+        &self,
+        _pad: &gst::Pad,
+        inbuf: gst::Buffer,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let Some(ometa) = inbuf.meta::<OriginalBufferMeta>() else {
+            //gst::element_warning!(self, gst::StreamError::Failed, ["Buffer {} is missing the GstOriginalBufferMeta, put originalbuffersave upstream in your pipeline", buffer]);
+            return Ok(gst::FlowSuccess::Ok);
+        };
+
+        let original = ometa.original().clone();
+        let caps = ometa.caps().clone();
+        let transforms: Vec<RecordedTransform> = ometa.transforms().to_vec();
+
+        {
+            let mut state = self.state.borrow_mut();
+            if state.restored_caps.as_ref() != Some(&caps) {
+                if !self.src_pad.push_event(gst::event::Caps::new(&caps)) {
+                    gst::info!(CAT, imp = self, "Failed to push caps event");
+                }
+                state.restored_caps = Some(caps);
+            }
+        }
+
+        let mut outbuf = original.copy();
+
+        // Ping-pong the downstream metadata back through each recorded
+        // transform, inverted and applied in reverse order, so it lands in
+        // the original buffer's coordinate space. Each step needs a distinct
+        // source and destination buffer (e.g. GstAnalyticsRelationMeta
+        // forbids transforming into itself), so all but the last step use
+        // small placeholder buffers that only exist to carry metadata
+        // between steps; the last step writes into the restored original
+        // buffer copy (which may already carry its own, pre-save, metadata).
+        if transforms.is_empty() {
+            self.transfer_metas(&inbuf, outbuf.make_mut(), None);
+        } else {
+            let mut current = inbuf.clone();
+            for (i, transform) in transforms.iter().enumerate().rev() {
+                if i == 0 {
+                    self.transfer_metas(&current, outbuf.make_mut(), Some(transform));
+                } else {
+                    let mut next = gst::Buffer::new();
+                    self.transfer_metas(&current, next.make_mut(), Some(transform));
+                    current = next;
+                }
+            }
+        }
+
+        inbuf
+            .copy_into(
+                outbuf.make_mut(),
+                gst::BufferCopyFlags::TIMESTAMPS | gst::BufferCopyFlags::FLAGS,
+                ..,
+            )
+            .unwrap();
 
         if !self.push_pending_segment() {
             return Err(gst::FlowError::Error);
