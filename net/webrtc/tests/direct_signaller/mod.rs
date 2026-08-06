@@ -1,4 +1,4 @@
-use gst::glib::{self, object::ObjectExt};
+use gst::glib::{self, object::ObjectExt, subclass::types::ObjectSubclassIsExt};
 use gstrswebrtc::signaller::Signallable;
 
 mod imp;
@@ -26,11 +26,23 @@ impl DirectSignaller {
     }
 
     pub fn request_session(&self) {
-        let id = self.property::<String>("id");
-        let peer = self.property::<DirectSignaller>("peer");
-        let peer_id = peer.property::<String>("id");
+        let (peer, id) = {
+            let settings = self.imp().settings.lock().unwrap();
+            let id = settings.id.to_string();
+            gst::debug!(CAT, obj = self, "{id}: Requesting session");
 
-        gst::debug!(CAT, obj = self, "{id}: Requesting session");
+            let Some(ref peer) = settings.peer else {
+                panic!("{id}: unknown peer (was about to request session)");
+            };
+            (
+                peer.upgrade().unwrap_or_else(|| {
+                    panic!("{id}: peer disappeared (was about to request session)");
+                }),
+                id,
+            )
+        };
+
+        let peer_id = peer.property::<String>("id");
 
         self.emit_by_name::<()>("session-started", &[&SESSION_ID, &peer_id.as_str()]);
 

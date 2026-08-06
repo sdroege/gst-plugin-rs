@@ -10,14 +10,14 @@ use std::sync::{LazyLock, Mutex};
 use super::CAT;
 
 #[derive(Debug, Default)]
-struct Settings {
-    id: String,
-    peer: Option<super::DirectSignaller>,
+pub struct Settings {
+    pub id: String,
+    pub peer: Option<glib::WeakRef<super::DirectSignaller>>,
 }
 
 #[derive(Debug, Default)]
 pub struct DirectSignaller {
-    settings: Mutex<Settings>,
+    pub settings: Mutex<Settings>,
 }
 
 impl SignallableImpl for DirectSignaller {
@@ -54,6 +54,9 @@ impl SignallableImpl for DirectSignaller {
         let peer = settings.peer.clone().unwrap();
         drop(settings);
 
+        let Some(peer) = peer.upgrade() else {
+            panic!("peer disappeared (was about to send SDP)");
+        };
         peer.emit_by_name::<()>("session-description", &[&session_id, &sdp]);
     }
 
@@ -65,16 +68,19 @@ impl SignallableImpl for DirectSignaller {
         sdp_mid: Option<String>,
     ) {
         let settings = self.settings.lock().unwrap();
+        let id = settings.id.to_string();
         gst::debug!(
             CAT,
             imp = self,
-            "{}: Sending ICE candidate {session_id}: {candidate}, {sdp_m_line_index}, {sdp_mid:?}",
-            settings.id,
+            "{id}: Sending ICE candidate {session_id}: {candidate}, {sdp_m_line_index}, {sdp_mid:?}",
         );
 
         let peer = settings.peer.clone().unwrap();
         drop(settings);
 
+        let Some(peer) = peer.upgrade() else {
+            panic!("{id}: peer disappeared (was about to send ICE candidate)");
+        };
         peer.emit_by_name::<()>(
             "handle-ice",
             &[&session_id, &sdp_m_line_index, &sdp_mid, &candidate],
@@ -127,6 +133,7 @@ impl ObjectImpl for DirectSignaller {
                 glib::ParamSpecObject::builder::<super::DirectSignaller>("peer")
                     .nick("Peer")
                     .blurb("The peer interface this signaller interface communicates with")
+                    .write_only()
                     .build(),
             ]
         });
@@ -138,7 +145,6 @@ impl ObjectImpl for DirectSignaller {
         match pspec.name() {
             "manual-sdp-munging" => false.to_value(),
             "id" => self.settings.lock().unwrap().id.to_value(),
-            "peer" => self.settings.lock().unwrap().peer.as_ref().to_value(),
             _ => unimplemented!(),
         }
     }
@@ -149,7 +155,8 @@ impl ObjectImpl for DirectSignaller {
                 self.settings.lock().unwrap().id = value.get().unwrap();
             }
             "peer" => {
-                self.settings.lock().unwrap().peer = Some(value.get().unwrap());
+                self.settings.lock().unwrap().peer =
+                    Some(value.get::<super::DirectSignaller>().unwrap().downgrade());
             }
             _ => unimplemented!(),
         }
