@@ -110,9 +110,12 @@ where
 
     configure_wsink(&wsink);
 
-    let elems = [&audio_src, wsink.upcast_ref()];
+    let elems = [&audio_src, &wsink];
     pipeline_sink.add_many(elems).unwrap();
     gst::Element::link_many(elems).unwrap();
+    // drop no-longer needed local references
+    drop(wsink);
+    drop(audio_src);
 
     let prod_started_cvar_pair = Arc::new((Mutex::new(false), Condvar::new()));
     wsink_signaller.connect("started", false, {
@@ -142,6 +145,8 @@ where
     // webrtcsrc
     let wsrc_signaller = DirectSignaller::new(&format!("{test} src"));
     DirectSignaller::associate(&wsink_signaller, &wsrc_signaller);
+    // drop no-longer needed local references
+    drop(wsink_signaller);
 
     let wsrc = gst::ElementFactory::make("webrtcsrc")
         .property("signaller", wsrc_signaller.clone())
@@ -173,6 +178,8 @@ where
     });
 
     let mut h_src = gst_check::Harness::with_element(&wsrc, None, None);
+    // drop no-longer needed local references
+    drop(wsrc);
     h_src.use_systemclock();
     h_src.set_sink_caps(sink_caps.clone());
 
@@ -180,6 +187,8 @@ where
 
     gst::debug!(CAT, "{test} requesting session");
     wsrc_signaller.request_session();
+    // drop no-longer needed local references
+    drop(wsrc_signaller);
 
     gst::debug!(CAT, "{test} awaiting Pad from WebRTCSrc");
     let pad = pad_rx.recv().unwrap();
@@ -215,6 +224,7 @@ where
 
     gst::debug!(CAT, "{test} setting Pipeline for WebRTCSink to Null");
     pipeline_sink.set_state(gst::State::Null).unwrap();
+    drop(pipeline_sink);
 
     gst::debug!(CAT, "{test} complete");
 }
