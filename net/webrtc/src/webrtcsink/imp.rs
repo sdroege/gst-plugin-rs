@@ -1523,9 +1523,12 @@ impl State {
                 .pipeline
                 .set_state(gst::State::Null);
 
-            cvar.notify_one();
-
+            // ensure all captured objects are unreferenced before notifying
+            drop(session);
             gst::debug!(CAT, obj = element, "Session {session_id} ended");
+            drop(element);
+
+            cvar.notify_one();
         });
     }
 
