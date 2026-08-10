@@ -19208,7 +19208,7 @@
                         "writable": true
                     },
                     "web-server-directory": {
-                        "blurb": "The directory the web server should serve",
+                        "blurb": "The directory the web server should serve, empty to serve the embedded gstwebrtc-api page if the plugin was built with the web_server_embedded feature",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,

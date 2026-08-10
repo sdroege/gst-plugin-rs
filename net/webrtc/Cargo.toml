@@ -36,6 +36,7 @@ fastrand = "2.0"
 gst-plugin-webrtc-protocol.workspace = true
 gst-plugin-webrtc-signalling.workspace = true
 human_bytes = "0.4"
+mime_guess = { version = "2", optional = true }
 rand = "0.10"
 url = "2"
 tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12", "ring"] }
@@ -90,6 +91,7 @@ path = "src/lib.rs"
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true
+fs_extra = "1"
 
 [features]
 default = ["janus", "whip", "web_server", "whep", "pixelstreaming", "rustls-ring"]
@@ -106,6 +108,9 @@ janus = []
 livekit = ["dep:livekit-protocol", "dep:livekit-api"]
 whip = ["dep:reqwest", "dep:warp", "dep:ctrlc"]
 web_server = ["dep:warp"]
+# Builds the gstwebrtc-api web page with npm at compile time and embeds it
+# into the plugin, so the web server can serve it without any local files
+web_server_embedded = ["web_server", "dep:mime_guess"]
 whep = ["dep:reqwest", "dep:warp"]
 pixelstreaming = []
 v1_30 = ["gst/v1_30"]

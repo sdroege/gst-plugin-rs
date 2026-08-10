@@ -25,6 +25,10 @@ variables:
   WINDOWS_RUST_MINIMUM_IMAGE: "$WINDOWS_BASE:$GST_RS_IMG_WINDOWS_TAG-main-$GST_RS_MSRV"
   WINDOWS_RUST_STABLE_IMAGE: "$WINDOWS_BASE:$GST_RS_IMG_WINDOWS_TAG-main-$GST_RS_STABLE"
 
+  # The CI images have no npm: build gst-plugin-webrtc without the
+  # gstwebrtc-api page that --all-features would otherwise embed
+  GST_WEBRTC_NO_EMBED_WEB_ASSETS: "1"
+
 workflow:
   rules:
     - if: $CI_MERGE_REQUEST_IID

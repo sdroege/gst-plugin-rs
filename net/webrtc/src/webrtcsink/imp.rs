@@ -90,10 +90,18 @@ const DEFAULT_WEB_SERVER_CERT: Option<&str> = None;
 const DEFAULT_WEB_SERVER_KEY: Option<&str> = None;
 #[cfg(feature = "web_server")]
 const DEFAULT_WEB_SERVER_PATH: Option<&str> = None;
-#[cfg(feature = "web_server")]
+#[cfg(all(feature = "web_server", not(feature = "web_server_embedded")))]
 const DEFAULT_WEB_SERVER_DIRECTORY: &str = "gstwebrtc-api/dist";
+/* An empty directory means serving the embedded gstwebrtc-api page */
+#[cfg(feature = "web_server_embedded")]
+const DEFAULT_WEB_SERVER_DIRECTORY: &str = "";
 #[cfg(feature = "web_server")]
 const DEFAULT_WEB_SERVER_HOST_ADDR: &str = "http://127.0.0.1:8080";
+
+/* The gstwebrtc-api page files, built and embedded by build.rs */
+#[cfg(feature = "web_server_embedded")]
+static WEB_SERVER_EMBEDDED_ASSETS: &[(&str, &[u8])] =
+    include!(concat!(env!("OUT_DIR"), "/web_server_embedded_assets.rs"));
 const DEFAULT_FORWARD_METAS: &str = "";
 const DEFAULT_ENABLE_MITIGATION_MODES: WebRTCSinkMitigationMode = WebRTCSinkMitigationMode::all();
 /* Start adding some FEC when the bitrate > 2Mbps as we found experimentally
@@ -2611,6 +2619,33 @@ impl BaseWebRTCSink {
             .extend(new_webrtc_pads);
     }
 
+    #[cfg(feature = "web_server_embedded")]
+    fn embedded_web_assets_filter() -> warp::filters::BoxedFilter<(warp::reply::Response,)> {
+        use warp::Reply;
+
+        warp::get()
+            .and(warp::path::tail())
+            .map(|tail: warp::path::Tail| {
+                let name = match tail.as_str() {
+                    "" => "index.html",
+                    name => name,
+                };
+                match WEB_SERVER_EMBEDDED_ASSETS
+                    .iter()
+                    .find(|(file, _)| *file == name)
+                {
+                    Some((_, data)) => warp::reply::with_header(
+                        *data,
+                        http::header::CONTENT_TYPE,
+                        mime_guess::from_path(name).first_or_octet_stream().as_ref(),
+                    )
+                    .into_response(),
+                    None => warp::http::StatusCode::NOT_FOUND.into_response(),
+                }
+            })
+            .boxed()
+    }
+
     #[cfg(feature = "web_server")]
     fn spawn_web_server(
         settings: &Settings,
@@ -2623,22 +2658,37 @@ impl BaseWebRTCSink {
     > {
         use hyper_util::{rt::TokioExecutor, rt::TokioIo, server::conn::auto};
 
+        #[cfg(feature = "web_server_embedded")]
+        if settings.web_server_directory.is_empty() && WEB_SERVER_EMBEDDED_ASSETS.is_empty() {
+            return Err(anyhow!(
+                "the plugin was built without the embedded gstwebrtc-api page, \
+                 web-server-directory must be set"
+            ));
+        }
+
         let (tx, mut rx) = tokio::sync::oneshot::channel::<()>();
 
         let addr = settings.web_server_host_addr.socket_addrs(|| None).unwrap()[0];
 
         let settings = settings.clone();
 
-        let jh = RUNTIME.spawn(async move {
-            let route = match settings.web_server_path {
-                Some(path) => warp::path(path)
-                    .and(warp::fs::dir(settings.web_server_directory))
-                    .boxed(),
-                None => warp::get()
-                    .and(warp::fs::dir(settings.web_server_directory))
-                    .boxed(),
-            };
+        #[cfg(feature = "web_server_embedded")]
+        let files = if settings.web_server_directory.is_empty() {
+            Self::embedded_web_assets_filter()
+        } else {
+            warp::fs::dir(settings.web_server_directory.clone())
+                .map(warp::Reply::into_response)
+                .boxed()
+        };
+        #[cfg(not(feature = "web_server_embedded"))]
+        let files = warp::fs::dir(settings.web_server_directory.clone()).boxed();
 
+        let route = match settings.web_server_path.clone() {
+            Some(path) => warp::path(path).and(files).boxed(),
+            None => warp::get().and(files).boxed(),
+        };
+
+        let jh = RUNTIME.spawn(async move {
             if let (Some(cert), Some(key)) = (settings.web_server_cert, settings.web_server_key) {
                 let listener = TcpListener::bind(&addr).await.unwrap();
                 let acceptor = create_tls_acceptor(&cert, &key).await.unwrap();
@@ -5649,12 +5699,20 @@ impl ObjectImpl for BaseWebRTCSink {
                  * The directory to serve when #GstBaseWebRTCSink:run-web-server
                  * is TRUE.
                  *
+                 * When the plugin is built with the `web_server_embedded` cargo
+                 * feature, leaving this empty serves a copy of the gstwebrtc-api
+                 * page embedded at build time.
+                 *
                  * Since: plugins-rs-0.14.0
                  */
                 #[cfg(feature = "web_server")]
                 glib::ParamSpecString::builder("web-server-directory")
                     .nick("Web server directory")
-                    .blurb("The directory the web server should serve")
+                    .blurb(
+                        "The directory the web server should serve, \
+                        empty to serve the embedded gstwebrtc-api page if the \
+                        plugin was built with the web_server_embedded feature",
+                    )
                     .default_value(DEFAULT_WEB_SERVER_DIRECTORY)
                     .build(),
                 /**

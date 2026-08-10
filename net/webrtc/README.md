@@ -95,7 +95,21 @@ prefer that a crash from the host webrtcsink doesn't take down signalling / webs
 
 Head over to the following section if you want to learn how to run services individually.
 
-To use the embedded web server, from the root of `net/webrtc` crate, first execute,
+When the plugin is built with the `web_server_embedded` cargo feature, the
+gstwebrtc-api page is built (this requires `npm`) and embedded into the plugin
+at compile time, and the web server serves it without needing any local files:
+
+```
+gst-launch-1.0 videotestsrc ! webrtcsink run-signalling-server=true run-web-server=true
+```
+
+Building with that feature on a machine without `npm` fails, for instance with
+`cargo build --all-features`; setting the `GST_WEBRTC_NO_EMBED_WEB_ASSETS`
+environment variable builds the plugin without the page instead, and the web
+server then requires `web-server-directory` to be set.
+
+Without that feature, the page must be built manually first, from the root of
+the `net/webrtc` crate:
 
 ``` shell
 cd gstwebrtc-api
@@ -103,9 +117,9 @@ npm install
 npm run build
 ```
 
-This generates the necessary artifacts in the `gstwebrtc-api/dist` directory.
-
-In the terminal, from the root of the `net/webrtc` crate:
+This generates the necessary artifacts in the `gstwebrtc-api/dist` directory,
+which is the default value of the `web-server-directory` property, relative to
+the directory the pipeline is started from:
 
 ```
 gst-launch-1.0 videotestsrc ! webrtcsink run-signalling-server=true run-web-server=true

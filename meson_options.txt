@@ -53,6 +53,8 @@ option('udp', type: 'feature', value: 'auto', description: 'Build udp plugin')
 option('webrtc', type: 'feature', value: 'auto', yield: true, description: 'Build webrtc plugin')
 option('webrtc-livekit', type: 'feature', value: 'disabled',  description: 'Build webrtc aws')
 option('webrtc-aws', type: 'feature', value: 'disabled', description: 'Build webrtc livekit')
+option('webrtc-web_server_embedded', type: 'feature', value: 'auto',
+       description: 'Embed the gstwebrtc-api web page into the webrtc plugin (requires npm)')
 option('webrtcbin2', type: 'feature', value: 'auto', description: 'Build webrtcbin2 plugin')
 option('webrtchttp', type: 'feature', value: 'auto', description: 'Build webrtchttp plugin')
 option('quinn', type: 'feature', value: 'auto', description: 'Build quinn plugin')

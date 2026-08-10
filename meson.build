@@ -134,7 +134,8 @@ plugins = {
   'webrtc': {
     'library': 'libgstrswebrtc',
     'examples': ['webrtcsink-stats-server'],
-    'option-features': ['aws', 'livekit']
+    'option-features': ['aws', 'livekit', 'web_server_embedded'],
+    'option-features-programs': {'web_server_embedded': ['npm']}
   },
   'webrtcbin2': {
     'library': 'libgstrswebrtcbin2',
@@ -614,7 +615,22 @@ foreach plugin_name, details: plugins
 
   option_features = []
   foreach feature : details.get('option-features', [])
-    if get_option(f'@plugin_name@-@feature@').allowed()
+    feature_opt = get_option(f'@plugin_name@-@feature@')
+    if not feature_opt.allowed()
+      continue
+    endif
+    feature_usable = true
+    foreach program : details.get('option-features-programs', {}).get(feature, [])
+      prog = find_program(program, required: feature_opt.enabled())
+      if prog.found()
+        # Expose the full path to the cargo build, e.g. npm -> NPM
+        extra_env += {program.underscorify().to_upper(): prog.full_path()}
+      else
+        message(f'@program@ not found, disabling @feature@ for @plugin_name@')
+        feature_usable = false
+      endif
+    endforeach
+    if feature_usable
       message(f'Enabling @feature@ for @plugin_name@')
       features += [feature]
     endif
