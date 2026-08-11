@@ -1502,6 +1502,8 @@ impl State {
     fn finalize_session(&mut self, element: &super::BaseWebRTCSink, session: Session) {
         let mut inner = session.0.lock().unwrap();
 
+        let _ = inner.control_events_handler.take();
+
         gst::info!(CAT, "Ending session {}", inner.id);
         inner.pipeline.debug_to_dot_file_with_ts(
             gst::DebugGraphDetails::all(),
