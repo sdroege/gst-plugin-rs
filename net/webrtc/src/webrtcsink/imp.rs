@@ -346,6 +346,7 @@ struct SessionInner {
     id: String,
 
     pipeline: gst::Pipeline,
+    bus_task_handle: Option<tokio::task::JoinHandle<()>>,
     webrtcbin: gst::Element,
     rtprtxsend: Option<gst::Element>,
     webrtc_pads: HashMap<u32, WebRTCPad>,
@@ -1523,8 +1524,13 @@ impl State {
                 .pipeline
                 .set_state(gst::State::Null);
 
-            // ensure all captured objects are unreferenced before notifying
+            let bus_task_handle = session.0.lock().unwrap().bus_task_handle.take();
+
+            // ensure all captured objects are unreferenced and terminated before notifying
             drop(session);
+            if let Some(bus_task_handle) = bus_task_handle {
+                let _ = RUNTIME.block_on(bus_task_handle);
+            }
             gst::debug!(CAT, obj = element, "Session {session_id} ended");
             drop(element);
 
@@ -1589,6 +1595,7 @@ impl SessionInner {
         Self {
             id,
             pipeline,
+            bus_task_handle: None,
             webrtcbin,
             peer_id,
             cc_info,
@@ -3809,7 +3816,7 @@ impl BaseWebRTCSink {
             ),
         );
 
-        let session = SessionInner::new(
+        let mut session = SessionInner::new(
             session_id.clone(),
             pipeline.clone(),
             webrtcbin.clone(),
@@ -3888,7 +3895,7 @@ impl BaseWebRTCSink {
         let offer_clone = offer.cloned();
         let peer_id_clone = peer_id.clone();
 
-        RUNTIME.spawn(async move {
+        session.bus_task_handle = Some(RUNTIME.spawn(async move {
             while let Some(msg) = bus_stream.next().await {
                 let Some(element) = element_clone.upgrade() else {
                     break;
@@ -3986,7 +3993,7 @@ impl BaseWebRTCSink {
                     _ => (),
                 }
             }
-        });
+        }));
 
         state.sessions.insert(
             session_id.to_string(),
