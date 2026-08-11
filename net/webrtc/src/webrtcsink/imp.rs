@@ -1642,6 +1642,17 @@ impl SessionInner {
         }
     }
 
+    fn on_data_channel(
+        &mut self,
+        element: &super::BaseWebRTCSink,
+        channel: &gst_webrtc::WebRTCDataChannel,
+    ) {
+        if channel.label().map(|l| l.to_string()) == Some("control".to_string()) {
+            self.control_events_handler =
+                Some(ControlRequestHandler::new(element, channel, &self.id));
+        }
+    }
+
     fn gather_stats(&self) -> gst::Structure {
         let mut ret = self.stats.to_owned();
 
@@ -1908,18 +1919,14 @@ impl Drop for NavigationEventHandler {
 }
 
 impl ControlRequestHandler {
-    fn new(element: &super::BaseWebRTCSink, webrtcbin: &gst::Element, session_id: &str) -> Self {
-        let channel = webrtcbin.emit_by_name::<WebRTCDataChannel>(
-            "create-data-channel",
-            &[
-                &CONTROL_DATA_CHANNEL_LABEL,
-                &gst::Structure::builder("config")
-                    .field("priority", gst_webrtc::WebRTCPriorityType::High)
-                    .build(),
-            ],
-        );
-
+    fn new(
+        element: &super::BaseWebRTCSink,
+        channel: &gst_webrtc::WebRTCDataChannel,
+        session_id: &str,
+    ) -> Self {
         let session_id = session_id.to_string();
+
+        let channel = channel.clone();
 
         Self((
             Some(channel.connect_closure(
@@ -3697,6 +3704,30 @@ impl BaseWebRTCSink {
             ),
         );
 
+        webrtcbin.connect_closure(
+            "on-data-channel",
+            false,
+            glib::closure!(
+                #[watch]
+                element,
+                #[strong]
+                session_id,
+                move |_webrtcbin: &gst::Element, channel: &gst_webrtc::WebRTCDataChannel| {
+                    let this = element.imp();
+
+                    if !this.settings.lock().unwrap().enable_control_data_channel {
+                        return;
+                    }
+
+                    let state = this.state.lock().unwrap();
+
+                    if let Some(session) = state.sessions.get(&session_id) {
+                        session.0.lock().unwrap().on_data_channel(element, channel);
+                    }
+                }
+            ),
+        );
+
         webrtcbin.connect_notify(
             Some("connection-state"),
             glib::clone!(
@@ -4173,16 +4204,16 @@ impl BaseWebRTCSink {
                     }
                 }
 
-                if enable_control_data_channel {
-                    let mut state = this.state.lock().unwrap();
-                    if let Some(session) = state.sessions.get_mut(&session_id) {
-                        let mut session = session.0.lock().unwrap();
-                        session.control_events_handler = Some(ControlRequestHandler::new(
-                            &element,
-                            &webrtcbin,
-                            &session_id,
-                        ));
-                    }
+                if enable_control_data_channel && offer.is_some() {
+                    webrtcbin.emit_by_name::<WebRTCDataChannel>(
+                        "create-data-channel",
+                        &[
+                            &CONTROL_DATA_CHANNEL_LABEL,
+                            &gst::Structure::builder("config")
+                                .field("priority", gst_webrtc::WebRTCPriorityType::High)
+                                .build(),
+                        ],
+                    );
                 }
 
                 // This is intentionally emitted with the pipeline in the Ready state,
