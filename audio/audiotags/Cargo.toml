@@ -1,0 +1,43 @@
+[package]
+name = "gst-plugin-audiotags"
+version.workspace = true
+authors = ["Tim-Philipp Müller <tim@centricular.com>"]
+repository.workspace = true
+license = "MPL-2.0"
+description = "GStreamer Rust Audio Tags Plugin"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+gst.workspace = true
+gst-base.workspace = true
+gst-tag.workspace = true
+bitstream-io = "4"
+
+[lib]
+name = "gstaudiotags"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper.workspace = true
+
+[features]
+static = []
+capi = []
+doc = ["gst/v1_18"]
+v1_30 = ["gst/v1_30"]
+
+[package.metadata.capi]
+min_version = "0.9.21"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+import_library = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-tag-1.0, gstreamer-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

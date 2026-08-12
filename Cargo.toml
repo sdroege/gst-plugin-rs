@@ -30,6 +30,8 @@ members = [
     "generic/inter",
     "generic/gopbuffer",
 
+    "audio/audiotags",
+
     "mux/flavors",
     "mux/isobmff",
 
