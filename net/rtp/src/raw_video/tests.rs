@@ -335,7 +335,7 @@ fn test_rtpvraw_bt2100_reads_tcs() {
 }
 
 #[test]
-fn test_rtpvraw_bt2100_defaults_to_pq() {
+fn test_rtpvraw_bt2100_defaults_tcs_to_sdr() {
     init();
 
     let mut h = Harness::new("rtpvrawdepay2");
@@ -351,26 +351,25 @@ fn test_rtpvraw_bt2100_defaults_to_pq() {
             .field("width", "1920")
             .field("height", "1080")
             .field("colorimetry", "BT2100")
-            // No TCS specified.
+            // No TCS: ST 2110-20 omission default is SDR (not PQ).
             .build(),
     );
 
     let element = h.element().unwrap();
     let caps = element.static_pad("src").unwrap().current_caps().unwrap();
     let s = caps.structure(0).unwrap();
-    // GStreamer has no BT2100 colorimetry without a transfer function,
-    // so an unspecified TCS is mapped to PQ.
-    assert_eq!(s.get::<&str>("colorimetry"), Ok("bt2100-pq"));
+    // BT2100 + SDR has no named GStreamer preset; stringifies as bt2020-10 at depth 10.
+    assert_eq!(s.get::<&str>("colorimetry"), Ok("bt2020-10"));
 
     drop(h);
     let _ = element.set_state(gst::State::Null);
 }
 
 #[test]
-fn test_rtpvraw_bt2100_writes_tcs() {
+fn test_rtpvraw_bt2100_writes_tcs_and_range() {
     init();
 
-    // Caps-only: no buffers needed to negotiate RTP colorimetry/TCS.
+    // Caps-only: no buffers needed to negotiate RTP colorimetry/TCS/RANGE.
     let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::Uyvp, 1920, 1080)
         .fps(gst::Fraction::new(25, 1))
         .colorimetry(&gst_video::VideoColorimetry::from_str("bt2100-hlg").unwrap())
@@ -386,6 +385,47 @@ fn test_rtpvraw_bt2100_writes_tcs() {
     let s = caps.structure(0).unwrap();
     assert_eq!(s.get::<&str>("colorimetry"), Ok("BT2100"));
     assert_eq!(s.get::<&str>("tcs"), Ok("HLG"));
+    assert_eq!(s.get::<&str>("range"), Ok("NARROW"));
+
+    drop(h);
+    let _ = element.set_state(gst::State::Null);
+}
+
+#[test]
+fn test_rtpvraw_reads_range_full() {
+    init();
+
+    let mut h = Harness::new("rtpvrawdepay2");
+    h.play();
+    h.set_src_caps(
+        gst::Caps::builder("application/x-rtp")
+            .field("media", "video")
+            .field("clock-rate", 90000i32)
+            .field("encoding-name", "RAW")
+            .field("payload", 96i32)
+            .field("sampling", "YCbCr-4:2:2")
+            .field("depth", "10")
+            .field("width", "1920")
+            .field("height", "1080")
+            .field("colorimetry", "BT709")
+            .field("tcs", "SDR")
+            .field("range", "FULL")
+            .build(),
+    );
+
+    let element = h.element().unwrap();
+    let caps = element.static_pad("src").unwrap().current_caps().unwrap();
+    let colorimetry = caps
+        .structure(0)
+        .unwrap()
+        .get::<&str>("colorimetry")
+        .unwrap();
+    assert_eq!(
+        gst_video::VideoColorimetry::from_str(colorimetry)
+            .unwrap()
+            .range(),
+        gst_video::VideoColorRange::Range0_255
+    );
 
     drop(h);
     let _ = element.set_state(gst::State::Null);

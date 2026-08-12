@@ -283,54 +283,26 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
             return false;
         }
 
-        let colorimetry = s.get::<&str>("colorimetry").ok().and_then(
-            |colorimetry| match colorimetry {
-                "BT601-5" | "BT601" => VideoColorimetry::from_str("bt601").ok(),
-                "BT709-2" | "BT709" => VideoColorimetry::from_str("bt709").ok(),
-                "BT2020" => {
-                    if depth >= 10 {
-                        VideoColorimetry::from_str("bt2020-10").ok()
-                    } else {
-                        VideoColorimetry::from_str("bt2020").ok()
-                    }
-                }
-                "BT2100" => {
-                    let tcs = s.get::<&str>("tcs").ok();
-                    match tcs {
-                        Some("PQ") => VideoColorimetry::from_str("bt2100-pq").ok(),
-                        Some("HLG") => VideoColorimetry::from_str("bt2100-hlg").ok(),
-                        Some(tcs) => {
-                            gst::warning!(
-                                CAT,
-                                imp = self,
-                                "Unsupported BT2100 transfer characteristic system {tcs}, assuming PQ"
-                            );
-                            VideoColorimetry::from_str("bt2100-pq").ok()
-                        }
-                        _ => {
-                            gst::warning!(
-                                CAT,
-                                imp = self,
-                                "Unspecified BT2100 transfer characteristic system, assuming PQ"
-                            );
-                            VideoColorimetry::from_str("bt2100-pq").ok()
-                        }
-                    }
-                }
-                "SMPTE240M" => VideoColorimetry::from_str("smpte240m").ok(),
-                "UNSPECIFIED" => {
-                    None
-                }
-                "ST2065-1" | "ST2065-3" | "XYZ" => {
-                    gst::warning!(CAT, imp = self, "Unsupported colorimetry {colorimetry}");
-                    None
-                }
-                colorimetry => {
-                    gst::warning!(CAT, imp = self, "Unexpected colorimetry {colorimetry}");
-                    VideoColorimetry::from_str(&colorimetry.to_lowercase()).ok()
-                }
-            },
-        );
+        let colorimetry = s.get::<&str>("colorimetry").ok().and_then(|colorimetry| {
+            let mapped = crate::fmtp_color_params::gst_colorimetry_from_fmtp_color_params(
+                colorimetry,
+                s.get::<&str>("tcs").ok(),
+                s.get::<&str>("range").ok(),
+                u8::try_from(depth).ok(),
+                crate::fmtp_color_params::FmtpColorDefaults::St2110_20,
+            )
+            .and_then(|value| VideoColorimetry::from_str(&value).ok());
+            if mapped.is_none() {
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Unsupported or incomplete colorimetry={colorimetry} tcs={:?} range={:?}",
+                    s.get::<&str>("tcs").ok(),
+                    s.get::<&str>("range").ok()
+                );
+            }
+            mapped
+        });
 
         let fmt = match (sampling, depth) {
             // Todo: could also support some of the 5/6-bit depth RGB variations from RFC-4421

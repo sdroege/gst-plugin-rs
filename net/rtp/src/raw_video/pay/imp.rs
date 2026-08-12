@@ -60,13 +60,11 @@ use gst::{glib, prelude::*, subclass::prelude::*};
 
 use std::{num::Wrapping, sync::LazyLock};
 
-use gst_video::{VideoColorimetry, VideoFormat, VideoFrame, VideoFrameExt, VideoInfo};
+use gst_video::{VideoFormat, VideoFrame, VideoFrameExt, VideoInfo};
 
 use crate::basepay::RtpBasePay2Ext;
 
 use super::packing_template::{FramePackingTemplate, VRAW_CHUNK_HDR_LEN, VRAW_EXT_SEQNUM_LEN};
-
-use std::str::FromStr;
 
 // Mostly used on local networks, so keep default MTU on higher side
 const RTP_VRAW_DEFAULT_MTU: u32 = 1400;
@@ -219,30 +217,17 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
         // We always have the same depths for all components (we don't support 5:6:5 RGB yet)
         let depth = info.comp_depth(0);
 
-        // Assume SDR transfer characteristic system unless overridden below
-        let mut tcs = "SDR";
-
-        // FIXME: Should there be constants/defines for these in gst_video, to match GST_VIDEO_COLORIMETRY_*?
-        let colorimetry = if info.colorimetry() == VideoColorimetry::from_str("bt601").unwrap() {
-            "BT601"
-        } else if info.colorimetry() == VideoColorimetry::from_str("bt709").unwrap() {
-            "BT709"
-        } else if info.colorimetry() == VideoColorimetry::from_str("bt2020").unwrap()
-            || info.colorimetry() == VideoColorimetry::from_str("bt2020-10").unwrap()
-        {
-            "BT2020"
-        } else if info.colorimetry() == VideoColorimetry::from_str("bt2100-pq").unwrap() {
-            tcs = "PQ";
-            "BT2100"
-        } else if info.colorimetry() == VideoColorimetry::from_str("bt2100-hlg").unwrap() {
-            tcs = "HLG";
-            "BT2100"
-        } else if info.colorimetry() == VideoColorimetry::from_str("smpte240m").unwrap() {
-            "SMPTE240M"
-        } else {
-            gst::info!(CAT, imp = self, "Mapping {:?} to BT709", info.colorimetry());
-            "BT709"
-        };
+        let fmtp_color = crate::fmtp_color_params::fmtp_color_params_from_gst_colorimetry(
+            &info.colorimetry().to_string(),
+        );
+        if fmtp_color.is_none() {
+            gst::info!(
+                CAT,
+                imp = self,
+                "No ST 2110-20 / RFC 4175 colorimetry mapping for {:?}",
+                info.colorimetry()
+            );
+        }
 
         let framerate = if info.fps().numer() == 0 {
             None
@@ -281,7 +266,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
             None
         };
 
-        let mut src_caps = gst::Caps::builder("application/x-rtp")
+        let mut caps_builder = gst::Caps::builder("application/x-rtp")
             .field("media", "video")
             .field("encoding-name", "RAW")
             .field("clock-rate", 90000i32)
@@ -289,16 +274,25 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
             .field("width", format!("{}", info.width()))
             .field("height", format!("{}", info.height()))
             .field("depth", format!("{depth}"))
-            .field("colorimetry", colorimetry)
-            .field("tcs", tcs)
             .field_if("interlace", "true", info.is_interlaced())
             .field_if_some("exactframerate", framerate)
-            .field_if_some("chroma-position", chroma_position)
-            .build();
+            .field_if_some("chroma-position", chroma_position);
+        if let Some(fmtp) = fmtp_color {
+            caps_builder = caps_builder.field("colorimetry", fmtp.colorimetry);
+            if let Some(tcs) = fmtp.tcs {
+                caps_builder = caps_builder.field("tcs", tcs);
+            }
+            if let Some(range) = fmtp.range {
+                caps_builder = caps_builder.field("range", range);
+            }
+        }
+        let mut src_caps = caps_builder.build();
 
         // Special handling for BT601-5 vs. BT601 and BT709-2 vs. BT709. The dash-less versions
         // are used by ST2110-20. We prefer the ST2110-20 values.
-        if ["BT601", "BT709"].contains(&colorimetry) {
+        if let Some(colorimetry) = fmtp_color.map(|f| f.colorimetry)
+            && ["BT601", "BT709"].contains(&colorimetry)
+        {
             let obj = self.obj();
             let src_pad = obj.src_pad();
 

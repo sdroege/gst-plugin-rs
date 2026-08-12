@@ -14585,6 +14585,58 @@
                 },
                 "rank": "primary"
             },
+            "rtpjxsvdepay": {
+                "author": "Gareth Sylvester-Bradley <garethsb@nvidia.com>",
+                "description": "Depayload a JPEG XS video stream from RTP packets (RFC 9134)",
+                "hierarchy": [
+                    "GstRtpJxsvDepay",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: video\n  encoding-name: JXSV\n     clock-rate: 90000\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "image/x-jxsc:\n      alignment: frame\n interlace-mode: progressive\n          width: [ 1, 32767 ]\n         height: [ 1, 32767 ]\n       sampling: { (string)YCbCr-4:4:4, (string)YCbCr-4:2:2, (string)YCbCr-4:2:0, (string)CLYCbCr-4:4:4, (string)CLYCbCr-4:2:2, (string)CLYCbCr-4:2:0, (string)ICtCp-4:4:4, (string)ICtCp-4:2:2, (string)ICtCp-4:2:0, (string)RGB, (string)XYZ, (string)KEY, (string)UNSPECIFIED }\n          depth: { (int)8, (int)10, (int)12, (int)16 }\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "primary"
+            },
+            "rtpjxsvpay": {
+                "author": "Gareth Sylvester-Bradley <garethsb@nvidia.com>",
+                "description": "Payload a JPEG XS video stream to RTP packets (RFC 9134)",
+                "hierarchy": [
+                    "GstRtpJxsvPay",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "image/x-jxsc:\n      alignment: frame\n interlace-mode: progressive\n          width: [ 1, 32767 ]\n         height: [ 1, 32767 ]\n       sampling: { (string)YCbCr-4:4:4, (string)YCbCr-4:2:2, (string)YCbCr-4:2:0, (string)CLYCbCr-4:4:4, (string)CLYCbCr-4:2:2, (string)CLYCbCr-4:2:0, (string)ICtCp-4:4:4, (string)ICtCp-4:2:2, (string)ICtCp-4:2:0, (string)RGB, (string)XYZ, (string)KEY, (string)UNSPECIFIED }\n          depth: { (int)8, (int)10, (int)12, (int)16 }\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: video\n  encoding-name: JXSV\n     clock-rate: 90000\n     packetmode: 0\n      transmode: 1\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "primary"
+            },
             "rtpklvdepay2": {
                 "author": "Tim-Philipp Müller <tim centricular com>",
                 "description": "Depayload an SMPTE ST 336 KLV metadata stream from RTP packets (RFC 6597)",

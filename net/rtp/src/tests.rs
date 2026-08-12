@@ -335,7 +335,7 @@ pub fn run_test_pipeline_full_and_validate_buffer<
 ) {
     let pipeline = Pipeline(gst::Pipeline::new());
 
-    // Return if the pipelines can't be built: this likely means that encoders are missing
+    // Return if the source bin can't be built: this likely means that encoders are missing
 
     let src = match src {
         Source::Bin(src) => {
@@ -377,9 +377,8 @@ pub fn run_test_pipeline_full_and_validate_buffer<
         }
     };
 
-    let Ok(pay) = gst::parse::bin_from_description_with_name(pay, true, "rtptestpay") else {
-        return;
-    };
+    let pay = gst::parse::bin_from_description_with_name(pay, true, "rtptestpay")
+        .unwrap_or_else(|err| panic!("Failed to build payloader bin from {pay}: {err}"));
     let pay = pay.upcast::<gst::Element>();
 
     // Collect samples from after the payloader
@@ -466,9 +465,8 @@ pub fn run_test_pipeline_full_and_validate_buffer<
         )
         .unwrap();
 
-    let Ok(depay) = gst::parse::bin_from_description_with_name(depay, true, "rtptestdepay") else {
-        return;
-    };
+    let depay = gst::parse::bin_from_description_with_name(depay, true, "rtptestdepay")
+        .unwrap_or_else(|err| panic!("Failed to build depayloader bin from {depay}: {err}"));
     let depay = depay.upcast::<gst::Element>();
 
     let depay_samples = Arc::new(Mutex::new(Vec::new()));

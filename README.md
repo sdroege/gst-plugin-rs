@@ -255,6 +255,8 @@ You will find the following plugins in this repository:
       - `rtpgccbwe`: RTP bandwidth estimator based on the Google Congestion Control algorithm.
       - `rtpjpegdepay2`: Depayload a JPEG Video stream from RTP packets (RFC 2435).
       - `rtpjpegpay2`: Payload a JPEG Video stream to RTP packets (RFC 2435).
+      - `rtpjxsvdepay`: Depayload a JPEG XS video stream from RTP packets (RFC 9134).
+      - `rtpjxsvpay`: Payload a JPEG XS video stream to RTP packets (RFC 9134).
       - `rtpklvdepay2`: Depayload an SMPTE ST 336 KLV metadata stream from RTP packets (RFC 6597).
       - `rtpklvpay2`: Payload an SMPTE ST 336 KLV metadata stream into RTP packets (RFC 6597).
       - `rtpmp2tdepay2`: Depayload an MPEG Transport Stream from RTP packets (RFC 2250).
