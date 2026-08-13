@@ -831,9 +831,8 @@ impl ElementImpl for UdpSrc {
 
 impl UdpSrc {
     fn prepare(&self) -> Result<(), gst::ErrorMessage> {
-        let mut settings = self.settings.lock().unwrap();
-
         let mut state = self.state.borrow_mut();
+        let mut settings = self.settings.lock().unwrap();
 
         let poll = mio::Poll::new().map_err(|err| {
             gst::error_msg!(gst::ResourceError::OpenRead, ["Failed create poll: {err}"])
