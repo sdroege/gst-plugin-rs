@@ -957,7 +957,7 @@ impl BaseSrcImpl for UdpSrc {
     fn stop(&self) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.borrow_mut();
         let mut settings = self.settings.lock().unwrap();
-        if let Some(socket) = settings.socket.take()
+        if let Some(socket) = settings.used_socket.take()
             && socket.is_external()
             && settings.close_socket
         {
@@ -967,6 +967,10 @@ impl BaseSrcImpl for UdpSrc {
         }
         *state = State::default();
         *self.waker.lock().unwrap() = None;
+        drop(state);
+        drop(settings);
+
+        self.obj().notify("used-socket");
 
         gst::info!(CAT, imp = self, "Stopped");
 
