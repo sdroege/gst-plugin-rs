@@ -71,10 +71,18 @@ impl AncDataHeader {
     }
 }
 
+/// Extend an 8-bit value to a 10-bit ST 291 word with even/odd parity.
+///
+/// Per SMPTE ST 291: b8 is even parity over b7 to b0 (so b0 to b8 have an even
+/// number of 1s), and b9 = NOT b8. Matches `SET_WITH_PARITY` in
+/// gst-plugins-base `video-anc.c`: odd popcount gives `0x100 | v`, even gives
+/// `0x200 | v`.
 fn extend_with_even_odd_parity(v: u8) -> u16 {
-    if v.count_ones() & 1 == 0 {
+    if v.count_ones() & 1 != 0 {
+        // Odd number of ones in v: b8 = 1, b9 = 0
         0x1_00 | (v as u16)
     } else {
+        // Even number of ones in v: b8 = 0, b9 = 1
         0x2_00 | (v as u16)
     }
 }
@@ -135,8 +143,10 @@ pub(crate) fn convert_to_st2038_buffer(
     }
 
     checksum &= 0x1_ff;
-    // bit b9 = NOT b8
-    checksum |= ((!(checksum >> 8)) & 0x0_01) << 9;
+    // b9 = NOT b8 (ST 291 checksum word)
+    if checksum & 0x1_00 == 0 {
+        checksum |= 0x2_00;
+    }
 
     w.write::<10, u16>(checksum).context("checksum")?;
 
@@ -277,5 +287,79 @@ pub(crate) fn add_ancillary_meta_to_buffer(
         meta.set_data_count_upper_two_bits(
             (extend_with_even_odd_parity(data_len as u8) >> 8) as u8,
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn even_odd_parity_matches_st291_and_gst_vbi_encoder() {
+        // Odd popcount gives b8=1, b9=0 (0x100 | v), as SET_WITH_PARITY in video-anc.c
+        assert_eq!(extend_with_even_odd_parity(0x00), 0x200); // 0 ones, even
+        assert_eq!(extend_with_even_odd_parity(0x01), 0x101); // 1 one, odd
+        assert_eq!(extend_with_even_odd_parity(0x03), 0x203); // 2 ones, even
+        assert_eq!(extend_with_even_odd_parity(0x61), 0x161); // 3 ones, odd (CEA-708 DID)
+
+        for v in 0u8..=255 {
+            let w = extend_with_even_odd_parity(v);
+            assert_eq!(w & 0xff, u16::from(v));
+            // Even parity over b0..b8: popcount of those 9 bits must be even
+            let popcount_0_to_8 = (w & 0x1ff).count_ones();
+            assert!(
+                popcount_0_to_8.is_multiple_of(2),
+                "b0..b8 must have even popcount for {v:#04x}, got {w:#05x}"
+            );
+            let b8 = (w >> 8) & 1;
+            let b9 = (w >> 9) & 1;
+            assert_eq!(b9, 1 - b8, "b9 must be NOT b8 for {v:#04x}");
+        }
+    }
+
+    #[test]
+    fn convert_to_st2038_uses_parity_extended_adf_words() {
+        gst::init().unwrap();
+
+        let buf = convert_to_st2038_buffer(false, 9, 0, 0x61, 0x01, &[0xaa, 0xbb]).expect("encode");
+        let map = buf.map_readable().unwrap();
+        let hdr = AncDataHeader::from_slice(map.as_slice()).expect("parse header");
+        assert_eq!(hdr.did, 0x61);
+        assert_eq!(hdr.sdid, 0x01);
+        assert_eq!(hdr.data_count, 2);
+
+        // Re-parse the 10-bit ADF words and check parity bits were written correctly.
+        use bitstream_io::{BigEndian, BitRead, BitReader};
+        use std::io::Cursor;
+        let mut r = BitReader::endian(Cursor::new(map.as_slice()), BigEndian);
+        let _ = r.read::<6, u8>().unwrap();
+        let _ = r.read_bit().unwrap();
+        let _ = r.read::<11, u16>().unwrap();
+        let _ = r.read::<12, u16>().unwrap();
+        let did10 = r.read::<10, u16>().unwrap();
+        let sdid10 = r.read::<10, u16>().unwrap();
+        let dc10 = r.read::<10, u16>().unwrap();
+        assert_eq!(did10, 0x161);
+        assert_eq!(sdid10, 0x101);
+        assert_eq!(dc10, extend_with_even_odd_parity(2));
+
+        let udw0 = r.read::<10, u16>().unwrap();
+        let udw1 = r.read::<10, u16>().unwrap();
+        assert_eq!(udw0, extend_with_even_odd_parity(0xaa));
+        assert_eq!(udw1, extend_with_even_odd_parity(0xbb));
+
+        let checksum = r.read::<10, u16>().unwrap();
+        let mut expected = 0u16;
+        expected = expected.wrapping_add(did10 & 0x1ff);
+        expected = expected.wrapping_add(sdid10 & 0x1ff);
+        expected = expected.wrapping_add(dc10 & 0x1ff);
+        expected = expected.wrapping_add(udw0 & 0x1ff);
+        expected = expected.wrapping_add(udw1 & 0x1ff);
+        expected &= 0x1ff;
+        if expected & 0x100 == 0 {
+            expected |= 0x200;
+        }
+        assert_eq!(checksum, expected);
+        assert_eq!((checksum >> 9) & 1, 1 - ((checksum >> 8) & 1));
     }
 }
