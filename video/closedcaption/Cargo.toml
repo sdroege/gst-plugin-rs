@@ -26,7 +26,7 @@ cea608-types = "0.1.1"
 gst = { workspace = true, features = ["v1_20"]}
 gst-base = { workspace = true, features = ["v1_22"]}
 gst-video = { workspace = true, features = ["v1_24"]}
-winnow = "0.7"
+winnow = "1.0"
 smallvec = "1"
 bitstream-io = "4"
 itertools = "0.15"
