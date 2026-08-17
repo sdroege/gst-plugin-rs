@@ -47,7 +47,7 @@ fn header<'a>(s: &mut &'a [u8]) -> ModalResult<MccLine<'a>> {
         alt((literal("1.0"), literal("2.0"))),
         end_of_line,
     )
-        .map(|_| MccLine::Header)
+        .value(MccLine::Header)
         .context(StrContext::Label("invalid header"))
         .parse_next(s)
 }
@@ -58,7 +58,7 @@ fn comment<'a>(s: &mut &'a [u8]) -> ModalResult<MccLine<'a>> {
     use winnow::token::{literal, rest};
 
     (literal("//"), rest)
-        .map(|_| MccLine::Comment)
+        .value(MccLine::Comment)
         .context(StrContext::Label("invalid comment"))
         .parse_next(s)
 }
@@ -111,7 +111,7 @@ fn metadata<'a>(s: &mut &'a [u8]) -> ModalResult<MccLine<'a>> {
 /// Parser that accepts only an empty line
 fn empty_line<'a>(s: &mut &'a [u8]) -> ModalResult<MccLine<'a>> {
     end_of_line
-        .map(|_| MccLine::Empty)
+        .value(MccLine::Empty)
         .context(StrContext::Label("invalid empty line"))
         .parse_next(s)
 }
@@ -128,74 +128,62 @@ fn mcc_payload_item(s: &mut &[u8]) -> ModalResult<Either<u8, &'static [u8]>> {
 
     alt((
         alt((
-            literal("G").map(|_| Either::Right([0xfa, 0x00, 0x00].as_ref())),
-            literal("H").map(|_| Either::Right([0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00].as_ref())),
-            literal("I").map(|_| {
-                Either::Right([0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00].as_ref())
-            }),
-            literal("J").map(|_| {
-                Either::Right(
-                    [
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                    ]
-                    .as_ref(),
-                )
-            }),
-            literal("K").map(|_| {
-                Either::Right(
-                    [
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                        0xfa, 0x00, 0x00,
-                    ]
-                    .as_ref(),
-                )
-            }),
-            literal("L").map(|_| {
-                Either::Right(
-                    [
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                    ]
-                    .as_ref(),
-                )
-            }),
-            literal("M").map(|_| {
-                Either::Right(
-                    [
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                    ]
-                    .as_ref(),
-                )
-            }),
-            literal("N").map(|_| {
-                Either::Right(
-                    [
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                    ]
-                    .as_ref(),
-                )
-            }),
+            literal("G").value(Either::Right([0xfa, 0x00, 0x00].as_ref())),
+            literal("H").value(Either::Right([0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00].as_ref())),
+            literal("I").value(Either::Right(
+                [0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00].as_ref(),
+            )),
+            literal("J").value(Either::Right(
+                [
+                    0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
+                ]
+                .as_ref(),
+            )),
+            literal("K").value(Either::Right(
+                [
+                    0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                    0x00, 0x00,
+                ]
+                .as_ref(),
+            )),
+            literal("L").value(Either::Right(
+                [
+                    0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                    0x00, 0x00, 0xfa, 0x00, 0x00,
+                ]
+                .as_ref(),
+            )),
+            literal("M").value(Either::Right(
+                [
+                    0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                    0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
+                ]
+                .as_ref(),
+            )),
+            literal("N").value(Either::Right(
+                [
+                    0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                    0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
+                ]
+                .as_ref(),
+            )),
         )),
         alt((
-            literal("O").map(|_| {
-                Either::Right(
-                    [
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                        0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
-                        0xfa, 0x00, 0x00,
-                    ]
-                    .as_ref(),
-                )
-            }),
-            literal("P").map(|_| Either::Right([0xfb, 0x80, 0x80].as_ref())),
-            literal("Q").map(|_| Either::Right([0xfc, 0x80, 0x80].as_ref())),
-            literal("R").map(|_| Either::Right([0xfd, 0x80, 0x80].as_ref())),
-            literal("S").map(|_| Either::Right([0x96, 0x69].as_ref())),
-            literal("T").map(|_| Either::Right([0x61, 0x01].as_ref())),
-            literal("U").map(|_| Either::Right([0xe1, 0x00, 0x00, 0x00].as_ref())),
-            literal("Z").map(|_| Either::Right([0x00].as_ref())),
+            literal("O").value(Either::Right(
+                [
+                    0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                    0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00,
+                    0x00,
+                ]
+                .as_ref(),
+            )),
+            literal("P").value(Either::Right([0xfb, 0x80, 0x80].as_ref())),
+            literal("Q").value(Either::Right([0xfc, 0x80, 0x80].as_ref())),
+            literal("R").value(Either::Right([0xfd, 0x80, 0x80].as_ref())),
+            literal("S").value(Either::Right([0x96, 0x69].as_ref())),
+            literal("T").value(Either::Right([0x61, 0x01].as_ref())),
+            literal("U").value(Either::Right([0xe1, 0x00, 0x00, 0x00].as_ref())),
+            literal("Z").value(Either::Right([0x00].as_ref())),
         )),
         take_while(2..=2, AsChar::is_hex_digit).map(|s: &[u8]| {
             let hex_to_u8 = |v: u8| match v {
@@ -243,7 +231,7 @@ fn caption<'a>(
                 mcc_payload.map(Some).parse_next(s)
             } else {
                 take_while(0.., |b| b != b'\n' && b != b'\r')
-                    .map(|_| None)
+                    .value(None)
                     .parse_next(s)
             }
         }
