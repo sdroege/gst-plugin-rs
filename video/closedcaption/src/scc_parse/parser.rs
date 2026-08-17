@@ -39,7 +39,7 @@ fn header(s: &mut &[u8]) -> ModalResult<SccLine> {
         literal("Scenarist_SCC V1.0"),
         end_of_line,
     )
-        .map(|_| SccLine::Header)
+        .value(SccLine::Header)
         .context(StrContext::Label("invalid header"))
         .parse_next(s)
 }
@@ -47,7 +47,7 @@ fn header(s: &mut &[u8]) -> ModalResult<SccLine> {
 /// Parser that accepts only an empty line
 fn empty_line(s: &mut &[u8]) -> ModalResult<SccLine> {
     end_of_line
-        .map(|_| SccLine::Empty)
+        .value(SccLine::Empty)
         .context(StrContext::Label("invalid empty line"))
         .parse_next(s)
 }
@@ -82,11 +82,8 @@ fn scc_payload(s: &mut &[u8]) -> ModalResult<Vec<u8>> {
     use winnow::combinator::{alt, repeat};
     use winnow::token::literal;
 
-    let parse_item = (
-        scc_payload_item,
-        alt((literal(" ").map(|_| ()), end_of_line)),
-    )
-        .map(|(item, _)| item);
+    let parse_item =
+        (scc_payload_item, alt((literal(" ").value(()), end_of_line))).map(|(item, _)| item);
 
     repeat(1.., parse_item)
         .fold(Vec::new, |mut acc: Vec<_>, item| {

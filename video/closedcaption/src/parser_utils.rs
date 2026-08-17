@@ -72,7 +72,7 @@ pub fn end_of_line(s: &mut &[u8]) -> ModalResult<()> {
     use winnow::token::literal;
 
     (opt(alt((literal("\r\n"), literal("\n")))), eof)
-        .map(|_| ())
+        .value(())
         .parse_next(s)
 }
 
