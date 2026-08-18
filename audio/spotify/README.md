@@ -10,20 +10,28 @@ to respect their legal/licensing restrictions.
 
 This plugin requires a [Spotify Premium](https://www.spotify.com/premium/) account.
 
-Provide a Spotify access token with 'streaming' scope using the `access-token` property. Such a token can be obtained by using either:
-- [this webpage](https://open.spotify.com/get_access_token) for easy testing;
-- [Spotify's OAuth flow](https://developer.spotify.com/documentation/web-api/concepts/authorization);
-- the facility on their [Web SDK getting started guide](https://developer.spotify.com/documentation/web-playback-sdk/tutorials/getting-started);
-- [librespot-oauth](https://github.com/librespot-org/librespot/blob/dev/oauth/examples/oauth.rs):
+Provide a Spotify access token using the `access-token` property, or specify a directory containing your credentials.json blob using the `cache-credentials` property.
+The `gstspotify-auth` helper tool included in this repository can provide both of these.
 
 ```console
-cargo install librespot-oauth --example oauth && oauth
+cargo run --package gst-plugin-spotify --bin gstspotify-auth -- /optionally/where/to/store/credentials/
+```
+
+Access tokens derived from third-party client IDs no longer work for playback. Instead, the token must be obtained using a privileged client ID,
+like the one used by Spotify's official desktop application. Methods to obtain such a token include:
+- `gstspotify-auth`
+- [Spotify's OAuth flow](https://developer.spotify.com/documentation/web-api/concepts/authorization);
+- the facility on their [Web SDK getting started guide](https://developer.spotify.com/documentation/web-playback-sdk/tutorials/getting-started);
+- [librespot-oauth](https://github.com/librespot-org/librespot/blob/dev/oauth/examples):
+
+```console
+cargo install librespot-oauth --example oauth_sync && oauth_sync
 ```
 
 Note, Spotify access tokens are only valid for 1 hour and must be [refreshed](https://developer.spotify.com/documentation/web-api/tutorials/refreshing-tokens)
 for usage beyond that.
 
-It is therefore advisable to also use the `cache-credentials` property. On first usage, your access token is exchanged for a reusable credentials blob and
+If specifying an access token, it is therefore still advisable to also use the `cache-credentials` property. On first usage, your access token is exchanged for a reusable credentials blob and
 stored at the location specified by this property. Once obtained, that credentials blob is used for login and any provided `access-token` is ignored.
 Unlike Spotify access tokens, the user's credentials blob does not expire. Avoiding handling token refresh greatly simplifies plugin usage.
 If you do not set `cache-credentials`, you must manage refreshing your Spotify access token so it's valid for login when the element starts.
@@ -35,7 +43,7 @@ You may also want to cache downloaded files, see the `cache-files` property.
 The `spotifyaudiosrc` element can be used to play a song from Spotify using its [Spotify URI](https://community.spotify.com/t5/FAQs/What-s-a-Spotify-URI/ta-p/919201).
 
 ```
-gst-launch-1.0 spotifyaudiosrc access-token=$ACCESS_TOKEN track=spotify:track:3i3P1mGpV9eRlfKccjDjwi ! oggdemux ! vorbisdec ! audioconvert ! autoaudiosink
+gst-launch-1.0 spotifyaudiosrc cache-credentials=. track=spotify:track:3i3P1mGpV9eRlfKccjDjwi ! oggdemux ! vorbisdec ! audioconvert ! autoaudiosink
 ```
 
 The element also implements an URI handler which accepts credentials and cache settings as URI parameters:
