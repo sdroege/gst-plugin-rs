@@ -9,10 +9,9 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-gst.workspace = true
-gst-base.workspace = true
+gst = { workspace = true, features = ["v1_16"] }
 gst-tag.workspace = true
-bitstream-io = "4"
+anyhow = "1"
 
 [lib]
 name = "gstaudiotags"

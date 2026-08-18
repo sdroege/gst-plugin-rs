@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: MPL-2.0
 #![allow(clippy::non_send_fields_in_send_ty, unused_doc_comments)]
 
+mod apedemux;
+
 /**
  * plugin-audiotags:
  *
@@ -17,6 +19,8 @@ use gst::glib;
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "v1_30")]
     plugin.set_static_features_flag();
+
+    apedemux::register(plugin)?;
 
     Ok(())
 }

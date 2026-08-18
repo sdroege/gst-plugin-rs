@@ -12,6 +12,7 @@ members = [
     "audio/audiofx",
     "audio/audiomultimixer",
     "audio/audioparsers",
+    "audio/audiotags",
     "audio/claxon",
     "audio/csound",
     "audio/demucs",
@@ -29,8 +30,6 @@ members = [
     "generic/threadshare",
     "generic/inter",
     "generic/gopbuffer",
-
-    "audio/audiotags",
 
     "mux/flavors",
     "mux/isobmff",

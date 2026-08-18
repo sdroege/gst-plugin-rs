@@ -115,6 +115,9 @@ You will find the following plugins in this repository:
       - `ac4parse`: Parses AC4 audio streams.
       - `s302mparse`: Parser for SMPTE S302M audio elementary streams.
 
+    - `audiotags`: Audio tag parsers
+      - `apetagdemux`: Parses APE audio tags.
+
     - `claxon`: A FLAC decoder based on the [Claxon](https://github.com/ruuda/claxon) library.
       - `claxondec`: Claxon FLAC decoder.
 

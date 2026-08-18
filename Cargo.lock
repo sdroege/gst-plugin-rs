@@ -5044,7 +5044,6 @@ name = "gst-plugin-audiotags"
 version = "0.16.0-alpha"
 dependencies = [
  "anyhow",
- "bitstream-io",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-tag",

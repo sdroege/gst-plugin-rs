@@ -190,6 +190,44 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "audiotags": {
+        "description": "GStreamer Rust Audio Tags Plugin",
+        "elements": {
+            "apetagdemux": {
+                "author": "Tim-Philipp Müller <tim@centricular.com>",
+                "description": "Extracts APE tags from audio streams and files",
+                "hierarchy": [
+                    "GstApeTagDemux",
+                    "GstTagDemux",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Demuxer/Metadata",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-apetag:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "primary + 1"
+            }
+        },
+        "filename": "gstaudiotags",
+        "license": "MPL-2.0",
+        "other-types": {},
+        "package": "gst-plugin-audiotags",
+        "source": "gst-plugin-audiotags",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "aws": {
         "description": "GStreamer Amazon Web Services plugin",
         "elements": {
