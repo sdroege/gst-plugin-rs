@@ -23,6 +23,8 @@ mod fmttracing;
 mod memory_tracer;
 mod pad_push_timings;
 mod pcap_writer;
+#[cfg(feature = "per-pipeline-logs")]
+mod per_pipeline_logs;
 #[cfg(feature = "perfetto")]
 mod perfettotracing;
 #[cfg(unix)]
@@ -51,6 +53,8 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     fmttracing::register(plugin)?;
     #[cfg(feature = "perfetto")]
     perfettotracing::register(plugin)?;
+    #[cfg(feature = "per-pipeline-logs")]
+    per_pipeline_logs::register(plugin)?;
     Ok(())
 }
 

@@ -6033,6 +6033,7 @@ dependencies = [
  "chrono",
  "etherparse",
  "futures",
+ "glob",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-tracing",
