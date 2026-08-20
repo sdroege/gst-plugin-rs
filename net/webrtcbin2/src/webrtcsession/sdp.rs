@@ -380,7 +380,8 @@ impl WebRTCSdpMedia {
         media: &sdp_types::Media,
     ) -> Result<Self, ParseWebRTCSdpError> {
         let media_type = media.media.parse::<MediaType>()?;
-        let is_rtp = [MediaType::Audio, MediaType::Video].contains(&media_type)
+        let is_rtp = [MediaType::Audio, MediaType::Video, MediaType::Application]
+            .contains(&media_type)
             && is_valid_rtp_profile(&media.proto);
         let is_sctp = [MediaType::Application].contains(&media_type)
             && is_valid_datachannel_profile(&media.proto);
@@ -1016,7 +1017,7 @@ impl RtpMedia {
         mline: u32,
         media: &sdp_types::Media,
     ) -> Result<Self, ParseWebRTCSdpError> {
-        let is_rtp = ["audio", "video"].contains(&media.media.as_ref())
+        let is_rtp = ["audio", "video", "application"].contains(&media.media.as_ref())
             && is_valid_rtp_profile(&media.proto);
         assert!(is_rtp);
 

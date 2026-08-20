@@ -1174,8 +1174,8 @@ impl WebRTCSession {
                 } else if media.port == 0 {
                     continue;
                 }
-                match media.media {
-                    MediaType::Audio | MediaType::Video => {
+                match &media.specifics {
+                    MediaSpecifics::Rtp(_) => {
                         let trans = match state.transceiver_for_sdp_media(media, idx) {
                             Some((_, transceiver)) => transceiver,
                             None => {
@@ -1242,6 +1242,7 @@ impl WebRTCSession {
                             let media_str = match media.media {
                                 MediaType::Audio => "audio",
                                 MediaType::Video => "video",
+                                MediaType::Application => "application",
                                 _ => unreachable!(),
                             };
                             let caps = gst::Caps::builder("application/x-rtp")
@@ -1253,11 +1254,8 @@ impl WebRTCSession {
                             pt_map = pt_map.field(format.to_string(), caps);
                         }
                     }
-                    MediaType::Application => {
+                    MediaSpecifics::Datachannel(_) => {
                         // FIXME data channel
-                    }
-                    media_type => {
-                        gst::warning!(CAT, "Unknown media type {media_type:?} at index {idx}");
                     }
                 }
             }
@@ -2301,6 +2299,94 @@ mod tests {
             typ: WebRTCSdpType::Offer,
             media: vec![ExpectedSdpMedia {
                 media: MediaType::Audio,
+                ice_ufrag: Some(true),
+                ice_pwd: Some(true),
+                setup: Some(DtlsSetup::ActPass),
+                mid: String::from("0"),
+                bundle_only: false,
+                fingerprints: 1,
+                rtp: Some(media0),
+            }],
+        };
+        expected_offer.match_against(&sdp);
+        let answer = rx.recv().unwrap();
+        let mut expected_answer = expected_offer.clone();
+        expected_answer.typ = WebRTCSdpType::Answer;
+        expected_answer.media[0].setup = Some(DtlsSetup::Active);
+        let sdp = WebRTCSdp::parse(WebRTCSdpType::Answer, &answer).unwrap();
+        expected_answer.match_against(&sdp);
+    }
+
+    fn klv_caps() -> gst::Caps {
+        gst::Caps::builder("application/x-rtp")
+            .field("media", "application")
+            .field("payload", 98i32)
+            .field("clock-rate", 90000i32)
+            .field("encoding-name", "SMPTE336M")
+            .build()
+    }
+
+    #[test]
+    fn session_klv() {
+        init();
+
+        let session = glib::Object::new::<super::super::WebRTCSession>();
+        session.imp().ensure_operations().unwrap();
+
+        let transceiver = glib::Object::new::<Transceiver>();
+        transceiver
+            .imp()
+            .state()
+            .set_codec_preferences(Some(klv_caps()));
+        session.imp().state().add_transceiver(transceiver);
+
+        let (tx, rx) = std::sync::mpsc::sync_channel(2);
+        let session_weak = session.downgrade();
+        session.imp().create_offer(
+            None,
+            Some(gst::Promise::with_change_func(move |reply| {
+                let reply = reply.unwrap().unwrap();
+                let sdp = reply.get::<String>("sdp").unwrap();
+                tx.send(sdp.clone()).unwrap();
+                let session = session_weak.upgrade().unwrap();
+                session.imp().set_remote_description(
+                    "offer".to_string(),
+                    sdp,
+                    Some(gst::Promise::with_change_func(move |_reply| {
+                        let session = session_weak.upgrade().unwrap();
+                        let _sdp = session.property::<String>("pending-remote-description");
+                    })),
+                );
+                session.imp().create_answer(
+                    None,
+                    Some(gst::Promise::with_change_func(move |reply| {
+                        let reply = reply.unwrap().unwrap();
+                        let sdp = reply.get::<String>("sdp").unwrap();
+                        tx.send(sdp.clone()).unwrap();
+                    })),
+                );
+            })),
+        );
+        let offer = rx.recv().unwrap();
+        let sdp = WebRTCSdp::parse(WebRTCSdpType::Offer, &offer).unwrap();
+        let mut media0 = crate::webrtcsession::sdp::RtpMedia {
+            direction: Direction::SendRecv,
+            rtcp_mux: true,
+            rtcp_mux_only: true,
+            rtcp_rsize: false,
+            rtcp_fb: None,
+            extmap: Default::default(),
+            formats: vec![98],
+            rtpmaps: Default::default(),
+            rtcp_fbs: Default::default(),
+            fmtps: Default::default(),
+        };
+        let rtpmap = RtpMap::new(98, "SMPTE336M", 90_000);
+        media0.rtpmaps.insert(rtpmap.payload_type, rtpmap);
+        let expected_offer = ExpectedSdp {
+            typ: WebRTCSdpType::Offer,
+            media: vec![ExpectedSdpMedia {
+                media: MediaType::Application,
                 ice_ufrag: Some(true),
                 ice_pwd: Some(true),
                 setup: Some(DtlsSetup::ActPass),
