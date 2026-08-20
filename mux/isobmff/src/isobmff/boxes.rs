@@ -1822,7 +1822,7 @@ fn write_visual_sample_entry(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Re
                     v.extend(mastering.white_point().x.to_be_bytes());
                     v.extend(mastering.white_point().y.to_be_bytes());
                     v.extend(mastering.max_display_mastering_luminance().to_be_bytes());
-                    v.extend(mastering.max_display_mastering_luminance().to_be_bytes());
+                    v.extend(mastering.min_display_mastering_luminance().to_be_bytes());
                     Ok(())
                 })?;
             }
