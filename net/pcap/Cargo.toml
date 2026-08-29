@@ -15,12 +15,18 @@ pcap-parser = "0.17.0"
 etherparse = "0.21"
 
 [dev-dependencies]
-gst-check = { workspace = true, features = ["v1_20"] }
+gst-check.workspace = true
+clap = { version = "4", features = ["derive"] }
+ctrlc = "3.5"
 
 [lib]
 name = "gstpcap"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
+
+[[example]]
+name = "pcap-ssrc"
+path = "examples/pcap_ssrc.rs"
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true

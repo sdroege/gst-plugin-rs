@@ -5597,6 +5597,8 @@ dependencies = [
 name = "gst-plugin-pcap"
 version = "0.16.0-alpha"
 dependencies = [
+ "clap",
+ "ctrlc",
  "etherparse",
  "glib",
  "gst-plugin-version-helper",
