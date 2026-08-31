@@ -27,10 +27,8 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 });
 
 const C608_TAG: &str = "C608";
-const C608_TAG_BYTES: &[u8] = C608_TAG.as_bytes();
 
 const C708_TAG: &str = "C708";
-const C708_TAG_BYTES: &[u8] = C708_TAG.as_bytes();
 
 #[cfg(feature = "sink")]
 const LINE_ATTR: &str = "line";
@@ -292,13 +290,13 @@ impl NDICCMetaDecoder {
                 Event::Start(_) => self.xml_content.clear(),
                 Event::Text(e) => {
                     self.xml_content.extend(
-                        e.iter().copied().filter(|&b| {
+                        e.as_ref().as_bytes().iter().copied().filter(|&b| {
                             (b != b' ') && (b != b'\t') && (b != b'\n') && (b != b'\r')
                         }),
                     );
                 }
                 Event::End(e) => match e.name().as_ref() {
-                    C608_TAG_BYTES => match BASE64.decode(self.xml_content.as_slice()) {
+                    C608_TAG => match BASE64.decode(self.xml_content.as_slice()) {
                         Ok(v210_buf) => match self.parse_for_cea608(&v210_buf) {
                             Ok(None) => (),
                             Ok(Some(anc)) => {
@@ -312,7 +310,7 @@ impl NDICCMetaDecoder {
                             gst::error!(CAT, "Failed to decode NDI C608 metadata: {err}");
                         }
                     },
-                    C708_TAG_BYTES => match BASE64.decode(self.xml_content.as_slice()) {
+                    C708_TAG => match BASE64.decode(self.xml_content.as_slice()) {
                         Ok(v210_buf) => match self.parse_for_cea708(&v210_buf) {
                             Ok(None) => (),
                             Ok(Some(anc)) => {
