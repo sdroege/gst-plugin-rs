@@ -486,6 +486,7 @@ impl Transcriber {
                                 );
                             }
                             this.pause_srcpad_task();
+                            break;
                         }
                     }
                     Ok(TranscriptOutput::Event(event)) => {
