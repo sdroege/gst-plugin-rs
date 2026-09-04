@@ -1355,9 +1355,10 @@ impl UdpSocket {
                         }
                         #[cfg(any(target_os = "openbsd", target_os = "freebsd"))]
                         (libc::IPPROTO_IP, libc::IP_RECVDSTADDR) => {
-                            let dst_addr = &*(libc::CMSG_DATA(cmsg) as *const libc::in_addr);
-                            let dst_addr = Ipv4Addr::from(addr.s_addr.to_ne_bytes());
+                            let in_addr = &*(libc::CMSG_DATA(cmsg) as *const libc::in_addr);
+                            let dst_addr = Ipv4Addr::from(in_addr.s_addr.to_ne_bytes());
                             if address.as_ref().is_some_and(|addr| *addr != dst_addr) {
+                                self.buffers_cache.push_back(buffer);
                                 continue 'next_packet;
                             }
                         }
@@ -1671,9 +1672,8 @@ impl UdpSocket {
                                 }
                                 #[cfg(any(target_os = "hurd", target_os = "dragonfly"))]
                                 (libc::IPPROTO_IP, libc::IP_RECVDSTADDR) => {
-                                    let dst_addr =
-                                        &*(libc::CMSG_DATA(cmsg) as *const libc::in_addr);
-                                    let dst_addr = Ipv4Addr::from(addr.s_addr.to_ne_bytes());
+                                    let in_addr = &*(libc::CMSG_DATA(cmsg) as *const libc::in_addr);
+                                    let dst_addr = Ipv4Addr::from(in_addr.s_addr.to_ne_bytes());
                                     if address.as_ref().is_some_and(|addr| *addr != dst_addr) {
                                         continue 'next_packet;
                                     }
