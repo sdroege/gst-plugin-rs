@@ -1273,7 +1273,6 @@ impl UdpSocket {
                         io::ErrorKind::HostUnreachable | io::ErrorKind::ConnectionReset => {
                             // ICMP error
                             // this can happen when the port is reused and shared with a UDP sender
-                            self.buffers_cache.extend(buffers.drain(..));
                             gst::warning!(CAT, obj = self.element, "Read error: {err}");
                             continue;
                         }
