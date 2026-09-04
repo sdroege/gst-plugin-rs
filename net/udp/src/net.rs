@@ -1952,6 +1952,7 @@ impl UdpSocket {
                 }
                 Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => {
                     gst::debug!(CAT, obj = self.element, "Socket closed");
+                    self.buffers_cache.push_back(buffer);
                     return Err(err).context("Receiving packet");
                 }
                 Err(err) if err.kind() == io::ErrorKind::Interrupted => {
@@ -1982,6 +1983,7 @@ impl UdpSocket {
                 }
                 Err(err) => {
                     gst::error!(CAT, obj = self.element, "Read error: {err}");
+                    self.buffers_cache.push_back(buffer);
                     return Err(err).context("Receiving packet");
                 }
             }
