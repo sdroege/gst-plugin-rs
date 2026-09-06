@@ -563,6 +563,60 @@ pub(crate) fn caps_to_timescale(caps: &gst::CapsRef) -> u32 {
 }
 
 impl TrackConfiguration {
+    fn caps_matches(&self, f: impl FnOnce(&str) -> bool) -> bool {
+        f(self.caps().structure(0).unwrap().name().as_str())
+    }
+
+    /// Whether this is a video/image-like track (including generically-compressed
+    /// and uncompressed video), as opposed to audio or metadata.
+    pub(crate) fn is_video_track(&self) -> bool {
+        self.caps_matches(|name| {
+            matches!(
+                name,
+                "video/x-h264"
+                    | "video/x-h265"
+                    | "video/x-h266"
+                    | "video/x-vp8"
+                    | "video/x-vp9"
+                    | "video/x-av1"
+                    | "image/jpeg"
+                    | "video/x-raw"
+                    | "video/x-bayer"
+                    | "application/x-zlib-compressed"
+                    | "application/x-deflate-compressed"
+                    | "application/x-brotli-compressed"
+            )
+        })
+    }
+
+    /// Whether this is an audio track, as opposed to video or metadata.
+    pub(crate) fn is_audio_track(&self) -> bool {
+        self.caps_matches(|name| {
+            matches!(
+                name,
+                "audio/mpeg"
+                    | "audio/x-opus"
+                    | "audio/x-flac"
+                    | "audio/x-alaw"
+                    | "audio/x-mulaw"
+                    | "audio/x-adpcm"
+                    | "audio/x-ac3"
+                    | "audio/x-eac3"
+                    | "audio/x-raw"
+            )
+        })
+    }
+
+    /// Whether this track carries ONVIF metadata (`application/x-onvif-metadata`).
+    pub(crate) fn is_onvif_metadata(&self) -> bool {
+        self.caps_matches(|name| name == "application/x-onvif-metadata")
+    }
+
+    /// Whether this is a metadata track, as opposed to video or audio.
+    pub(crate) fn is_metadata_track(&self) -> bool {
+        self.is_onvif_metadata()
+    }
+
     pub(crate) fn to_timescale(&self) -> u32 {
         if self.trak_timescale > 0 {
             self.trak_timescale

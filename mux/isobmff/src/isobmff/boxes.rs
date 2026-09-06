@@ -152,37 +152,23 @@ fn write_moov(v: &mut Vec<u8>, cfg: &PresentationConfiguration) -> Result<(), Er
         write_mvhd(v, cfg, creation_time)
     })?;
 
+    // The first video-like track, used below to link it to ONVIF metadata tracks
+    // via a `cdsc` track reference.
+    let first_video_track_idx = cfg.tracks.iter().position(|s| s.is_video_track());
+
     for (idx, stream) in cfg.tracks.iter().enumerate() {
         write_box(v, b"trak", |v| {
             let mut references = Vec::new();
 
             // Reference the video track for ONVIF metadata tracks
-            if (cfg.variant == Variant::FragmentedONVIF || cfg.variant == Variant::ONVIF)
-                && stream.caps().structure(0).unwrap().name() == "application/x-onvif-metadata"
+            if let Some(first_video_track_idx) = first_video_track_idx
+                && (cfg.variant == Variant::FragmentedONVIF || cfg.variant == Variant::ONVIF)
+                && stream.is_onvif_metadata()
             {
-                // Find the first video track
-                for (idx, other_stream) in cfg.tracks.iter().enumerate() {
-                    let s = other_stream.caps().structure(0).unwrap();
-
-                    if matches!(
-                        s.name().as_str(),
-                        "video/x-h264"
-                            | "video/x-h265"
-                            | "video/x-h266"
-                            | "image/jpeg"
-                            | "video/x-raw"
-                            | "video/x-bayer"
-                            | "application/x-zlib-compressed"
-                            | "application/x-deflate-compressed"
-                            | "application/x-brotli-compressed"
-                    ) {
-                        references.push(TrackReference {
-                            reference_type: *b"cdsc",
-                            track_ids: vec![idx as u32 + 1],
-                        });
-                        break;
-                    }
-                }
+                references.push(TrackReference {
+                    reference_type: *b"cdsc",
+                    track_ids: vec![first_video_track_idx as u32 + 1],
+                });
             }
 
             write_trak(v, cfg, idx, stream, creation_time, &references)
@@ -263,39 +249,23 @@ fn write_minf(
     cfg: &PresentationConfiguration,
     stream: &TrackConfiguration,
 ) -> Result<(), Error> {
-    let caps = stream.caps();
-    let s = caps.structure(0).unwrap();
-
-    match s.name().as_str() {
-        "video/x-h264"
-        | "video/x-h265"
-        | "video/x-h266"
-        | "video/x-vp8"
-        | "video/x-vp9"
-        | "video/x-av1"
-        | "image/jpeg"
-        | "video/x-raw"
-        | "video/x-bayer"
-        | "application/x-zlib-compressed"
-        | "application/x-deflate-compressed"
-        | "application/x-brotli-compressed" => {
-            // Flags are always 1 for unspecified reasons
-            write_full_box(v, b"vmhd", FULL_BOX_VERSION_0, 1, write_vmhd)?
-        }
-        "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
-        | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" | "audio/x-raw" => write_full_box(
+    if stream.is_video_track() {
+        // Flags are always 1 for unspecified reasons
+        write_full_box(v, b"vmhd", FULL_BOX_VERSION_0, 1, write_vmhd)?;
+    } else if stream.is_audio_track() {
+        write_full_box(
             v,
             b"smhd",
             FULL_BOX_VERSION_0,
             FULL_BOX_FLAGS_NONE,
             write_smhd,
-        )?,
-        "application/x-onvif-metadata" => {
-            write_full_box(v, b"nmhd", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |_v| {
-                Ok(())
-            })?
-        }
-        _ => unreachable!(),
+        )?;
+    } else if stream.is_metadata_track() {
+        write_full_box(v, b"nmhd", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |_v| {
+            Ok(())
+        })?;
+    } else {
+        unreachable!()
     }
 
     write_box(v, b"dinf", write_dinf)?;
@@ -1013,33 +983,19 @@ pub(crate) fn write_hdlr_box(
 }
 
 fn write_hdlr_for_stream(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error> {
-    let s = stream.caps().structure(0).unwrap();
-    let (handler_type, name) = match s.name().as_str() {
-        "video/x-h264"
-        | "video/x-h265"
-        | "video/x-h266"
-        | "video/x-vp8"
-        | "video/x-vp9"
-        | "video/x-av1"
-        | "image/jpeg"
-        | "video/x-raw"
-        | "video/x-bayer"
-        | "application/x-zlib-compressed"
-        | "application/x-deflate-compressed"
-        | "application/x-brotli-compressed" => {
-            if stream.image_sequence {
-                // See ISO/IEC 23008-12:2022 Section 7.2.2
-                (b"pict", b"PictureHandler\0".as_slice())
-            } else {
-                (b"vide", b"VideoHandler\0".as_slice())
-            }
+    let (handler_type, name) = if stream.is_video_track() {
+        if stream.image_sequence {
+            // See ISO/IEC 23008-12:2022 Section 7.2.2
+            (b"pict", b"PictureHandler\0".as_slice())
+        } else {
+            (b"vide", b"VideoHandler\0".as_slice())
         }
-        "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
-        | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" | "audio/x-raw" => {
-            (b"soun", b"SoundHandler\0".as_slice())
-        }
-        "application/x-onvif-metadata" => (b"meta", b"MetadataHandler\0".as_slice()),
-        _ => unreachable!(),
+    } else if stream.is_audio_track() {
+        (b"soun", b"SoundHandler\0".as_slice())
+    } else if stream.is_metadata_track() {
+        (b"meta", b"MetadataHandler\0".as_slice())
+    } else {
+        unreachable!()
     };
     write_hdlr_box(v, handler_type, name)
 }
@@ -1122,45 +1078,31 @@ fn write_tkhd(
     v.extend(0u16.to_be_bytes());
 
     // Volume
-    let s = stream.caps().structure(0).unwrap();
-    match s.name().as_str() {
-        "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
-        | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" | "audio/x-raw" => {
-            v.extend((1u16 << 8).to_be_bytes())
-        }
-        _ => v.extend(0u16.to_be_bytes()),
+    if stream.is_audio_track() {
+        v.extend((1u16 << 8).to_be_bytes());
+    } else {
+        v.extend(0u16.to_be_bytes());
     }
 
     // Reserved
     v.extend([0u8; 2]);
 
     // Per stream orientation matrix for video
-    let matrix = match s.name().as_str() {
-        x if x.starts_with("video/") || x.starts_with("image/") => stream.orientation,
-        _ => &crate::isobmff::transform_matrix::IDENTITY_MATRIX,
+    let matrix = if stream.caps_matches(|x| x.starts_with("video/") || x.starts_with("image/")) {
+        stream.orientation
+    } else {
+        &crate::isobmff::transform_matrix::IDENTITY_MATRIX
     };
     v.extend(matrix.iter().flatten());
 
     // Width/height
-    match s.name().as_str() {
-        "video/x-h264"
-        | "video/x-h265"
-        | "video/x-h266"
-        | "video/x-vp8"
-        | "video/x-vp9"
-        | "video/x-av1"
-        | "image/jpeg"
-        | "video/x-raw"
-        | "video/x-bayer"
-        | "application/x-zlib-compressed"
-        | "application/x-deflate-compressed"
-        | "application/x-brotli-compressed" => {
-            let (width, height) = find_width_and_height(&stream.caps);
+    if stream.is_video_track() {
+        let (width, height) = find_width_and_height(&stream.caps);
 
-            v.extend((width << 16).to_be_bytes());
-            v.extend((height << 16).to_be_bytes());
-        }
-        _ => v.extend([0u8; 2 * 4]),
+        v.extend((width << 16).to_be_bytes());
+        v.extend((height << 16).to_be_bytes());
+    } else {
+        v.extend([0u8; 2 * 4]);
     }
 
     Ok(())
@@ -1409,26 +1351,14 @@ pub(crate) fn write_stsd(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result
     // Entry count
     v.extend((stream.stream_entry_count() as u32).to_be_bytes());
 
-    let s = stream.caps().structure(0).unwrap();
-    match s.name().as_str() {
-        "video/x-h264"
-        | "video/x-h265"
-        | "video/x-h266"
-        | "video/x-vp8"
-        | "video/x-vp9"
-        | "video/x-av1"
-        | "image/jpeg"
-        | "video/x-raw"
-        | "video/x-bayer"
-        | "application/x-zlib-compressed"
-        | "application/x-deflate-compressed"
-        | "application/x-brotli-compressed" => write_visual_sample_entry(v, stream)?,
-        "audio/mpeg" | "audio/x-opus" | "audio/x-flac" | "audio/x-alaw" | "audio/x-mulaw"
-        | "audio/x-adpcm" | "audio/x-ac3" | "audio/x-eac3" | "audio/x-raw" => {
-            write_audio_sample_entry(v, stream)?
-        }
-        "application/x-onvif-metadata" => write_xml_meta_data_sample_entry(v, stream)?,
-        _ => unreachable!(),
+    if stream.is_video_track() {
+        write_visual_sample_entry(v, stream)?;
+    } else if stream.is_audio_track() {
+        write_audio_sample_entry(v, stream)?;
+    } else if stream.is_onvif_metadata() {
+        write_xml_meta_data_sample_entry(v, stream)?;
+    } else {
+        unreachable!()
     }
 
     Ok(())
