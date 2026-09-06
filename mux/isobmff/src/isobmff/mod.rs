@@ -378,6 +378,14 @@ impl PresentationConfiguration {
             self.tracks[0].to_timescale()
         }
     }
+
+    pub(crate) fn min_earliest_pts(&self) -> gst::ClockTime {
+        self.tracks.iter().map(|s| s.earliest_pts).min().unwrap()
+    }
+
+    pub(crate) fn max_end_pts(&self) -> gst::ClockTime {
+        self.tracks.iter().map(|s| s.end_pts).max().unwrap()
+    }
 }
 
 #[derive(Debug)]

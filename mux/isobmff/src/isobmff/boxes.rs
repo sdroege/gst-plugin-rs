@@ -929,14 +929,7 @@ fn write_mvhd(
     if cfg.variant.is_fragmented() {
         v.extend(0u64.to_be_bytes());
     } else {
-        let min_earliest_pts = cfg.tracks.iter().map(|s| s.earliest_pts).min().unwrap();
-        let max_end_pts = cfg
-            .tracks
-            .iter()
-            .map(|stream| stream.end_pts)
-            .max()
-            .unwrap();
-        let duration = (max_end_pts - min_earliest_pts)
+        let duration = (cfg.max_end_pts() - cfg.min_earliest_pts())
             .nseconds()
             .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
             .context("too big track duration")?;
@@ -1061,9 +1054,8 @@ fn write_tkhd(
         // Track header duration is in movie header timescale
         let timescale = cfg.to_timescale();
 
-        let min_earliest_pts = cfg.tracks.iter().map(|s| s.earliest_pts).min().unwrap();
         // Duration is the end PTS of this stream up to the beginning of the earliest stream
-        let duration = stream.end_pts - min_earliest_pts;
+        let duration = stream.end_pts - cfg.min_earliest_pts();
         let duration = duration
             .nseconds()
             .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
