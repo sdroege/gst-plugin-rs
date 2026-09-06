@@ -965,7 +965,7 @@ fn write_mvhd(
 pub(crate) fn write_hdlr_box(
     v: &mut Vec<u8>,
     handler_type: &[u8; 4],
-    name: &[u8],
+    name: &str,
 ) -> Result<(), Error> {
     // Pre-defined
     v.extend([0u8; 4]);
@@ -977,7 +977,8 @@ pub(crate) fn write_hdlr_box(
     v.extend([0u8; 3 * 4]);
 
     // Name
-    v.extend(name);
+    v.extend_from_slice(name.as_bytes());
+    v.push(0);
 
     Ok(())
 }
@@ -986,14 +987,14 @@ fn write_hdlr_for_stream(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result
     let (handler_type, name) = if stream.is_video_track() {
         if stream.image_sequence {
             // See ISO/IEC 23008-12:2022 Section 7.2.2
-            (b"pict", b"PictureHandler\0".as_slice())
+            (b"pict", "PictureHandler")
         } else {
-            (b"vide", b"VideoHandler\0".as_slice())
+            (b"vide", "VideoHandler")
         }
     } else if stream.is_audio_track() {
-        (b"soun", b"SoundHandler\0".as_slice())
+        (b"soun", "SoundHandler")
     } else if stream.is_metadata_track() {
-        (b"meta", b"MetadataHandler\0".as_slice())
+        (b"meta", "MetadataHandler")
     } else {
         unreachable!()
     };
@@ -2394,7 +2395,7 @@ pub(crate) fn write_onvif_metabox(
 ) -> Result<(), Error> {
     write_full_box(v, b"meta", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
         write_full_box(v, b"hdlr", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-            write_hdlr_box(v, b"null", b"MetadataHandler")
+            write_hdlr_box(v, b"null", "MetadataHandler")
         })?;
 
         write_cstb(cfg, v)
