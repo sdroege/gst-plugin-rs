@@ -366,10 +366,10 @@ impl BaseTransformImpl for YoloTensorDec {
             kept[b.class as usize].push(*b);
 
             // Calculate top-left corner and width/height from top-left and bottom-right corner
-            let x = b.xmin as i32;
-            let y = b.ymin as i32;
-            let width = (b.xmax - b.xmin) as i32;
-            let height = (b.ymax - b.ymin) as i32;
+            let x = b.xmin.round() as i32;
+            let y = b.ymin.round() as i32;
+            let width = (b.xmax - b.xmin).round() as i32;
+            let height = (b.ymax - b.ymin).round() as i32;
 
             let class = state
                 .labels
