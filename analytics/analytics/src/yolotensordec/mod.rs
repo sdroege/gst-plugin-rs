@@ -46,7 +46,7 @@ glib::wrapper! {
  * SECTION:element-yoloxtensordec
  * @see_also: objectdetectionoverlay, burn-yoloxinference.
  *
- * Tensor decoder element for [YOLOX](https://github.com/Megvii-BaseDetection/YOLOX)-based object
+ * Tensor decoder element for [YoloX](https://github.com/Megvii-BaseDetection/YOLOX)-based object
  * detection.
  *
  * |[
@@ -63,6 +63,31 @@ glib::wrapper! {
  */
 glib::wrapper! {
     pub struct YoloXTensorDec(ObjectSubclass<imp::YoloXTensorDec>) @extends YoloTensorDec, gst_base::BaseTransform, gst::Element, gst::Object;
+}
+
+/**
+ * SECTION:element-yolo26tensordec2
+ * @see_also: objectdetectionoverlay, onnxinference.
+ *
+ * Tensor decoder element for [Yolo object detection](https://docs.ultralytics.com/models).
+ * This supports YoloV10, Yolo11, Yolo12 and Yolo26 but only the one-to-one (end2end, NMS) heads.
+ *
+ * Test image file, model file and labels file can be found here : https://gitlab.collabora.com/gstreamer/onnx-models
+ *
+ * |[
+ * gst-launch-1.0 filesrc location=onnx-models/images/bus.jpg \
+ *     ! jpegdec ! videoconvert ! videoscale ! video/x-raw,pixel-aspect-ratio=1/1 \
+ *     !  onnxinference model-file=onnx-models/models/yolo26n.onnx \
+ *     ! yolo26tensordec2 score-threshold=0.3 label-file=onnx-models/labels/COCO_classes.txt \
+ *     ! objectdetectionoverlay ! videoconvert ! imagefreeze ! autovideosink
+ * ]| This takes a JPEG, performs object detection via `onnxinference` on it, decodes the
+ * inferred tensors with `yolo26tensordec2` and then overlays the detected objects on the frame via
+ * `objectdetectionoverlay`.
+ *
+ * Since: plugins-rs-0.16.0
+ */
+glib::wrapper! {
+    pub struct Yolo26TensorDec(ObjectSubclass<imp::Yolo26TensorDec>) @extends YoloTensorDec, gst_base::BaseTransform, gst::Element, gst::Object;
 }
 
 pub trait YoloTensorDecImpl: BaseTransformImpl + ObjectSubclass<Type: IsA<YoloTensorDec>> {}
@@ -87,6 +112,12 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         "yoloxtensordec",
         gst::Rank::PRIMARY,
         YoloXTensorDec::static_type(),
+    )?;
+    gst::Element::register(
+        Some(plugin),
+        "yolo26tensordec2",
+        gst::Rank::PRIMARY + 1,
+        Yolo26TensorDec::static_type(),
     )?;
 
     Ok(())
