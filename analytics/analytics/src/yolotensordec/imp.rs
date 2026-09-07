@@ -340,64 +340,58 @@ impl BaseTransformImpl for YoloTensorDec {
             }
         }
 
-        // Sort boxes by class and then by decreasing confidence
-        candidate_boxes.sort_unstable_by(|a, b| {
-            a.class
-                .cmp(&b.class)
-                .then_with(|| a.confidence.total_cmp(&b.confidence).reverse())
-        });
+        // Sort boxes by decreasing confidence
+        candidate_boxes.sort_unstable_by(|a, b| b.confidence.total_cmp(&a.confidence));
 
         drop(map);
         let mut rmeta = gst_analytics::AnalyticsRelationMeta::add(buffer);
 
-        // For all boxes of the same class, perform non-maximum suppression
-        for b in candidate_boxes.chunk_by_mut(|a, b| a.class == b.class) {
-            let mut current_index = 0;
-            for index in 0..b.len() {
-                let mut drop = false;
-                for prev_index in 0..current_index {
-                    let iou = iou(&b[prev_index], &b[index]);
-                    if iou > settings.iou_threshold {
-                        drop = true;
-                        break;
-                    }
-                }
-                if !drop {
-                    b.swap(current_index, index);
-                    current_index += 1;
-                }
+        // Perform non-maximum suppression per class, processing the boxes in
+        // globally decreasing confidence order, so that the max-detections
+        // limit keeps the highest confidence detections.
+        let mut kept: Vec<Vec<BoundingBox>> = vec![Vec::new(); num_classes];
+        let mut num_detections = 0;
+        for b in &candidate_boxes {
+            if kept[b.class as usize]
+                .iter()
+                .any(|k| iou(b, k) > settings.iou_threshold)
+            {
+                continue;
             }
+            kept[b.class as usize].push(*b);
 
-            // Add relation meta for the remaining boxes
-            for b in &b[0..current_index] {
-                // Calculate top-left corner and width/height from top-left and bottom-right corner
-                let x = b.xmin as i32;
-                let y = b.ymin as i32;
-                let width = (b.xmax - b.xmin) as i32;
-                let height = (b.ymax - b.ymin) as i32;
+            // Calculate top-left corner and width/height from top-left and bottom-right corner
+            let x = b.xmin as i32;
+            let y = b.ymin as i32;
+            let width = (b.xmax - b.xmin) as i32;
+            let height = (b.ymax - b.ymin) as i32;
 
-                let class = state
-                    .labels
-                    .get(b.class as usize)
-                    .copied()
-                    .unwrap_or_else(|| glib::Quark::from_str(glib::gformat!("CLASS-{}", b.class)));
+            let class = state
+                .labels
+                .get(b.class as usize)
+                .copied()
+                .unwrap_or_else(|| glib::Quark::from_str(glib::gformat!("CLASS-{}", b.class)));
 
-                gst::log!(
-                    CAT,
-                    imp = self,
-                    "Adding object {} with confidence {} at ({x}, {y}) with size {width}x{height}",
-                    class.as_str(),
-                    b.confidence,
-                );
+            gst::log!(
+                CAT,
+                imp = self,
+                "Adding object {} with confidence {} at ({x}, {y}) with size {width}x{height}",
+                class.as_str(),
+                b.confidence,
+            );
 
-                let od_meta = rmeta
-                    .add_od_mtd(class, x, y, width, height, b.confidence)
-                    .unwrap()
-                    .id();
-                let cls_meta = rmeta.add_one_cls_mtd(b.confidence, class).unwrap().id();
-                rmeta
-                    .set_relation(gst_analytics::RelTypes::RELATE_TO, od_meta, cls_meta)
-                    .unwrap();
+            let od_meta = rmeta
+                .add_od_mtd(class, x, y, width, height, b.confidence)
+                .unwrap()
+                .id();
+            let cls_meta = rmeta.add_one_cls_mtd(b.confidence, class).unwrap().id();
+            rmeta
+                .set_relation(gst_analytics::RelTypes::RELATE_TO, od_meta, cls_meta)
+                .unwrap();
+
+            num_detections += 1;
+            if num_detections >= settings.max_detections {
+                break;
             }
         }
 
@@ -450,7 +444,7 @@ fn find_yolo_tensor_meta(
 
 impl super::YoloTensorDecImpl for YoloTensorDec {}
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 struct BoundingBox {
     xmin: f32,
     xmax: f32,
