@@ -84,14 +84,6 @@ impl ObjectImpl for YoloTensorDec {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
             vec![
-                glib::ParamSpecFloat::builder("box-confidence-threshold")
-                    .nick("Box Confidence Threshold")
-                    .blurb("Boxes with a location confidence level inferior to this threshold will be excluded")
-                    .minimum(0.0)
-                    .maximum(1.0)
-                    .default_value(Settings::default().box_confidence_threshold)
-                    .mutable_playing()
-                    .build(),
                 glib::ParamSpecFloat::builder("class-confidence-threshold")
                     .nick("Class Confidence Threshold")
                     .blurb("Boxes with a confidence level inferior to this threshold will be excluded")
@@ -127,10 +119,6 @@ impl ObjectImpl for YoloTensorDec {
 
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
-            "box-confidence-threshold" => {
-                let mut settings = self.settings.lock().unwrap();
-                settings.box_confidence_threshold = value.get().unwrap();
-            }
             "class-confidence-threshold" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.class_confidence_threshold = value.get().unwrap();
@@ -153,10 +141,6 @@ impl ObjectImpl for YoloTensorDec {
 
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
-            "box-confidence-threshold" => {
-                let settings = self.settings.lock().unwrap();
-                settings.box_confidence_threshold.to_value()
-            }
             "class-confidence-threshold" => {
                 let settings = self.settings.lock().unwrap();
                 settings.class_confidence_threshold.to_value()
@@ -585,7 +569,50 @@ impl ObjectSubclass for YoloXTensorDec {
     type ParentType = super::YoloTensorDec;
 }
 
-impl ObjectImpl for YoloXTensorDec {}
+impl ObjectImpl for YoloXTensorDec {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
+            vec![
+                glib::ParamSpecFloat::builder("box-confidence-threshold")
+                    .nick("Box Confidence Threshold")
+                    .blurb("Boxes with a location confidence level inferior to this threshold will be excluded")
+                    .minimum(0.0)
+                    .maximum(1.0)
+                    .default_value(Settings::default().box_confidence_threshold)
+                    .mutable_playing()
+                    .build(),
+            ]
+        });
+
+        &PROPERTIES
+    }
+
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        match pspec.name() {
+            "box-confidence-threshold" => {
+                let obj = self.obj();
+                let base = obj.upcast_ref::<super::YoloTensorDec>();
+                let imp = base.imp();
+                let mut settings = imp.settings.lock().unwrap();
+                settings.box_confidence_threshold = value.get().unwrap();
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.name() {
+            "box-confidence-threshold" => {
+                let obj = self.obj();
+                let base = obj.upcast_ref::<super::YoloTensorDec>();
+                let imp = base.imp();
+                let settings = imp.settings.lock().unwrap();
+                settings.box_confidence_threshold.to_value()
+            }
+            _ => unimplemented!(),
+        }
+    }
+}
 
 impl GstObjectImpl for YoloXTensorDec {}
 
