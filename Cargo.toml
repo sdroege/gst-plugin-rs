@@ -158,6 +158,12 @@ opt-level = 3
 debug = true
 panic = 'unwind'
 
+[profile.release.package.aws-lc-sys]
+opt-level = 's'
+
+[profile.release.package.aws-lc-rs]
+opt-level = 's'
+
 [profile.dev]
 opt-level = 1
 lto = "off"
