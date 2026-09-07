@@ -48,7 +48,7 @@ pub(crate) fn clear_frame(vframe: &mut VideoFrame<Writable>) {
         VideoFormat::Uyvy => {
             let data = vframe.plane_data_mut(0).unwrap();
             for line in data.chunks_exact_mut(stride) {
-                for pixel in line[0..][..width * 2].chunks_exact_mut(4) {
+                for pixel in line[0..][..width * 2].as_chunks_mut::<4>().0.iter_mut() {
                     pixel[0] = BLACK.u;
                     pixel[1] = BLACK.y;
                     pixel[2] = BLACK.v;
@@ -61,7 +61,7 @@ pub(crate) fn clear_frame(vframe: &mut VideoFrame<Writable>) {
         VideoFormat::Uyvp => {
             let data = vframe.plane_data_mut(0).unwrap();
             for line in data.chunks_exact_mut(stride) {
-                for macro_pixel in line.chunks_exact_mut(5) {
+                for macro_pixel in line.as_chunks_mut::<5>().0.iter_mut() {
                     macro_pixel[0] = 0x80; // easier to hard-code this than do lots of bitshifting
                     macro_pixel[1] = 0x84;
                     macro_pixel[2] = 0x08;
@@ -75,7 +75,7 @@ pub(crate) fn clear_frame(vframe: &mut VideoFrame<Writable>) {
         VideoFormat::V308 => {
             let data = vframe.plane_data_mut(0).unwrap();
             for line in data.chunks_exact_mut(stride) {
-                for pixel in line[0..][..width * 3].chunks_exact_mut(3) {
+                for pixel in line[0..][..width * 3].as_chunks_mut::<3>().0.iter_mut() {
                     pixel[0] = BLACK.y;
                     pixel[1] = BLACK.u;
                     pixel[2] = BLACK.v;

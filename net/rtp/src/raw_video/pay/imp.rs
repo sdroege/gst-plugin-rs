@@ -482,7 +482,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
 
                     let scratch_space = &mut scratch_space_vec;
 
-                    let mut scratch_iter = scratch_space.chunks_exact_mut(3);
+                    let mut scratch_iter = scratch_space.as_chunks_mut::<3>().0.iter_mut();
 
                     for chunks in &packet.chunks {
                         let line_number = chunks.y_off as usize;
@@ -500,7 +500,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
                         let pixels = &line[byte_offset..][..length];
 
                         for (src_pixel, dest_pixel) in
-                            std::iter::zip(pixels.chunks_exact(3), &mut scratch_iter)
+                            std::iter::zip(pixels.as_chunks::<3>().0.iter(), &mut scratch_iter)
                         {
                             dest_pixel[0] = src_pixel[1]; // Cb
                             dest_pixel[1] = src_pixel[0]; // Y
@@ -530,7 +530,10 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
 
                     let scratch_space = &mut scratch_space_vec;
 
-                    let mut scratch_iter = scratch_space.chunks_exact_mut(PGROUP_SIZE_I420);
+                    let mut scratch_iter = scratch_space
+                        .as_chunks_mut::<PGROUP_SIZE_I420>()
+                        .0
+                        .iter_mut();
 
                     for chunks in &packet.chunks {
                         let y = chunks.y_off as usize;
@@ -561,8 +564,8 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
                         let v_pixels = &v_line[x / 2..][..n_pixels / 2];
 
                         for (y1, y2, u, v, dest_pgroup) in izip!(
-                            y1_pixels.chunks_exact(2),
-                            y2_pixels.chunks_exact(2),
+                            y1_pixels.as_chunks::<2>().0.iter(),
+                            y2_pixels.as_chunks::<2>().0.iter(),
                             u_pixels,
                             v_pixels,
                             scratch_iter.by_ref()
@@ -599,7 +602,10 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
 
                     let scratch_space = &mut scratch_space_vec;
 
-                    let mut scratch_iter = scratch_space.chunks_exact_mut(PGROUP_SIZE_Y41B);
+                    let mut scratch_iter = scratch_space
+                        .as_chunks_mut::<PGROUP_SIZE_Y41B>()
+                        .0
+                        .iter_mut();
 
                     for chunks in &packet.chunks {
                         let y = chunks.y_off as usize;
@@ -620,7 +626,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
                         let v_pixels = &v_line[x / 4..][..n_pixels / 4];
 
                         for (y, u, v, dest_pgroup) in izip!(
-                            y_pixels.chunks_exact(4),
+                            y_pixels.as_chunks::<4>().0.iter(),
                             u_pixels,
                             v_pixels,
                             scratch_iter.by_ref()

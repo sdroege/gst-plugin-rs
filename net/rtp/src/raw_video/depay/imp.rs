@@ -508,7 +508,9 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
         // Figure out number of chunks
 
         let n_chunks = payload
-            .chunks_exact(VRAW_CHUNK_HDR_LEN)
+            .as_chunks::<VRAW_CHUNK_HDR_LEN>()
+            .0
+            .iter()
             .enumerate()
             .find(|(_, c)| c[4] & 0x80 == 0x00) // Continuation flag
             .map(|(i, _)| i + 1);
@@ -547,7 +549,9 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
         let (preamble, mut payload) = payload.split_at(preamble_length);
 
         for (i, (length, y, x)) in preamble
-            .chunks_exact(6)
+            .as_chunks::<6>()
+            .0
+            .iter()
             .map(|c| {
                 (
                     u16::from_be_bytes([c[0], c[1]]) as usize, // length
@@ -694,9 +698,10 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
                     let byte_offset = x * pstride;
                     let pixels = &mut line[byte_offset..][..length];
 
-                    for (dest, src) in
-                        std::iter::zip(pixels.chunks_exact_mut(3), chunk_data.chunks_exact(3))
-                    {
+                    for (dest, src) in std::iter::zip(
+                        pixels.as_chunks_mut::<3>().0.iter_mut(),
+                        chunk_data.as_chunks::<3>().0.iter(),
+                    ) {
                         dest[0] = src[1];
                         dest[1] = src[0];
                         dest[2] = src[2];
@@ -774,11 +779,11 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
                     let v_pixels = &mut v_line[x / 2..][..n_pixels.next_multiple_of(2) / 2];
 
                     for (y1, y2, u, v, src) in izip!(
-                        y1_pixels.chunks_exact_mut(2),
-                        y2_pixels.chunks_exact_mut(2),
+                        y1_pixels.as_chunks_mut::<2>().0.iter_mut(),
+                        y2_pixels.as_chunks_mut::<2>().0.iter_mut(),
                         u_pixels,
                         v_pixels,
-                        chunk_data.chunks_exact(PGROUP_SIZE_I420)
+                        chunk_data.as_chunks::<PGROUP_SIZE_I420>().0.iter(),
                     ) {
                         y1[0] = src[0];
                         y1[1] = src[1];
@@ -841,10 +846,10 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
                     let v_pixels = &mut v_line[x / 4..][..n_pixels.next_multiple_of(4) / 4];
 
                     for (y, u, v, src) in izip!(
-                        y_pixels.chunks_exact_mut(4),
+                        y_pixels.as_chunks_mut::<4>().0.iter_mut(),
                         u_pixels,
                         v_pixels,
-                        chunk_data.chunks_exact(PGROUP_SIZE_Y41B)
+                        chunk_data.as_chunks::<PGROUP_SIZE_Y41B>().0.iter(),
                     ) {
                         *u = src[0];
                         y[0] = src[1];
