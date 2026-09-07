@@ -160,6 +160,14 @@ impl ObjectImpl for YoloTensorDec {
             _ => unimplemented!(),
         }
     }
+
+    fn constructed(&self) {
+        self.parent_constructed();
+
+        self.obj()
+            .sink_pad()
+            .unset_pad_flags(gst::PadFlags::ACCEPT_INTERSECT);
+    }
 }
 
 impl GstObjectImpl for YoloTensorDec {}
