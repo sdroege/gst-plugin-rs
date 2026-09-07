@@ -47,6 +47,11 @@ function Run-Tests {
         $local_exclude += @("--exclude", "gst-plugin-compress")
         $local_exclude += @("--exclude", "gst-plugin-webrtc")
         $local_exclude += @("--exclude", "gst-plugin-reqwest")
+        $local_exclude += @("--exclude", "gst-plugin-icecast")
+        $local_exclude += @("--exclude", "gst-plugin-rtsp")
+        $local_exclude += @("--exclude", "gst-plugin-quinn")
+        $local_exclude += @("--exclude", "gst-plugin-webrtc-signalling")
+        $local_exclude += @("--exclude", "gst-plugin-uriplaylistbin")
     }
 
     Write-Host "Features: $Features"
