@@ -264,7 +264,12 @@ impl BaseTransformImpl for YoloTensorDec {
                 (tensor.dims()[1], tensor.dims()[2])
             }
         };
-        let num_classes = num_fields - 5;
+        // YOLOv8 has no box confidence field, fields 4.. are class scores.
+        // YOLOX has a box confidence field at index 4, fields 5.. are class scores.
+        let num_classes = match tensor_format {
+            YoloTensorFormat::V8 => num_fields - 4,
+            YoloTensorFormat::X => num_fields - 5,
+        };
         gst::log!(
             CAT,
             imp = self,
@@ -406,7 +411,8 @@ fn find_yolo_tensor_meta(
     buffer
         .iter_meta::<gst_analytics::TensorMeta>()
         .find(|meta| {
-            let (model, order) = match tensor_format_from_type(type_) {
+            let format = tensor_format_from_type(type_);
+            let (model, order) = match format {
                 YoloTensorFormat::V8 => (YOLOV8_OUT, gst_analytics::TensorDimOrder::ColMajor),
                 YoloTensorFormat::X => (YOLOX_OUT, gst_analytics::TensorDimOrder::RowMajor),
             };
@@ -424,17 +430,14 @@ fn find_yolo_tensor_meta(
                 return false;
             }
 
-            // Need at least the bounding box (4) and the box confidence (1)
-            // and at least the confidence for a single class (1).
-            let num_fields = if type_ == super::YoloV8TensorDec::static_type() {
-                tensor.dims()[1]
-            } else if type_ == super::YoloXTensorDec::static_type() {
-                tensor.dims()[2]
-            } else {
-                unreachable!()
+            // Need at least the bounding box (4) and the confidence for a single
+            // class (1). YOLOX additionally has a box confidence field (1).
+            let (num_fields, min_fields) = match format {
+                YoloTensorFormat::V8 => (tensor.dims()[1], 4 + 1),
+                YoloTensorFormat::X => (tensor.dims()[2], 4 + 1 + 1),
             };
 
-            if num_fields < 4 + 1 + 1 {
+            if num_fields < min_fields {
                 return false;
             }
 
@@ -639,7 +642,7 @@ impl ElementImpl for YoloXTensorDec {
                                     gst::Array::from_values([
                                         1i32.to_send_value(),
                                         gst::IntRange::<i32>::new(0, i32::MAX).to_send_value(),
-                                        gst::IntRange::<i32>::new(5, i32::MAX).to_send_value(),
+                                        gst::IntRange::<i32>::new(6, i32::MAX).to_send_value(),
                                     ]),
                                 )
                                 .field("dims-order", "row-major")
