@@ -4286,6 +4286,8 @@ impl BaseWebRTCSink {
 
             let fec_percentage = fec_ratio * 50f64;
             let encoders_bitrate = (bitrate as f64) / (1. + (fec_percentage / 100.));
+            let encoders_bitrate =
+                encoders_bitrate / (1. + (settings.rtx_percentage as f64 / 100.));
 
             let encoder_bitrate = (encoders_bitrate / (n_encoders as f64)) as i32;
 
