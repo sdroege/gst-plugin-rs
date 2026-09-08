@@ -198,6 +198,15 @@ impl ElementImpl for RtpRawVideoDepay {
                             .field("depth", "10")
                             .build(),
                     )
+                    .structure(
+                        gst::Structure::builder("application/x-rtp")
+                            .field("media", "video")
+                            .field("clock-rate", 90000i32)
+                            .field("encoding-name", "RAW")
+                            .field("sampling", "GRAYSCALE")
+                            .field("depth", gst::List::new(["8", "10", "12", "14", "16"]))
+                            .build(),
+                    )
                     .build(),
             )
             .unwrap();
@@ -207,11 +216,15 @@ impl ElementImpl for RtpRawVideoDepay {
                 gst::PadDirection::Src,
                 gst::PadPresence::Always,
                 &gst_video::VideoCapsBuilder::new()
+                    // Note: DEF STAN 00-002 doesn't specify endianness for 16 bits grayscale samples and
+                    // doesn't propose any SDP attribute for that purpose. We'll assume network byte order.
                     .format_list([
                         VideoFormat::Rgb,
                         VideoFormat::Rgba,
                         VideoFormat::Bgr,
                         VideoFormat::Bgra,
+                        VideoFormat::Gray8,
+                        VideoFormat::Gray16Be,
                         VideoFormat::V308,
                         VideoFormat::Uyvy,
                         VideoFormat::I420,
@@ -304,6 +317,8 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
             mapped
         });
 
+        // TODO handle grayscale 16 TI specific attributes DEF STAN 00-082 § B.6.2
+
         let fmt = match (sampling, depth) {
             // Todo: could also support some of the 5/6-bit depth RGB variations from RFC-4421
             // Todo: could probably support higher-depth RGB variations quite easily
@@ -312,6 +327,10 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
             ("RGBA", 8) => VideoFormat::Rgba,
             ("BGR", 8) => VideoFormat::Bgr,
             ("BGRA", 8) => VideoFormat::Bgra,
+            ("GRAYSCALE", 8) => VideoFormat::Gray8,
+            // TODO map 10, 12 & 14 to their actual format
+            // when this MR is merged https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/10584
+            ("GRAYSCALE", depth) if [10, 12, 14, 16].contains(&depth) => VideoFormat::Gray16Be,
             // Todo: for bonus points we could support different output formats for
             // the various YUV subsamplings (e.g. packed and planar variations)
             ("YCbCr-4:4:4", 8) => VideoFormat::V308,
@@ -329,18 +348,25 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
             }
         };
 
-        let framerate = s.get::<&str>("exactframerate").ok().and_then(|framerate| {
-            if let Some((fps_n, fps_d)) = framerate.split_once('/').and_then(|(fps_n, fps_d)| {
-                Option::zip(fps_n.parse::<i32>().ok(), fps_d.parse::<i32>().ok())
-            }) {
-                Some(gst::Fraction::new(fps_n, fps_d))
-            } else if let Ok(fps_n) = framerate.parse::<i32>() {
-                Some(gst::Fraction::new(fps_n, 1))
-            } else {
-                gst::warning!(CAT, imp = self, "Unsupported framerate {framerate}");
-                None
-            }
-        });
+        let framerate = s
+            .get_optional::<&str>("exactframerate")
+            .ok()
+            .flatten()
+            .or_else(|| s.get_optional::<&str>("framerate").ok().flatten())
+            .and_then(|framerate| {
+                if let Some((fps_n, fps_d)) =
+                    framerate.split_once('/').and_then(|(fps_n, fps_d)| {
+                        Option::zip(fps_n.parse::<i32>().ok(), fps_d.parse::<i32>().ok())
+                    })
+                {
+                    Some(gst::Fraction::new(fps_n, fps_d))
+                } else if let Ok(fps_n) = framerate.parse::<i32>() {
+                    Some(gst::Fraction::new(fps_n, 1))
+                } else {
+                    gst::warning!(CAT, imp = self, "Unsupported framerate {framerate}");
+                    None
+                }
+            });
 
         let chroma_site = if ["YCbCr-4:2:2", "YCbCr-4:2:0", "YCbCr-4:1:1"].contains(&sampling) {
             // RFC 4175 defines that 0 (COSITED) is the default and ST2110-20 defines
@@ -397,6 +423,8 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
             None
         };
 
+        // TODO handle grayscale 16 TI specific attributes DEF STAN 00-082 § B.6.2
+
         let video_info = VideoInfo::builder(fmt, width, height)
             .colorimetry_if_some(colorimetry.as_ref())
             .fps_if_some(framerate)
@@ -434,6 +462,8 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
         let mut state = self.state.borrow_mut();
 
         gst::trace!(CAT, imp = self, "Got packet {packet:?}");
+
+        // TODO extract grayscale FDR TI metadata from header extension DEF STAN 00-082 § B.6.2
 
         // Push out frame if finished
         if let Some(output_frame) = state.output_frame.as_ref()
@@ -606,7 +636,12 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
 
             match format {
                 // Formats where we can just memcpy pixels directly from source to dest
-                VideoFormat::Rgb | VideoFormat::Rgba | VideoFormat::Bgr | VideoFormat::Bgra => {
+                VideoFormat::Rgb
+                | VideoFormat::Rgba
+                | VideoFormat::Bgr
+                | VideoFormat::Bgra
+                | VideoFormat::Gray8
+                | VideoFormat::Gray16Be => {
                     // Clip length if needed
                     if x + n_pixels > width {
                         gst::warning!(

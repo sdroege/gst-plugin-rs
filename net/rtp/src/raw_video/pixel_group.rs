@@ -46,6 +46,18 @@ impl PixelGroup {
                 y_inc: 1,
                 direct: true,
             },
+            VideoFormat::Gray8 => PixelGroup {
+                size: 1,
+                x_inc: 1,
+                y_inc: 1,
+                direct: true,
+            },
+            VideoFormat::Gray16Be => PixelGroup {
+                size: 2,
+                x_inc: 1,
+                y_inc: 1,
+                direct: true,
+            },
             VideoFormat::V308 => PixelGroup {
                 size: 3,
                 x_inc: 1,

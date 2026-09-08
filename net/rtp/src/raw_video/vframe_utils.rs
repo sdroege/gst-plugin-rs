@@ -35,7 +35,7 @@ pub(crate) fn clear_frame(vframe: &mut VideoFrame<Writable>) {
     let pstride = vframe.comp_pstride(0) as usize;
 
     // RGB variants: we can just splat zeroes
-    if format_info.is_rgb() {
+    if format_info.is_rgb() || format_info.is_gray() {
         let data = vframe.plane_data_mut(0).unwrap();
         for line in data.chunks_exact_mut(stride) {
             line[0..][..width * pstride].fill(0);

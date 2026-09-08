@@ -24,7 +24,7 @@ fn calc_active_bytes_per_line(video_info: &gst_video::VideoInfo) -> [usize; 4] {
     let width = video_info.width() as usize;
 
     match video_info.format() {
-        Rgb | Rgba | Bgr | Bgra | V308 | Uyvy => {
+        Rgb | Rgba | Bgr | Bgra | Gray8 | Gray16Be | V308 | Uyvy => {
             let pstride = video_info.comp_pstride(0) as usize;
             [pstride * width, 0, 0, 0]
         }
@@ -119,6 +119,7 @@ fn check_test_frame(
     Ok(())
 }
 
+#[track_caller]
 fn run_raw_video_test(
     format: gst_video::VideoFormat,
     width: u32,
@@ -237,6 +238,32 @@ fn test_rtpvraw_bgra() {
     run_raw_video_test(gst_video::VideoFormat::Bgra, 319, 240, 224);
     run_raw_video_test(gst_video::VideoFormat::Bgra, 321, 241, 226);
     run_raw_video_test(gst_video::VideoFormat::Bgra, 319, 239, 223);
+}
+
+#[test]
+fn test_rtpvraw_gray8() {
+    run_raw_video_test(gst_video::VideoFormat::Gray8, 320, 240, 57);
+    run_raw_video_test(gst_video::VideoFormat::Gray8, 320, 241, 57);
+    run_raw_video_test(gst_video::VideoFormat::Gray8, 320, 239, 57);
+    run_raw_video_test(gst_video::VideoFormat::Gray8, 321, 240, 57);
+    run_raw_video_test(gst_video::VideoFormat::Gray8, 319, 240, 57);
+    run_raw_video_test(gst_video::VideoFormat::Gray8, 321, 241, 58);
+    run_raw_video_test(gst_video::VideoFormat::Gray8, 319, 239, 57);
+    run_raw_video_test(gst_video::VideoFormat::Gray8, 640, 480, 225);
+}
+
+#[test]
+fn test_rtpvraw_gray16() {
+    run_raw_video_test(gst_video::VideoFormat::Gray16Be, 320, 240, 113);
+    run_raw_video_test(gst_video::VideoFormat::Gray16Be, 320, 241, 113);
+    run_raw_video_test(gst_video::VideoFormat::Gray16Be, 320, 239, 112);
+    run_raw_video_test(gst_video::VideoFormat::Gray16Be, 321, 240, 113);
+    run_raw_video_test(gst_video::VideoFormat::Gray16Be, 319, 240, 112);
+    run_raw_video_test(gst_video::VideoFormat::Gray16Be, 321, 241, 114);
+    run_raw_video_test(gst_video::VideoFormat::Gray16Be, 319, 239, 112);
+    run_raw_video_test(gst_video::VideoFormat::Gray16Be, 640, 480, 448);
+    // Example mentionned in DEF STAN 00-082 § B.6.1
+    run_raw_video_test(gst_video::VideoFormat::Gray16Be, 640, 512, 478);
 }
 
 #[test]

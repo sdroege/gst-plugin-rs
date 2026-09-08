@@ -240,6 +240,7 @@ pub fn run_test_pipeline_and_validate_data<T: Fn(&[u8], usize, usize) -> anyhow:
 }
 
 // Validation function that gets the full buffer instead of just the byte slice
+#[track_caller]
 pub fn run_test_pipeline_and_validate_buffer<
     T: Fn(&gst::Buffer, usize, usize) -> anyhow::Result<()>,
 >(
@@ -291,6 +292,7 @@ pub fn run_test_pipeline_full(
 
 // Validation of payloader output can be added if there's a concrete need for it
 #[allow(clippy::too_many_arguments)]
+#[track_caller]
 pub fn run_test_pipeline_full_and_validate_data<
     T: Fn(&[u8], usize, usize) -> anyhow::Result<()>,
 >(
@@ -321,6 +323,7 @@ pub fn run_test_pipeline_full_and_validate_data<
 //
 // Validation function that gets the full buffer instead of just the byte slice
 #[allow(clippy::too_many_arguments)]
+#[track_caller]
 pub fn run_test_pipeline_full_and_validate_buffer<
     T: Fn(&gst::Buffer, usize, usize) -> anyhow::Result<()>,
 >(

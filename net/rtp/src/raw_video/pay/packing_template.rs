@@ -12,6 +12,8 @@
 // RTP packets. RTP packets can contain one or multiple line fragments.
 use smallvec::{SmallVec, smallvec};
 
+use crate::raw_video::pixel_group::PixelGroup;
+
 pub(crate) const VRAW_EXT_SEQNUM_LEN: usize = 2;
 pub(crate) const VRAW_CHUNK_HDR_LEN: usize = 6;
 
@@ -99,19 +101,17 @@ impl FramePackingTemplate {
         max_payload_size: usize,
         vinfo: &gst_video::VideoInfo,
         field: u8,
-        pgroup_size: usize,
-        x_inc: usize,
-        y_inc: usize,
+        pgroup: PixelGroup,
     ) -> Result<FramePackingTemplate, ()> {
         assert!(field == 0 || field == 1);
-        assert!(pgroup_size > 0);
+        assert!(pgroup.size() > 0);
 
         let max_payload_size = max_payload_size - VRAW_EXT_SEQNUM_LEN;
 
         let mut packing_template =
             FramePackingTemplate::new_for_size(vinfo.size(), max_payload_size);
 
-        let mut pbuilder = PacketBuilder::new(max_payload_size, pgroup_size);
+        let mut pbuilder = PacketBuilder::new(max_payload_size, pgroup.size());
 
         let height = vinfo.height() as usize;
         let width = vinfo.width() as usize;
@@ -119,7 +119,7 @@ impl FramePackingTemplate {
         // Template caps ensure that already, just letting the compiler know
         assert!(width <= u16::MAX as usize && height <= u16::MAX as usize);
 
-        for line in (0..height).step_by(y_inc) {
+        for line in (0..height).step_by(pgroup.y_inc()) {
             let mut x = 0;
 
             while x < width {
@@ -128,7 +128,7 @@ impl FramePackingTemplate {
                     packing_template.add(packet);
                 }
 
-                let pgroups_left_in_line = (width - x).div_ceil(x_inc);
+                let pgroups_left_in_line = (width - x).div_ceil(pgroup.x_inc());
 
                 let space_left_in_pgroups = pbuilder.space_left_in_pgroups();
 
@@ -136,7 +136,7 @@ impl FramePackingTemplate {
 
                 pbuilder.add_line_chunk(x, line, pgroups_to_payload);
 
-                x += pgroups_to_payload * x_inc;
+                x += pgroups_to_payload * pgroup.x_inc();
             }
         }
 

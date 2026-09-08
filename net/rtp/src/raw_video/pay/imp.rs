@@ -62,7 +62,7 @@ use std::{num::Wrapping, sync::LazyLock};
 
 use gst_video::{VideoFormat, VideoFrame, VideoFrameExt, VideoInfo};
 
-use crate::basepay::RtpBasePay2Ext;
+use crate::{basepay::RtpBasePay2Ext, raw_video::pixel_group::PixelGroup};
 
 use super::packing_template::{FramePackingTemplate, VRAW_CHUNK_HDR_LEN, VRAW_EXT_SEQNUM_LEN};
 
@@ -122,24 +122,38 @@ impl ElementImpl for RtpRawVideoPay {
                 "src",
                 gst::PadDirection::Src,
                 gst::PadPresence::Always,
-                &gst::Caps::builder("application/x-rtp")
-                    .field("media", "video")
-                    .field("clock-rate", 90000i32)
-                    .field("encoding-name", "RAW")
-                    .field(
-                        "sampling",
-                        gst::List::new([
-                            "RGB",
-                            "RGBA",
-                            "BGR",
-                            "BGRA",
-                            "YCbCr-4:4:4",
-                            "YCbCr-4:2:2",
-                            "YCbCr-4:2:0",
-                            "YCbCr-4:1:1",
-                        ]),
+                &gst::Caps::builder_full()
+                    .structure(
+                        gst::Structure::builder("application/x-rtp")
+                            .field("media", "video")
+                            .field("clock-rate", 90000i32)
+                            .field("encoding-name", "RAW")
+                            .field(
+                                "sampling",
+                                gst::List::new([
+                                    "RGB",
+                                    "RGBA",
+                                    "BGR",
+                                    "BGRA",
+                                    "YCbCr-4:4:4",
+                                    "YCbCr-4:2:2",
+                                    "YCbCr-4:2:0",
+                                    "YCbCr-4:1:1",
+                                ]),
+                            )
+                            .field("depth", gst::List::new(["8", "10", "12", "16"]))
+                            .build(),
                     )
-                    .field("depth", gst::List::new(["8", "10", "12", "16"]))
+                    .structure(
+                        // TODO handle grayscale FDR TI metadata header extension DEF STAN 00-082 § B.6.2
+                        gst::Structure::builder("application/x-rtp")
+                            .field("media", "video")
+                            .field("clock-rate", 90000i32)
+                            .field("encoding-name", "RAW")
+                            .field("sampling", "GRAYSCALE")
+                            .field("depth", gst::List::new(["8", "16"]))
+                            .build(),
+                    )
                     .build(),
             )
             .unwrap();
@@ -149,12 +163,14 @@ impl ElementImpl for RtpRawVideoPay {
                 gst::PadDirection::Sink,
                 gst::PadPresence::Always,
                 &gst_video::VideoCapsBuilder::new()
-                    // Note: not advertising Ayuv here, which was a mistake and should be v308 really
+                    // Notes: not advertising Ayuv here, which was a mistake and should be v308 really
                     .format_list([
                         VideoFormat::Rgb,
                         VideoFormat::Rgba,
                         VideoFormat::Bgr,
                         VideoFormat::Bgra,
+                        VideoFormat::Gray8,
+                        VideoFormat::Gray16Be,
                         VideoFormat::V308,
                         VideoFormat::Uyvy,
                         VideoFormat::I420,
@@ -191,18 +207,19 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
 
         gst::info!(CAT, imp = self, "Got caps, video info: {info:?}");
 
-        let (sampling, pgroup, x_inc, y_inc) = match info.format() {
-            VideoFormat::Rgb => ("RGB", 3, 1, 1),
-            VideoFormat::Rgba => ("RGBA", 4, 1, 1),
-            VideoFormat::Bgr => ("BGR", 3, 1, 1),
-            VideoFormat::Bgra => ("BGRA", 4, 1, 1),
+        let sampling = match info.format() {
+            VideoFormat::Rgb => "RGB",
+            VideoFormat::Rgba => "RGBA",
+            VideoFormat::Bgr => "BGR",
+            VideoFormat::Bgra => "BGRA",
+            VideoFormat::Gray8 | VideoFormat::Gray16Be => "GRAYSCALE",
             // Not advertising AYUV since we just drop the alpha then, should've been v308 instead
-            // VideoFormat::Ayuv => ("YCbCr-4:4:4", 3, 1, 1),
-            VideoFormat::V308 => ("YCbCr-4:4:4", 3, 1, 1),
-            VideoFormat::Uyvy => ("YCbCr-4:2:2", 4, 2, 1),
-            VideoFormat::I420 => ("YCbCr-4:2:0", 6, 2, 2),
-            VideoFormat::Y41b => ("YCbCr-4:1:1", 6, 4, 1),
-            VideoFormat::Uyvp => ("YCbCr-4:2:2", 5, 2, 1),
+            // VideoFormat::Ayuv => "YCbCr-4:4:4",
+            VideoFormat::V308 => "YCbCr-4:4:4",
+            VideoFormat::Uyvy => "YCbCr-4:2:2",
+            VideoFormat::I420 => "YCbCr-4:2:0",
+            VideoFormat::Y41b => "YCbCr-4:1:1",
+            VideoFormat::Uyvp => "YCbCr-4:2:2",
             _ => {
                 gst::error!(
                     CAT,
@@ -213,6 +230,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
                 return false;
             }
         };
+        let pgroup = PixelGroup::from_video_info(&info).expect("supported formats filtered above");
 
         // We always have the same depths for all components (we don't support 5:6:5 RGB yet)
         let depth = info.comp_depth(0);
@@ -271,11 +289,13 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
             .field("encoding-name", "RAW")
             .field("clock-rate", 90000i32)
             .field("sampling", sampling)
-            .field("width", format!("{}", info.width()))
-            .field("height", format!("{}", info.height()))
-            .field("depth", format!("{depth}"))
+            .field("width", info.width().to_string())
+            .field("height", info.height().to_string())
+            .field("depth", depth.to_string())
             .field_if("interlace", "true", info.is_interlaced())
-            .field_if_some("exactframerate", framerate)
+            .field_if_some("exactframerate", framerate.clone())
+            // DEF STAN 00-082 § B.5.2 mentions 'framerate'
+            .field_if_some("framerate", framerate)
             .field_if_some("chroma-position", chroma_position);
         if let Some(fmtp) = fmtp_color {
             caps_builder = caps_builder.field("colorimetry", fmtp.colorimetry);
@@ -286,6 +306,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
                 caps_builder = caps_builder.field("range", range);
             }
         }
+        // TODO also add grayscale FDR TI specifics DEF STAN 00-082 § B.6.3
         let mut src_caps = caps_builder.build();
 
         // Special handling for BT601-5 vs. BT601 and BT709-2 vs. BT709. The dash-less versions
@@ -327,18 +348,14 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
 
         self.obj().set_src_caps(&src_caps);
 
-        let y_inc = if info.is_interlaced() {
-            y_inc * 2
-        } else {
-            y_inc
-        };
-
         gst::info!(
             CAT,
             imp = self,
-            "Format config: {sampling}, pgroup {pgroup}, \
-             x_inc {x_inc}, y_inc {y_inc} depth {depth}, \
-             interlaced {}",
+            "Format config: {sampling}, pgroup size {}, x_inc {}, y_inc {}, \
+            depth {depth}, interlaced {}",
+            pgroup.size(),
+            pgroup.x_inc(),
+            pgroup.y_inc(),
             info.is_interlaced()
         );
 
@@ -347,8 +364,9 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
         let max_payload_size = self.obj().max_payload_size() as usize;
 
         // Build a template for how to pack the frame data into packets
-        let Ok(packing_template) =
-            FramePackingTemplate::new(max_payload_size, &info, 0, pgroup, x_inc, y_inc)
+        // TODO needs provision for grayscale FDR TI metadata DEF STAN 00-082 § B.6.2
+        // FIXME handle grayscale packing
+        let Ok(packing_template) = FramePackingTemplate::new(max_payload_size, &info, 0, pgroup)
         else {
             gst::error!(CAT, imp = self, "Failed to create frame packing template");
             return false;
@@ -398,6 +416,8 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
 
         let packing_template = packing_template.as_ref().unwrap();
 
+        // TODO handle grayscale FDR TI metadata header extension DEF STAN 00-082 § B.6.2
+
         // Temporary buffer that can be used for swizzling/packing pixels before payloading
         let mut scratch_space_vec = scratch_space_vec;
 
@@ -428,7 +448,9 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
                 | VideoFormat::Rgba
                 | VideoFormat::Bgr
                 | VideoFormat::Bgra
-                | VideoFormat::Uyvy => {
+                | VideoFormat::Uyvy
+                | VideoFormat::Gray8
+                | VideoFormat::Gray16Be => {
                     let data = vframe.plane_data(0).unwrap();
                     let stride = vframe.plane_stride()[0] as usize;
                     let pstride = vframe.comp_pstride(0) as usize;
