@@ -869,6 +869,7 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property("gop-size", 2560i32);
                 enc.set_property_from_str("rc-mode", "cbr-ld-hq");
                 enc.set_property("zerolatency", true);
+                enc.set_property("vbv-buffer-size", start_bitrate / 10000);
             }
             "vaapih264enc" | "vaapivp8enc" | "vaapivp9enc" => {
                 enc.set_property("bitrate", start_bitrate / 1000);
@@ -1388,6 +1389,10 @@ impl VideoEncoder {
             | "vaapivp9enc" | "qsvh264enc" | "nvav1enc" | "vpuenc_h264" | "vpuenc_hevc"
             | "vavp8enc" | "vavp8lpenc" | "vavp9enc" | "vavp9lpenc" | "vah264enc"
             | "vah264lpenc" | "vah265enc" | "vah265lpenc" | "vaav1enc" | "vaav1lpenc" => {
+                if ["nvh264enc", "nvh265enc"].contains(&self.factory_name.as_str()) {
+                    self.element
+                        .set_property("vbv-buffer-size", (bitrate / 10000) as u32);
+                }
                 self.element
                     .set_property("bitrate", (bitrate / 1000) as u32);
             }
