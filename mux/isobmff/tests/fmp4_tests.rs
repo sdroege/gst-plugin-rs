@@ -5151,15 +5151,8 @@ fn test_large_gop_split_at_fragment_boundary_chunked() {
 
     h.push_event(gst::event::Eos::new());
 
-    while h.buffers_in_queue() > 0 {
-        let buf = h.pull().unwrap();
-        if !buf.flags().contains(gst::BufferFlags::HEADER) {
-            num_buffers += 1;
-        }
-    }
-
-    assert_eq!(num_buffers, 20);
-
+    // Pull all events first, blocking on EOS until the aggregator has finished
+    // processing and pushed all remaining buffers downstream.
     let ev = h.pull_event().unwrap();
     assert_eq!(ev.type_(), gst::EventType::StreamStart);
     let ev = h.pull_event().unwrap();
@@ -5168,4 +5161,13 @@ fn test_large_gop_split_at_fragment_boundary_chunked() {
     assert_eq!(ev.type_(), gst::EventType::Segment);
     let ev = h.pull_event().unwrap();
     assert_eq!(ev.type_(), gst::EventType::Eos);
+
+    while h.buffers_in_queue() > 0 {
+        let buf = h.pull().unwrap();
+        if !buf.flags().contains(gst::BufferFlags::HEADER) {
+            num_buffers += 1;
+        }
+    }
+
+    assert_eq!(num_buffers, 22);
 }
