@@ -36,6 +36,9 @@ mod yolotensordec;
 #[cfg(feature = "v1_30")]
 mod hand;
 
+#[cfg(feature = "v1_30")]
+mod ctctexttensordec;
+
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "v1_30")]
     plugin.set_static_features_flag();
@@ -58,6 +61,9 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
     #[cfg(feature = "v1_30")]
     hand::register(plugin)?;
+
+    #[cfg(feature = "v1_30")]
+    ctctexttensordec::register(plugin)?;
 
     Ok(())
 }

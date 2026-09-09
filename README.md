@@ -62,6 +62,7 @@ You will find the following plugins in this repository:
     - `analytics`:
       - `analyticscombiner`: Analytics combiner / batcher element
       - `analyticssplitter`: Analytics batch splitter element
+      - `ctctexttensordec`: CTC text recognition tensor decoder
       - `handdetectiontensordec`: Tensor decoder for hand detection tensors.
       - `handlandmarktensordec`: Tensor decoder for hand landmark tensors with keypoint visibility metadata attachment.
       - `onvifmeta2relationmeta`: Convert ONVIF metadata to relation metas

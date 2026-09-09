@@ -24,6 +24,7 @@ xmltree = "0.12"
 glib = { workspace = true, features = ["v2_62"] }
 byte-slice-cast = "1"
 itertools = "0.15"
+smol_str = { version = "0.3", optional = true }
 
 [dev-dependencies]
 gst-check.workspace = true
@@ -36,7 +37,7 @@ static = []
 capi = []
 doc = []
 v1_28 = ["gst-analytics/v1_28"]
-v1_30 = ["v1_28", "gst/v1_30", "gst-analytics/v1_30"]
+v1_30 = ["v1_28", "gst/v1_30", "gst-analytics/v1_30", "dep:smol_str"]
 
 [[test]]
 name = "analyticscombiner"
