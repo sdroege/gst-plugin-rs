@@ -1093,11 +1093,7 @@ impl UdpRecvSocket {
             };
 
             let recv_res = self.socket.try_io(|| unsafe {
-                use std::{
-                    mem,
-                    net::{SocketAddrV4, SocketAddrV6},
-                    os::fd::AsRawFd,
-                };
+                use std::{mem, os::fd::AsRawFd};
 
                 'next_packet: loop {
                     let mut name = mem::MaybeUninit::<libc::sockaddr_storage>::zeroed();
