@@ -529,6 +529,7 @@ impl ElementImpl for YoloV8TensorDec {
                         )
                         .build(),
                 )
+                .any_features()
                 .build();
 
             let sink_pad_template = gst::PadTemplate::new(
@@ -539,7 +540,7 @@ impl ElementImpl for YoloV8TensorDec {
             )
             .unwrap();
 
-            let src_caps = gst_video::VideoCapsBuilder::new().build();
+            let src_caps = gst_video::VideoCapsBuilder::new().any_features().build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
@@ -659,6 +660,7 @@ impl ElementImpl for YoloXTensorDec {
                         )
                         .build(),
                 )
+                .any_features()
                 .build();
 
             let sink_pad_template = gst::PadTemplate::new(
@@ -669,7 +671,7 @@ impl ElementImpl for YoloXTensorDec {
             )
             .unwrap();
 
-            let src_caps = gst_video::VideoCapsBuilder::new().build();
+            let src_caps = gst_video::VideoCapsBuilder::new().any_features().build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
