@@ -15,7 +15,7 @@ gst-audio = { workspace = true, features = ["v1_16"] }
 anyhow = "1"
 futures = "0.3"
 tokio = { version = "1.0", features = [ "full" ] }
-deepgram = "0.10"
+deepgram = "0.7"
 async-stream = "0.3"
 bytes = "1"
 
