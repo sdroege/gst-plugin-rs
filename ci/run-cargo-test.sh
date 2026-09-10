@@ -16,18 +16,7 @@ parent="${CI_PROJECT_DIR:-$(pwd)}"
 new_report_dir="$parent/junit_reports"
 mkdir -p "$new_report_dir"
 
-no_default_excludes="\
-    --exclude gst-plugin-burn \
-    --exclude gst-plugin-compress \
-    --exclude gst-plugin-webrtc \
-    --exclude gst-plugin-reqwest \
-    --exclude gst-plugin-icecast \
-    --exclude gst-plugin-rtsp \
-    --exclude gst-plugin-quinn \
-    --exclude gst-plugin-webrtc-signalling \
-    --exclude gst-plugin-uriplaylistbin"
-
-for cfg in "",default "--all-features --exclude gst-plugin-gtk4 --exclude gst-plugin-whisper --exclude gst-plugin-llamacpp",all "--no-default-features $no_default_excludes",no-default; do
+for cfg in "",default "--all-features --exclude gst-plugin-gtk4 --exclude gst-plugin-whisper --exclude gst-plugin-llamacpp",all "--no-default-features --exclude gst-plugin-burn --exclude gst-plugin-compress --exclude gst-plugin-webrtc --exclude gst-plugin-reqwest",no-default; do
     IFS="," read cfg junit <<< "${cfg}"
 
     echo "Building and testing with $cfg"
