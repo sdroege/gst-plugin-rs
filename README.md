@@ -74,6 +74,12 @@ You will find the following plugins in this repository:
         YoloV8-V10, Yolo11, Yolo12 and Yolo26, but only the one-to-many
         (non-NMS) heads of YoloV10, Yolo11, Yolo12 and Yolo26.
       - `yoloxtensordec`: Tensor decoder for YOLOX tensors.
+      - `yolov8obbtensordec`: Tensor decoder for YoloV8-obb tensors. Supports
+        YoloV8-V10-obb, Yolo11-obb, Yolo12-obb and Yolo26-obb, but only the one-to-many
+        (non-NMS) heads of YoloV10-obb, Yolo11-obb, Yolo12-obb and Yolo26-obb.
+      - `yolo26obbtensordec`: Tensor decoder for YoloV10 tensors. Supports
+        YoloV10-obb, Yolo11-obb, Yolo12-obb and Yolo26-obb, but only the one-to-one
+        (end2end, NMS) heads of YoloV10-obb, Yolo11-obb, Yolo12-obb and Yolo26-obb.
 
     - `burn`:
       - `burn-yoloxinference`: Object detection inference element based on YOLOX.

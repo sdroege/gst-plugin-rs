@@ -15,24 +15,34 @@ use byte_slice_cast::*;
 use itertools::izip;
 use std::sync::{LazyLock, Mutex};
 
+use super::util::{BoundingBox, iou, iou_oriented};
+
 const YOLOV8_OUT: &glib::GStr = glib::gstr!("yolo-v8-out");
+const YOLOV8OBB_OUT: &glib::GStr = glib::gstr!("yolo-v8-obb-out");
 const YOLOX_OUT: &glib::GStr = glib::gstr!("yolox-out");
 const YOLO26_OUT: &glib::GStr = glib::gstr!("yolo-26-end2end-out");
+const YOLO26OBB_OUT: &glib::GStr = glib::gstr!("yolo-26-obb-end2end-out");
 
 #[derive(Clone, Copy, Debug)]
 enum YoloTensorFormat {
-    V8,  // Col-major, [1, 4+C, N]
-    X,   // Row-major, [1, N, 5+C]
-    Y26, // Row-major, [1, N, 6], NMS done by the model
+    V8,   // Col-major, [1, 4+C, N]
+    V8O,  // Col-major, [1, 4+C, N] Yolo V8 OBB one-to-many
+    X,    // Row-major, [1, N, 5+C]
+    Y26,  // Row-major, [1, N, 6], NMS done by the model
+    Y26O, // Row-major, [1, N, 7], Yolo-OBB NMS done by the model
 }
 
 fn tensor_format_from_type(type_: glib::Type) -> YoloTensorFormat {
     if type_ == super::YoloV8TensorDec::static_type() {
         YoloTensorFormat::V8
+    } else if type_ == super::YoloV8ObbTensorDec::static_type() {
+        YoloTensorFormat::V8O
     } else if type_ == super::YoloXTensorDec::static_type() {
         YoloTensorFormat::X
     } else if type_ == super::Yolo26TensorDec::static_type() {
         YoloTensorFormat::Y26
+    } else if type_ == super::Yolo26ObbTensorDec::static_type() {
+        YoloTensorFormat::Y26O
     } else {
         unreachable!()
     }
@@ -56,7 +66,7 @@ struct Settings {
     iou_threshold: f32,
     // YoloX and YoloV8
     max_detections: u32,
-    // Only Yolo26
+    // Yolo26 and Yolo26Obb
     score_threshold: f32,
 }
 
@@ -73,7 +83,7 @@ impl Default for Settings {
     }
 }
 
-// Shared properties between YoloX and YoloV8
+// Shared properties between YoloX, YoloV8 and YoloV8Obb
 impl Settings {
     fn nms_properties() -> Vec<glib::ParamSpec> {
         vec![
@@ -280,9 +290,9 @@ impl BaseTransformImpl for YoloTensorDec {
 
         let tensor_format = tensor_format_from_type(self.obj().type_());
 
-        // YoloV8, YoloX and Yolo26 tensors use different memory layouts.
+        // YoloV8, YoloX, Yolo26, Yolo26Obb tensors all use different memory layouts.
         let (num_candidates, num_fields) = match tensor_format {
-            YoloTensorFormat::V8 => {
+            YoloTensorFormat::V8O | YoloTensorFormat::V8 => {
                 // YoloV8: dims[1] = num_fields, dims[2] = num_candidates
                 // Planar / column-major: field f of candidate c is at data[c + f * stride]
                 (tensor.dims()[2], tensor.dims()[1])
@@ -296,17 +306,25 @@ impl BaseTransformImpl for YoloTensorDec {
                 // Yolo26: dims[1] = num_candidates, dims[2] = 6 (fixed)
                 (tensor.dims()[1], 6)
             }
+            YoloTensorFormat::Y26O => {
+                // Yolo26: dims[1] = num_candidates, dims[2] = 7 (fixed)
+                (tensor.dims()[1], 7)
+            }
         };
         // YoloV8 has no box confidence field, fields 4.. are class scores.
         // YoloX has a box confidence field at index 4, fields 5.. are class scores.
         // Yolo26 has a single score and class index, no per-class scores.
+        // YoloV8Obb has no box confidence field, but has rotation, fields 5.. are class scores.
+        // Yolo26Obb has a single score on an oriented box and class index, no per-class scores.
         let num_classes = match tensor_format {
             YoloTensorFormat::V8 => num_fields - 4,
             YoloTensorFormat::X => num_fields - 5,
             YoloTensorFormat::Y26 => 0,
+            YoloTensorFormat::V8O => num_fields - 5,
+            YoloTensorFormat::Y26O => 0,
         };
         match tensor_format {
-            YoloTensorFormat::Y26 => {
+            YoloTensorFormat::Y26 | YoloTensorFormat::Y26O => {
                 gst::log!(CAT, imp = self, "Received {num_candidates} boxes",);
             }
             _ => {
@@ -346,14 +364,15 @@ impl BaseTransformImpl for YoloTensorDec {
                         continue;
                     }
 
-                    candidate_boxes.push(BoundingBox {
-                        xmin: x - width / 2.,
-                        ymin: y - height / 2.,
-                        xmax: x + width / 2.,
-                        ymax: y + height / 2.,
+                    candidate_boxes.push(BoundingBox::from_center_extents(
+                        x,
+                        y,
+                        width,
+                        height,
+                        None,
                         class,
-                        confidence: max_confidence,
-                    });
+                        max_confidence,
+                    ));
                 }
             }
             YoloTensorFormat::X => {
@@ -375,14 +394,15 @@ impl BaseTransformImpl for YoloTensorDec {
                     }
 
                     let combined_confidence = b[4] * confidence;
-                    candidate_boxes.push(BoundingBox {
-                        xmin: b[0] - b[2] / 2.,
-                        ymin: b[1] - b[3] / 2.,
-                        xmax: b[0] + b[2] / 2.,
-                        ymax: b[1] + b[3] / 2.,
-                        class: class as u32,
-                        confidence: combined_confidence,
-                    });
+                    candidate_boxes.push(BoundingBox::from_center_extents(
+                        b[0],
+                        b[1],
+                        b[2],
+                        b[3],
+                        None,
+                        class as u32,
+                        combined_confidence,
+                    ));
                 }
             }
             YoloTensorFormat::Y26 => {
@@ -410,14 +430,91 @@ impl BaseTransformImpl for YoloTensorDec {
                     }
 
                     // Unlike other Yolo variants the box coordinates are the four corners already.
-                    candidate_boxes.push(BoundingBox {
-                        xmin: det[0],
-                        ymin: det[1],
-                        xmax: det[2],
-                        ymax: det[3],
-                        class: det[5] as u32,
-                        confidence: score,
-                    });
+                    candidate_boxes.push(BoundingBox::from_corners(
+                        det[0],
+                        det[1],
+                        det[2],
+                        det[3],
+                        None,
+                        det[5] as u32,
+                        score,
+                    ));
+                }
+            }
+            YoloTensorFormat::V8O => {
+                // YoloV8 Obb planar layout: field f of candidate c is at data[c + f * stride]
+                // stride = dims[2] = num_candidates
+                // Boxes are x,y,w,h,class0...n,r
+                let stride = num_candidates;
+                let (boxes, extras) = data.split_at(4 * stride);
+                let (xs, rest) = boxes.split_at(stride);
+                let (ys, rest) = rest.split_at(stride);
+                let (widths, heights) = rest.split_at(stride);
+                let (classes, rotations) = extras.split_at(num_classes * stride);
+
+                for (c, (&x, &y, &width, &height, &rotation)) in
+                    izip!(xs, ys, widths, heights, rotations).enumerate()
+                {
+                    // Find max confidence across all class confidence slices
+                    let (class, max_confidence) = classes
+                        .chunks_exact(stride)
+                        .enumerate()
+                        .map(|(i, chunk)| (i as u32, chunk[c]))
+                        .max_by(|(_, a), (_, b)| a.total_cmp(b))
+                        .unwrap();
+                    if max_confidence < settings.class_confidence_threshold {
+                        continue;
+                    }
+
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "candidate x {x}, y {y}, w {width}, h {height}, rotation {rotation} class {class} confidence {max_confidence}"
+                    );
+
+                    candidate_boxes.push(BoundingBox::from_center_extents(
+                        x,
+                        y,
+                        width,
+                        height,
+                        Some(rotation),
+                        class,
+                        max_confidence,
+                    ));
+                }
+            }
+            YoloTensorFormat::Y26O => {
+                // Yolo26Obb (end2end) interleaved layout: each row is a finalized detection
+                for det in data.chunks_exact(num_fields) {
+                    let score = det[4];
+                    if score < settings.score_threshold {
+                        continue;
+                    }
+
+                    // The output box coordinates for the OBB model differ from the detect end2end model
+                    // in that they are xywh instead of xyxy corners
+                    let x = det[0];
+                    let y = det[1];
+                    let width = det[2];
+                    let height = det[3];
+                    let class = det[5] as u32;
+                    let rot = det[6];
+
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "candidate x {x}, y {y}, w {width}, h {height}, rotation {rot} class {class} confidence {score}"
+                    );
+
+                    candidate_boxes.push(BoundingBox::from_center_extents(
+                        x,
+                        y,
+                        width,
+                        height,
+                        Some(rot),
+                        class,
+                        score,
+                    ));
                 }
             }
         }
@@ -428,11 +525,37 @@ impl BaseTransformImpl for YoloTensorDec {
         drop(map);
         let mut rmeta = gst_analytics::AnalyticsRelationMeta::add(buffer);
 
-        if matches!(tensor_format, YoloTensorFormat::Y26) {
-            // Yolo26: NMS is already done by the model, so emit all detections
+        if matches!(
+            tensor_format,
+            YoloTensorFormat::Y26 | YoloTensorFormat::Y26O
+        ) {
+            // Yolo26 and Yolo26Obb: NMS is already done by the model, so emit all detections
             // that passed the score threshold.
             for b in &candidate_boxes {
                 self.add_detection(&mut rmeta, &state.labels, b);
+            }
+        } else if matches!(tensor_format, YoloTensorFormat::V8O) {
+            // YoloV8Obb: perform non-maximum suppression per class,
+            // processing the boxes in globally decreasing confidence order, so
+            // that the max-detections limit keeps the highest confidence
+            // detections, using the full oriented/rotated iou
+            let mut kept: Vec<Vec<BoundingBox>> = vec![Vec::new(); num_classes];
+            let mut num_detections = 0;
+            for b in &candidate_boxes {
+                if kept[b.class as usize]
+                    .iter()
+                    .any(|k| iou_oriented(b, k) > settings.iou_threshold)
+                {
+                    continue;
+                }
+                kept[b.class as usize].push(*b);
+
+                self.add_detection(&mut rmeta, &state.labels, b);
+
+                num_detections += 1;
+                if num_detections >= settings.max_detections {
+                    break;
+                }
             }
         } else {
             // YoloV8 and YoloX: perform non-maximum suppression per class,
@@ -485,18 +608,33 @@ impl YoloTensorDec {
             .copied()
             .unwrap_or_else(|| glib::Quark::from_str(glib::gformat!("CLASS-{}", b.class)));
 
-        gst::log!(
-            CAT,
-            imp = self,
-            "Adding object {} with confidence {} at ({x}, {y}) with size {width}x{height}",
-            class.as_str(),
-            b.confidence,
-        );
+        let od_meta = if let Some(rotation) = b.rotation {
+            gst::log!(
+                CAT,
+                imp = self,
+                "Adding object {} with confidence {} at ({x}, {y}) with size {width}x{height} rotation {rotation}",
+                class.as_str(),
+                b.confidence,
+            );
 
-        let od_meta = rmeta
-            .add_od_mtd(class, x, y, width, height, b.confidence)
-            .unwrap()
-            .id();
+            rmeta
+                .add_oriented_od_mtd(class, x, y, width, height, rotation, b.confidence)
+                .unwrap()
+                .id()
+        } else {
+            gst::log!(
+                CAT,
+                imp = self,
+                "Adding object {} with confidence {} at ({x}, {y}) with size {width}x{height}",
+                class.as_str(),
+                b.confidence,
+            );
+
+            rmeta
+                .add_od_mtd(class, x, y, width, height, b.confidence)
+                .unwrap()
+                .id()
+        };
         let cls_meta = rmeta.add_one_cls_mtd(b.confidence, class).unwrap().id();
         rmeta
             .set_relation(gst_analytics::RelTypes::RELATE_TO, od_meta, cls_meta)
@@ -516,6 +654,8 @@ fn find_yolo_tensor_meta(
                 YoloTensorFormat::V8 => (YOLOV8_OUT, gst_analytics::TensorDimOrder::ColMajor),
                 YoloTensorFormat::X => (YOLOX_OUT, gst_analytics::TensorDimOrder::RowMajor),
                 YoloTensorFormat::Y26 => (YOLO26_OUT, gst_analytics::TensorDimOrder::RowMajor),
+                YoloTensorFormat::V8O => (YOLOV8OBB_OUT, gst_analytics::TensorDimOrder::ColMajor),
+                YoloTensorFormat::Y26O => (YOLO26OBB_OUT, gst_analytics::TensorDimOrder::RowMajor),
             };
 
             let Some(tensor) = meta.typed_tensor(
@@ -534,37 +674,19 @@ fn find_yolo_tensor_meta(
             // YoloV8: at least 5 fields (4 bounding box + 1 class) in dims[1].
             // YoloX: at least 6 fields (4 bounding box + 1 box conf + 1 class) in dims[2].
             // Yolo26: exactly 6 fields (4 bounding box + 1 score + 1 class) in dims[2].
+            // YoloV8Obb: at least 6 fields (5 bounding box + 1 class) in dims[1].
+            // Yolo26Obb: exactly 7 fields (4 oriented bounding box + 1 score + 1 class + 1 rotation) in dims[2].
             match format {
                 YoloTensorFormat::V8 => tensor.dims()[1] >= 5,
                 YoloTensorFormat::X => tensor.dims()[2] >= 6,
                 YoloTensorFormat::Y26 => tensor.dims()[2] == 6,
+                YoloTensorFormat::V8O => tensor.dims()[1] >= 6,
+                YoloTensorFormat::Y26O => tensor.dims()[2] == 7,
             }
         })
 }
 
 impl super::YoloTensorDecImpl for YoloTensorDec {}
-
-#[derive(Clone, Copy, Debug)]
-struct BoundingBox {
-    xmin: f32,
-    xmax: f32,
-    ymin: f32,
-    ymax: f32,
-    class: u32,
-    confidence: f32,
-}
-
-// Intersection over union of two bounding boxes
-fn iou(b1: &BoundingBox, b2: &BoundingBox) -> f32 {
-    let b1_area = (b1.xmax - b1.xmin + 1.0) * (b1.ymax - b1.ymin + 1.0);
-    let b2_area = (b2.xmax - b2.xmin + 1.0) * (b2.ymax - b2.ymin + 1.0);
-    let i_xmin = f32::max(b1.xmin, b2.xmin);
-    let i_xmax = f32::min(b1.xmax, b2.xmax);
-    let i_ymin = f32::max(b1.ymin, b2.ymin);
-    let i_ymax = f32::min(b1.ymax, b2.ymax);
-    let i_area = f32::max(i_xmax - i_xmin + 1.0, 0.0) * f32::max(i_ymax - i_ymin + 1.0, 0.0);
-    i_area / (b1_area + b2_area - i_area)
-}
 
 #[derive(Default)]
 pub struct YoloV8TensorDec {}
@@ -601,7 +723,7 @@ impl ElementImpl for YoloV8TensorDec {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
             gst::subclass::ElementMetadata::new(
-                "YoloV10, Yolo11, Yolo12 and Yolo26 Tensor Decoder Element",
+                "YoloV8-V10, Yolo11, Yolo12 and Yolo26 Tensor Decoder Element",
                 "Tensordecoder/Video",
                 "Decodes tensors from a YoloV8-v10, Yolo11, Yolo12 and Yolo26 model \
                  from the one-to-many head",
@@ -932,3 +1054,239 @@ impl BaseTransformImpl for Yolo26TensorDec {
 }
 
 impl super::YoloTensorDecImpl for Yolo26TensorDec {}
+
+#[derive(Default)]
+pub struct YoloV8ObbTensorDec {}
+
+#[glib::object_subclass]
+impl ObjectSubclass for YoloV8ObbTensorDec {
+    const NAME: &'static str = "GstYoloV8ObbTensorDec";
+    type Type = super::YoloV8ObbTensorDec;
+    type ParentType = super::YoloTensorDec;
+}
+
+impl ObjectImpl for YoloV8ObbTensorDec {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(Settings::nms_properties);
+        &PROPERTIES
+    }
+
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        let obj = self.obj();
+        let imp = obj.upcast_ref::<super::YoloTensorDec>().imp();
+        imp.settings.lock().unwrap().nms_set_property(value, pspec);
+    }
+
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        let obj = self.obj();
+        let imp = obj.upcast_ref::<super::YoloTensorDec>().imp();
+        imp.settings.lock().unwrap().nms_get_property(pspec)
+    }
+}
+
+impl GstObjectImpl for YoloV8ObbTensorDec {}
+
+impl ElementImpl for YoloV8ObbTensorDec {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "YoloV8-V10-obb, Yolo11-obb, Yolo12-obb and Yolo26-obb Tensor Decoder Element",
+                "Tensordecoder/Video",
+                "Decodes tensors from a YoloV8-v10-obb, Yolo11-obb, Yolo12-obb and Yolo26-obb model \
+                 from the one-to-many head",
+                "Jan Schmidt <jan@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
+            let sink_caps = gst_video::VideoCapsBuilder::new()
+                .field(
+                    "tensors",
+                    gst::Structure::builder("tensorgroups")
+                        .field(
+                            YOLOV8OBB_OUT,
+                            gst::UniqueList::new([gst::Caps::builder("tensor/strided")
+                                .field("tensor-id", YOLOV8OBB_OUT)
+                                .field(
+                                    "dims",
+                                    gst::Array::from_values([
+                                        1i32.to_send_value(),
+                                        gst::IntRange::<i32>::new(6, i32::MAX).to_send_value(),
+                                        gst::IntRange::<i32>::new(0, i32::MAX).to_send_value(),
+                                    ]),
+                                )
+                                .field("dims-order", "col-major")
+                                .field("type", "float32")
+                                .build()]),
+                        )
+                        .build(),
+                )
+                .any_features()
+                .build();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &sink_caps,
+            )
+            .unwrap();
+
+            let src_caps = gst_video::VideoCapsBuilder::new().any_features().build();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &src_caps,
+            )
+            .unwrap();
+
+            vec![sink_pad_template, src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
+
+impl BaseTransformImpl for YoloV8ObbTensorDec {
+    const MODE: gst_base::subclass::BaseTransformMode =
+        gst_base::subclass::BaseTransformMode::AlwaysInPlace;
+    const PASSTHROUGH_ON_SAME_CAPS: bool = false;
+    const TRANSFORM_IP_ON_PASSTHROUGH: bool = true;
+}
+
+impl super::YoloTensorDecImpl for YoloV8ObbTensorDec {}
+
+#[derive(Default)]
+pub struct Yolo26ObbTensorDec;
+
+#[glib::object_subclass]
+impl ObjectSubclass for Yolo26ObbTensorDec {
+    const NAME: &'static str = "GstYolo26ObbTensorDec";
+    type Type = super::Yolo26ObbTensorDec;
+    type ParentType = super::YoloTensorDec;
+}
+
+impl ObjectImpl for Yolo26ObbTensorDec {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
+            vec![
+                glib::ParamSpecFloat::builder("score-threshold")
+                    .nick("Score Threshold")
+                    .blurb("Detections with a score inferior to this threshold will be excluded")
+                    .minimum(0.0)
+                    .maximum(1.0)
+                    .default_value(Settings::default().score_threshold)
+                    .mutable_playing()
+                    .build(),
+            ]
+        });
+
+        &PROPERTIES
+    }
+
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        let obj = self.obj();
+        let imp = obj.upcast_ref::<super::YoloTensorDec>().imp();
+        match pspec.name() {
+            "score-threshold" => {
+                let mut settings = imp.settings.lock().unwrap();
+                settings.score_threshold = value.get().unwrap();
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        let obj = self.obj();
+        let imp = obj.upcast_ref::<super::YoloTensorDec>().imp();
+        match pspec.name() {
+            "score-threshold" => {
+                let settings = imp.settings.lock().unwrap();
+                settings.score_threshold.to_value()
+            }
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl GstObjectImpl for Yolo26ObbTensorDec {}
+
+impl ElementImpl for Yolo26ObbTensorDec {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: LazyLock<gst::subclass::ElementMetadata> = LazyLock::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "YoloV10-obb, Yolo11-obb, Yolo12-obb and Yolo26-obb end2end Tensor Decoder Element",
+                "Tensordecoder/Video",
+                "Decodes tensors from a YoloV10-obb, Yolo11-obb, Yolo12-obb and Yolo26-obb model \
+                 from the end2end (one-to-one) head",
+                "Jan Schmidt <jan@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
+            let sink_caps = gst_video::VideoCapsBuilder::new()
+                .field(
+                    "tensors",
+                    gst::Structure::builder("tensorgroups")
+                        .field(
+                            YOLO26OBB_OUT,
+                            gst::UniqueList::new([gst::Caps::builder("tensor/strided")
+                                .field("tensor-id", YOLO26OBB_OUT)
+                                .field(
+                                    "dims",
+                                    gst::Array::from_values([
+                                        1i32.to_send_value(),
+                                        gst::IntRange::<i32>::new(1, i32::MAX).to_send_value(),
+                                        7i32.to_send_value(),
+                                    ]),
+                                )
+                                .field("dims-order", "row-major")
+                                .field("type", "float32")
+                                .build()]),
+                        )
+                        .build(),
+                )
+                .any_features()
+                .build();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &sink_caps,
+            )
+            .unwrap();
+
+            let src_caps = gst_video::VideoCapsBuilder::new().any_features().build();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &src_caps,
+            )
+            .unwrap();
+
+            vec![sink_pad_template, src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
+
+impl BaseTransformImpl for Yolo26ObbTensorDec {
+    const MODE: gst_base::subclass::BaseTransformMode =
+        gst_base::subclass::BaseTransformMode::AlwaysInPlace;
+    const PASSTHROUGH_ON_SAME_CAPS: bool = false;
+    const TRANSFORM_IP_ON_PASSTHROUGH: bool = true;
+}
+
+impl super::YoloTensorDecImpl for Yolo26ObbTensorDec {}
