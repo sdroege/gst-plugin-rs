@@ -16,12 +16,12 @@ gst.workspace = true
 gst-base = { workspace = true, features = ["v1_22"] }
 tokio = { version = "1.36.0", default-features = false, features = ["time", "rt-multi-thread", "macros"] }
 futures = "0.3.30"
-quinn = { version = "0.11.6", default-features = false, features = ["runtime-tokio", "log", "bloom"] }
-quinn-proto = { version = "0.11.9", default-features = false, features = ["log"] }
-web-transport-quinn = { version = "0.12", default-features = false }
+quinn = { version = "0.11.6", default-features = false, features = ["runtime-tokio", "log", "bloom", "ring"] }
+quinn-proto = { version = "0.11.9", default-features = false, features = ["log", "ring"] }
+web-transport-quinn = { version = "0.12", default-features = false, features = ["ring"] }
 rustls.workspace = true
 rustls-pki-types = "1"
-rcgen = { version = "0.14", default-features = false, features = ["pem"] }
+rcgen = "0.14"
 bytes = "1.5.0"
 thiserror = "2"
 async-channel = "2.3"
@@ -48,9 +48,8 @@ gst-plugin-version-helper.workspace = true
 static = []
 capi = []
 doc = []
-rustls-ring = ["rustls/ring", "quinn/ring", "quinn-proto/ring", "web-transport-quinn/ring", "rcgen/ring"]
-rustls-aws-lc-rs = ["rustls/aws-lc-rs", "quinn/aws-lc-rs", "quinn-proto/aws-lc-rs", "web-transport-quinn/aws-lc-rs", "rcgen/aws_lc_rs"]
-default = ["rustls-aws-lc-rs"]
+rustls-ring = ["rustls/ring"]
+default = ["rustls-ring"]
 v1_30 = ["gst/v1_30"]
 
 [package.metadata.capi]

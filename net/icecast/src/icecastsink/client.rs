@@ -211,16 +211,9 @@ impl IceClient {
             let stream = match (scheme, stream) {
                 // TLS
                 ("ice+https", stream) => {
-                    #[cfg(all(feature = "rustls-ring", not(feature = "rustls-aws-lc-rs")))]
-                    let crypto_provider = Arc::new(rustls::crypto::ring::default_provider());
-                    #[cfg(feature = "rustls-aws-lc-rs")]
-                    let crypto_provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
-                    #[cfg(all(not(feature = "rustls-ring"), not(feature = "rustls-aws-lc-rs")))]
-                    compile_error!(
-                        "Either rustls-ring or rustls-aws-lc-rs feature must be enabled"
-                    );
+                    let provider = Arc::new(rustls::crypto::ring::default_provider());
 
-                    let config = ClientConfig::builder_with_provider(crypto_provider)
+                    let config = ClientConfig::builder_with_provider(provider)
                         .with_safe_default_protocol_versions()
                         .unwrap()
                         .with_platform_verifier()

@@ -19,15 +19,11 @@ mod spotifyaudiosrc;
 mod spotifylyricssrc;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    #[cfg(all(feature = "rustls-ring", not(feature = "rustls-aws-lc-rs")))]
+    #[cfg(feature = "rustls-ring")]
     {
         let _ = rustls::crypto::ring::default_provider().install_default();
     }
-    #[cfg(feature = "rustls-aws-lc-rs")]
-    {
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-    }
-    #[cfg(all(not(feature = "rustls-ring"), not(feature = "rustls-aws-lc-rs")))]
+    #[cfg(not(feature = "rustls-ring"))]
     {
         if rustls::crypto::CryptoProvider::get_default().is_none() {
             panic!(

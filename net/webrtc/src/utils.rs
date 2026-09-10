@@ -1696,20 +1696,7 @@ struct SkipServerVerification(Arc<rustls::crypto::CryptoProvider>);
 
 impl SkipServerVerification {
     pub fn new() -> Arc<Self> {
-        #[cfg(all(feature = "rustls-ring", not(feature = "rustls-aws-lc-rs")))]
-        {
-            Arc::new(Self(Arc::new(rustls::crypto::ring::default_provider())))
-        }
-        #[cfg(feature = "rustls-aws-lc-rs")]
-        {
-            Arc::new(Self(
-                Arc::new(rustls::crypto::aws_lc_rs::default_provider()),
-            ))
-        }
-        #[cfg(all(not(feature = "rustls-ring"), not(feature = "rustls-aws-lc-rs")))]
-        {
-            compile_error!("Either rustls-ring or rustls-aws-lc-rs feature must be enabled");
-        }
+        Arc::new(Self(Arc::new(rustls::crypto::ring::default_provider())))
     }
 }
 
@@ -1783,14 +1770,11 @@ pub async fn create_tls_acceptor(
     certificate_file: &str,
     private_key_file: &str,
 ) -> Result<TlsAcceptor, Box<dyn std::error::Error>> {
-    #[cfg(all(feature = "rustls-ring", not(feature = "rustls-aws-lc-rs")))]
-    let crypto_provider = rustls::crypto::ring::default_provider();
-    #[cfg(feature = "rustls-aws-lc-rs")]
-    let crypto_provider = rustls::crypto::aws_lc_rs::default_provider();
+    let ring_provider = rustls::crypto::ring::default_provider();
     let certs = read_certs_from_file(certificate_file.into())?;
     let key = read_private_key_from_file(private_key_file.into())?;
 
-    let config = rustls::ServerConfig::builder_with_provider(crypto_provider.into())
+    let config = rustls::ServerConfig::builder_with_provider(ring_provider.into())
         .with_safe_default_protocol_versions()
         .unwrap()
         .with_no_client_auth()
@@ -1803,15 +1787,12 @@ pub async fn create_tls_connector<P: AsRef<Path>>(
     certificate_file: Option<P>,
     insecure_tls: bool,
 ) -> Result<TlsConnector, std::io::Error> {
-    #[cfg(all(feature = "rustls-ring", not(feature = "rustls-aws-lc-rs")))]
-    let crypto_provider = rustls::crypto::ring::default_provider();
-    #[cfg(feature = "rustls-aws-lc-rs")]
-    let crypto_provider = rustls::crypto::aws_lc_rs::default_provider();
+    let ring_provider = rustls::crypto::ring::default_provider();
 
     match (!insecure_tls).then_some(certificate_file).flatten() {
         Some(certificate_file) => {
             let root_cert_store = get_root_certstore(certificate_file).await?;
-            let config = rustls::ClientConfig::builder_with_provider(crypto_provider.into())
+            let config = rustls::ClientConfig::builder_with_provider(ring_provider.into())
                 .with_safe_default_protocol_versions()
                 .unwrap()
                 .with_root_certificates(root_cert_store)
@@ -1820,7 +1801,7 @@ pub async fn create_tls_connector<P: AsRef<Path>>(
             Ok(TlsConnector::from(Arc::new(config)))
         }
         _ => {
-            let config = rustls::ClientConfig::builder_with_provider(crypto_provider.into())
+            let config = rustls::ClientConfig::builder_with_provider(ring_provider.into())
                 .with_safe_default_protocol_versions()
                 .unwrap()
                 .dangerous()

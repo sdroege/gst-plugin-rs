@@ -142,17 +142,11 @@ pub async fn create_tls_acceptor(
     certificate_file: &str,
     private_key_file: &str,
 ) -> Result<TlsAcceptor, Box<dyn std::error::Error>> {
-    #[cfg(all(feature = "rustls-ring", not(feature = "rustls-aws-lc-rs")))]
-    let crypto_provider = rustls::crypto::ring::default_provider();
-    #[cfg(feature = "rustls-aws-lc-rs")]
-    let crypto_provider = rustls::crypto::aws_lc_rs::default_provider();
-    #[cfg(all(not(feature = "rustls-ring"), not(feature = "rustls-aws-lc-rs")))]
-    compile_error!("Either rustls-ring or rustls-aws-lc-rs feature must be enabled");
-
+    let ring_provider = rustls::crypto::ring::default_provider();
     let certs = read_certs_from_file(certificate_file.into())?;
     let key = read_private_key_from_file(private_key_file.into())?;
 
-    let config = rustls::ServerConfig::builder_with_provider(crypto_provider.into())
+    let config = rustls::ServerConfig::builder_with_provider(ring_provider.into())
         .with_safe_default_protocol_versions()
         .unwrap()
         .with_no_client_auth()

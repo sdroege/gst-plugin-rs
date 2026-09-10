@@ -555,16 +555,7 @@ fn infinite_to_finite() {
 fn cache() {
     let media = TestMedia::mkv_http();
 
-    #[cfg(all(feature = "rustls-ring", not(feature = "rustls-aws-lc-rs")))]
-    {
-        let _ = rustls::crypto::ring::default_provider().install_default();
-    }
-    #[cfg(feature = "rustls-aws-lc-rs")]
-    {
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-    }
-    #[cfg(all(not(feature = "rustls-ring"), not(feature = "rustls-aws-lc-rs")))]
-    compile_error!("Either rustls-ring or rustls-aws-lc-rs feature must be enabled");
+    let _ = rustls::crypto::ring::default_provider().install_default();
 
     if let Err(err) = reqwest::blocking::get(&media.uri) {
         println!("skipping test as {} is not available: {}", media.uri, err);

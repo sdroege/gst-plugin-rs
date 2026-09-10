@@ -146,20 +146,7 @@ struct SkipServerVerification(Arc<rustls::crypto::CryptoProvider>);
 
 impl SkipServerVerification {
     pub fn new() -> Arc<Self> {
-        #[cfg(all(feature = "rustls-ring", not(feature = "rustls-aws-lc-rs")))]
-        {
-            Arc::new(Self(Arc::new(rustls::crypto::ring::default_provider())))
-        }
-        #[cfg(feature = "rustls-aws-lc-rs")]
-        {
-            Arc::new(Self(
-                Arc::new(rustls::crypto::aws_lc_rs::default_provider()),
-            ))
-        }
-        #[cfg(all(not(feature = "rustls-ring"), not(feature = "rustls-aws-lc-rs")))]
-        {
-            compile_error!("Either rustls-ring or rustls-aws-lc-rs feature must be enabled");
-        }
+        Arc::new(Self(Arc::new(rustls::crypto::ring::default_provider())))
     }
 }
 
@@ -237,14 +224,9 @@ fn create_transport_config(
 }
 
 fn configure_client(ep_config: &QuinnQuicEndpointConfig) -> Result<ClientConfig, Box<dyn Error>> {
-    #[cfg(all(feature = "rustls-ring", not(feature = "rustls-aws-lc-rs")))]
-    let crypto_provider = Arc::new(rustls::crypto::ring::default_provider());
-    #[cfg(feature = "rustls-aws-lc-rs")]
-    let crypto_provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
-    #[cfg(all(not(feature = "rustls-ring"), not(feature = "rustls-aws-lc-rs")))]
-    compile_error!("Either rustls-ring or rustls-aws-lc-rs feature must be enabled");
+    let ring_provider = Arc::new(rustls::crypto::ring::default_provider());
 
-    let builder = rustls::ClientConfig::builder_with_provider(crypto_provider)
+    let builder = rustls::ClientConfig::builder_with_provider(ring_provider)
         .with_protocol_versions(&[&rustls::version::TLS13])
         .unwrap();
 
@@ -334,12 +316,7 @@ fn read_private_key_from_file(
 }
 
 fn configure_server(ep_config: &QuinnQuicEndpointConfig) -> Result<ServerConfig, Box<dyn Error>> {
-    #[cfg(all(feature = "rustls-ring", not(feature = "rustls-aws-lc-rs")))]
-    let crypto_provider = Arc::new(rustls::crypto::ring::default_provider());
-    #[cfg(feature = "rustls-aws-lc-rs")]
-    let crypto_provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
-    #[cfg(all(not(feature = "rustls-ring"), not(feature = "rustls-aws-lc-rs")))]
-    compile_error!("Either rustls-ring or rustls-aws-lc-rs feature must be enabled");
+    let ring_provider = Arc::new(rustls::crypto::ring::default_provider());
 
     let (certs, key) = match Option::zip(
         ep_config.certificate_file.as_ref(),
@@ -361,7 +338,7 @@ fn configure_server(ep_config: &QuinnQuicEndpointConfig) -> Result<ServerConfig,
         }
     };
 
-    let builder = rustls::ServerConfig::builder_with_provider(crypto_provider.clone())
+    let builder = rustls::ServerConfig::builder_with_provider(ring_provider.clone())
         .with_protocol_versions(&[&rustls::version::TLS13])
         .unwrap();
 
@@ -374,7 +351,7 @@ fn configure_server(ep_config: &QuinnQuicEndpointConfig) -> Result<ServerConfig,
 
                 let auth_client = rustls::server::WebPkiClientVerifier::builder_with_provider(
                     Arc::new(cert_store),
-                    crypto_provider,
+                    ring_provider,
                 )
                 .build()
                 .unwrap();
