@@ -590,7 +590,7 @@ impl Transcriber {
                         secret_key,
                         session_token,
                         None,
-                        "translate",
+                        "transcriber",
                     ))
                 }
                 _ => {

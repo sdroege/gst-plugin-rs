@@ -791,7 +791,7 @@ impl Polly {
                         secret_key,
                         session_token,
                         None,
-                        "translate",
+                        "polly",
                     ))
                 }
                 _ => {
