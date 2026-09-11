@@ -15,7 +15,7 @@ gst-base.workspace = true
 gst-audio = { workspace = true, features = ["v1_16"] }
 tokio = { version = "1", features = [ "full" ] }
 async-tungstenite = { version = "0.35", features = ["tokio", "tokio-runtime", "tokio-rustls-native-certs"] }
-rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+rustls.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 atomic_refcell = "0.1"
@@ -31,10 +31,12 @@ path = "src/lib.rs"
 gst-plugin-version-helper.workspace = true
 
 [features]
+default = ["rustls-ring"]
 static = []
 capi = []
 doc = ["gst/v1_18"]
 v1_30 = ["gst/v1_30"]
+rustls-ring = ["rustls/ring"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

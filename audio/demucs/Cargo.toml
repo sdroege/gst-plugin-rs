@@ -14,7 +14,7 @@ gst.workspace = true
 gst-base.workspace = true
 gst-audio.workspace = true
 async-tungstenite = { version = "0.35", features = ["tokio-runtime", "tokio-rustls-native-certs"], optional = true }
-rustls = { version = "0.23", default-features = false, features = ["std", "ring"], optional = true }
+rustls = { workspace = true, optional = true }
 futures = "0.3"
 tokio = { version = "1", features = ["net", "time", "rt", "rt-multi-thread", "io-util"] }
 url = "2"
@@ -40,8 +40,9 @@ capi = []
 doc = []
 websocket = ["async-tungstenite", "rustls", "http"]
 inprocess = ["pyo3"]
-default = ["websocket"]
+default = ["websocket", "rustls/ring"]
 v1_30 = ["gst/v1_30"]
+rustls-ring = ["rustls/ring"]
 
 [package.metadata.capi]
 min_version = "0.9.21"
