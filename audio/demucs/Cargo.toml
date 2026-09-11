@@ -40,9 +40,10 @@ capi = []
 doc = []
 websocket = ["async-tungstenite", "rustls", "http"]
 inprocess = ["pyo3"]
-default = ["websocket", "rustls/ring"]
+default = ["websocket", "rustls-aws-lc-rs"]
 v1_30 = ["gst/v1_30"]
 rustls-ring = ["rustls/ring"]
+rustls-aws-lc-rs = ["rustls/aws-lc-rs"]
 
 [package.metadata.capi]
 min_version = "0.9.21"

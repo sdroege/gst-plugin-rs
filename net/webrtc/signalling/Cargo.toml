@@ -25,12 +25,13 @@ test-log = { version = "0.2", features = ["trace"], default-features = false }
 pin-project-lite = "0.2"
 gst-plugin-webrtc-protocol.workspace = true
 rustls.workspace = true
-tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12", "ring"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"] }
 rustls-pki-types = "1"
 
 [features]
-rustls-ring = ["rustls/ring"]
-default = ["rustls-ring"]
+rustls-ring = ["rustls/ring", "tokio-rustls/ring"]
+rustls-aws-lc-rs = ["rustls/aws-lc-rs", "tokio-rustls/aws-lc-rs"]
+default = ["rustls-aws-lc-rs"]
 
 [[bin]]
 name = "gst-webrtc-signalling-server"
