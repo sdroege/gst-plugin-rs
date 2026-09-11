@@ -382,6 +382,7 @@ impl BaseTransformImpl for YoloxInference {
                 tensors.set(
                     YOLOX_OUT,
                     gst::UniqueList::new([gst::Caps::builder("tensor/strided")
+                        .field("tensor-id", YOLOX_OUT)
                         .field(
                             "dims",
                             gst::Array::from_values([
