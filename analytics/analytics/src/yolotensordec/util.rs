@@ -78,14 +78,18 @@ impl BoundingBox {
 
 // Intersection over union of two non-rotated bounding boxes
 pub fn iou(b1: &BoundingBox, b2: &BoundingBox) -> f32 {
-    let b1_area = (b1.xmax - b1.xmin + 1.0) * (b1.ymax - b1.ymin + 1.0);
-    let b2_area = (b2.xmax - b2.xmin + 1.0) * (b2.ymax - b2.ymin + 1.0);
     let i_xmin = f32::max(b1.xmin, b2.xmin);
     let i_xmax = f32::min(b1.xmax, b2.xmax);
     let i_ymin = f32::max(b1.ymin, b2.ymin);
     let i_ymax = f32::min(b1.ymax, b2.ymax);
-    let i_area = f32::max(i_xmax - i_xmin + 1.0, 0.0) * f32::max(i_ymax - i_ymin + 1.0, 0.0);
-    i_area / (b1_area + b2_area - i_area)
+    let i_area = f32::max(i_xmax - i_xmin, 0.0) * f32::max(i_ymax - i_ymin, 0.0);
+
+    let union_area = b1.area() + b2.area() - i_area;
+    if union_area > 0.0 {
+        i_area / union_area
+    } else {
+        0.0
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
