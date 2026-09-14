@@ -457,3 +457,230 @@ fn test_rtpvraw_reads_range_full() {
     drop(h);
     let _ = element.set_state(gst::State::Null);
 }
+
+#[test]
+fn test_depay_ancillary_and_active_lines() {
+    use super::line_numbering::{
+        HD_720P_ACTIVE_HEIGHT, HD_720P_ACTIVE_WIDTH, HD_720P_FIRST_ACTIVE, HD_720P_LAST_ACTIVE,
+    };
+    use super::pay::packing_template::{VRAW_CHUNK_HDR_LEN, VRAW_EXT_SEQNUM_LEN};
+    use super::pixel_group::PixelGroup;
+    use smallvec::SmallVec;
+    use std::io::Write;
+
+    const HD_720P_FIRST_ANC: u32 = 7;
+    const MTU: usize = 1400;
+    const MAX_CHUNK_PER_PACKET: usize = 2;
+    const MAX_VRAW_HEADER_LEN: usize =
+        VRAW_EXT_SEQNUM_LEN + MAX_CHUNK_PER_PACKET * VRAW_CHUNK_HDR_LEN;
+    const MAX_PAYLOAD_LEN: usize =
+        MTU - rtp_types::RtpPacket::MIN_RTP_PACKET_LEN - MAX_VRAW_HEADER_LEN;
+
+    const CLOCK_RATE: u32 = 90_000;
+
+    init();
+
+    let video_info = gst_video::VideoInfo::builder(
+        gst_video::VideoFormat::Rgb,
+        HD_720P_ACTIVE_WIDTH,
+        HD_720P_ACTIVE_HEIGHT,
+    )
+    .build()
+    .unwrap();
+    let pgroup = PixelGroup::from_video_info(&video_info).unwrap();
+
+    // The rtpvrawpay2 doesn't support this configuration
+    // => manually build packets for 3 frames containing ancillary & active lines
+    let mut ext_seqnum = 0u32;
+    let mut packets = vec![];
+    for frame_idx in 0..3 {
+        struct Packet {
+            ext_seqnum: u32,
+            vraw_header: SmallVec<[u8; MAX_VRAW_HEADER_LEN]>,
+            payload: Vec<u8>,
+            payload_offset: usize,
+        }
+
+        impl Packet {
+            fn new(ext_seqnum: u32) -> Self {
+                let mut vraw_header = SmallVec::<[u8; MAX_VRAW_HEADER_LEN]>::new();
+                vraw_header.extend(((ext_seqnum >> 16) as u16).to_be_bytes());
+                Packet {
+                    ext_seqnum,
+                    vraw_header,
+                    payload: vec![0; MAX_PAYLOAD_LEN],
+                    payload_offset: 0,
+                }
+            }
+
+            fn rem_payload_mut(&mut self) -> &mut [u8] {
+                &mut self.payload[self.payload_offset..]
+            }
+
+            fn payload(&self) -> &[u8] {
+                &self.payload[..self.payload_offset]
+            }
+        }
+
+        let mut x = 0;
+        let mut y = HD_720P_FIRST_ANC as usize;
+
+        let mut packet_opt = None;
+
+        while y <= HD_720P_LAST_ACTIVE as usize {
+            let packet = packet_opt.get_or_insert_with(|| Packet::new(ext_seqnum));
+
+            let rem_payload = packet.rem_payload_mut();
+            let rem_payload_len = rem_payload.len();
+
+            assert!(rem_payload_len >= pgroup.size());
+
+            let take_packet;
+            let is_last;
+            if x == 0 {
+                // For each new line:
+                // * byte 0: frame nb
+                // * bytes 1 & 2 (BE u16): scan line number
+                rem_payload[0] = frame_idx;
+                let _ = (&mut rem_payload[1..=2])
+                    .write(&(y as u16).to_be_bytes())
+                    .unwrap();
+            }
+
+            let rem_pgroups_capacity = rem_payload_len / pgroup.size();
+            let rem_pgroups_for_line = (HD_720P_ACTIVE_WIDTH as usize - x) / pgroup.x_inc();
+            if rem_pgroups_for_line > rem_pgroups_capacity {
+                // rem of the line doesn't fit in remaining payload
+                let len = rem_pgroups_capacity * pgroup.size();
+                packet.vraw_header.extend((len as u16).to_be_bytes());
+                packet.payload_offset += len;
+
+                take_packet = true;
+                is_last = false;
+
+                packet.vraw_header.extend((y as u16).to_be_bytes());
+                // no Continuation bit in this case
+                packet.vraw_header.extend((x as u16).to_be_bytes());
+
+                x += rem_pgroups_capacity * pgroup.x_inc();
+            } else {
+                // terminate current line
+                let len = rem_pgroups_for_line * pgroup.size();
+                packet.vraw_header.extend((len as u16).to_be_bytes());
+                packet.payload_offset += len;
+
+                is_last = y == HD_720P_LAST_ACTIVE as usize;
+                take_packet = packet.rem_payload_mut().len() < pgroup.size() || is_last;
+
+                // ensure we get the end of an ancillary line chunk and
+                // the first active line chunk in the same packet
+                // so as to test this edge case
+                if y + pgroup.y_inc() == HD_720P_FIRST_ACTIVE as usize {
+                    assert!(!take_packet);
+                }
+
+                packet.vraw_header.extend((y as u16).to_be_bytes());
+                let continuation_flag = if take_packet { 0 } else { 1 << 15 };
+                packet
+                    .vraw_header
+                    .extend(((continuation_flag + x) as u16).to_be_bytes());
+
+                y += pgroup.y_inc();
+                x = 0;
+            }
+
+            if take_packet && let Some(packet) = packet_opt.take() {
+                let rtp_packet_builder = rtp_types::RtpPacketBuilder::new()
+                    .payload_type(96)
+                    .sequence_number((packet.ext_seqnum & 0xffff) as u16)
+                    .timestamp(CLOCK_RATE * frame_idx as u32)
+                    .ssrc(1234)
+                    .marker_bit(is_last)
+                    .payload(packet.vraw_header.as_slice())
+                    .payload(packet.payload());
+
+                let packet_len = rtp_packet_builder.calculate_size().unwrap();
+                let mut buf = gst::Buffer::with_size(packet_len).unwrap();
+                {
+                    let buf_mut = buf.make_mut();
+                    buf_mut.set_pts((frame_idx as u64).seconds());
+
+                    let mut buf_mapped = buf_mut.map_writable().unwrap();
+                    rtp_packet_builder
+                        .write_into(buf_mapped.as_mut_slice())
+                        .unwrap();
+                }
+                packets.push(buf);
+
+                ext_seqnum += 1;
+            }
+        }
+    }
+
+    let mut h = gst_check::Harness::new("rtpvrawdepay2");
+    h.play();
+
+    h.push_event(gst::event::StreamStart::new("test"));
+    h.push_event(gst::event::Caps::new(
+        &gst::Caps::builder("application/x-rtp")
+            .field("media", "video")
+            .field("clock-rate", CLOCK_RATE as i32)
+            .field("encoding-name", "RAW")
+            .field(
+                "sampling",
+                match video_info.format() {
+                    gst_video::VideoFormat::Rgb => "RGB",
+                    gst_video::VideoFormat::I420 => "YCbCr-4:2:0",
+                    _ => unreachable!(),
+                },
+            )
+            .field("width", HD_720P_ACTIVE_WIDTH.to_string())
+            .field("height", HD_720P_ACTIVE_HEIGHT.to_string())
+            .field("depth", "8")
+            .build(),
+    ));
+    h.push_event(gst::event::Segment::new(&gst::FormattedSegment::<
+        gst::format::Time,
+    >::new()));
+
+    let mut frame_idx = 0;
+    for packet in packets.drain(..) {
+        h.push(packet).unwrap();
+
+        if let Some(buf) = h.try_pull() {
+            let frame =
+                gst_video::VideoFrameRef::from_buffer_ref_readable(&buf, &video_info).unwrap();
+
+            for plane_idx in 0..frame.n_planes() {
+                let stride = frame.plane_stride()[plane_idx as usize] as usize;
+                let plane = frame.plane_data(plane_idx).unwrap();
+
+                for (y, line) in plane.chunks(stride).enumerate() {
+                    assert_eq!(frame_idx, line[0]);
+
+                    let scan_line = u16::from_be_bytes(line[1..=2].try_into().unwrap()) as usize;
+
+                    if frame_idx > 0 {
+                        // numbering scheme identified
+                        assert_eq!(y, scan_line - HD_720P_FIRST_ACTIVE as usize);
+                    } else {
+                        // numbering scheme not identified yet
+                        match y as u32 {
+                            0..HD_720P_FIRST_ACTIVE => {
+                                // blank line
+                                assert_eq!(0, scan_line);
+                            }
+                            HD_720P_FIRST_ACTIVE..HD_720P_ACTIVE_HEIGHT => {
+                                // safe to display, but offset
+                                assert_eq!(y, scan_line);
+                            }
+                            _ => unreachable!("out of range"),
+                        }
+                    }
+                }
+            }
+
+            frame_idx += 1;
+        }
+    }
+}

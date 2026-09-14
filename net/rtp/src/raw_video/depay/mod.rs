@@ -32,7 +32,9 @@ glib::wrapper! {
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "doc")]
     {
+        use crate::raw_video::line_numbering::LineNumberingIdentificationMethod;
         ConcealmentMethod::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        LineNumberingIdentificationMethod::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
 
     gst::Element::register(

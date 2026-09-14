@@ -16502,6 +16502,18 @@
                         "readable": true,
                         "type": "GstRtpRawVideoDepay2ConcealmentMethod",
                         "writable": true
+                    },
+                    "line-numbering-identification-method": {
+                        "blurb": "Identification method for line numbering scheme",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "infer (1)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRtpRawVideoLineNumberingIdentificationMethod",
+                        "writable": true
                     }
                 },
                 "rank": "marginal"
@@ -17201,6 +17213,21 @@
                     {
                         "desc": "Last Frame",
                         "name": "last-frame",
+                        "value": "1"
+                    }
+                ]
+            },
+            "GstRtpRawVideoLineNumberingIdentificationMethod": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Keep line number unchanged",
+                        "name": "passthrough",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Infer scan line numbering scheme",
+                        "name": "infer",
                         "value": "1"
                     }
                 ]

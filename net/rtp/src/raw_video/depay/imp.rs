@@ -62,9 +62,13 @@ use gst_video::{VideoColorimetry, VideoFormat, VideoFrame, VideoInfo, prelude::*
 use crate::basedepay::{PacketToBufferRelation, RtpBaseDepay2Ext};
 
 use crate::raw_video::depay::ConcealmentMethod;
+use crate::raw_video::line_numbering::{
+    LineNumberingIdentificationMethod, LineNumberingSchemeIdentifier,
+};
 use crate::raw_video::pixel_group::PixelGroup;
 use crate::raw_video::vframe_utils;
 
+use std::ops::DerefMut;
 use std::str::FromStr;
 
 pub(crate) const VRAW_CHUNK_HDR_LEN: usize = 6;
@@ -90,11 +94,13 @@ struct State {
     output_frame: Option<OutputFrame>,
     video_info: Option<VideoInfo>,
     pgroup: Option<PixelGroup>,
+    line_nb_ider: LineNumberingSchemeIdentifier,
 }
 
 #[derive(Default)]
 struct Settings {
     concealment_method: ConcealmentMethod,
+    line_nb_id_method: LineNumberingIdentificationMethod,
 }
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
@@ -121,6 +127,13 @@ impl ObjectImpl for RtpRawVideoDepay {
                     .blurb("Concealment method used for packet loss")
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecEnum::builder::<LineNumberingIdentificationMethod>(
+                    "line-numbering-identification-method",
+                )
+                .nick("Line Numbering Identification Method")
+                .blurb("Identification method for line numbering scheme")
+                .mutable_ready()
+                .build(),
             ]
         });
 
@@ -130,6 +143,9 @@ impl ObjectImpl for RtpRawVideoDepay {
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "concealment-method" => self.settings.lock().unwrap().concealment_method.to_value(),
+            "line-numbering-identification-method" => {
+                self.settings.lock().unwrap().line_nb_id_method.to_value()
+            }
             _ => unimplemented!(),
         }
     }
@@ -138,6 +154,10 @@ impl ObjectImpl for RtpRawVideoDepay {
         match pspec.name() {
             "concealment-method" => {
                 self.settings.lock().unwrap().concealment_method = value.get().unwrap();
+            }
+            "line-numbering-identification-method" => {
+                let method = value.get().unwrap();
+                self.settings.lock().unwrap().line_nb_id_method = method;
             }
             _ => unimplemented!(),
         }
@@ -445,6 +465,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
         gst::info!(CAT, imp = self, "{pgroup:?} for {video_info:?}");
         state.pgroup = Some(pgroup);
 
+        state.line_nb_ider.set_video_info(&video_info);
         state.video_info = Some(video_info);
 
         self.obj().set_src_caps(&output_caps);
@@ -478,7 +499,15 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
 
         let pgroup = state.pgroup.unwrap();
 
-        let output_frame = if let Some(output_frame) = state.output_frame.as_mut() {
+        let State {
+            pool: state_pool,
+            output_frame: state_output_frame,
+            video_info: state_video_info,
+            line_nb_ider: state_line_nb_ider,
+            ..
+        } = state.deref_mut();
+
+        let output_frame = if let Some(output_frame) = state_output_frame.as_mut() {
             if output_frame.ext_timestamp.is_none() {
                 output_frame.ext_timestamp = Some(packet.ext_timestamp());
                 output_frame.seq_start = Some(packet.ext_seqnum());
@@ -486,13 +515,13 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
             }
             output_frame
         } else {
-            let pool = state.pool.as_ref().unwrap();
+            let pool = state_pool.as_ref().unwrap();
 
             gst::log!(CAT, imp = self, "Acquiring new buffer from pool..");
 
             let buf = pool.acquire_buffer(None)?;
             let mut vframe =
-                VideoFrame::from_buffer_writable(buf, state.video_info.as_ref().unwrap()).map_err(
+                VideoFrame::from_buffer_writable(buf, state_video_info.as_ref().unwrap()).map_err(
                     |_| {
                         gst::error!(CAT, imp = self, "Failed to map video buffer for writing");
                         gst::FlowError::Error
@@ -513,12 +542,13 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
 
             gst::debug!(CAT, imp = self, "New output frame: {new_output_frame:?}");
 
-            state.output_frame = Some(new_output_frame);
-            state.output_frame.as_mut().unwrap()
+            *state_output_frame = Some(new_output_frame);
+            state_output_frame.as_mut().unwrap()
         };
 
         output_frame.seq_end = Some(packet.ext_seqnum());
 
+        let end_of_frame = packet.marker_bit();
         let payload = packet.payload();
 
         if payload.len() < 2 + VRAW_CHUNK_HDR_LEN {
@@ -578,19 +608,42 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
 
         let (preamble, mut payload) = payload.split_at(preamble_length);
 
-        for (i, (length, y, x)) in preamble
+        for (i, (length, field_id_line_nb, x)) in preamble
             .as_chunks::<6>()
             .0
             .iter()
             .map(|c| {
                 (
                     u16::from_be_bytes([c[0], c[1]]) as usize, // length
-                    (u16::from_be_bytes([c[2], c[3]]) & 0x7fff) as usize, // line number
-                    (u16::from_be_bytes([c[4], c[5]]) & 0x7fff) as usize, // pixel offset
+                    u16::from_be_bytes([c[2], c[3]]),          // F bit + line number
+                    (u16::from_be_bytes([c[4], c[5]]) & 0x7fff) as usize, // C bit + pixel offset
                 )
             })
             .enumerate()
         {
+            if field_id_line_nb & 0x8000 == 0x8000 {
+                // field identification bit set => interlace
+                // unexpected because caps parsing in set_sink_caps() rejects interlace videos
+                gst::error!(CAT, imp = self, "unexpected: field identification bit set");
+                return Err(gst::FlowError::Error);
+            }
+
+            let line_nb = field_id_line_nb & 0x7fff;
+            let is_last = end_of_frame && (i + 1 == n_chunks);
+            let Some(y) = state_line_nb_ider
+                .convert_to_gst_line_nb(line_nb as u32, is_last)
+                .map(|y| y as usize)
+            else {
+                gst::trace!(
+                    CAT,
+                    imp = self,
+                    "skipping chunk {i}: {length} bytes @ out of range line nb {line_nb}"
+                );
+                let (_, remainder) = payload.split_at(length);
+                payload = remainder;
+                continue;
+            };
+
             gst::trace!(CAT, imp = self, "Chunk {i}: {length} bytes @ {x},{y}");
 
             let pgroup_size = pgroup.size();
@@ -901,8 +954,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
             payload = remainder;
         }
 
-        // Marker = end of frame
-        if packet.marker_bit() {
+        if end_of_frame {
             self.finish_current_frame(&mut state)?;
         }
 
@@ -912,16 +964,23 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
     fn flush(&self) {
         let mut state = self.state.borrow_mut();
         let _ = state.output_frame.take();
+        state.line_nb_ider.reset();
     }
 
     fn drain(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.borrow_mut();
         let _ = state.output_frame.take();
+        state.line_nb_ider.reset();
+
         Ok(gst::FlowSuccess::Ok)
     }
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        *self.state.borrow_mut() = State::default();
+        let line_nb_id_method = self.settings.lock().unwrap().line_nb_id_method;
+
+        let mut state = self.state.borrow_mut();
+        *state = State::default();
+        state.line_nb_ider.set_method(line_nb_id_method);
 
         Ok(())
     }

@@ -13,7 +13,7 @@
 use gst::glib;
 use gst::prelude::*;
 
-mod packing_template;
+pub(crate) mod packing_template;
 
 pub mod imp;
 
