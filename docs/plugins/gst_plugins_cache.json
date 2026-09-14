@@ -11822,6 +11822,32 @@
                     }
                 },
                 "rank": "primary"
+            },
+            "zerodcetensordec": {
+                "author": "Denis Shimizu <denis.shimizu@collabora.com>",
+                "description": "Decodes the enhanced image tensor of a Zero-DCE low-light image enhancement model",
+                "hierarchy": [
+                    "GstZeroDceTensorDec",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Tensordecoder/Video",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-raw:\n         format: { RGB_F32LE, RGB }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n        tensors: \"tensorgroups\\,\\ image-rgb-hwc-out\\=\\(/uniquelist\\)\\{\\ \\(caps\\)\\\"tensor/strided\\\\\\,\\\\\\ tensor-id\\\\\\=\\\\\\(string\\\\\\)image-rgb-hwc-out\\\\\\,\\\\\\ dims\\\\\\=\\\\\\(int\\\\\\)\\\\\\<\\\\\\ 1\\\\\\,\\\\\\ \\\\\\[\\\\\\ 0\\\\\\,\\\\\\ 2147483647\\\\\\ \\\\\\]\\\\\\,\\\\\\ \\\\\\[\\\\\\ 0\\\\\\,\\\\\\ 2147483647\\\\\\ \\\\\\]\\\\\\,\\\\\\ 3\\\\\\ \\\\\\>\\\\\\,\\\\\\ dims-order\\\\\\=\\\\\\(string\\\\\\)row-major\\\\\\,\\\\\\ type\\\\\\=\\\\\\(string\\\\\\)float32\\\"\\,\\ \\(caps\\)\\\"tensor/strided\\\\\\,\\\\\\ tensor-id\\\\\\=\\\\\\(string\\\\\\)image-rgb-hwc-out\\\\\\,\\\\\\ dims\\\\\\=\\\\\\(int\\\\\\)\\\\\\<\\\\\\ \\\\\\[\\\\\\ 0\\\\\\,\\\\\\ 2147483647\\\\\\ \\\\\\]\\\\\\,\\\\\\ \\\\\\[\\\\\\ 0\\\\\\,\\\\\\ 2147483647\\\\\\ \\\\\\]\\\\\\,\\\\\\ 3\\\\\\ \\\\\\>\\\\\\,\\\\\\ dims-order\\\\\\=\\\\\\(string\\\\\\)row-major\\\\\\,\\\\\\ type\\\\\\=\\\\\\(string\\\\\\)float32\\\"\\ \\}\\;\"\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\n         format: { RGB_F32LE, RGB }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "primary"
             }
         },
         "filename": "gstrsanalytics",

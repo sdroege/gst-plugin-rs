@@ -81,6 +81,8 @@ You will find the following plugins in this repository:
       - `yolo26obbtensordec`: Tensor decoder for YoloV10 tensors. Supports
         YoloV10-obb, Yolo11-obb, Yolo12-obb and Yolo26-obb, but only the one-to-one
         (end2end, NMS) heads of YoloV10-obb, Yolo11-obb, Yolo12-obb and Yolo26-obb.
+      - `zerodcetensordec`: Tensor decoder for Zero-DCE low-light image enhancement, and more
+        generally for any image-to-image model emitting the `image-rgb-hwc-out` tensor.
 
     - `burn`:
       - `burn-yoloxinference`: Object detection inference element based on YOLOX.
