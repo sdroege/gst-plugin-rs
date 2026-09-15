@@ -46,6 +46,7 @@ impl Packet {
         &self,
         field: u8,
         extended_seqnum: u32,
+        line_nb_offset: u16,
     ) -> SmallVec<[u8; VRAW_EXT_SEQNUM_LEN + 4 * VRAW_CHUNK_HDR_LEN]> {
         let field_flag = if field == 1 { 0x8000 } else { 0x0000 };
 
@@ -62,7 +63,7 @@ impl Packet {
             let continuation_flag = if !is_last { 0x8000 } else { 0x0000 };
 
             hdr_buf.extend_from_slice(&chunk.length.to_be_bytes());
-            hdr_buf.extend_from_slice(&(chunk.y_off | field_flag).to_be_bytes());
+            hdr_buf.extend_from_slice(&((chunk.y_off + line_nb_offset) | field_flag).to_be_bytes());
             hdr_buf.extend_from_slice(&(chunk.x_off | continuation_flag).to_be_bytes());
         }
 

@@ -16542,6 +16542,20 @@
                         "presence": "always"
                     }
                 },
+                "properties": {
+                    "line-numbering-scheme": {
+                        "blurb": "Line numbering scheme to use in RTP payload header",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "passthrough (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstRtpRawVideoLineNumberingScheme",
+                        "writable": true
+                    }
+                },
                 "rank": "marginal"
             }
         },
@@ -17229,6 +17243,26 @@
                         "desc": "Infer scan line numbering scheme",
                         "name": "infer",
                         "value": "1"
+                    }
+                ]
+            },
+            "GstRtpRawVideoLineNumberingScheme": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "0-based line numbering",
+                        "name": "passthrough",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "1-based line numbering",
+                        "name": "vesa",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Use SMPTE ancillary-tolerant line numbering (requires eligible resolution)",
+                        "name": "smpte",
+                        "value": "2"
                     }
                 ]
             },

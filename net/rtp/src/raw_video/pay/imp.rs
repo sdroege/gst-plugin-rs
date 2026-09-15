@@ -58,11 +58,17 @@ use atomic_refcell::AtomicRefCell;
 
 use gst::{glib, prelude::*, subclass::prelude::*};
 
-use std::{num::Wrapping, sync::LazyLock};
+use std::{
+    num::Wrapping,
+    sync::{LazyLock, Mutex},
+};
 
 use gst_video::{VideoFormat, VideoFrame, VideoFrameExt, VideoInfo};
 
-use crate::{basepay::RtpBasePay2Ext, raw_video::pixel_group::PixelGroup};
+use crate::{
+    basepay::RtpBasePay2Ext,
+    raw_video::{line_numbering::LineNumberingScheme, pixel_group::PixelGroup},
+};
 
 use super::packing_template::{FramePackingTemplate, VRAW_CHUNK_HDR_LEN, VRAW_EXT_SEQNUM_LEN};
 
@@ -71,7 +77,13 @@ const RTP_VRAW_DEFAULT_MTU: u32 = 1400;
 
 #[derive(Default)]
 pub struct RtpRawVideoPay {
+    settings: Mutex<Settings>,
     state: AtomicRefCell<State>,
+}
+
+#[derive(Debug, Default)]
+pub struct Settings {
+    line_numbering_scheme: LineNumberingScheme,
 }
 
 #[derive(Default)]
@@ -81,6 +93,7 @@ struct State {
     extended_seqnum: Wrapping<u32>,
     // Temporary buffer that can be used for swizzling/packing pixels before payloading
     scratch_space_vec: Vec<u8>,
+    line_nb_offset: u16,
 }
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
@@ -98,7 +111,42 @@ impl ObjectSubclass for RtpRawVideoPay {
     type ParentType = crate::basepay::RtpBasePay2;
 }
 
-impl ObjectImpl for RtpRawVideoPay {}
+impl ObjectImpl for RtpRawVideoPay {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
+            vec![
+                glib::ParamSpecEnum::builder::<LineNumberingScheme>("line-numbering-scheme")
+                    .nick("Line Numbering Scheme")
+                    .blurb("Line numbering scheme to use in RTP payload header")
+                    .build(),
+            ]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        let mut settings = self.settings.lock().unwrap();
+        match pspec.name() {
+            "line-numbering-scheme" => {
+                settings.line_numbering_scheme = value.get().expect("type checked upstream");
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.name() {
+            "line-numbering-scheme" => self
+                .settings
+                .lock()
+                .unwrap()
+                .line_numbering_scheme
+                .to_value(),
+            _ => unimplemented!(),
+        }
+    }
+}
 
 impl GstObjectImpl for RtpRawVideoPay {}
 
@@ -348,11 +396,24 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
 
         self.obj().set_src_caps(&src_caps);
 
+        let Ok(line_nb_offset) = self
+            .settings
+            .lock()
+            .unwrap()
+            .line_numbering_scheme
+            .to_line_nb_offset(&info)
+            .inspect_err(|err| {
+                gst::error!(CAT, imp = self, "failed to set caps {caps}: {err}");
+            })
+        else {
+            return false;
+        };
+
         gst::info!(
             CAT,
             imp = self,
             "Format config: {sampling}, pgroup size {}, x_inc {}, y_inc {}, \
-            depth {depth}, interlaced {}",
+            depth {depth}, interlaced {}, line nb offset {line_nb_offset}",
             pgroup.size(),
             pgroup.x_inc(),
             pgroup.y_inc(),
@@ -361,11 +422,12 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
 
         let mut state = self.state.borrow_mut();
 
+        state.line_nb_offset = line_nb_offset;
+
         let max_payload_size = self.obj().max_payload_size() as usize;
 
         // Build a template for how to pack the frame data into packets
         // TODO needs provision for grayscale FDR TI metadata DEF STAN 00-082 § B.6.2
-        // FIXME handle grayscale packing
         let Ok(packing_template) = FramePackingTemplate::new(max_payload_size, &info, 0, pgroup)
         else {
             gst::error!(CAT, imp = self, "Failed to create frame packing template");
@@ -411,6 +473,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
             packing_template,
             extended_seqnum,
             scratch_space_vec,
+            line_nb_offset,
             ..
         } = &mut *state;
 
@@ -436,7 +499,7 @@ impl crate::basepay::RtpBasePay2Impl for RtpRawVideoPay {
         for (i, packet) in packing_template.packets.iter().enumerate() {
             let is_last = i == (n_packets - 1);
 
-            let hdr = packet.make_headers(field, extended_seqnum.0);
+            let hdr = packet.make_headers(field, extended_seqnum.0, *line_nb_offset);
 
             let mut rtp_packet_builder = rtp_types::RtpPacketBuilder::new()
                 .marker_bit(is_last)

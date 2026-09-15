@@ -126,6 +126,27 @@ fn run_raw_video_test(
     height: u32,
     expected_packets_per_frame: usize,
 ) {
+    run_raw_video_test_with_descriptions(
+        format,
+        width,
+        height,
+        "rtpvrawpay2",
+        "rtpvrawdepay2",
+        expected_packets_per_frame,
+        false,
+    )
+}
+
+#[track_caller]
+fn run_raw_video_test_with_descriptions(
+    format: gst_video::VideoFormat,
+    width: u32,
+    height: u32,
+    pay_descr: &str,
+    depay_descr: &str,
+    expected_packets_per_frame: usize,
+    skip_first_frame_check: bool,
+) {
     init();
 
     let video_info = gst_video::VideoInfo::builder(format, width, height)
@@ -178,8 +199,8 @@ fn run_raw_video_test(
 
     run_test_pipeline_and_validate_buffer(
         Source::Buffers(caps, buffers),
-        "rtpvrawpay2",
-        "rtpvrawdepay2",
+        pay_descr,
+        depay_descr,
         expected_pay,
         expected_depay,
         move |buffer, list_idx, buffer_idx| {
@@ -191,7 +212,11 @@ fn run_raw_video_test(
                 bail!("Too many frames (got {}, expected 3)", list_idx + 1);
             }
 
-            check_test_frame(buffer, &video_info, list_idx as u64)
+            if list_idx > 0 || !skip_first_frame_check {
+                check_test_frame(buffer, &video_info, list_idx as u64)
+            } else {
+                Ok(())
+            }
         },
     );
 }
@@ -683,4 +708,97 @@ fn test_depay_ancillary_and_active_lines() {
             frame_idx += 1;
         }
     }
+}
+
+#[test]
+fn test_rtpvraw_vesa_numbering() {
+    // skip first frame checks as it takes 1 frame to infer line numbering scheme
+    run_raw_video_test_with_descriptions(
+        gst_video::VideoFormat::Rgb,
+        320,
+        240,
+        "rtpvrawpay2 line-numbering-scheme=vesa",
+        "rtpvrawdepay2 line-numbering-identification-method=infer",
+        168,
+        true,
+    );
+    run_raw_video_test_with_descriptions(
+        gst_video::VideoFormat::Rgb,
+        640,
+        480,
+        "rtpvrawpay2 line-numbering-scheme=vesa",
+        "rtpvrawdepay2 line-numbering-identification-method=infer",
+        670,
+        true,
+    );
+    run_raw_video_test_with_descriptions(
+        gst_video::VideoFormat::I420,
+        640,
+        480,
+        "rtpvrawpay2 line-numbering-scheme=vesa",
+        "rtpvrawdepay2 line-numbering-identification-method=infer",
+        335,
+        true,
+    );
+}
+
+#[test]
+fn test_rtpvraw_smpte_numbering() {
+    use super::line_numbering::{HD_720P_ACTIVE_HEIGHT, HD_720P_ACTIVE_WIDTH};
+    // elligble resolution for ancillary offset
+    run_raw_video_test_with_descriptions(
+        gst_video::VideoFormat::Rgb,
+        HD_720P_ACTIVE_WIDTH,
+        HD_720P_ACTIVE_HEIGHT,
+        "rtpvrawpay2 line-numbering-scheme=smpte",
+        "rtpvrawdepay2 line-numbering-identification-method=infer",
+        2007,
+        true,
+    );
+    run_raw_video_test_with_descriptions(
+        gst_video::VideoFormat::I420,
+        HD_720P_ACTIVE_WIDTH,
+        HD_720P_ACTIVE_HEIGHT,
+        "rtpvrawpay2 line-numbering-scheme=smpte",
+        "rtpvrawdepay2 line-numbering-identification-method=infer",
+        1004,
+        true,
+    );
+}
+
+#[test]
+fn test_rtpvraw_smpte_numbering_resolution_mismatch() {
+    // skip first frame checks as it takes 1 frame to infer line numbering scheme
+    const WIDTH: u32 = 640;
+    const HEIGHT: u32 = 480;
+
+    init();
+
+    let mut h = gst_check::Harness::new("rtpvrawpay2");
+    h.element()
+        .unwrap()
+        .set_property_from_str("line-numbering-scheme", "smpte");
+    h.play();
+
+    assert!(h.push_event(gst::event::StreamStart::new("test")));
+    assert!(
+        h.push_event(gst::event::Caps::new(
+            &gst::Caps::builder("video/x-raw")
+                .field("format", "RGB")
+                .field("width", WIDTH as i32)
+                .field("height", HEIGHT as i32)
+                .field("framerate", gst::Fraction::new(30, 1))
+                .field("interlace-mode", "progressive")
+                .build(),
+        ))
+    );
+    assert!(
+        h.push_event(gst::event::Segment::new(&gst::FormattedSegment::<
+            gst::format::Time,
+        >::new()))
+    );
+    assert_eq!(
+        Err(gst::FlowError::NotNegotiated),
+        h.push(gst::Buffer::new())
+    );
 }

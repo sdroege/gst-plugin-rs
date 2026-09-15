@@ -123,6 +123,73 @@ pub enum LineNumberingIdentificationMethod {
     Infer,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, glib::Enum, Default)]
+#[enum_type(name = "GstRtpRawVideoLineNumberingScheme")]
+#[repr(i32)]
+pub enum LineNumberingScheme {
+    /// Use GStreamer 0-based line numbering in the RTP payload header
+    #[default]
+    #[enum_value(name = "0-based line numbering", nick = "passthrough")]
+    Passthrough,
+
+    /// Use VESA 1-based line numbering in the RTP payload header
+    #[enum_value(name = "1-based line numbering", nick = "vesa")]
+    Vesa,
+
+    /// Use SMPTE ancillary-tolerant line numbering in the RTP payload header
+    ///
+    /// Use that scheme if the format resolution matches one of those known to use
+    /// ancillary-tolerant numbering scheme; if not, error-out.
+    #[enum_value(
+        name = "Use SMPTE ancillary-tolerant line numbering (requires eligible resolution)",
+        nick = "smpte"
+    )]
+    Smpte,
+}
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum LineNumberingSchemeError {
+    #[error("SMPTE line numbering scheme: unsupported resolution {}x{}", .width, .height)]
+    SmpteSchemeUnsupportedResolution { width: u32, height: u32 },
+}
+
+impl LineNumberingScheme {
+    pub fn to_line_nb_offset(
+        self,
+        vinfo: &gst_video::VideoInfo,
+    ) -> Result<u16, LineNumberingSchemeError> {
+        use LineNumberingScheme::*;
+        let offset = match self {
+            Passthrough => 0,
+            Vesa => 1,
+            Smpte => match (vinfo.width(), vinfo.height()) {
+                (HD_1080P_ACTIVE_WIDTH, HD_1080P_ACTIVE_HEIGHT) => HD_1080P_FIRST_ACTIVE as u16,
+                (HD_720P_ACTIVE_WIDTH, HD_720P_ACTIVE_HEIGHT) => HD_720P_FIRST_ACTIVE as u16,
+                (DCI_2K_ACTIVE_WIDTH, DCI_2K_ACTIVE_HEIGHT) => DCI_2K_FIRST_ACTIVE as u16,
+                (UHD1_4K_ACTIVE_WIDTH, UHD1_4K_ACTIVE_HEIGHT) => UHD1_4K_FIRST_ACTIVE as u16,
+                (DCI_4K_ACTIVE_WIDTH, DCI_4K_ACTIVE_HEIGHT) => DCI_4K_FIRST_ACTIVE as u16,
+                (UHD2_8K_ACTIVE_WIDTH, UHD2_8K_ACTIVE_HEIGHT) => UHD2_8K_FIRST_ACTIVE as u16,
+                (DCI_8K_ACTIVE_WIDTH, DCI_8K_ACTIVE_HEIGHT) => DCI_8K_FIRST_ACTIVE as u16,
+                (width, height) => {
+                    return Err(LineNumberingSchemeError::SmpteSchemeUnsupportedResolution {
+                        width,
+                        height,
+                    });
+                }
+            },
+        };
+
+        gst::debug!(
+            CAT,
+            "selected line number offset {offset} for {}x{}",
+            vinfo.width(),
+            vinfo.height(),
+        );
+
+        Ok(offset)
+    }
+}
+
 /// State of the [`LineNumberingSchemeIdentifier`]
 ///
 /// The [`LineNumberingSchemeIdentifier`] transitions from the `Unidentified`
