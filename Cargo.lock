@@ -4984,10 +4984,13 @@ dependencies = [
  "gstreamer-analytics",
  "gstreamer-base",
  "gstreamer-check",
+ "gstreamer-d3d12",
+ "gstreamer-hip",
  "gstreamer-video",
  "itertools 0.15.0",
  "smol_str",
  "tempfile",
+ "windows 0.62.2",
  "xmltree",
 ]
 
@@ -6708,6 +6711,29 @@ source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#
 dependencies = [
  "glib-sys",
  "gstreamer-gl-sys",
+ "libc",
+ "system-deps 9.0.1",
+]
+
+[[package]]
+name = "gstreamer-hip"
+version = "0.26.0-alpha"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#af24b79300323f9d0cd1db003b75b5685fbcc15b"
+dependencies = [
+ "glib",
+ "gstreamer",
+ "gstreamer-hip-sys",
+ "gstreamer-video",
+]
+
+[[package]]
+name = "gstreamer-hip-sys"
+version = "0.26.0-alpha"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs?branch=main#af24b79300323f9d0cd1db003b75b5685fbcc15b"
+dependencies = [
+ "glib-sys",
+ "gstreamer-sys",
+ "gstreamer-video-sys",
  "libc",
  "system-deps 9.0.1",
 ]

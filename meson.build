@@ -24,6 +24,7 @@ cargo_wrapper = find_program('cargo_wrapper.py')
 cargo_c = find_program('cargo-cbuild', version:'>=0.9.21', required: false)
 
 rustc = meson.get_compiler('rust')
+cc = meson.get_compiler('c')
 
 if not cargo_c.found()
   error('cargo-c missing, install it with: \'cargo install cargo-c\'')
@@ -306,8 +307,21 @@ if analytics_option.allowed()
   gst_analytics_dep = deps_cache['gstreamer-analytics-1.0']
   if gst_analytics_dep.found() and gst_analytics_dep.version().version_compare('>= 1.28')
     plugins_analytics = plugins['analytics']
+    analytics_features = ['v1_28']
+    if gst_analytics_dep.version().version_compare('>= 1.29') and \
+        host_system in ['windows', 'linux'] and \
+        host_machine.cpu_family() in ['x86_64', 'aarch64'] and cc.sizeof('void *') == 8
+      gsthip_dep = dependency('gstreamer-hip-1.0', version: '>= 1.29',
+        fallback: ['gst-plugins-bad', 'gsthip_dep'], required: false)
+      if gsthip_dep.found()
+        analytics_features += ['hip']
+        if gsthip_dep.type_name() == 'internal'
+          depends += subproject('gst-plugins-bad').get_variable('gsthip')
+        endif
+      endif
+    endif
     plugins_analytics += {
-      'features': plugins_analytics['features'] + ['v1_28'],
+      'features': plugins_analytics['features'] + analytics_features,
     }
     plugins += {
       'analytics': plugins_analytics
@@ -368,7 +382,6 @@ if sodium_option.allowed()
   endif
 endif
 
-cc = meson.get_compiler('c')
 if csound_option.allowed()
   # if csound isn't distributed with pkg-config then user needs to define CSOUND_LIB_DIR with its location
 

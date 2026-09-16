@@ -72,6 +72,7 @@ You will find the following plugins in this repository:
       - `pipnettensordec`: Tensor decoder for PIPNet face detection models
       - `relationmeta2onvifmeta`: Convert relation metadata to ONVIF metas
       - `tensordecodebin2`: Bin that auto-plugs tensor decoders based on upstream caps
+      - `videotensorpreproc`: Prepare video frames and regions for tensor inference
       - `yolo26tensordec2`: Tensor decoder for YoloV10 tensors. Supports
         YoloV10, Yolo11, Yolo12 and Yolo26, but only the one-to-one
         (end2end, NMS) heads of YoloV10, Yolo11, Yolo12 and Yolo26.

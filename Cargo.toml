@@ -204,6 +204,7 @@ gst-gl = { package = "gstreamer-gl", git = "https://gitlab.freedesktop.org/gstre
 gst-gl-egl = { package = "gstreamer-gl-egl", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
 gst-gl-wayland = { package = "gstreamer-gl-wayland", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
 gst-gl-x11 = { package = "gstreamer-gl-x11", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+gst-hip = { package = "gstreamer-hip", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
 gst-net = { package = "gstreamer-net", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
 gst-pbutils = { package = "gstreamer-pbutils", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
 gst-plugin-version-helper = { path="./version-helper", version = "0.8" }

@@ -54,6 +54,9 @@ mod crafttensordec;
 #[cfg(feature = "v1_30")]
 mod bytetracker;
 
+#[cfg(feature = "v1_30")]
+mod videotensorpreproc;
+
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "v1_30")]
     plugin.set_static_features_flag();
@@ -97,6 +100,9 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
     #[cfg(feature = "v1_30")]
     bytetracker::register(plugin)?;
+
+    #[cfg(feature = "v1_30")]
+    videotensorpreproc::register(plugin)?;
 
     Ok(())
 }

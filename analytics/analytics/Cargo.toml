@@ -25,6 +25,13 @@ itertools = "0.15"
 smol_str = { version = "0.3", optional = true }
 geo = { version = "0.33", default-features = false, optional = true }
 
+[target.'cfg(all(target_pointer_width = "64", any(target_arch = "x86_64", target_arch = "aarch64"), any(target_os = "windows", target_os = "linux")))'.dependencies]
+gst-hip = { workspace = true, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+gst-d3d12.workspace = true
+windows = { version = ">= 0.61, <= 0.62", features = ["Win32_Graphics_Direct3D12", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D_Fxc", "Win32_Graphics_Dxgi_Common"] }
+
 [dev-dependencies]
 gst-check.workspace = true
 tempfile = "3"
@@ -36,8 +43,9 @@ gst-plugin-version-helper.workspace = true
 static = []
 capi = []
 doc = []
+hip = ["v1_30", "dep:gst-hip"]
 v1_28 = ["gst-analytics/v1_28"]
-v1_30 = ["v1_28", "gst/v1_30", "gst-video/v1_30", "gst-analytics/v1_30", "dep:smol_str", "dep:geo"]
+v1_30 = ["v1_28", "gst/v1_30", "gst-video/v1_30", "gst-d3d12/v1_30", "gst-analytics/v1_30", "dep:smol_str", "dep:geo"]
 
 [[test]]
 name = "analyticscombiner"
