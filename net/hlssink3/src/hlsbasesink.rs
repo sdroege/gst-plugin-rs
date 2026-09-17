@@ -805,7 +805,7 @@ impl HlsBaseSink {
             .replace(
                 None,
                 false,
-                gio::FileCreateFlags::empty(),
+                gio::FileCreateFlags::REPLACE_DESTINATION,
                 None::<&gio::Cancellable>,
             )
             .map_err(move |err| {
