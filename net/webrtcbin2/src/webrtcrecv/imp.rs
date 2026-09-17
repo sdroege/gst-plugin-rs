@@ -137,11 +137,12 @@ impl ObjectImpl for WebRTCRecv {
                 .to_value(),
             "threadshare-mode" => self.settings.lock().unwrap().threadshare_mode.to_value(),
             "threadshare-context" => self.settings.lock().unwrap().threadshare_ctx.to_value(),
-            "threadshare-context-wait" => self
+            "threadshare-context-wait" => (self
                 .settings
                 .lock()
                 .unwrap()
                 .threadshare_ctx_wait
+                .mseconds() as u32)
                 .to_value(),
             _ => unreachable!(),
         }
