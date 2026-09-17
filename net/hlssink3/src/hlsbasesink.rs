@@ -16,7 +16,6 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use m3u8_rs::MediaSegment;
 use std::fs;
-use std::io::Write;
 use std::path;
 use std::sync::{LazyLock, Mutex};
 
@@ -163,6 +162,7 @@ pub struct PlaylistContext {
     max_num_segment_files: usize,
     playlist_length: u32,
     single_media_file: bool,
+    playlist_data: Vec<u8>,
 }
 
 #[derive(Default)]
@@ -424,6 +424,7 @@ impl HlsBaseSink {
             max_num_segment_files: settings.max_num_segment_files,
             playlist_length: settings.playlist_length,
             single_media_file: settings.single_media_file.is_some(),
+            playlist_data: Vec::new(),
         });
     }
 
@@ -446,6 +447,7 @@ impl HlsBaseSink {
             max_num_segment_files: settings.max_num_segment_files,
             playlist_length: settings.playlist_length,
             single_media_file: false,
+            playlist_data: Vec::new(),
         });
     }
 
@@ -516,6 +518,29 @@ impl HlsBaseSink {
         }
     }
 
+    fn buffered_fragment_stream(stream: gio::OutputStream) -> gio::OutputStream {
+        // The muxer can write a fragment in many small chunks so a buffered
+        // stream coalesces them into fewer write() calls.
+        //
+        // Size specified here is more of a guess and going higher did not
+        // bring more improvements.
+        gio::BufferedOutputStream::new_sized(&stream, 8 * 1024).upcast()
+    }
+
+    fn flush_fragment_stream(&self, stream: Option<&super::HlsBaseSinkGioOutputStream>) {
+        // For the single media file case the same fragment stream is
+        // reused for the whole file and giostreamsink does not close
+        // it between fragments close-on-stop being disabled for that
+        // case. Flush any data that is still buffered before playlist
+        // is updated. giostreamsink already flushes on EOS and stop,
+        // so this is us being cautious.
+        if let Some(stream) = stream
+            && let Err(err) = stream.flush(gio::Cancellable::NONE)
+        {
+            gst::error!(CAT, imp = self, "Failed to flush fragment stream: {}", err);
+        }
+    }
+
     pub fn get_fragment_stream(&self, fragment_id: u32) -> Option<(gio::OutputStream, String)> {
         let location = self.get_stream_location(fragment_id)?;
 
@@ -533,14 +558,15 @@ impl HlsBaseSink {
 
             gst::trace!(CAT, imp = self, "Segment location formatted: {}", location);
 
-            Some((stream, location))
+            Some((Self::buffered_fragment_stream(stream), location))
         } else if state.stream.is_none() {
             let stream = self.obj().emit_by_name::<Option<gio::OutputStream>>(
                 SIGNAL_GET_FRAGMENT_STREAM,
                 &[&location],
             )?;
 
-            let gios = super::HlsBaseSinkGioOutputStream::new(stream);
+            let gios =
+                super::HlsBaseSinkGioOutputStream::new(Self::buffered_fragment_stream(stream));
             let stream = gios.upcast_ref::<gio::OutputStream>().clone();
 
             state.stream = Some(gios);
@@ -579,14 +605,14 @@ impl HlsBaseSink {
         mut segment: MediaSegment,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
-        let context = match state.context.as_mut() {
-            Some(context) => context,
-            None => {
-                gst::error!(CAT, imp = self, "Playlist is not configured",);
+        if state.context.is_none() {
+            gst::error!(CAT, imp = self, "Playlist is not configured");
+            return Err(gst::FlowError::Error);
+        }
 
-                return Err(gst::FlowError::Error);
-            }
-        };
+        self.flush_fragment_stream(state.stream.as_ref());
+
+        let context = state.context.as_mut().unwrap();
 
         if let Some(running_time) = running_time {
             if context.pdt_base_running_time.is_none() {
@@ -682,15 +708,14 @@ impl HlsBaseSink {
         segment: MediaSegment,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
-        let context = match state.iframe_context.as_mut() {
-            Some(context) => context,
-            None => {
-                gst::error!(CAT, imp = self, "I-Frame playlist is not configured",);
+        if state.iframe_context.is_none() {
+            gst::error!(CAT, imp = self, "I-Frame playlist is not configured");
+            return Err(gst::FlowError::Error);
+        }
 
-                return Err(gst::FlowError::Error);
-            }
-        };
+        self.flush_fragment_stream(state.stream.as_ref());
 
+        let context = state.iframe_context.as_mut().unwrap();
         let (init_segment_br, segment_br) = self.byte_ranges(&segment);
 
         context.playlist.add_segment(segment);
@@ -733,9 +758,25 @@ impl HlsBaseSink {
             .playlist
             .update_playlist_state(context.playlist_length as usize);
 
+        // Serialize the playlist to memory first. Writing the serialized
+        // playlist in a single write_all call improves I/O performance.
+        context.playlist_data.clear();
+        context
+            .playlist
+            .write_to(&mut context.playlist_data)
+            .map_err(|err| {
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Could not serialize new playlist: {}",
+                    err.to_string()
+                );
+                gst::FlowError::Error
+            })?;
+
         // Acquires the playlist file handle so we can update it with new content. By default, this
         // is expected to be the same file every time.
-        let mut playlist_stream = self
+        let playlist_stream = self
             .obj()
             .emit_by_name::<Option<gio::OutputStream>>(
                 SIGNAL_GET_PLAYLIST_STREAM,
@@ -748,12 +789,11 @@ impl HlsBaseSink {
                     "Could not get stream to write playlist content",
                 );
                 gst::FlowError::Error
-            })?
-            .into_write();
+            })?;
 
-        context
-            .playlist
-            .write_to(&mut playlist_stream)
+        playlist_stream
+            .write_all(&context.playlist_data, gio::Cancellable::NONE)
+            .and_then(|(_, err)| err.map_or(Ok(()), Err))
             .map_err(|err| {
                 gst::error!(
                     CAT,
@@ -763,15 +803,18 @@ impl HlsBaseSink {
                 );
                 gst::FlowError::Error
             })?;
-        playlist_stream.flush().map_err(|err| {
-            gst::error!(
-                CAT,
-                imp = self,
-                "Could not flush playlist: {}",
-                err.to_string()
-            );
-            gst::FlowError::Error
-        })?;
+
+        playlist_stream
+            .flush(gio::Cancellable::NONE)
+            .map_err(|err| {
+                gst::error!(
+                    CAT,
+                    imp = self,
+                    "Could not flush playlist: {}",
+                    err.to_string()
+                );
+                gst::FlowError::Error
+            })?;
 
         let delete_fragment = context.playlist.is_type_undefined()
             && context.max_num_segment_files > 0

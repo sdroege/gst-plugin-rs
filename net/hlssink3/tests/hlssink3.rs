@@ -11,6 +11,7 @@ use gst::prelude::*;
 use gsthlssink3::hlssink3::HlsSink3PlaylistType;
 use std::io::Write;
 use std::sync::LazyLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 
 mod common;
@@ -686,6 +687,111 @@ fn test_hlssink3_video_with_single_media_file() -> Result<(), ()> {
         ]
     };
     assert_eq!(expected_ordering_of_events, actual_events);
+
+    Ok(())
+}
+
+struct CountingWriter {
+    write_calls: Arc<AtomicUsize>,
+}
+
+impl Write for CountingWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.write_calls.fetch_add(1, Ordering::SeqCst);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn test_hlssink3_playlist_is_written_in_one_call() -> Result<(), ()> {
+    init();
+
+    const BUFFER_NB: i32 = 3000;
+
+    let pipeline = gst::Pipeline::with_name("playlist_write_pipeline");
+
+    let video_src = try_create_element!("videotestsrc");
+    video_src.set_property("num-buffers", BUFFER_NB);
+
+    let caps = gst::Caps::builder("video/x-raw")
+        .field("framerate", gst::Fraction::new(1, 1))
+        .build();
+    let capsfilter = gst::ElementFactory::make("capsfilter")
+        .property("caps", caps)
+        .build()
+        .expect("Must be able to instantiate capsfilter");
+
+    let x264enc = try_create_element!("x264enc");
+    x264enc.set_property("key-int-max", 1u32);
+    let h264parse = try_create_element!("h264parse");
+
+    let hlssink3 = gst::ElementFactory::make("hlssink3")
+        .name("test_hlssink3")
+        .property("target-duration", 1u32)
+        .property("playlist-length", 0u32)
+        .property("max-files", u32::MAX)
+        .build()
+        .expect("Must be able to instantiate hlssink3");
+
+    let write_calls = Arc::new(AtomicUsize::new(0));
+    let playlist_streams = Arc::new(AtomicUsize::new(0));
+
+    hlssink3.connect("get-playlist-stream", false, {
+        let write_calls = write_calls.clone();
+        let playlist_streams = playlist_streams.clone();
+
+        move |_args| {
+            playlist_streams.fetch_add(1, Ordering::SeqCst);
+
+            let writer = CountingWriter {
+                write_calls: write_calls.clone(),
+            };
+            let output = gio::WriteOutputStream::new(writer);
+
+            Some(output.to_value())
+        }
+    });
+
+    hlssink3.connect("get-fragment-stream", false, move |_args| {
+        let stream = gio::MemoryOutputStream::new_resizable();
+        Some(stream.to_value())
+    });
+
+    try_or_pause!(pipeline.add_many([&video_src, &capsfilter, &x264enc, &h264parse, &hlssink3,]));
+    try_or_pause!(gst::Element::link_many([
+        &video_src,
+        &capsfilter,
+        &x264enc,
+        &h264parse,
+        &hlssink3
+    ]));
+
+    pipeline.set_state(gst::State::Playing).unwrap();
+
+    let bus = pipeline.bus().unwrap();
+    while let Some(msg) = bus.timed_pop(gst::ClockTime::NONE) {
+        use gst::MessageView;
+        match msg.view() {
+            MessageView::Eos(..) => break,
+            MessageView::Error(err) => panic!("{err}"),
+            _ => (),
+        }
+    }
+
+    pipeline.set_state(gst::State::Null).unwrap();
+
+    let streams = playlist_streams.load(Ordering::SeqCst);
+    let writes = write_calls.load(Ordering::SeqCst);
+
+    assert!(streams > 0, "Expected at least one playlist update");
+    assert_eq!(
+        writes, streams,
+        "Each playlist update must be written with a single write() call"
+    );
 
     Ok(())
 }
