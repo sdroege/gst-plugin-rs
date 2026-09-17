@@ -6323,7 +6323,6 @@ dependencies = [
  "rustls 0.23.45",
  "sdp-types",
  "serde",
- "serde_derive",
  "serde_json",
  "thiserror 2.0.20",
  "tokio",

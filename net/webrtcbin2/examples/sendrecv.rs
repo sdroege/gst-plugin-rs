@@ -15,8 +15,6 @@ use clap::Parser;
 
 use rand::prelude::*;
 
-use serde_derive::{Deserialize, Serialize};
-
 use gst::glib;
 use gst::prelude::*;
 
@@ -52,7 +50,7 @@ struct Args {
 }
 
 // JSON messages we communicate with
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum JsonMsg {
     Ice {
