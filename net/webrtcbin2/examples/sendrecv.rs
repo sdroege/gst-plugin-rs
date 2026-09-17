@@ -85,44 +85,6 @@ struct App(Arc<AppInner>);
 #[derive(Debug)]
 struct AppWeak(Weak<AppInner>);
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct RtpMap {
-    pub name: String,
-    pub clock_rate: u32,
-    pub params: Option<String>,
-}
-
-impl RtpMap {
-    fn from_str(s: &str) -> Result<(u8, Self), ()> {
-        let mut s = s.splitn(2, " ");
-        let pt = s.next().and_then(parse_payload).ok_or(())?;
-        let params = s.next().ok_or(())?;
-        let mut s = params.split("/");
-        let enc_name = s.next().ok_or(())?;
-        let clock_rate = s.next().and_then(|cr| cr.parse::<u32>().ok()).ok_or(())?;
-        let enc_params = s.next().map(|s| s.to_string());
-        if s.next().is_some() {
-            return Err(());
-        }
-        Ok((
-            pt,
-            RtpMap {
-                name: enc_name.to_string(),
-                clock_rate,
-                params: enc_params,
-            },
-        ))
-    }
-}
-
-fn parse_payload(s: &str) -> Option<u8> {
-    let pt = s.parse::<u8>().ok()?;
-    if pt > 127 {
-        return None;
-    }
-    Some(pt)
-}
-
 // To be able to access the App's fields directly
 impl std::ops::Deref for App {
     type Target = AppInner;
@@ -500,19 +462,16 @@ impl App {
                 */
                 let twcc_id = None::<u8>;
 
-                for a in &media.attributes {
-                    if a.attribute == "rtpmap" {
-                        let rtpmap = a.value.as_ref().expect("No rtpmap value!");
-                        let (map_pt, rtpmap) =
-                            RtpMap::from_str(rtpmap).expect("Failed to parse rtpmap");
-                        if map_pt == pt {
-                            if rtpmap.name == "VP8" && vp8_id.is_none() {
-                                vp8_id = Some((pt, twcc_id));
-                            } else if rtpmap.name.eq_ignore_ascii_case("opus") && opus_id.is_none()
-                            {
-                                opus_id = Some((pt, twcc_id));
-                            }
-                        }
+                let Some(Ok(rtpmap)) = media.get_first_attribute_typed::<sdp_types::RtpMap>()
+                else {
+                    bail!("no or invalid RTP Map in {media:?}");
+                };
+                if rtpmap.payload_type == pt {
+                    if rtpmap.encoding_name == "VP8" && vp8_id.is_none() {
+                        vp8_id = Some((pt, twcc_id));
+                    } else if rtpmap.encoding_name.eq_ignore_ascii_case("opus") && opus_id.is_none()
+                    {
+                        opus_id = Some((pt, twcc_id));
                     }
                 }
             }
