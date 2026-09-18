@@ -21,7 +21,7 @@
  * |[
  * gst-launch-1.0 udpsrc2 caps='application/x-rtp, media=(string)application, clock-rate=(int)90000, encoding-name=(string)SMPTE336M' ! rtpklvdepay2 ! fakesink dump=true
  * ]| This will depayload an RTP KLV stream and display a hexdump of the KLV data on stdout.
- * You can use the #rtpklvpay2 or #rtpklvpay elements to create such an RTP stream.
+ * You can use the #rtpklvpay2 element to create such an RTP stream.
  *
  * Since: plugins-rs-0.13.0
  */

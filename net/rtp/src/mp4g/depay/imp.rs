@@ -22,7 +22,7 @@
  * gst-launch-1.0 udpsrc2 caps='application/x-rtp,media=audio,clock-rate=44100,encoding-name=MPEG4-GENERIC,payload=96,encoding-params=1,streamtype=5,profile-level-id=2,mode=AAC-hbr,config=(string)1208,sizelength=13,indexlength=3,indexdeltalength=3' ! rtpjitterbuffer ! rtpmp4gdepay2 ! decodebin3 ! audioconvert ! audioresample ! autoaudiosink
  * ]| This will depayload an incoming RTP MPEG-4 generic elementary stream AAC-hbr with
  * 1 channel @ 44100 sampling rate (default `audiotestsrc ! fdkaacenc` negotiation).
- * You can use the #rtpmp4gpay2 or #rtpmp4gpay elements to create such an RTP stream.
+ * You can use the #rtpmp4gpay2 element to create such an RTP stream.
  *
  * Since: plugins-rs-0.13.0
  */

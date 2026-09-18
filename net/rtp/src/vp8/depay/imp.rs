@@ -22,7 +22,7 @@
  * ```
  *
  * This will depayload and decode an incoming RTP VP8 video stream. You can use the #rtpvp8pay2
- * and #vp8enc elements to create such an RTP stream.
+ * element to create such an RTP stream.
  *
  * Since: plugins-rs-0.13.0
  */

@@ -21,7 +21,7 @@
  * |[
  * gst-launch-1.0 udpsrc2 caps='application/x-rtp,media=audio,clock-rate=48000,encoding-name=AC3,payload=96' ! rtpjitterbuffer latency=250 ! rtpac3depay2 ! decodebin3 ! audioconvert ! audioresample ! autoaudiosink
  * ]| This will depayload an incoming RTP AC-3 audio stream and decode it and play it.
- * You can use the `rtpac3pay2` or `rtpac3pay` elements with `avenc_ac3` to create such an RTP stream.
+ * You can use the `rtpac3pay2` element with `avenc_ac3` to create such an RTP stream.
  *
  * Since: plugins-rs-0.13.0
  */

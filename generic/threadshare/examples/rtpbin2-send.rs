@@ -60,7 +60,7 @@ fn main() {
         .property("context-wait", 20u32)
         .build()
         .unwrap();
-    let audio_pay = gst::ElementFactory::make("rtpL16pay")
+    let audio_pay = gst::ElementFactory::make("rtpL16pay2")
         .name("pay")
         .property("pt", AUDIO_PT as u32)
         .build()

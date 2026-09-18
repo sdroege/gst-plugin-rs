@@ -34,7 +34,7 @@
  * gst-launch audiotestsrc wave=ticks ! avenc_ac3 ! ac3parse ! rtpac3pay2 ! udpsink2 host=127.0.0.1 port=5004
  * ]| This will encode an audio test signal to AC-3 and then payload the encoded audio
  * into RTP packets and send them out via UDP to localhost (IPv4) port 5004.
- * You can use the `rtpac3depay2` or `rtpac3depay` elements to depayload such a stream, and
+ * You can use the `rtpac3depay2` element to depayload such a stream, and
  * the `avdec_ac3` or `a52dec` elements to decode the depayloaded stream.
  *
  * Since: plugins-rs-0.13.0

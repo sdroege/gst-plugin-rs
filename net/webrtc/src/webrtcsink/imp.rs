@@ -985,7 +985,7 @@ fn configure_payloader(pay: &gst::Element) {
 
     if let Some(factory) = pay.factory() {
         match factory.name().as_str() {
-            "rtpvp8pay" | "rtpvp9pay" => {
+            "rtpvp8pay2" | "rtpvp9pay2" | "rtpvp8pay" | "rtpvp9pay" => {
                 pay.set_property_from_str("picture-id-mode", "15-bit");
             }
             "rtph264pay" | "rtph265pay" => {

@@ -22,7 +22,7 @@
  * ```
  *
  * This will depayload and decode an incoming RTP VP9 video stream. You can use the #rtpvp9pay2
- * and #vp9enc elements to create such an RTP stream.
+ * element to create such an RTP stream.
  *
  * Since: plugins-rs-0.13.0
  */

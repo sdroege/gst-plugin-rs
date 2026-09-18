@@ -157,7 +157,7 @@ fn main() {
 
         let elems = if session_id == 0 {
             // Let's use this stream to monitor what's going on
-            let depay = gst::ElementFactory::make("rtpL16depay")
+            let depay = gst::ElementFactory::make("rtpL16depay2")
                 .name("depay-0")
                 .build()
                 .unwrap();

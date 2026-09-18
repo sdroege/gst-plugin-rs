@@ -37,7 +37,7 @@
  *
  * This will encode an audio test signal to MP3 and then payload the encoded audio
  * into RTP packets and send them out via UDP to localhost (IPv4) port 5004.
- * You can use the #rtpmpadepay2 or #rtpmpadepay elements to depayload such a stream, and
+ * You can use the #rtpmpadepay2 element to depayload such a stream, and
  * the #mpg123audiodec or avdec_mp3 element to decode the depayloaded stream.
  *
  * Since: plugins-rs-0.16.0

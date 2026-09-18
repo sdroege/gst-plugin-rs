@@ -126,7 +126,7 @@ fn send_rtp_buffers(n_streams: u16, num_buffers: Option<i32>) {
             .name(format!("alawenc-{i}").as_str())
             .build()
             .unwrap();
-        let pay = gst::ElementFactory::make("rtppcmapay")
+        let pay = gst::ElementFactory::make("rtppcmapay2")
             .name(format!("rtppcmapay-{i}").as_str())
             .build()
             .unwrap();

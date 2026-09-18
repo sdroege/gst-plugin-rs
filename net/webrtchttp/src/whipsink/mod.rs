@@ -15,7 +15,7 @@
  * ``` bash
  * gst-launch-1.0 videotestsrc ! videoconvert ! openh264enc ! rtph264pay ! \
  * 'application/x-rtp,media=video,encoding-name=H264,payload=97,clock-rate=90000' ! \
- * whip.sink_0 audiotestsrc ! audioconvert ! opusenc ! rtpopuspay ! \
+ * whip.sink_0 audiotestsrc ! audioconvert ! opusenc ! rtpopuspay2 ! \
  * 'application/x-rtp,media=audio,encoding-name=OPUS,payload=96,clock-rate=48000,encoding-params=(string)2' ! \
  * whip.sink_1 whipsink name=whip auth-token=$WHIP_TOKEN whip-endpoint=$WHIP_ENDPOINT
  * ```

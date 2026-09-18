@@ -21,7 +21,7 @@ fn connect_input_stream(
     compositor: &gst::Element,
     capsfilter: &gst::Element,
 ) -> Result<(), Error> {
-    let depay = gst::ElementFactory::make("rtph264depay")
+    let depay = gst::ElementFactory::make("rtph264depay2")
         .property("request-keyframe", true)
         .property("wait-for-keyframe", true)
         .build()?;

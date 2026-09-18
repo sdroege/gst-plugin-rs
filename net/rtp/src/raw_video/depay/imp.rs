@@ -20,8 +20,8 @@
  *
  * |[
  * gst-launch-1.0 udpsrc2 address=127.0.0.1 port=5555 caps='application/x-rtp,media=video,clock-rate=90000,encoding-name=RAW,width=320,height=240,depth=8,sampling=BGRA' ! rtpjitterbuffer latency=100 ! rtpvrawdepay2 ! queue ! videoconvertscale ! autovideosink
- * ]| This will depayload an incoming Raw Video RTP stream. You can use the #rtpvrawpay2 or #rtpvrawpay
- * element to create such an RTP stream.
+ * ]| This will depayload an incoming Raw Video RTP stream. You can use the #rtpvrawpay2 element
+ * to create such an RTP stream.
  *
  * ## Performance and system tuning considerations
  *

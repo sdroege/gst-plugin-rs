@@ -429,7 +429,7 @@ fn add_audio_test_src_harness(h: &mut gst_check::Harness, ssrc: u32) {
         caps.set("ssrc", ssrc);
     }
     h.add_src_parse(
-        "audiotestsrc is-live=true ! rtpL16pay ! capsfilter name=capsfilter ! identity",
+        "audiotestsrc is-live=true ! rtpL16pay2 ! capsfilter name=capsfilter ! identity",
         true,
     );
     let capsfilter = h
@@ -522,7 +522,7 @@ fn add_video_test_src_harness(h: &mut gst_check::Harness, ssrc: u32) {
         caps.set("ssrc", ssrc);
     }
     h.add_src_parse(
-        "videotestsrc is-live=true ! vp8enc deadline=1 ! rtpvp8pay ! capsfilter name=capsfilter ! identity",
+        "videotestsrc is-live=true ! vp8enc deadline=1 ! rtpvp8pay2 ! capsfilter name=capsfilter ! identity",
         true,
     );
     let capsfilter = h

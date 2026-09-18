@@ -25,7 +25,7 @@
  * ```
  *
  * This will depayload an incoming RTP MPEG audio elementary stream (e.g. mp3).
- * You can use the #rtpmpapay2 or #rtpmpapay elements to create such an RTP stream.
+ * You can use the #rtpmpapay2 element to create such an RTP stream.
  *
  * Since: plugins-rs-0.16.0
  */

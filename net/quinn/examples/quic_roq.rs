@@ -73,7 +73,7 @@ fn video_bin(pipeline: &gst::Pipeline, text: &str, use_vp8: bool) -> gst::Bin {
     };
     let enc_caps = gst::ElementFactory::make("capsfilter").build().unwrap();
     let rtppay = if use_vp8 {
-        gst::ElementFactory::make("rtpvp8pay").build().unwrap()
+        gst::ElementFactory::make("rtpvp8pay2").build().unwrap()
     } else {
         gst::ElementFactory::make("rtph264pay").build().unwrap()
     };

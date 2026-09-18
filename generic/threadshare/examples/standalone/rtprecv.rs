@@ -81,7 +81,7 @@ fn main() {
             .build()
             .unwrap();
 
-        let pay = gst::ElementFactory::make("rtpL16pay")
+        let pay = gst::ElementFactory::make("rtpL16pay2")
             .name(format!("pay-{i}").as_str())
             .build()
             .unwrap();
@@ -118,7 +118,7 @@ fn main() {
 
             let sub_ctx_name = format!("standalone {}.sub", i % args.groups);
 
-            let depay = gst::ElementFactory::make("rtpL16depay")
+            let depay = gst::ElementFactory::make("rtpL16depay2")
                 .name(format!("depay-{i}").as_str())
                 .build()
                 .unwrap();
