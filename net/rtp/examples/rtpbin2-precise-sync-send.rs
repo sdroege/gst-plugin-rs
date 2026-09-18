@@ -7,7 +7,7 @@
 ///
 /// Note that this sender muxes RTP & RTCP. If this is not a requirement,
 /// this can be simplified by removing the relevant funnel & signalling and
-/// adding a dedicated `udpsink`.
+/// adding a dedicated `udpsink2`.
 ///
 /// ## Examples
 ///
@@ -677,12 +677,12 @@ fn build_pipeline(
         )
         .unwrap();
 
-    let outbound_sink = gst::ElementFactory::make("udpsink")
+    let outbound_sink = gst::ElementFactory::make("udpsink2")
         .name("outbound-udpsink")
         // sync of the RTP packets is handled before rtpsend
         .property("sync", false)
         .property("host", &args.outbound_addr)
-        .property("port", args.outbound_port as i32)
+        .property("port", args.outbound_port as u32)
         .build()
         .context("configuring outbound sink")?;
     pipeline.add(&outbound_sink).unwrap();

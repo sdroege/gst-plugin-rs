@@ -19,7 +19,7 @@
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 filesrc location=video-with-st2038.ts ! tsdemux ! rtpsmpte291pay ! udpsink
+ * gst-launch-1.0 filesrc location=video-with-st2038.ts ! tsdemux ! rtpsmpte291pay ! udpsink2
  * ]| This example pipeline will payload an RTP ANC stream extracted from an
  * MPEG-TS stream and send it via UDP to an RTP receiver. Note that `rtpsmpte291pay` expects the
  * incoming ST2038 packets to be timestamped, which may not always be the case when they come from

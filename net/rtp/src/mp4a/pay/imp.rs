@@ -21,7 +21,7 @@
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 audiotestsrc ! fdkaacenc ! rtpmp4apay2 ! udpsink host=127.0.0.1 port=5004
+ * gst-launch-1.0 audiotestsrc ! fdkaacenc ! rtpmp4apay2 ! udpsink2 host=127.0.0.1 port=5004
  * ]| This will encode an audio test signal to AAC and then payload the encoded audio
  * into RTP packets and send them out via UDP to localhost (IPv4) port 5004.
  * You can use the #rtpmp4adepay2 or #rtpmp4adepay elements to depayload such a stream, and

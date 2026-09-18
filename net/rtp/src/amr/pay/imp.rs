@@ -20,7 +20,7 @@ use anyhow::anyhow;
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 audiotestsrc wave=ticks ! amrnbenc ! rtpamrpay2 ! udpsink host=127.0.0.1 port=5004
+ * gst-launch-1.0 audiotestsrc wave=ticks ! amrnbenc ! rtpamrpay2 ! udpsink2 host=127.0.0.1 port=5004
  * ]| This will encode an audio test signal as AMR NB audio and payload it as RTP and send it out
  * over UDP to localhost port 5004.
  *

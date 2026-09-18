@@ -32,7 +32,7 @@
  * ## Example pipeline
  *
  * ```shell
- * gst-launch-1.0 audiotestsrc wave=ticks ! lamemp3enc ! mpegaudioparse ! rtpmpapay2 ! udpsink host=127.0.0.1 port=5004
+ * gst-launch-1.0 audiotestsrc wave=ticks ! lamemp3enc ! mpegaudioparse ! rtpmpapay2 ! udpsink2 host=127.0.0.1 port=5004
  * ```
  *
  * This will encode an audio test signal to MP3 and then payload the encoded audio

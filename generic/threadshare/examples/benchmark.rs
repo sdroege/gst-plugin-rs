@@ -86,10 +86,10 @@ fn main() {
         );
 
         let (source, context) = match source.as_str() {
-            "udpsrc" => {
-                let source = gst::ElementFactory::make("udpsrc")
+            "udpsrc2" => {
+                let source = gst::ElementFactory::make("udpsrc2")
                     .name(format!("source-{i}").as_str())
-                    .property("port", 5004i32 + i as i32)
+                    .property("port", 5004u32 + i as u32)
                     .property("retrieve-sender-address", false)
                     .build()
                     .unwrap();

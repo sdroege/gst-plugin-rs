@@ -12,7 +12,7 @@
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 udpsrc caps='application/x-rtp, media=video, encoding-name=JXSV, clock-rate=90000, packetmode=(string)0, sampling=(string)YCbCr-4:2:2, depth=(string)10, width=(string)1920, height=(string)1080, exactframerate=(string)25' ! rtpjitterbuffer latency=50 ! rtpjxsvdepay ! svtjpegxsdec ! videoconvert ! autovideosink
+ * gst-launch-1.0 udpsrc2 caps='application/x-rtp, media=video, encoding-name=JXSV, clock-rate=90000, packetmode=(string)0, sampling=(string)YCbCr-4:2:2, depth=(string)10, width=(string)1920, height=(string)1080, exactframerate=(string)25' ! rtpjitterbuffer latency=50 ! rtpjxsvdepay ! svtjpegxsdec ! videoconvert ! autovideosink
  * ]| Depayload an incoming RTP JPEG XS video stream. The packetmode, width,
  * height, depth and sampling media type parameters are carried as SDP fmtp
  * parameters, i.e. as strings; svtjpegxsdec requires some of them to negotiate

@@ -1187,7 +1187,7 @@ impl RtpBaseDepay2 {
                 [
                     "Input buffers need to have RTP caps set on them. This is usually \
                      achieved by setting the 'caps' property of the upstream source \
-                     element (often udpsrc or appsrc), or by putting a capsfilter \
+                     element (often udpsrc/2 or appsrc), or by putting a capsfilter \
                      element before the depayloader and setting the 'caps' property \
                      on that. Also see https://gitlab.freedesktop.org/gstreamer/gstreamer/-/ \
                      blob/main/subprojects/gst-plugins-good/gst/rtp/README",

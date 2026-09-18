@@ -21,7 +21,7 @@
  * ## Example pipeline
  *
  * ```shell
- * gst-launch-1.0 udpsrc caps='application/x-rtp,media=audio,clock-rate=90000,encoding-name=MPA,payload=96' ! rtpjitterbuffer latency=250 ! rtpmpadepay2 ! decodebin3 ! audioconvert ! audioresample ! autoaudiosink
+ * gst-launch-1.0 udpsrc2 caps='application/x-rtp,media=audio,clock-rate=90000,encoding-name=MPA,payload=96' ! rtpjitterbuffer latency=250 ! rtpmpadepay2 ! decodebin3 ! audioconvert ! audioresample ! autoaudiosink
  * ```
  *
  * This will depayload an incoming RTP MPEG audio elementary stream (e.g. mp3).

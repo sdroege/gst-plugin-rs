@@ -20,7 +20,7 @@
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 udpsrc caps='application/x-rtp, media=audio, clock-rate=48000, encoding-name=OPUS, encoding-params=(string)2, sprop-stereo=(string)1, payload=96' ! rtpjitterbuffer latency=50 ! rtpopusdepay2 ! opusdec ! audioconvert ! audioresample ! autoaudiosink
+ * gst-launch-1.0 udpsrc2 caps='application/x-rtp, media=audio, clock-rate=48000, encoding-name=OPUS, encoding-params=(string)2, sprop-stereo=(string)1, payload=96' ! rtpjitterbuffer latency=50 ! rtpopusdepay2 ! opusdec ! audioconvert ! audioresample ! autoaudiosink
  * ]| This will depayload an incoming RTP Opus audio stream. You can use the #opusenc and
  * #rtpopuspay2 elements to create such an RTP stream.
  *

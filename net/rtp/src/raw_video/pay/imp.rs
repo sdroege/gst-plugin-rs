@@ -19,7 +19,7 @@
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=25/1,format=RGB ! timeoverlay font-desc=Sans,22 ! queue ! rtpvrawpay2 chunks-per-frame=10 ! udpsink host=127.0.0.1 port=5555 buffer-size=4194304
+ * gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,framerate=25/1,format=RGB ! timeoverlay font-desc=Sans,22 ! queue ! rtpvrawpay2 chunks-per-frame=10 ! udpsink2 host=127.0.0.1 port=5555 buffer-size=4194304
  * ]| This will create and payload a raw video stream in RGB format with a test pattern and send it out via UDP.
  *
  * ## Performance and system tuning considerations
@@ -28,7 +28,7 @@
  * packet rates, and as such is more demanding on the system and network than lower-bitrate
  * compressed video.
  *
- * This means you may need to tune your system's network configuration and configure udpsink
+ * This means you may need to tune your system's network configuration and configure udpsink2
  * for high datarate streams.
  *
  * In particular, you may want to increase the maximum allowed buffer size for the kernel-side
@@ -42,7 +42,7 @@
  *
  * Alternatively this can also be configured in `/etc/sysctl.conf`.
  *
- * Once this is configured kernel-side, you can use `udpsink buffer-size=NNN` to increase the
+ * Once this is configured kernel-side, you can use `udpsink2 buffer-size=NNN` to increase the
  * value to something larger than the default. If the value is too low it's possible that a lot
  * of packets may never get sent out because they will be overwritten by new data before they can
  * all be sent out.

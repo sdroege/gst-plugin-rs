@@ -332,7 +332,7 @@ unsafe impl<T: RtpLinearAudioPayImpl> IsSubclassable<T> for super::RtpLinearAudi
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 audiotestsrc wave=ticks ! rtpL8pay2 ! udpsink host=127.0.0.1 port=5004
+ * gst-launch-1.0 audiotestsrc wave=ticks ! rtpL8pay2 ! udpsink2 host=127.0.0.1 port=5004
  * ]| This will generate an 8-bit raw audio test signal and payload it as RTP and send it out
  * as UDP to localhost port 5004.
  *
@@ -419,7 +419,7 @@ impl RtpBaseAudioPay2Impl for RtpL8Pay {}
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 audiotestsrc wave=ticks ! rtpL16pay2 ! udpsink host=127.0.0.1 port=5004
+ * gst-launch-1.0 audiotestsrc wave=ticks ! rtpL16pay2 ! udpsink2 host=127.0.0.1 port=5004
  * ]| This will generate an 16-bit raw audio test signal and payload it as RTP and send it out
  * as UDP to localhost port 5004.
  *
@@ -515,7 +515,7 @@ impl RtpBaseAudioPay2Impl for RtpL16Pay {}
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 audiotestsrc wave=ticks ! audioconvert ! rtpL24pay2 ! udpsink host=127.0.0.1 port=5004
+ * gst-launch-1.0 audiotestsrc wave=ticks ! audioconvert ! rtpL24pay2 ! udpsink2 host=127.0.0.1 port=5004
  * ]| This will generate a 24-bit raw audio test signal and payload it as RTP and send it out
  * as UDP to localhost port 5004.
  *

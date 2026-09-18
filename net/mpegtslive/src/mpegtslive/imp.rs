@@ -8,11 +8,11 @@
 
 /**
  * SECTION:element-mpegtslivesrc
- * @see_also: udpsrc, srtsrtc, tsdemux
+ * @see_also: udpsrc2, srtsrtc, tsdemux
  *
  * Clock provider from live MPEG-TS sources.
  *
- * This element allows wrapping an existing live "mpeg-ts source" (udpsrc,
+ * This element allows wrapping an existing live "mpeg-ts source" (udpsrc2,
  * srtsrc,...) and providing a clock based on the actual PCR of the stream.
  *
  * Combined with tsdemux ignore-pcr=True downstream of it, this allows playing

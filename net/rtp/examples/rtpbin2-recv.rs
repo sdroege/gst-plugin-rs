@@ -36,9 +36,9 @@ fn add_rtp_recv(
         .unwrap();
 
     // RTP / RTCP from peer
-    let rtp_src = gst::ElementFactory::make("udpsrc")
+    let rtp_src = gst::ElementFactory::make("udpsrc2")
         .name(format!("udpsrc-rtp-{}-{}", params.session_id, params.pt))
-        .property("port", params.rtp_recv_port as i32)
+        .property("port", params.rtp_recv_port as u32)
         .property("caps", &params.caps)
         .build()
         .unwrap();
@@ -82,9 +82,9 @@ fn add_rtp_recv(
         )
         .unwrap();
 
-    let rtcp_src = gst::ElementFactory::make("udpsrc")
+    let rtcp_src = gst::ElementFactory::make("udpsrc2")
         .name(format!("udpsrc-rtcp-{}-{}", params.session_id, params.pt))
-        .property("port", params.rtcp_recv_port as i32)
+        .property("port", params.rtcp_recv_port as u32)
         .property("caps", gst::Caps::new_empty_simple("application/x-rtcp"))
         .build()
         .unwrap();
@@ -98,11 +98,11 @@ fn add_rtp_recv(
         .unwrap();
 
     // RTCP to peer
-    let rtcp_sink = gst::ElementFactory::make("udpsink")
+    let rtcp_sink = gst::ElementFactory::make("udpsink2")
         .name(format!("udpsink-rtcp-{}-{}", params.session_id, params.pt))
         // don't wait for the first RTCP packet for preroll
         .property("async", false)
-        .property("port", params.rtcp_send_port as i32)
+        .property("port", params.rtcp_send_port as u32)
         .property("host", HOST)
         .build()
         .unwrap();

@@ -21,7 +21,7 @@ use bitstream_io::{BigEndian, BitRead as _, BitReader, ByteRead as _, ByteReader
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 udpsrc caps='application/x-rtp, media=audio, clock-rate=8000, encoding-name=AMR, octet-align=(string)1' ! rtpjitterbuffer latency=50 ! rtpamrdepay2 ! amrnbdec ! audioconvert ! audioresample ! autoaudiosink
+ * gst-launch-1.0 udpsrc2 caps='application/x-rtp, media=audio, clock-rate=8000, encoding-name=AMR, octet-align=(string)1' ! rtpjitterbuffer latency=50 ! rtpamrdepay2 ! amrnbdec ! audioconvert ! audioresample ! autoaudiosink
  * ]| This will depayload an incoming RTP AMR NB audio stream. You can use the #amrnbenc and
  * #rtpamrpay2 elements to create such an RTP stream.
  *

@@ -115,11 +115,11 @@ async fn run() {
         .unwrap();
     pipeline.add(&funnel).unwrap();
 
-    let sink = gst::ElementFactory::make("udpsink")
+    let sink = gst::ElementFactory::make("udpsink2")
         .name(format!("udpsink-{SESSION_ID}"))
         // sync of the RTP packets is handled before the rtpfunnel
         .property("sync", false)
-        .property("port", SEND_PORT as i32)
+        .property("port", SEND_PORT as u32)
         .property("host", HOST)
         .build()
         .unwrap();
@@ -164,9 +164,9 @@ async fn run() {
         .unwrap();
     pipeline.add(&rtprecv).unwrap();
 
-    let src = gst::ElementFactory::make("udpsrc")
+    let src = gst::ElementFactory::make("udpsrc2")
         .name(format!("udpsrc-{SESSION_ID}"))
-        .property("port", RECV_PORT as i32)
+        .property("port", RECV_PORT as u32)
         .property("caps", gst::Caps::new_empty_simple("application/x-rtcp"))
         .build()
         .unwrap();

@@ -19,7 +19,7 @@
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 udpsrc address=127.0.0.1 port=5555 caps='application/x-rtp,media=video,clock-rate=90000,encoding-name=MP2T' ! rtpjitterbuffer latency=100 ! rtpmp2tdepay2 ! decodebin3 ! videoconvertscale ! autovideosink
+ * gst-launch-1.0 udpsrc2 address=127.0.0.1 port=5555 caps='application/x-rtp,media=video,clock-rate=90000,encoding-name=MP2T' ! rtpjitterbuffer latency=100 ! rtpmp2tdepay2 ! decodebin3 ! videoconvertscale ! autovideosink
  * ]| This will depayload an incoming RTP MPEG-TS stream. You can use the #rtpmp2tpay2 or #rtpmp2tpay
  * element to create such an RTP stream.
  *

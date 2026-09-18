@@ -19,7 +19,7 @@
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 udpsrc caps='application/x-rtp, media=(string)application, clock-rate=(int)90000, encoding-name=(string)smpte291' ! rtpsmpte291depay ! fakesink dump=true
+ * gst-launch-1.0 udpsrc2 caps='application/x-rtp, media=(string)application, clock-rate=(int)90000, encoding-name=(string)smpte291' ! rtpsmpte291depay ! fakesink dump=true
  * ]| This will depayload an RTP ST291-1 stream and display a hexdump of the ST2038 data on stdout.
  * You can use the #rtpsmpte291pay element to create such an RTP stream.
  *

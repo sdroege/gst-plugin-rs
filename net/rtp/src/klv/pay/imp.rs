@@ -19,7 +19,7 @@
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 filesrc location=video-with-klv.ts ! tsdemux ! rtpklvpay2 ! udpsink
+ * gst-launch-1.0 filesrc location=video-with-klv.ts ! tsdemux ! rtpklvpay2 ! udpsink2
  * ]| This example pipeline will payload an RTP KLV stream extracted from an
  * MPEG-TS stream and send it via UDP to an RTP receiver. Note that `rtpklvpay2` expects the
  * incoming KLV packets to be timestamped, which may not always be the case when they come from

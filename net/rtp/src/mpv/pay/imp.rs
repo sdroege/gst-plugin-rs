@@ -19,7 +19,7 @@
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,format=I420 ! timeoverlay font-desc=Sans,22 ! avenc_mpeg2video ! rtpmpvpay2 ! udpsink host=127.0.0.1 port=5004
+ * gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,format=I420 ! timeoverlay font-desc=Sans,22 ! avenc_mpeg2video ! rtpmpvpay2 ! udpsink2 host=127.0.0.1 port=5004
  * ]| This will create and payload an MPEG-2 Video elementary stream with a test pattern and
  * send it out via UDP to localhost port 5004.
  *

@@ -110,7 +110,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpPcmauDepay {
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 udpsrc caps='application/x-rtp, media=audio, clock-rate=8000, payload=8' ! rtpjitterbuffer latency=50 ! rtppcmadepay2 ! alawdec ! audioconvert ! audioresample ! autoaudiosink
+ * gst-launch-1.0 udpsrc2 caps='application/x-rtp, media=audio, clock-rate=8000, payload=8' ! rtpjitterbuffer latency=50 ! rtppcmadepay2 ! alawdec ! audioconvert ! audioresample ! autoaudiosink
  * ]| This will depayload an incoming RTP A-law audio stream. You can use the #rtppcmapay2 and
  * alawenc elements to create such an RTP stream.
  *
@@ -203,7 +203,7 @@ impl super::RtpPcmauDepayImpl for RtpPcmaDepay {}
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 udpsrc caps='application/x-rtp, media=audio, clock-rate=8000, payload=0' ! rtpjitterbuffer latency=50 ! rtppcmudepay2 ! mulawdec ! audioconvert ! audioresample ! autoaudiosink
+ * gst-launch-1.0 udpsrc2 caps='application/x-rtp, media=audio, clock-rate=8000, payload=0' ! rtpjitterbuffer latency=50 ! rtppcmudepay2 ! mulawdec ! audioconvert ! audioresample ! autoaudiosink
  * ]| This will depayload an incoming RTP µ-law audio stream. You can use the #rtppcmupay2 and
  * mulawenc elements to create such an RTP stream.
  *

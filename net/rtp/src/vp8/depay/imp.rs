@@ -18,7 +18,7 @@
  * ## Example pipeline
  *
  * ```shell
- * gst-launch-1.0 udpsrc address=127.0.0.1 port=5555 caps='application/x-rtp,media=video,clock-rate=90000,encoding-name=VP8' ! rtpjitterbuffer latency=100 ! rtpvp8depay2 ! decodebin3 ! videoconvertscale ! autovideosink
+ * gst-launch-1.0 udpsrc2 address=127.0.0.1 port=5555 caps='application/x-rtp,media=video,clock-rate=90000,encoding-name=VP8' ! rtpjitterbuffer latency=100 ! rtpvp8depay2 ! decodebin3 ! videoconvertscale ! autovideosink
  * ```
  *
  * This will depayload and decode an incoming RTP VP8 video stream. You can use the #rtpvp8pay2

@@ -29,7 +29,7 @@
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 audiotestsrc wave=ticks ! audio/x-raw,channels=2 ! opusenc ! rtpopuspay2 ! udpsink host=127.0.0.1 port=5004
+ * gst-launch-1.0 audiotestsrc wave=ticks ! audio/x-raw,channels=2 ! opusenc ! rtpopuspay2 ! udpsink2 host=127.0.0.1 port=5004
  * ]| This will encode and audio test signal as Opus audio and payload it as RTP and send it out
  * over UDP to localhost port 5004.
  *

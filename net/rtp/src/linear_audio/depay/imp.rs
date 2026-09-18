@@ -370,7 +370,7 @@ impl RtpLinearAudioDepayImpl for RtpL8Depay {}
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 udpsrc caps='application/x-rtp, media=audio, clock-rate=48000, encoding-name=L16, encoding-params=(string)1, channels=1, payload=96' ! rtpjitterbuffer latency=50 ! rtpL16depay2 ! audioconvert ! audioresample ! autoaudiosink
+ * gst-launch-1.0 udpsrc2 caps='application/x-rtp, media=audio, clock-rate=48000, encoding-name=L16, encoding-params=(string)1, channels=1, payload=96' ! rtpjitterbuffer latency=50 ! rtpL16depay2 ! audioconvert ! audioresample ! autoaudiosink
  * ]| This will depayload an incoming RTP 16-bit raw audio stream. You can use the #rtpL16pay2
  * element to create such an RTP stream.
  *
@@ -464,7 +464,7 @@ impl RtpLinearAudioDepayImpl for RtpL16Depay {}
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 udpsrc caps='application/x-rtp, media=audio, clock-rate=48000, encoding-name=L24, encoding-params=(string)1, channels=1, payload=96' ! rtpjitterbuffer latency=50 ! rtpL24depay2 ! audioconvert ! audioresample ! autoaudiosink
+ * gst-launch-1.0 udpsrc2 caps='application/x-rtp, media=audio, clock-rate=48000, encoding-name=L24, encoding-params=(string)1, channels=1, payload=96' ! rtpjitterbuffer latency=50 ! rtpL24depay2 ! audioconvert ! audioresample ! autoaudiosink
  * ]| This will depayload an incoming RTP 24-bit raw audio stream. You can use the #rtpL24pay2
  * element to create such an RTP stream.
  *

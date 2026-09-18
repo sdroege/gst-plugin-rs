@@ -19,7 +19,7 @@
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,format=I420 ! timeoverlay font-desc=Sans,22 ! x264enc tune=zerolatency ! mpegtsmux alignment=7 ! rtpmp2tpay2 ! udpsink host=127.0.0.1 port=5555
+ * gst-launch-1.0 videotestsrc ! video/x-raw,width=1280,height=720,format=I420 ! timeoverlay font-desc=Sans,22 ! x264enc tune=zerolatency ! mpegtsmux alignment=7 ! rtpmp2tpay2 ! udpsink2 host=127.0.0.1 port=5555
  * ]| This will create and payload an MPEG-TS stream with a test pattern and send it out via UDP.
  *
  * Since: plugins-rs-0.13.0

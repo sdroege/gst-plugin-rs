@@ -12,7 +12,7 @@
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 ... ! svtjpegxsenc ! rtpjxsvpay ! udpsink host=127.0.0.1 port=5004
+ * gst-launch-1.0 ... ! svtjpegxsenc ! rtpjxsvpay ! udpsink2 host=127.0.0.1 port=5004
  * ]| Payload a bare JPEG XS codestream from `svtjpegxsenc`, wrapping each encoded
  * frame into an RFC 9134 picture segment before RTP packetization. Sink caps
  * require a usable framerate; `codestream-length` (from `svtjpegxsenc`) or else

@@ -22,7 +22,7 @@ use bitstream_io::{BigEndian, ByteRead, ByteReader, ByteWrite as _, ByteWriter};
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 udpsrc caps='application/x-rtp, media=video, clock-rate=90000' ! rtpjitterbuffer latency=50 ! rtpjpegdepay2 ! jpegdec ! videoconvert ! autovideosink
+ * gst-launch-1.0 udpsrc2 caps='application/x-rtp, media=video, clock-rate=90000' ! rtpjitterbuffer latency=50 ! rtpjpegdepay2 ! jpegdec ! videoconvert ! autovideosink
  * ]| This will depayload an incoming RTP JPEG video stream. You can use the #jpegenc and
  * #rtpjpegpay2 elements to create such an RTP stream.
  *

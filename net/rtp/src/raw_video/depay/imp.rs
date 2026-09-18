@@ -19,7 +19,7 @@
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 udpsrc address=127.0.0.1 port=5555 caps='application/x-rtp,media=video,clock-rate=90000,encoding-name=RAW,width=320,height=240,depth=8,sampling=BGRA' ! rtpjitterbuffer latency=100 ! rtpvrawdepay2 ! queue ! videoconvertscale ! autovideosink
+ * gst-launch-1.0 udpsrc2 address=127.0.0.1 port=5555 caps='application/x-rtp,media=video,clock-rate=90000,encoding-name=RAW,width=320,height=240,depth=8,sampling=BGRA' ! rtpjitterbuffer latency=100 ! rtpvrawdepay2 ! queue ! videoconvertscale ! autovideosink
  * ]| This will depayload an incoming Raw Video RTP stream. You can use the #rtpvrawpay2 or #rtpvrawpay
  * element to create such an RTP stream.
  *
@@ -29,7 +29,7 @@
  * packet rates, and as such is more demanding on the system and network than lower-bitrate
  * compressed video.
  *
- * This means you may need to tune your system's network configuration and configure #udpsrc
+ * This means you may need to tune your system's network configuration and configure #udpsrc2
  * for high datarate streams.
  *
  * In particular, you may want to increase the maximum allowed buffer size for the kernel-side
@@ -43,7 +43,7 @@
  *
  * Alternatively this can also be configured in `/etc/sysctl.conf`.
  *
- * Once this is configured kernel-side, you can use `udpsrc buffer-size=NNN` to increase the
+ * Once this is configured kernel-side, you can use `udpsrc2 buffer-size=NNN` to increase the
  * value to something larger than the default. If the value is too low it's possible that a lot
  * of packets may never get read out by the pipeline after capture because they will be overwritten
  * by new data before they can all be read out.

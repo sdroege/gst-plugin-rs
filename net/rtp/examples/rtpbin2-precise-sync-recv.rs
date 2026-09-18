@@ -492,11 +492,11 @@ fn maybe_add_outbound_rtcp_sink(
     }
 
     eprintln!("Adding outbound RTCP sink {outbound_rtcp_udpsink_name}");
-    let rtcp_sink = gst::ElementFactory::make("udpsink")
+    let rtcp_sink = gst::ElementFactory::make("udpsink2")
         .name(&outbound_rtcp_udpsink_name)
         .property("sync", false)
         .property("async", false)
-        .property("port", port as i32)
+        .property("port", port as u32)
         .property("host", connection_address)
         .build()
         .context("configuring outbound RTCP sink")?;

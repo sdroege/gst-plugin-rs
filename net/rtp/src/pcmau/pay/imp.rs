@@ -98,7 +98,7 @@ impl crate::baseaudiopay::RtpBaseAudioPay2Impl for RtpPcmauPay {}
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 audiotestsrc wave=ticks ! audio/x-raw,rate=8000,channels=1 ! alawenc ! rtppcmapay2 ! udpsink host=127.0.0.1 port=5004
+ * gst-launch-1.0 audiotestsrc wave=ticks ! audio/x-raw,rate=8000,channels=1 ! alawenc ! rtppcmapay2 ! udpsink2 host=127.0.0.1 port=5004
  * ]| This will generate an A-law audio test signal and payload it as RTP and send it out
  * as UDP to localhost port 5004.
  *
@@ -195,7 +195,7 @@ impl super::RtpPcmauPayImpl for RtpPcmaPay {}
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 audiotestsrc wave=ticks ! audio/x-raw,rate=8000,channels=1 ! mulawenc ! rtppcmupay2 ! udpsink host=127.0.0.1 port=5004
+ * gst-launch-1.0 audiotestsrc wave=ticks ! audio/x-raw,rate=8000,channels=1 ! mulawenc ! rtppcmupay2 ! udpsink2 host=127.0.0.1 port=5004
  * ]| This will generate a µ-law audio test signal and payload it as RTP and send it out
  * as UDP to localhost port 5004.
  *
