@@ -140,7 +140,7 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             address: Host::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
-            port: 5000,
+            port: 5004,
             buffer_size: 0,
             mtu: 1500,
             caps: None,
