@@ -22150,6 +22150,388 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "sdp": {
+        "description": "GStreamer SDP Plugin",
+        "elements": {
+            "sapsink": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Session Announcement Protocol sink",
+                "hierarchy": [
+                    "GstSapSink",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Sink/Network",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstSapSinkPad"
+                    }
+                },
+                "properties": {
+                    "compress": {
+                        "blurb": "Whether to compress the SAP announcements with zlib",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "multicast-iface": {
+                        "blurb": "Comma-separated list of network interfaces to use for multicast",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "multicast-loopback": {
+                        "blurb": "Enable multicast loopback so that local receivers on the same host receive the streams; needed for local testing",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "rtcp-mode": {
+                        "blurb": "Whether to send and/or receive RTCP",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "inactive (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstSapRtcpMode",
+                        "writable": true
+                    },
+                    "rtcp-mux": {
+                        "blurb": "Send and receive RTCP on the same port as RTP (a=rtcp-mux)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "rtp-profile": {
+                        "blurb": "Profile of the announced RTP session",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "avp (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstSapSinkRtpProfile",
+                        "writable": true
+                    },
+                    "sap-addresses": {
+                        "blurb": "Comma-separated list of multicast group addresses to announce the session on. If unset, the SAP multicast group matching the scope of the stream destination addresses is used",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "session-description": {
+                        "blurb": "Description of the announced session",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "session-id": {
+                        "blurb": "Session ID of the announced session, i.e. the session ID of the SDP o= line. 0 generates a random one",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "session-name": {
+                        "blurb": "Name of the announced session",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "GStreamer SAP session",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "session-version": {
+                        "blurb": "Session version of the announced session, i.e. the session version of the SDP o= line",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "source-address": {
+                        "blurb": "Source address of the session, used as the SDP origin address and the SAP originating source. If unset, it is derived from the multicast interfaces or the routing to the stream destinations",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
+            "sapsrc": {
+                "author": "Sebastian Dröge <sebastian@centricular.com>",
+                "description": "Session Announcement Protocol source",
+                "hierarchy": [
+                    "GstSapSrc",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Source/Network",
+                "pad-templates": {
+                    "src_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "properties": {
+                    "latency": {
+                        "blurb": "RTP jitterbuffer latency in ms",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "200",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "multicast-iface": {
+                        "blurb": "Comma-separated list of network interfaces to use for multicast",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "multicast-loopback": {
+                        "blurb": "Enable multicast loopback so that local senders on the same host receive RTCP; needed for local testing",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "originating-source": {
+                        "blurb": "Originating source address to filter for, i.e. the IP address of the SAP announcer",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "rtcp-mode": {
+                        "blurb": "Whether to send and/or receive RTCP",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "inactive (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstSapRtcpMode",
+                        "writable": true
+                    },
+                    "session-id": {
+                        "blurb": "Session ID to filter for, i.e. the session ID of the SDP o= line",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "timeout": {
+                        "blurb": "Post a warning after this many nanoseconds without receiving data (0 = disabled)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            }
+        },
+        "filename": "gstsdp",
+        "license": "MPL",
+        "other-types": {
+            "GstSapRtcpMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Inactive",
+                        "name": "inactive",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Only receive RTCP",
+                        "name": "recvonly",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Only send RTCP",
+                        "name": "sendonly",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "Send and receive RTCP",
+                        "name": "sendrecv",
+                        "value": "3"
+                    }
+                ]
+            },
+            "GstSapSinkPad": {
+                "hierarchy": [
+                    "GstSapSinkPad",
+                    "GstGhostPad",
+                    "GstProxyPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object",
+                "properties": {
+                    "dest-ip": {
+                        "blurb": "IP address to send this media stream to, defaults to a multicast group if unset",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "dest-port": {
+                        "blurb": "UDP port to send this media stream to (required)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "65535",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                }
+            },
+            "GstSapSinkRtpProfile": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "RTP/AVP",
+                        "name": "avp",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "RTP/AVPF",
+                        "name": "avpf",
+                        "value": "1"
+                    }
+                ]
+            }
+        },
+        "package": "gst-plugin-sdp",
+        "source": "gst-plugin-sdp",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "skia": {
         "description": "GStreamer skia plugin",
         "elements": {

@@ -5839,6 +5839,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-sdp"
+version = "0.16.0-alpha"
+dependencies = [
+ "anyhow",
+ "clap",
+ "flate2",
+ "fnv_rs",
+ "futures",
+ "getifaddrs",
+ "gio",
+ "gst-plugin-rtp",
+ "gst-plugin-udp",
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-base",
+ "gstreamer-pbutils",
+ "mio",
+ "rand 0.10.3",
+ "rtcp-types",
+ "sdp-types",
+ "sdp-types-gst",
+ "slab",
+ "socket2 0.6.5",
+]
+
+[[package]]
 name = "gst-plugin-skia"
 version = "0.16.0-alpha"
 dependencies = [
@@ -11335,6 +11361,18 @@ dependencies = [
  "bstr",
  "fallible-iterator",
  "hex",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "sdp-types-gst"
+version = "0.16.0-alpha"
+dependencies = [
+ "base64 0.23.1",
+ "gstreamer",
+ "gstreamer-pbutils",
+ "mykey",
+ "sdp-types",
  "thiserror 2.0.21",
 ]
 

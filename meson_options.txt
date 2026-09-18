@@ -50,6 +50,7 @@ option('raptorq', type: 'feature', value: 'auto', description: 'Build raptorq pl
 option('reqwest', type: 'feature', value: 'auto', description: 'Build reqwest plugin')
 option('rtsp', type: 'feature', value: 'auto', description: 'Build rtsp plugin')
 option('rtp', type: 'feature', value: 'auto', description: 'Build rtp plugin')
+option('sdp', type: 'feature', value: 'auto', description: 'Build sdp plugin')
 option('udp', type: 'feature', value: 'auto', description: 'Build udp plugin')
 option('webrtc', type: 'feature', value: 'auto', yield: true, description: 'Build webrtc plugin')
 option('webrtc-livekit', type: 'feature', value: 'disabled',  description: 'Build webrtc aws')

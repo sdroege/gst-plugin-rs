@@ -325,6 +325,10 @@ You will find the following plugins in this repository:
     - `rtsp`:
       - `rtspsrc2`: New Rust implementation of a Real Time Streaming Protocol (RTSP) (RFC 2326, 7826) source element.
 
+    - `sdp`: Elements for the Session Description Protocol (SDP) and the Session Announcement Protocol (SAP).
+      - `sapsink`: Announces an RTP session via the Session Announcement Protocol (SAP).
+      - `sapsrc`: Receives RTP sessions announced via the Session Announcement Protocol (SAP).
+
     - `udp`:
       - `multiudpsink2`: New version of the `multiudpsink`.
       - `udpsink2`: New version of the `udpsink`.

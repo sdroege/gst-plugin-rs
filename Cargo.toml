@@ -4,6 +4,7 @@ resolver = "3"
 members = [
     "tutorial",
     "version-helper",
+    "sdp-types-gst",
 
     "analytics/analytics",
     "analytics/burn",
@@ -47,6 +48,7 @@ members = [
     "net/reqwest",
     "net/rtp",
     "net/rtsp",
+    "net/sdp",
     "net/udp",
     "net/webrtchttp",
     "net/webrtc",
@@ -92,6 +94,7 @@ members = [
 # Only plugins without external dependencies
 default-members = [
     "version-helper",
+    "sdp-types-gst",
 
     "analytics/analytics",
     "analytics/burn",
@@ -123,6 +126,7 @@ default-members = [
     "net/reqwest",
     "net/rtp",
     "net/rtsp",
+    "net/sdp",
     "net/udp",
     "net/webrtchttp",
     "net/webrtc",
@@ -221,4 +225,5 @@ gst-plugin-webrtcbin2 = { path="net/webrtcbin2", version = "0.16.0-alpha" }
 lru = "0.19"
 rustls = { version = "0.23", default-features = false, features = ["std"] }
 rustls-platform-verifier = "0.7"
-sdp-types = "0.3"
+sdp-types = "0.3.2"
+sdp-types-gst = { path = "sdp-types-gst", version = "0.16.0-alpha" }

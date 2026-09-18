@@ -1,0 +1,60 @@
+[package]
+name = "gst-plugin-sdp"
+version.workspace = true
+authors = ["Sebastian Dröge <sebastian@centricular.com>"]
+repository.workspace = true
+license = "MPL-2.0"
+description = "GStreamer SDP Plugin"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+gst = { workspace = true, features = ["v1_20"] }
+gst-pbutils = { workspace = true, features = ["v1_20"] }
+gio.workspace = true
+mio = { version = "1.0", features = ["net", "os-poll"] }
+getifaddrs = "0.6"
+rand = "0.10"
+socket2 = { version = "0.6", features = ["all"] }
+anyhow = "1"
+flate2 = "1.0"
+fnv_rs = "0.4"
+gst-base = { workspace = true, features = ["v1_20"] }
+sdp-types.workspace = true
+sdp-types-gst.workspace = true
+slab = "0.4"
+
+[dev-dependencies]
+futures = "0.3"
+clap = { version = "4", features = ["derive"] }
+rtcp-types = "0.3"
+gst-plugin-rtp.workspace = true
+gst-plugin-udp = { path = "../udp" }
+
+[lib]
+name = "gstsdp"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[features]
+static = []
+capi = []
+v1_30 = ["gst/v1_30"]
+doc = []
+
+[build-dependencies]
+gst-plugin-version-helper.workspace = true
+
+[package.metadata.capi]
+min_version = "0.9.21"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+import_library = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gstreamer-pbutils-1.0, gio-2.0, gobject-2.0, glib-2.0, gmodule-2.0"

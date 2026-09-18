@@ -1,0 +1,19 @@
+[package]
+name = "sdp-types-gst"
+version.workspace = true
+authors = ["Sebastian Dröge <sebastian@centricular.com>"]
+repository.workspace = true
+edition.workspace = true
+license = "MPL-2.0"
+keywords = ["sdp", "gstreamer", "rtp", "multimedia", "streaming"]
+categories = ["multimedia", "network-programming"]
+description = "SDP (RFC 4566) and GStreamer caps conversion, based on sdp-types"
+rust-version.workspace = true
+
+[dependencies]
+base64 = "0.23"
+gst = { workspace = true, features = ["v1_20"] }
+gst-pbutils.workspace = true
+mykey = "2"
+sdp-types.workspace = true
+thiserror = "2"

@@ -129,6 +129,7 @@ plugins = {
   'reqwest': {'library': 'libgstreqwest'},
   'rtsp': {'library': 'libgstrsrtsp'},
   'rtp': {'library': 'libgstrsrtp'},
+  'sdp': {'library': 'libgstsdp'},
   'udp': {'library': 'libgstrsudp'},
   'webrtchttp': {'library': 'libgstwebrtchttp'},
   'webrtc': {
