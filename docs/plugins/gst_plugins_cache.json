@@ -4883,15 +4883,15 @@
                 },
                 "properties": {
                     "loop": {
-                        "blurb": "Respects the internal 'repeat' setting by default and overrides it to run inifinitely if true",
+                        "blurb": "Set the repeat behaviour of the image",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
                         "controllable": false,
-                        "default": "false",
+                        "default": "image (2)",
                         "mutable": "ready",
                         "readable": true,
-                        "type": "gboolean",
+                        "type": "GstGifLoopStrategy",
                         "writable": true
                     }
                 },
@@ -4960,7 +4960,28 @@
         },
         "filename": "gstgif",
         "license": "MIT/X11",
-        "other-types": {},
+        "other-types": {
+            "GstGifLoopStrategy": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Loop the animation irrespective of the image's settings",
+                        "name": "force-yes",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Play the animation only once irrespective of the image's settings",
+                        "name": "force-no",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Respect the image's settings",
+                        "name": "image",
+                        "value": "2"
+                    }
+                ]
+            }
+        },
         "package": "gst-plugin-gif",
         "source": "gst-plugin-gif",
         "tracers": {},

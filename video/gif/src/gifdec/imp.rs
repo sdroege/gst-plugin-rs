@@ -16,13 +16,15 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use std::sync::LazyLock;
 
+use crate::gifdec::LoopStrategy;
+
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new("gifdec", gst::DebugColorFlags::empty(), Some("GIF decoder"))
 });
 
 #[derive(Default)]
 struct Settings {
-    do_loop: bool,
+    do_loop: LoopStrategy,
 }
 
 #[derive(Default)]
@@ -93,7 +95,7 @@ impl GifDec {
             }
             gif::Repeat::Infinite => {
                 gst::info!(CAT, "repeat infinite");
-                do_loop = true;
+                do_loop = LoopStrategy::Yes;
                 0
             }
         };
@@ -140,7 +142,7 @@ impl GifDec {
 
         let mut has_read_frames = false; // Not yet
 
-        while do_loop || repeat != 0 {
+        while do_loop == LoopStrategy::Yes || repeat != 0 {
             let next_frame = match d.read_next_frame() {
                 Ok(f) => f,
                 Err(e) => {
@@ -162,7 +164,7 @@ impl GifDec {
                 gst::debug!(CAT, "end of frames, replaying..");
 
                 d = dec.clone().read_info(buf.as_slice()).unwrap();
-                if repeat > 0 && !do_loop {
+                if repeat > 0 && do_loop != LoopStrategy::Yes {
                     repeat -= 1;
                     gst::debug!(CAT, "repeat count: {repeat} ");
                 }
@@ -338,12 +340,13 @@ impl ObjectImpl for GifDec {
 
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: LazyLock<Vec<glib::ParamSpec>> = LazyLock::new(|| {
-            vec![glib::ParamSpecBoolean::builder("loop")
-                .nick("Loop")
-                .blurb("Respects the internal 'repeat' setting by default and overrides it to run inifinitely if true")
-                .default_value(false)
-                .mutable_ready()
-                .build()]
+            vec![
+                glib::ParamSpecEnum::builder::<LoopStrategy>("loop")
+                    .nick("Loop")
+                    .blurb("Set the repeat behaviour of the image")
+                    .mutable_ready()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()
