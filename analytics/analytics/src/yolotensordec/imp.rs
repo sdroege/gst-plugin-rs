@@ -17,6 +17,14 @@ use std::sync::{LazyLock, Mutex};
 
 use super::util::{BoundingBox, iou, iou_oriented};
 
+pub static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
+    gst::DebugCategory::new(
+        "yolotensordec",
+        gst::DebugColorFlags::empty(),
+        Some("Yolo tensor decoder element"),
+    )
+});
+
 const YOLOV8_OUT: &glib::GStr = glib::gstr!("yolo-v8-out");
 const YOLOV8OBB_OUT: &glib::GStr = glib::gstr!("yolo-v8-obb-out");
 const YOLOX_OUT: &glib::GStr = glib::gstr!("yolox-out");
@@ -48,26 +56,18 @@ fn tensor_format_from_type(type_: glib::Type) -> YoloTensorFormat {
     }
 }
 
-static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
-    gst::DebugCategory::new(
-        "yolotensordec",
-        gst::DebugColorFlags::empty(),
-        Some("Yolo tensor decoder element"),
-    )
-});
-
-struct Settings {
-    label_file: Option<String>,
+pub struct Settings {
+    pub label_file: Option<String>,
     // Only YoloX
-    box_confidence_threshold: f32,
+    pub box_confidence_threshold: f32,
     // YoloX and YoloV8
-    class_confidence_threshold: f32,
+    pub class_confidence_threshold: f32,
     // YoloX and YoloV8
-    iou_threshold: f32,
+    pub iou_threshold: f32,
     // YoloX and YoloV8
-    max_detections: u32,
+    pub max_detections: u32,
     // Yolo26 and Yolo26Obb
-    score_threshold: f32,
+    pub score_threshold: f32,
 }
 
 impl Default for Settings {
@@ -85,7 +85,31 @@ impl Default for Settings {
 
 // Shared properties between YoloX, YoloV8 and YoloV8Obb
 impl Settings {
-    fn nms_properties() -> Vec<glib::ParamSpec> {
+    pub fn load_labels(&self) -> Result<Option<Vec<glib::Quark>>, gst::ErrorMessage> {
+        use std::fs;
+
+        if let Some(ref label_file) = self.label_file {
+            let label_file = match fs::read_to_string(label_file) {
+                Ok(s) => s,
+                Err(err) => {
+                    return Err(gst::error_msg!(
+                        gst::ResourceError::OpenRead,
+                        ["Failed to open labels file '{label_file}': {err}"]
+                    ));
+                }
+            };
+            Ok(Some(
+                label_file
+                    .lines()
+                    .map(glib::Quark::from_str)
+                    .collect::<Vec<_>>(),
+            ))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn nms_properties() -> Vec<glib::ParamSpec> {
         vec![
         glib::ParamSpecFloat::builder("class-confidence-threshold")
             .nick("Class Confidence Threshold")
@@ -114,7 +138,7 @@ impl Settings {
     ]
     }
 
-    fn nms_set_property(&mut self, value: &glib::Value, pspec: &glib::ParamSpec) {
+    pub fn nms_set_property(&mut self, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "class-confidence-threshold" => {
                 self.class_confidence_threshold = value.get().unwrap();
@@ -129,7 +153,7 @@ impl Settings {
         }
     }
 
-    fn nms_get_property(&self, pspec: &glib::ParamSpec) -> glib::Value {
+    pub fn nms_get_property(&self, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "class-confidence-threshold" => self.class_confidence_threshold.to_value(),
             "iou-threshold" => self.iou_threshold.to_value(),
@@ -212,34 +236,18 @@ impl BaseTransformImpl for YoloTensorDec {
     const TRANSFORM_IP_ON_PASSTHROUGH: bool = true;
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        use std::fs;
-
         let mut state = self.state.lock().unwrap();
 
         let settings = self.settings.lock().unwrap();
-        let labels = if let Some(ref label_file) = settings.label_file {
-            let label_file = match fs::read_to_string(label_file) {
-                Ok(s) => s,
-                Err(err) => {
-                    gst::error!(
-                        CAT,
-                        imp = self,
-                        "Failed to open labels file '{label_file}': {err}"
-                    );
-                    return Err(gst::error_msg!(
-                        gst::ResourceError::OpenRead,
-                        ["Failed to open labels file '{label_file}': {err}"]
-                    ));
-                }
-            };
-            label_file
-                .lines()
-                .map(glib::Quark::from_str)
-                .collect::<Vec<_>>()
-        } else {
-            gst::debug!(CAT, imp = self, "No labels file provided");
-            Vec::new()
-        };
+        let labels = settings
+            .load_labels()
+            .inspect_err(|err| {
+                gst::error!(CAT, imp = self, "{}", err);
+            })?
+            .unwrap_or_else(|| {
+                gst::debug!(CAT, imp = self, "No labels file provided");
+                Vec::new()
+            });
 
         *state = Some(State { labels });
 

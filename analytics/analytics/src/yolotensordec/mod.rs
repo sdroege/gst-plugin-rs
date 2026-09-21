@@ -11,10 +11,21 @@ use gst::prelude::*;
 use gst_base::subclass::prelude::*;
 
 pub mod imp;
+pub mod seg;
 mod util;
+
+use seg::ScaleMode;
 
 glib::wrapper! {
     pub struct YoloTensorDec(ObjectSubclass<imp::YoloTensorDec>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
+}
+
+pub trait YoloTensorDecImpl: BaseTransformImpl + ObjectSubclass<Type: IsA<YoloTensorDec>> {}
+
+unsafe impl<T: YoloTensorDecImpl> IsSubclassable<T> for YoloTensorDec {
+    fn class_init(class: &mut glib::Class<Self>) {
+        Self::parent_class_init::<T>(class);
+    }
 }
 
 /**
@@ -142,16 +153,76 @@ glib::wrapper! {
     pub struct Yolo26ObbTensorDec(ObjectSubclass<imp::Yolo26ObbTensorDec>) @extends YoloTensorDec, gst_base::BaseTransform, gst::Element, gst::Object;
 }
 
-pub trait YoloTensorDecImpl: BaseTransformImpl + ObjectSubclass<Type: IsA<YoloTensorDec>> {}
+glib::wrapper! {
+    pub struct YoloSegTensorDec(ObjectSubclass<seg::YoloSegTensorDec>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
+}
 
-unsafe impl<T: YoloTensorDecImpl> IsSubclassable<T> for YoloTensorDec {
+pub trait YoloSegTensorDecImpl:
+    BaseTransformImpl + ObjectSubclass<Type: IsA<YoloSegTensorDec>>
+{
+}
+
+unsafe impl<T: YoloSegTensorDecImpl> IsSubclassable<T> for YoloSegTensorDec {
     fn class_init(class: &mut glib::Class<Self>) {
         Self::parent_class_init::<T>(class);
     }
 }
 
+/**
+ * SECTION:element-yolov8segtensordec
+ * @see_also: objectdetectionoverlay, onnxinference.
+ *
+ * Tensor decoder element for [Yolo segmentation](https://docs.ultralytics.com/models).
+ * This supports YoloV8-V10, Yolo11, Yolo12 and Yolo26 using the one-to-many
+ * (non-NMS) heads of YoloV10-seg, Yolo11-seg, Yolo12-seg and Yolo26-seg.
+ *
+ * Test image file, model file and labels file can be found here : https://gitlab.collabora.com/gstreamer/onnx-models
+ *
+ * |[
+ * gst-launch-1.0 v4l2src ! videorate max-rate=3 ! videoconvertscale \
+ *  ! onnxinference  model-file=yolov8n-seg.onnx \
+ *  ! yolov8segtensordec class-confidence-threshold=0.8 iou-threshold=0.3 \
+ *    max-detections=100 label-file=labels/DOTAv1.txt \
+ *  ! objectdetectionoverlay ! videoconvert ! imagefreeze ! autovideosink
+ * ]| This takes webcam input, performs oriented object bounding box detection via `onnxinference` on it, decodes the
+ * inferred tensors with `yolov8segtensordec` and then overlays the detected objects on the frame via
+ * `objectdetectionoverlay`.
+ *
+ * Since: plugins-rs-0.16.0
+ */
+glib::wrapper! {
+    pub struct YoloV8SegTensorDec(ObjectSubclass<seg::YoloV8SegTensorDec>) @extends YoloSegTensorDec, gst_base::BaseTransform, gst::Element, gst::Object;
+}
+
+/**
+ * SECTION:element-yolo26segtensordec
+ * @see_also: objectdetectionoverlay, onnxinference.
+ *
+ * Tensor decoder element for [Yolo segmentation](https://docs.ultralytics.com/models).
+ * This supports YoloV10-seg, Yolo11-seg, Yolo12-seg and Yolo26-seg but only the one-to-one (end2end, NMS) heads.
+ *
+ * Test image file, model file and labels file can be found here : https://gitlab.collabora.com/gstreamer/onnx-models
+ *
+ * |[
+ * gst-launch-1.0 v4l2src ! videorate max-rate=3 ! videoconvertscale \
+ *  ! onnxinference  model-file=yolo26n-seg-e2e.onnx \
+ *  ! yolo26segtensordec score-threshold=0.8 label-file=labels/DOTAv1.txt \
+ *  ! objectdetectionoverlay \
+ *  ! glimagesink sink="gtkglsink processing-deadline=300000000"
+ * ]| This takes webcam input, performs oriented object bounding box detection via `onnxinference` on it, decodes the
+ * inferred tensors with `yolo26segtensordec` and then overlays the detected objects on the frame via
+ * `objectdetectionoverlay`.
+ *
+ * Since: plugins-rs-0.16.0
+ */
+glib::wrapper! {
+    pub struct Yolo26SegTensorDec(ObjectSubclass<seg::Yolo26SegTensorDec>) @extends YoloSegTensorDec, gst_base::BaseTransform, gst::Element, gst::Object;
+}
+
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    ScaleMode::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     YoloTensorDec::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+    YoloSegTensorDec::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
 
     gst::Element::register(
         Some(plugin),
@@ -182,6 +253,18 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         "yolo26obbtensordec",
         gst::Rank::PRIMARY + 1,
         Yolo26ObbTensorDec::static_type(),
+    )?;
+    gst::Element::register(
+        Some(plugin),
+        "yolov8segtensordec",
+        gst::Rank::PRIMARY + 1,
+        YoloV8SegTensorDec::static_type(),
+    )?;
+    gst::Element::register(
+        Some(plugin),
+        "yolo26segtensordec",
+        gst::Rank::PRIMARY + 1,
+        Yolo26SegTensorDec::static_type(),
     )?;
 
     Ok(())

@@ -10,6 +10,20 @@
 use std::ops::{Add, Deref, DerefMut, Mul, Sub};
 
 #[derive(Clone, Copy, Debug)]
+pub struct PixelExtents {
+    pub x: usize,
+    pub y: usize,
+    pub width: usize,
+    pub height: usize,
+}
+
+impl PixelExtents {
+    pub fn size(&self) -> usize {
+        self.width * self.height
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct BoundingBox {
     pub xmin: f32,
     pub xmax: f32,
@@ -62,17 +76,64 @@ impl BoundingBox {
             confidence,
         }
     }
-    fn area(&self) -> f32 {
+
+    pub fn scale_and_clamp(
+        &self,
+        scale_x: f32,
+        scale_y: f32,
+        max_x: f32,
+        max_y: f32,
+    ) -> BoundingBox {
+        BoundingBox {
+            xmin: (self.xmin * scale_x).clamp(0.0, max_x),
+            ymin: (self.ymin * scale_y).clamp(0.0, max_y),
+            xmax: (self.xmax * scale_x).clamp(0.0, max_x),
+            ymax: (self.ymax * scale_y).clamp(0.0, max_y),
+            rotation: self.rotation,
+            class: self.class,
+            confidence: self.confidence,
+        }
+    }
+
+    pub fn area(&self) -> f32 {
         self.width() * self.height()
     }
-    fn width(&self) -> f32 {
+    pub fn width(&self) -> f32 {
         self.xmax - self.xmin
     }
-    fn height(&self) -> f32 {
+    pub fn height(&self) -> f32 {
         self.ymax - self.ymin
     }
     fn center(&self) -> Point {
         Point::from_xy((self.xmin + self.xmax) / 2.0, (self.ymin + self.ymax) / 2.0)
+    }
+
+    pub fn pixel_extents(&self) -> PixelExtents {
+        PixelExtents {
+            x: self.pixel_x(),
+            y: self.pixel_y(),
+            width: self.pixel_width(),
+            height: self.pixel_height(),
+        }
+    }
+
+    pub fn pixel_x(&self) -> usize {
+        self.xmin.floor() as usize
+    }
+    pub fn pixel_y(&self) -> usize {
+        self.ymin.floor() as usize
+    }
+    pub fn pixel_x_max(&self) -> usize {
+        self.xmax.ceil() as usize
+    }
+    pub fn pixel_y_max(&self) -> usize {
+        self.ymax.ceil() as usize
+    }
+    pub fn pixel_width(&self) -> usize {
+        self.pixel_x_max() - self.pixel_x()
+    }
+    pub fn pixel_height(&self) -> usize {
+        self.pixel_y_max() - self.pixel_y()
     }
 }
 
@@ -291,6 +352,17 @@ pub fn iou_oriented(b1: &BoundingBox, b2: &BoundingBox) -> f32 {
         intersection.area() / union_area
     } else {
         0.0
+    }
+}
+
+pub fn sigmoid(x: f32) -> f32 {
+    // numerically stable sigmoid formulation, with intermediate f64
+    if x >= 0.0 {
+        let exp_neg_x = (-x as f64).exp();
+        (1.0 / (1.0 + exp_neg_x)) as f32
+    } else {
+        let exp_x = (x as f64).exp();
+        (exp_x / (1.0 + exp_x)) as f32
     }
 }
 

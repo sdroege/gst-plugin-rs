@@ -81,6 +81,12 @@ You will find the following plugins in this repository:
       - `yolo26obbtensordec`: Tensor decoder for YoloV10 tensors. Supports
         YoloV10-obb, Yolo11-obb, Yolo12-obb and Yolo26-obb, but only the one-to-one
         (end2end, NMS) heads of YoloV10-obb, Yolo11-obb, Yolo12-obb and Yolo26-obb.
+      - `yolov8segtensordec`: Tensor decoder for YoloV8-seg semantic segmentation tensors.
+        Supports YoloV8-V10-seg, Yolo11-seg, Yolo12-seg and Yolo26-seg, but only the one-to-many
+        (non-NMS) heads of YoloV10-seg, Yolo11-seg, Yolo12-seg and Yolo26-seg.
+      - `yolo26segtensordec`: Tensor decoder for YoloV10-seg semantic segmentation tensors.
+        Supports YoloV10-seg, Yolo11-seg, Yolo12-seg and Yolo26-seg, but only the one-to-one
+        (end2end, NMS) heads of YoloV10-seg, Yolo11-seg, Yolo12-seg and Yolo26-seg.
       - `zerodcetensordec`: Tensor decoder for Zero-DCE low-light image enhancement, and more
         generally for any image-to-image model emitting the `image-rgb-hwc-out` tensor.
 
