@@ -664,6 +664,7 @@ impl TextTransform {
             || settings.penalty_present > 0.0
         {
             chain.push(LlamaSampler::penalties(
+                model.n_vocab(),
                 settings.penalty_last_n,
                 settings.penalty_repeat,
                 settings.penalty_freq,
