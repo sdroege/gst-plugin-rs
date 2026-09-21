@@ -1202,12 +1202,18 @@ impl PushSrcImpl for ReqwestHttpSrc {
         }
 
         let future = async {
-            current_response.chunk().await.map_err(move |err| {
-                gst::error_msg!(
-                    gst::ResourceError::Read,
-                    ["Failed to read chunk at offset {}: {:?}", offset, err]
-                )
-            })
+            loop {
+                let chunk = current_response.chunk().await.map_err(move |err| {
+                    gst::error_msg!(
+                        gst::ResourceError::Read,
+                        ["Failed to read chunk at offset {}: {:?}", offset, err]
+                    )
+                })?;
+                match chunk {
+                    Some(chunk) if chunk.is_empty() => continue,
+                    chunk => break Ok(chunk),
+                }
+            }
         };
         let res = self.wait(future);
 
@@ -1300,4 +1306,163 @@ impl ObjectSubclass for ReqwestHttpSrc {
     type Type = super::ReqwestHttpSrc;
     type ParentType = gst_base::PushSrc;
     type Interfaces = (gst::URIHandler,);
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::io::{Read, Write};
+    use std::time::Duration;
+
+    fn frame(kind: u8, flags: u8, stream: u32, data: &[u8]) -> Vec<u8> {
+        let size = u32::try_from(data.len()).unwrap().to_be_bytes();
+        let mut result = size[1..].to_vec();
+        result.extend([kind, flags]);
+        result.extend(stream.to_be_bytes());
+        result.extend(data);
+        result
+    }
+
+    fn receive(chunks: &[&'static [u8]], content_length: bool) {
+        // Given a real HTTP/2 server sending exactly the specified DATA frames.
+        gst::init().unwrap();
+        static INIT: std::sync::Once = std::sync::Once::new();
+        INIT.call_once(|| crate::plugin_register_static().unwrap());
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let chunks = chunks.to_vec();
+        let expected = chunks.concat();
+        let size = expected.len();
+        let (stop_tx, stop_rx) = std::sync::mpsc::channel();
+        let server = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(10)))
+                .unwrap();
+            let mut preface = [0; 24];
+            socket.read_exact(&mut preface).unwrap();
+            assert_eq!(&preface, b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
+            socket.write_all(&frame(4, 0, 0, &[])).unwrap();
+            let stream = loop {
+                let mut header = [0; 9];
+                socket.read_exact(&mut header).unwrap();
+                let size = u32::from_be_bytes([0, header[0], header[1], header[2]]);
+                let mut payload = vec![0; usize::try_from(size).unwrap()];
+                socket.read_exact(&mut payload).unwrap();
+                match header[3] {
+                    4 if header[4] == 0 => socket.write_all(&frame(4, 1, 0, &[])).unwrap(),
+                    1 => break u32::from_be_bytes(header[5..9].try_into().unwrap()),
+                    _ => (),
+                }
+            };
+            // HPACK static-table indices: 8 = :status 200; 28 = content-length.
+            let mut headers = vec![0x88];
+            if content_length {
+                let length = size.to_string();
+                headers.extend([0x0f, 13, u8::try_from(length.len()).unwrap()]);
+                headers.extend(length.as_bytes());
+            }
+            socket
+                .write_all(&frame(
+                    1,
+                    if chunks.is_empty() { 5 } else { 4 },
+                    stream,
+                    &headers,
+                ))
+                .unwrap();
+            for (index, chunk) in chunks.iter().enumerate() {
+                let end = u8::from(index + 1 == chunks.len());
+                socket.write_all(&frame(0, end, stream, chunk)).unwrap();
+            }
+            stop_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        });
+
+        let source: super::super::ReqwestHttpSrc = glib::Object::builder()
+            .property("location", format!("http://{address}/"))
+            .build();
+        // Prior knowledge selects cleartext HTTP/2 without test certificates or TLS changes.
+        let client = RUNTIME.block_on(async {
+            Client::builder()
+                .http2_prior_knowledge()
+                .no_proxy()
+                .build()
+                .unwrap()
+        });
+        *source.imp().client.lock().unwrap() =
+            Some(ClientContext(Arc::new(ClientContextInner { client })));
+        let sink = gst::ElementFactory::make("fakesink")
+            .property("signal-handoffs", true)
+            .property("sync", false)
+            .build()
+            .unwrap();
+        let received = Arc::new(Mutex::new(Vec::new()));
+        let captured = received.clone();
+        sink.connect("handoff", false, move |values| {
+            let buffer = values[1].get::<gst::Buffer>().unwrap();
+            let map = buffer.map_readable().unwrap();
+            let mut bytes = captured.lock().unwrap();
+            assert_eq!(buffer.offset(), u64::try_from(bytes.len()).unwrap());
+            bytes.extend_from_slice(map.as_slice());
+            assert_eq!(buffer.offset_end(), u64::try_from(bytes.len()).unwrap());
+            None
+        });
+        let pipeline = gst::Pipeline::new();
+        pipeline.add_many([source.upcast_ref(), &sink]).unwrap();
+        source.link(&sink).unwrap();
+
+        // When the actual plugin consumes the wire response through a running pipeline.
+        pipeline.set_state(gst::State::Playing).unwrap();
+        let message = pipeline.bus().unwrap().timed_pop_filtered(
+            gst::ClockTime::from_seconds(5),
+            &[gst::MessageType::Eos, gst::MessageType::Error],
+        );
+        pipeline.set_state(gst::State::Null).unwrap();
+        stop_tx.send(()).unwrap();
+        server.join().unwrap();
+
+        // Then EOS occurs and every nonempty byte arrives with contiguous offsets.
+        let message = message.expect("pipeline timed out");
+        assert_eq!(message.type_(), gst::MessageType::Eos, "{message:?}");
+        assert_eq!(*received.lock().unwrap(), expected);
+    }
+
+    #[test]
+    fn nonempty_data() {
+        receive(&[b"abc", b"def"], false);
+    }
+
+    #[test]
+    fn headers_only_eos() {
+        receive(&[], false);
+    }
+
+    #[test]
+    fn empty_data_eos() {
+        receive(&[b""], false);
+    }
+
+    #[test]
+    fn leading_empty_data() {
+        receive(&[b"", b"abc", b"def"], false);
+    }
+
+    #[test]
+    fn middle_empty_data() {
+        receive(&[b"abc", b"", b"def"], false);
+    }
+
+    #[test]
+    fn trailing_empty_data() {
+        receive(&[b"abc", b"def", b""], false);
+    }
+
+    #[test]
+    fn trailing_empty_data_with_content_length() {
+        receive(&[b"abc", b"def", b""], true);
+    }
+
+    #[test]
+    fn empty_data_with_zero_content_length() {
+        receive(&[b""], true);
+    }
 }
