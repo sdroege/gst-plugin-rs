@@ -115,7 +115,7 @@ class CargoAnalyzer:
             if gst_version_major < majver or gst_version_minor < minver:
                 continue
             wanted_features |= set([name])
-            wanted_features |= set(value)
+            wanted_features |= {feature for feature in value if not feature.startswith('dep:')}
             if name.startswith("gst"):
                 # Required for some reason for rswebrtc which has a specific feature
                 wanted_features |= {f"{cargo_data['package']['name']}/{name}"}
