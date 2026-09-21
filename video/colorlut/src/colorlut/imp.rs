@@ -255,7 +255,10 @@ fn transform_rgba_1d(
         let src_row = &src_row[..width_in_bytes];
         let dst_row = &mut dst_row[..width_in_bytes];
 
-        for (s, d) in Iterator::zip(src_row.chunks_exact(4), dst_row.chunks_exact_mut(4)) {
+        for (s, d) in Iterator::zip(
+            src_row.as_chunks::<4>().0.iter(),
+            dst_row.as_chunks_mut::<4>().0.iter_mut(),
+        ) {
             for c in 0..3 {
                 d[c] = apply_1d(lut, c, s[c]);
             }
@@ -285,7 +288,10 @@ fn transform_rgba_3d(
         let src_row = &src_row[..width_in_bytes];
         let dst_row = &mut dst_row[..width_in_bytes];
 
-        for (s, d) in Iterator::zip(src_row.chunks_exact(4), dst_row.chunks_exact_mut(4)) {
+        for (s, d) in Iterator::zip(
+            src_row.as_chunks::<4>().0.iter(),
+            dst_row.as_chunks_mut::<4>().0.iter_mut(),
+        ) {
             let out = apply_3d(lut, s[0], s[1], s[2]);
             d[..3].copy_from_slice(&out);
             d[3] = s[3];
@@ -328,7 +334,10 @@ fn transform_rgba64_1d<const LE: bool>(
         let src_row = &src_row[..width * 4];
         let dst_row = &mut dst_row[..width * 4];
 
-        for (s, d) in Iterator::zip(src_row.chunks_exact(4), dst_row.chunks_exact_mut(4)) {
+        for (s, d) in Iterator::zip(
+            src_row.as_chunks::<4>().0.iter(),
+            dst_row.as_chunks_mut::<4>().0.iter_mut(),
+        ) {
             for c in 0..3 {
                 let v = if LE {
                     u16::from_le(s[c])
@@ -371,7 +380,10 @@ fn transform_rgba64_3d<const LE: bool>(
         let src_row = &src_row[..width * 4];
         let dst_row = &mut dst_row[..width * 4];
 
-        for (s, d) in Iterator::zip(src_row.chunks_exact(4), dst_row.chunks_exact_mut(4)) {
+        for (s, d) in Iterator::zip(
+            src_row.as_chunks::<4>().0.iter(),
+            dst_row.as_chunks_mut::<4>().0.iter_mut(),
+        ) {
             let (r, g, b) = if LE {
                 (u16::from_le(s[0]), u16::from_le(s[1]), u16::from_le(s[2]))
             } else {

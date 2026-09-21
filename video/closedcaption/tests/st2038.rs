@@ -266,7 +266,9 @@ fn test_st2038_combiner_extractor(
     let mut combiner_buffers = Vec::<gst::Buffer>::new();
 
     for (frame_num, pair) in st2038_buffers
-        .chunks_exact(BUFFERS_PER_FRAME)
+        .as_chunks::<BUFFERS_PER_FRAME>()
+        .0
+        .iter()
         .enumerate()
         .take(frame_limit)
     {

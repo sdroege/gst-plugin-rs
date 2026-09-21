@@ -191,7 +191,7 @@ impl RaptorqTest {
             .collect::<Vec<_>>();
 
         // Simulate out of order packets
-        for x in self.swapped_buffers.chunks_exact(2) {
+        for x in self.swapped_buffers.as_chunks::<2>().0 {
             media_packets.swap(x[0], x[1])
         }
 

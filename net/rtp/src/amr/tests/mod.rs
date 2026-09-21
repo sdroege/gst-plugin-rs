@@ -28,7 +28,9 @@ fn get_amr_nb_data() -> (gst::Caps, Vec<gst::Buffer>) {
         .build();
 
     let buffers = AMR_NB_DATA
-        .chunks_exact(32)
+        .as_chunks::<32>()
+        .0
+        .iter()
         .enumerate()
         .map(|(idx, c)| {
             let mut buf = gst::Buffer::from_slice(c);
@@ -59,7 +61,9 @@ fn get_amr_wb_data() -> (gst::Caps, Vec<gst::Buffer>) {
         .build();
 
     let buffers = AMR_WB_DATA
-        .chunks_exact(18)
+        .as_chunks::<18>()
+        .0
+        .iter()
         .enumerate()
         .map(|(idx, c)| {
             let mut buf = gst::Buffer::from_slice(c);

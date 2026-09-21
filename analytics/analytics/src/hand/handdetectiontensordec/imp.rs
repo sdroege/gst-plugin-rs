@@ -126,7 +126,9 @@ fn extract_hands_from_palm_detection(
     );
 
     for (i, detection) in detections_data
-        .chunks_exact(8)
+        .as_chunks::<8>()
+        .0
+        .iter()
         .take(num_detections)
         .enumerate()
     {

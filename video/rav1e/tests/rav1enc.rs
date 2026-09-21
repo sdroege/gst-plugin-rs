@@ -147,23 +147,23 @@ fn test_encode(video_info: &gst_video::VideoInfo) {
                 }
             }
             10 => {
-                for v in vframe.plane_data_mut(1).unwrap().chunks_exact_mut(2) {
+                for v in vframe.plane_data_mut(1).unwrap().as_chunks_mut::<2>().0 {
                     v[0] = 0;
                     v[1] = 2;
                 }
 
-                for v in vframe.plane_data_mut(2).unwrap().chunks_exact_mut(2) {
+                for v in vframe.plane_data_mut(2).unwrap().as_chunks_mut::<2>().0 {
                     v[0] = 0;
                     v[1] = 2;
                 }
             }
             12 => {
-                for v in vframe.plane_data_mut(1).unwrap().chunks_exact_mut(2) {
+                for v in vframe.plane_data_mut(1).unwrap().as_chunks_mut::<2>().0 {
                     v[0] = 0;
                     v[1] = 8;
                 }
 
-                for v in vframe.plane_data_mut(2).unwrap().chunks_exact_mut(2) {
+                for v in vframe.plane_data_mut(2).unwrap().as_chunks_mut::<2>().0 {
                     v[0] = 0;
                     v[1] = 8;
                 }

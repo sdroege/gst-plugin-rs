@@ -133,7 +133,7 @@ impl HsvDetector {
         {
             for (in_p, out_p) in in_line[..in_line_bytes]
                 .chunks_exact(nb_input_channels)
-                .zip(out_line[..out_line_bytes].chunks_exact_mut(4))
+                .zip(out_line[..out_line_bytes].as_chunks_mut::<4>().0.iter_mut())
             {
                 let hsv = to_hsv(in_p);
 

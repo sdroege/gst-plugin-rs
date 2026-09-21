@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 use gst::glib::Properties;
 use gst_base::subclass::prelude::*;
-use gst_video::{prelude::*, subclass::prelude::*};
+use gst_video::subclass::prelude::*;
 use std::sync::Mutex;
 
 use super::*;

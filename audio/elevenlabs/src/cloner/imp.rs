@@ -610,7 +610,7 @@ impl Cloner {
             hound::WavWriter::new(cursor, spec).unwrap()
         });
 
-        for sample in data.as_slice().chunks_exact(2) {
+        for sample in data.as_slice().as_chunks::<2>().0 {
             wav_writer
                 .write_sample(i16::from_le_bytes([sample[0], sample[1]]))
                 .unwrap();

@@ -575,9 +575,11 @@ impl Synthesizer {
                 compression_factor = Some(factor);
 
                 let samples: Vec<_> = bytes
-                    .chunks_exact(2)
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
                     .map(|chunk| {
-                        let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
+                        let sample = i16::from_le_bytes(*chunk);
                         (sample as f32) / 32768.
                     })
                     .collect();
@@ -589,11 +591,10 @@ impl Synthesizer {
                 let mut bytes_mut: bytes::BytesMut = bytes.into();
 
                 for (out_bytes, sample) in
-                    Iterator::zip(bytes_mut.chunks_exact_mut(2), output.iter())
+                    Iterator::zip(bytes_mut.as_chunks_mut::<2>().0.iter_mut(), output.iter())
                 {
                     let scaled_sample = f32::clamp(sample * 32_768., -32_768., 32_767.) as i16;
-                    let chunk = scaled_sample.to_le_bytes();
-                    out_bytes.copy_from_slice(&chunk);
+                    *out_bytes = scaled_sample.to_le_bytes();
                 }
 
                 bytes = bytes_mut.into();

@@ -582,6 +582,9 @@ impl AudioTestSrcTask {
                 value.to_be_bytes()
             };
 
+            // as_chunks is not usable here because the chunk size size_of::<T>()
+            // depends on the generic type parameter T
+            #[allow(clippy::chunks_exact_to_as_chunks)]
             for sample in data.chunks_exact_mut(mem::size_of::<T>()) {
                 sample.copy_from_slice(value.as_ref());
             }
@@ -598,6 +601,9 @@ impl AudioTestSrcTask {
                     value.to_be_bytes()
                 };
 
+                // as_chunks is not usable here because the chunk size size_of::<T>()
+                // depends on the generic type parameter T
+                #[allow(clippy::chunks_exact_to_as_chunks)]
                 for sample in chunk.chunks_exact_mut(mem::size_of::<T>()) {
                     sample.copy_from_slice(value.as_ref());
                 }

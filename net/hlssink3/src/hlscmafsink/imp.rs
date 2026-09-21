@@ -812,7 +812,7 @@ impl HlsCmafSink {
         );
 
         if iframe_playlist {
-            let keyframes = state.fragment_keyframes.drain(..).collect::<Vec<_>>();
+            let keyframes = std::mem::take(&mut state.fragment_keyframes);
             if !keyframes.is_empty() {
                 for m in keyframes {
                     let offset = if is_single_media_file {

@@ -211,11 +211,11 @@ impl GifDec {
             ) {
                 for ((prev_frame_pixel, curr_frame_pixel), this_frame_pixel) in Iterator::zip(
                     Iterator::zip(
-                        prev_frame_row.chunks_exact_mut(4),
-                        curr_frame_row.chunks_exact_mut(4),
+                        prev_frame_row.as_chunks_mut::<4>().0.iter_mut(),
+                        curr_frame_row.as_chunks_mut::<4>().0.iter_mut(),
                     )
                     .skip(frame.left as usize),
-                    this_frame_row.chunks_exact(4),
+                    this_frame_row.as_chunks::<4>().0.iter(),
                 ) {
                     // the fill_buffer call internally is doing the job to check if this pixel is
                     // supposed to be transparent and indicates that by setting alpha channel value to

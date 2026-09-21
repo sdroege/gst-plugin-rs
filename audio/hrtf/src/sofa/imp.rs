@@ -311,7 +311,10 @@ impl Sofalizer {
                         cp.outdata_left_scratch.iter(),
                         cp.outdata_right_scratch.iter(),
                     ),
-                    outdata[2 * written_samples..].chunks_exact_mut(2),
+                    outdata[2 * written_samples..]
+                        .as_chunks_mut::<2>()
+                        .0
+                        .iter_mut(),
                 ) {
                     y[0] += l * gain;
                     y[1] += r * gain;

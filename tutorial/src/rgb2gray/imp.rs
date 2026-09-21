@@ -357,8 +357,10 @@ impl VideoFilterImpl for Rgb2Gray {
                 // arbitrary amount of padding at the end (e.g. for alignment purposes) and we
                 // don't want to process that padding.
                 for (in_p, out_p) in in_line[..in_line_bytes]
-                    .chunks_exact(4)
-                    .zip(out_line[..out_line_bytes].chunks_exact_mut(4))
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .zip(out_line[..out_line_bytes].as_chunks_mut::<4>().0.iter_mut())
                 {
                     assert_eq!(out_p.len(), 4);
 
@@ -398,7 +400,9 @@ impl VideoFilterImpl for Rgb2Gray {
                 // arbitrary amount of padding at the end (e.g. for alignment purposes) and we
                 // don't want to process that padding.
                 for (in_p, out_p) in in_line[..in_line_bytes]
-                    .chunks_exact(4)
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
                     .zip(out_line[..out_line_bytes].iter_mut())
                 {
                     // Use our above-defined function to convert a BGRx pixel with the settings to

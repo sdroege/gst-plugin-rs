@@ -178,7 +178,9 @@ impl VideoDecoderImpl for CdgDec {
                 .enumerate()
             {
                 for (x, pixel) in line
-                    .chunks_exact_mut(4)
+                    .as_chunks_mut::<4>()
+                    .0
+                    .iter_mut()
                     .take(CDG_WIDTH as usize)
                     .enumerate()
                 {
