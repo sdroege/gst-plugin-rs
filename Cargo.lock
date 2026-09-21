@@ -3426,9 +3426,9 @@ dependencies = [
 
 [[package]]
 name = "deepgram"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12466522a157634afeed95a738f129f5f0fc2e1af855d9550921eeec1182e1a1"
+checksum = "f2d5e8b85dc63bb8a23f80ad7ff9a76d362708b60d965e3fdfb975599eb8019b"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3436,12 +3436,15 @@ dependencies = [
  "http 1.5.0",
  "pin-project",
  "reqwest 0.13.5",
+ "rustls 0.23.45",
+ "rustls-pki-types",
  "serde",
  "serde_json",
  "serde_urlencoded",
  "sha256",
  "thiserror 2.0.20",
  "tokio",
+ "tokio-rustls 0.26.5",
  "tokio-stream",
  "tokio-tungstenite 0.28.0",
  "tokio-util",
@@ -3449,6 +3452,7 @@ dependencies = [
  "tungstenite 0.28.0",
  "url",
  "uuid",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]
