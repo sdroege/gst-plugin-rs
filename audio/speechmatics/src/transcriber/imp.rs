@@ -159,9 +159,17 @@ struct SpeakerDiarizationConfig {
     speakers: Vec<LabeledSpeaker>,
 }
 
+#[derive(serde::Serialize, Debug, Clone)]
+struct Replacement {
+    from: String,
+    to: String,
+}
+
 #[derive(serde::Serialize, Debug)]
 struct TranscriptFilteringConfig {
     remove_disfluencies: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    replacements: Vec<Replacement>,
 }
 
 #[derive(serde::Serialize, Debug)]
@@ -266,6 +274,7 @@ const DEFAULT_MAX_SPEAKERS: u32 = 50;
 const DEFAULT_REMOVE_DISFLUENCIES: bool = false;
 const DEFAULT_GET_SPEAKERS_INTERVAL: u32 = 0;
 const DEFAULT_AUDIO_EVENT_TYPES: Vec<SpeechmaticsAudioEventType> = vec![];
+const DEFAULT_REPLACEMENTS: Vec<Replacement> = vec![];
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -283,6 +292,7 @@ struct Settings {
     remove_disfluencies: bool,
     get_speakers_interval: u32,
     audio_event_types: Vec<SpeechmaticsAudioEventType>,
+    replacements: Vec<Replacement>,
 }
 
 impl Default for Settings {
@@ -302,6 +312,7 @@ impl Default for Settings {
             remove_disfluencies: DEFAULT_REMOVE_DISFLUENCIES,
             get_speakers_interval: DEFAULT_GET_SPEAKERS_INTERVAL,
             audio_event_types: DEFAULT_AUDIO_EVENT_TYPES,
+            replacements: DEFAULT_REPLACEMENTS,
         }
     }
 }
@@ -1573,6 +1584,7 @@ impl Transcriber {
                     speaker_diarization_config,
                     transcript_filtering_config: TranscriptFilteringConfig {
                         remove_disfluencies: settings.remove_disfluencies,
+                        replacements: settings.replacements.clone(),
                     },
                 },
                 translation_config: TranslationConfig {
@@ -2038,6 +2050,17 @@ impl ObjectImpl for Transcriber {
                     .blurb("Audio Event Types")
                     .mutable_ready()
                     .build(),
+                gst::ParamSpecArray::builder("replacements")
+                    .nick("Replacements")
+                    .blurb("A set of replacements to apply on input text, see https://docs.speechmatics.com/speech-to-text/formatting#word-replacement")
+                    .element_spec(
+                        &glib::ParamSpecBoxed::builder::<gst::Structure>("replacement")
+                            .nick("Replacement")
+                            .blurb("A replacement to apply on input text")
+                            .build(),
+                    )
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -2236,6 +2259,48 @@ impl ObjectImpl for Transcriber {
                     })
                     .collect::<Vec<_>>();
             }
+            "replacements" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.replacements = vec![];
+                let replacements = value.get::<gst::ArrayRef>().expect("type checked upstream");
+                for replacement in replacements.as_slice() {
+                    let s = match replacement
+                        .get::<Option<gst::Structure>>()
+                        .expect("type checked upstream")
+                    {
+                        Some(s) => s,
+                        None => {
+                            continue;
+                        }
+                    };
+
+                    let from = match s.get::<Option<String>>("from") {
+                        Ok(Some(from)) => from,
+                        Ok(None) | Err(_) => {
+                            gst::error!(
+                                CAT,
+                                imp = self,
+                                "Replacement require a from field as a string"
+                            );
+                            continue;
+                        }
+                    };
+
+                    let to = match s.get::<Option<String>>("to") {
+                        Ok(Some(to)) => to,
+                        Ok(None) | Err(_) => {
+                            gst::error!(
+                                CAT,
+                                imp = self,
+                                "Replacement require a to field as a string"
+                            );
+                            continue;
+                        }
+                    };
+
+                    settings.replacements.push(Replacement { from, to });
+                }
+            }
             _ => unimplemented!(),
         }
     }
@@ -2329,6 +2394,19 @@ impl ObjectImpl for Transcriber {
                     labeled_speakers.push(s.to_send_value());
                 }
                 gst::Array::new(labeled_speakers).to_value()
+            }
+            "replacements" => {
+                let settings = self.settings.lock().unwrap();
+                let mut replacements = gst::Array::default();
+                for replacement in &settings.replacements {
+                    replacements.append(
+                        gst::Structure::builder("replacement")
+                            .field("from", &replacement.from)
+                            .field("to", &replacement.to)
+                            .build(),
+                    );
+                }
+                replacements.to_value()
             }
             "audio-event-types" => self
                 .settings

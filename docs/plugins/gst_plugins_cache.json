@@ -17980,6 +17980,17 @@
                         "type": "gboolean",
                         "writable": true
                     },
+                    "replacements": {
+                        "blurb": "A set of replacements to apply on input text, see https://docs.speechmatics.com/speech-to-text/formatting#word-replacement",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    },
                     "url": {
                         "blurb": "URL of the transcription server",
                         "conditionally-available": false,
