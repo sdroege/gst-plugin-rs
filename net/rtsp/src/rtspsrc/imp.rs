@@ -484,7 +484,7 @@ pub enum RtspError {
     #[error("SDP parse error")]
     SDPParser(#[from] sdp_types::ParserError),
     #[error("Unexpected RTSP message: expected, received")]
-    UnexpectedMessage(&'static str, rtsp_types::Message<Body>),
+    UnexpectedMessage(&'static str, Box<rtsp_types::Message<Body>>),
     #[error("Invalid RTSP message")]
     InvalidMessage(&'static str),
     #[error("Fatal error")]
@@ -2738,7 +2738,7 @@ impl RtspTaskState {
 
             let rsp = match self.stream.next().await {
                 Some(Ok(rtsp_types::Message::Response(rsp))) => Ok(rsp),
-                Some(Ok(m)) => Err(RtspError::UnexpectedMessage("Response", m)),
+                Some(Ok(m)) => Err(RtspError::UnexpectedMessage("Response", Box::new(m))),
                 Some(Err(e)) => Err(e.into()),
                 None => {
                     Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "response").into())

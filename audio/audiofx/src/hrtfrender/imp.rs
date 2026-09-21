@@ -305,7 +305,10 @@ impl HrtfRender {
             state.channel_processors.iter_mut().for_each(|cp| {
                 for (x, y) in Iterator::zip(
                     cp.outdata_scratch.iter(),
-                    outdata[2 * written_samples..].chunks_exact_mut(2),
+                    outdata[2 * written_samples..]
+                        .as_chunks_mut::<2>()
+                        .0
+                        .iter_mut(),
                 ) {
                     y[0] += x.0;
                     y[1] += x.1;

@@ -69,8 +69,10 @@ fn test_cdgdec() {
 
                 // First frame fully blue
                 map.as_slice()
-                    .chunks_exact(4)
-                    .for_each(|p| assert_eq!(p, [0, 0, 136, 255]));
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .for_each(|p| assert_eq!(p, &[0, 0, 136, 255]));
 
                 Ok(gst::FlowSuccess::Ok)
             })

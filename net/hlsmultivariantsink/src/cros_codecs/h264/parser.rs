@@ -855,16 +855,12 @@ impl Parser {
     ) {
         // (7-8) in the spec.
         for outer in scaling_list4x4 {
-            for inner in outer {
-                *inner = 16;
-            }
+            outer.fill(16);
         }
 
         // (7-9) in the spec.
         for outer in scaling_list8x8 {
-            for inner in outer {
-                *inner = 16;
-            }
+            outer.fill(16);
         }
     }
 

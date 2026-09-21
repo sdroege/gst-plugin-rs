@@ -160,7 +160,7 @@ impl Cea608Overlay {
             gst::warning!(CAT, "cc_data length is not a multiple of 3, truncating");
         }
 
-        for triple in data.chunks_exact(3) {
+        for triple in data.as_chunks::<3>().0 {
             let cc_valid = (triple[0] & 0x04) == 0x04;
             let cc_type = triple[0] & 0x03;
 
@@ -206,7 +206,7 @@ impl Cea608Overlay {
             gst::warning!(CAT, "cc_data length is not a multiple of 3, truncating");
         }
 
-        for triple in data.chunks_exact(3) {
+        for triple in data.as_chunks::<3>().0 {
             let field = if (triple[0] & 0x80) == 0x80 { 0 } else { 1 };
 
             if state.selected_field.is_none() {
@@ -279,7 +279,7 @@ impl Cea608Overlay {
             } else if meta.caption_type() == gst_video::VideoCaptionType::Cea608Raw {
                 let data = meta.data();
                 assert!(data.len() % 2 == 0);
-                for pair in data.chunks_exact(2) {
+                for pair in data.as_chunks::<2>().0 {
                     match state.renderer.push_pair([pair[0], pair[1]]) {
                         Err(e) => {
                             gst::warning!(

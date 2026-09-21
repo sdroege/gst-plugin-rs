@@ -308,7 +308,7 @@ impl Cea708Overlay {
             gst::warning!(CAT, "cc_data length is not a multiple of 3, truncating");
         }
 
-        for triple in data.chunks_exact(3) {
+        for triple in data.as_chunks::<3>().0 {
             let field = if (triple[0] & 0x80) == 0x80 {
                 cea608_types::tables::Field::ONE
             } else {
@@ -401,7 +401,7 @@ impl Cea708Overlay {
             } else if meta.caption_type() == gst_video::VideoCaptionType::Cea608Raw {
                 let data = meta.data();
                 assert!(data.len() % 2 == 0);
-                for pair in data.chunks_exact(2) {
+                for pair in data.as_chunks::<2>().0 {
                     self.have_cea608(
                         &mut state,
                         cea608_types::tables::Field::ONE,

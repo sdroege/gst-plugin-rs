@@ -84,16 +84,11 @@ impl FromBitStream for Bsi {
         let frmsiz = r.read::<11, u16>().context("frmsiz")?;
         let fscod = r.read::<2, u8>().context("fscod")?;
 
-        let fscod2;
-        let numblkscod;
-        if fscod == 0x3 {
-            fscod2 = Some(r.read::<2, u8>().context("fscod2")?);
-
-            numblkscod = 6;
+        let (fscod2, numblkscod) = if fscod == 0x3 {
+            (Some(r.read::<2, u8>().context("fscod2")?), 6)
         } else {
-            fscod2 = None;
-            numblkscod = r.read::<2, u8>().context("numblkscod")?;
-        }
+            (None, r.read::<2, u8>().context("numblkscod")?)
+        };
         let number_of_blocks_per_sync_frame = NUM_BLOCKS[numblkscod as usize];
 
         let acmod = r.read::<3, u8>().context("acmod")?;

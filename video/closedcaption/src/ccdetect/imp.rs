@@ -84,7 +84,7 @@ impl CCDetect {
         let mut started_ccp = false;
         let mut have_cc608 = false;
         let mut have_cc708 = false;
-        for (i, triple) in data.chunks_exact(3).enumerate() {
+        for (i, triple) in data.as_chunks::<3>().0.iter().enumerate() {
             let cc_valid = (triple[0] & 0x04) == 0x04;
             let cc_type = triple[0] & 0x03;
             gst::trace!(

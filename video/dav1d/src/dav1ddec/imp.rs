@@ -1227,13 +1227,13 @@ impl VideoDecoderImpl for Dav1dDec {
 
         let settings = self.settings.lock().unwrap();
         let mut decoder_settings = dav1d::Settings::new();
-        let max_frame_delay: u32;
+
         let n_cpus = num_cpus::get();
 
         gst::info!(CAT, imp = self, "Detected {} logical CPUs", n_cpus);
 
         // For autodetection: 1 if live, else whatever dav1d gives us
-        if settings.max_frame_delay == -1 {
+        let max_frame_delay: u32 = if settings.max_frame_delay == -1 {
             let mut latency_query = gst::query::Latency::new();
             let mut is_live = false;
 
@@ -1241,10 +1241,10 @@ impl VideoDecoderImpl for Dav1dDec {
                 is_live = latency_query.result().0;
             }
 
-            max_frame_delay = u32::from(is_live);
+            u32::from(is_live)
         } else {
-            max_frame_delay = settings.max_frame_delay.try_into().unwrap();
-        }
+            settings.max_frame_delay.try_into().unwrap()
+        };
 
         gst::info!(
             CAT,

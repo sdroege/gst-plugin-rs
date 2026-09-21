@@ -189,7 +189,7 @@ impl S3Upload {
         }
 
         let s3_data: Vec<u8> = if consume {
-            self.s3_data.drain(0..).collect()
+            std::mem::take(&mut self.s3_data)
         } else {
             self.s3_data.clone()
         };

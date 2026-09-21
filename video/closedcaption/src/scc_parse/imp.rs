@@ -393,7 +393,7 @@ impl SccParse {
         };
 
         let mut send_eos = false;
-        for d in data.chunks_exact(2) {
+        for d in data.as_chunks::<2>().0 {
             let mut buffer = gst::Buffer::with_size(d.len()).unwrap();
             {
                 let buf_mut = buffer.get_mut().unwrap();

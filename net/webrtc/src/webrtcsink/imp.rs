@@ -1321,7 +1321,7 @@ impl State {
             format!("removing-session-{}-", inner.id),
         );
 
-        let webrtc_pads: HashMap<_, _> = inner.webrtc_pads.drain().collect();
+        let webrtc_pads: HashMap<_, _> = std::mem::take(&mut inner.webrtc_pads);
 
         for ssrc in webrtc_pads.keys() {
             inner.links.remove(ssrc);
@@ -3975,7 +3975,8 @@ impl BaseWebRTCSink {
 
         let mut session = session_clone.lock().unwrap();
 
-        let pending_removed_streams: HashSet<_> = session.pending_removed_streams.drain().collect();
+        let pending_removed_streams: HashSet<_> =
+            std::mem::take(&mut session.pending_removed_streams);
 
         let had_pending_removed_streams = !pending_removed_streams.is_empty();
 

@@ -678,7 +678,7 @@ impl State {
             bail!("Couldn't find sync byte");
         };
 
-        for chunk in map[pos..].chunks_exact(188) {
+        for chunk in map[pos..].as_chunks::<188>().0 {
             self.handle_packet(imp, chunk, monotonic_time)
                 .context("handling buffer")?;
         }
