@@ -5,6 +5,9 @@ endif
 
 # Check for gstreamer-validate dependency
 gstvalidate_dep = dependency('gstreamer-validate-1.0', required: validate_option)
+if not gstvalidate_dep.found()
+  subdir_done()
+endif
 
 # Build the validate plugin
 lib = 'libgstrsvalidate'
