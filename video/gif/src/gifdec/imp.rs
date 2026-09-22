@@ -138,7 +138,7 @@ impl GifDec {
         let mut prev_frame_buffer = vec![0_u8; size];
         let mut next_timestamp = gst::ClockTime::ZERO;
 
-        let mut has_read_frames = None; // Not yet
+        let mut has_read_frames = false; // Not yet
 
         while do_loop || repeat != 0 {
             let next_frame = match d.read_next_frame() {
@@ -151,20 +151,14 @@ impl GifDec {
                 }
             };
 
-            if next_frame.is_some() {
-                has_read_frames = Some(true)
-            } else if has_read_frames.is_none() {
-                has_read_frames = Some(false);
-            }
-
-            if let Some(false) = has_read_frames {
-                return Err(gst::error_msg!(
-                    gst::StreamError::Decode,
-                    ["Animation has no frames"]
-                ));
-            }
-
             let Some(frame) = next_frame else {
+                if !has_read_frames {
+                    return Err(gst::error_msg!(
+                        gst::StreamError::Decode,
+                        ["Animation has no frames"]
+                    ));
+                }
+
                 gst::debug!(CAT, "end of frames, replaying..");
 
                 d = dec.clone().read_info(buf.as_slice()).unwrap();
@@ -174,6 +168,8 @@ impl GifDec {
                 }
                 continue;
             };
+
+            has_read_frames = true;
 
             let timestamp = next_timestamp;
             // Frame delay in units of 10 ms.
