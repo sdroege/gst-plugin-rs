@@ -5,6 +5,39 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.15.4] - 2026-09-22
+### Fixed
+- fmp4mux: Fix racy `test_large_gop_split_at_fragment_boundary_chunked` test.
+- gifdec: Error out if a frameless GIF is somehow supplied.
+- hlssink3 / hlsbasesink: Don't `unwrap()` the PTS or running-time of a fragment.
+- isobmff: Fix `min_display_mastering_luminance` in the `mdcv` box.
+- isobmff: Use the previous highest PTS or DTS when none are available on a buffer.
+- reqwesthttpsrc: Handle empty response chunks.
+- rtp: Fix overflowing additions.
+- rtprecv: Fix deadlock when handling an RTCP packet as part of a buffer list.
+- rtprecv: Limit the number of remote sources being tracked.
+- rtpsmpte291depay: Fix depayloading frames with multiple ANC packets.
+- rtspsrc2: Fix handling of scheme and parameter parsing.
+- st2038anc: Fix inverted even/odd parity on ST 291 ADF words.
+- st2038combiner: Hold each picture until the end of its ST-2038 window, complete
+  frame-aligned pictures on the first in-window ANC, and fix an off-by-one when
+  ST-2038 pads are skewed.
+- textaccumulate: Thoroughly reset state on FLUSH_START.
+- webrtcsink: Handle `level-asymmetry-allowed` when answering.
+
+### Added
+- isobmff: Add support for `video/x-h266`.
+- rtspsrc2: Allow disabling SRTP/SRTCP encryption and SRTP authentication.
+- st2038combiner: Add `drop-late-st2038` property.
+- textaccumulate: Output a single joined buffer and add the list of buffers as metadata.
+- webrtc: Add support for `nvv4l2h265enc`.
+
+### Changed
+- `aws-lc-rs` is now the default rustls crypto provider.
+- Various dependencies were updated, raptorq was downgraded to 2.0.0 again.
+- Various new Rust 1.97 / 1.98 clippy warnings were fixed.
+- textaccumulate: Join punctuation appropriately for French streams.
+
 ## [0.15.3] - 2026-06-30
 ### Fixed
 - fmp4mux: Fix draining in chunk mode after partial GOPs were drained.
@@ -1097,7 +1130,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 - webrtcsink: Make the `turn-server` property a `turn-servers` list
 - webrtcsink: Move from async-std to tokio
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.15.3...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.15.4...HEAD
+[0.15.4]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.15.3...0.15.4
 [0.15.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.15.2...0.15.3
 [0.15.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.15.1...0.15.2
 [0.15.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.15.0...0.15.1
