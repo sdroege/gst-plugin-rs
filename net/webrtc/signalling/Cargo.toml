@@ -36,3 +36,6 @@ default = ["rustls-aws-lc-rs"]
 [[bin]]
 name = "gst-webrtc-signalling-server"
 path = "src/bin/server.rs"
+
+[package.metadata.gstreamer]
+release_date = "2026-09-22"
