@@ -16,6 +16,8 @@
  */
 use std::sync::LazyLock;
 
+mod basetransform;
+mod imagetransform;
 mod texttransform;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
@@ -34,8 +36,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "v1_30")]
     plugin.set_static_features_flag();
 
-    texttransform::register(plugin)?;
-    Ok(())
+    basetransform::register(plugin)
 }
 
 fn initialize_logging(envvar_name: &str) -> Result<(), anyhow::Error> {

@@ -12,7 +12,8 @@ rust-version.workspace = true
 encoding_rs = "0.8"
 glib.workspace = true
 gst.workspace = true
-llama-cpp-2 = { version = "0.1.160" }
+gst-video.workspace = true
+llama-cpp-2 = { version = "0.1.160", features = ["mtmd"] }
 minijinja = { version = "3.1.0", features = ["builtins", "loop_controls", "json"] }
 minijinja-contrib = { version = "3.1.0", features = ["pycompat"] }
 once_cell = "1.0"

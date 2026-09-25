@@ -8,13 +8,12 @@
 #![allow(unused_doc_comments)]
 
 use gst::glib;
-use gst::prelude::*;
 
 mod imp;
 
 /**
  * SECTION:element-llamacpp-texttransform
- * @see_also: textwrap, textaccumulate, whispertranscriber.
+ * @see_also: textwrap, textaccumulate, whispertranscriber, llamacpp-imagetransform.
  *
  * [llama.cpp](https://github.com/ggml-org/llama.cpp)-based text transformation element that
  * passes text through a LLM and forwards the output.
@@ -81,14 +80,5 @@ mod imp;
  * Since: plugins-rs-0.16.0
  */
 glib::wrapper! {
-    pub struct TextTransform(ObjectSubclass<imp::TextTransform>) @extends gst::Element, gst::Object;
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "llamacpp-texttransform",
-        gst::Rank::NONE,
-        TextTransform::static_type(),
-    )
+    pub struct TextTransform(ObjectSubclass<imp::TextTransform>) @extends crate::basetransform::LlamaBaseTransform, gst::Element, gst::Object;
 }

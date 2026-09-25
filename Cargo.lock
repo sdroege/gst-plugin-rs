@@ -5632,6 +5632,7 @@ dependencies = [
  "glib",
  "gst-plugin-version-helper",
  "gstreamer",
+ "gstreamer-video",
  "llama-cpp-2",
  "minijinja",
  "minijinja-contrib",

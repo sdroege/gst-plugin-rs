@@ -373,6 +373,7 @@ You will find the following plugins in this repository:
 
     - `llamacpp`: A plugin wrapping [llama.cpp](https://github.com/ggml-org/llama.cpp) for making use of LLMs
       - `llamacpp-texttransform`: Text transformation element.
+      - `llamacpp-imagetransform`: Image-to-text transformation element.
 
     - `regex`: A regular expression text filter plugin.
 
