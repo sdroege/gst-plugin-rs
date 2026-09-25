@@ -114,8 +114,11 @@ struct State {
     // Active vorbis config
     config: Option<VorbisConfig>,
 
-    // The last time we sent an in-band config
-    last_inband_config_time: Option<std::time::Instant>,
+    // Running time when we last inserted the config in-band
+    last_inband_config_time: Option<gst::ClockTime>,
+
+    // Forced delayed sending of inband config before next buffer after caps change or such
+    pending_forced_inband_config: bool,
 }
 
 #[derive(Default)]
@@ -348,10 +351,12 @@ impl RtpBasePay2Impl for RtpVorbisPay {
                 );
             } else {
                 // Queue the new updated headers in-band now
-                if let Err(err) = self.send_inband_config(&mut state) {
-                    gst::warning!(CAT, imp = self, "Failed to send in-band headers: {err:?}");
-                    return false;
-                }
+                gst::info!(
+                    CAT,
+                    imp = self,
+                    "Queuing forced sending of in-band headers on next buffer"
+                );
+                state.pending_forced_inband_config = true;
             }
         } else {
             gst::info!(
@@ -406,19 +411,33 @@ impl RtpBasePay2Impl for RtpVorbisPay {
         }
 
         // If in-band header sending is enabled, re-send the headers regularly
-        if settings.config_interval > 0 {
-            let send_now = if let Some(t) = state.last_inband_config_time {
-                t.elapsed() >= std::time::Duration::from_secs(settings.config_interval as u64)
-            } else {
-                true
+        if settings.config_interval > 0 || state.pending_forced_inband_config {
+            let segment = self.obj().segment().expect("segment");
+
+            // Base class ensures pts or errors out if no pts on first buffer
+            let buffer_running_time = segment.to_running_time(buffer.pts().expect("pts"));
+
+            let send_now = state.pending_forced_inband_config || {
+                if let Some(last_inband_config_time) = state.last_inband_config_time {
+                    if let Some(rt_now) = buffer_running_time {
+                        let elapsed = rt_now - last_inband_config_time;
+                        elapsed >= gst::ClockTime::from_seconds(settings.config_interval as u64)
+                    } else {
+                        false
+                    }
+                } else {
+                    true
+                }
             };
+
             if send_now {
                 gst::info!(
                     CAT,
                     imp = self,
                     "Config has changed, need to send new headers in-band now"
                 );
-                self.send_inband_config(&mut state)?;
+
+                self.send_inband_config(&mut state, buffer_running_time.unwrap())?;
             }
         }
 
@@ -759,7 +778,11 @@ impl RtpVorbisPay {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn send_inband_config(&self, state: &mut State) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn send_inband_config(
+        &self,
+        state: &mut State,
+        running_time: gst::ClockTime,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let config = state.config.as_ref().unwrap();
 
         let packed_headers = match config.to_packed() {
@@ -774,7 +797,8 @@ impl RtpVorbisPay {
             }
         };
 
-        state.last_inband_config_time = Some(std::time::Instant::now());
+        state.last_inband_config_time = Some(running_time);
+        state.pending_forced_inband_config = false;
 
         self.send_fragmented_payload(
             &packed_headers,

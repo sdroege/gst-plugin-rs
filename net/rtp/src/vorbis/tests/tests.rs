@@ -162,7 +162,30 @@ fn test_vorbis_inband_headers() {
             _ => unreachable!(),
         };
 
-        expected_pay.push(vec![
+        let pts = gst::ClockTime::from_nseconds(
+            position
+                .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
+                .unwrap(),
+        );
+
+        let mut packets = vec![];
+
+        // in-band headers expected?
+        let have_in_band_headers = i == 24 || i == 47;
+
+        if have_in_band_headers {
+            for _ in 0..4 {
+                packets.push(
+                    ExpectedPacket::builder()
+                        .pts(pts)
+                        .rtp_time((position & 0xffff_ffff) as u32)
+                        .marker_bit(false)
+                        .build(),
+                );
+            }
+        }
+
+        packets.push(
             ExpectedPacket::builder()
                 .pts(gst::ClockTime::from_nseconds(
                     position
@@ -177,7 +200,9 @@ fn test_vorbis_inband_headers() {
                 .rtp_time((position & 0xffff_ffff) as u32)
                 .marker_bit(false)
                 .build(),
-        ]);
+        );
+
+        expected_pay.push(packets);
     }
 
     let mut expected_depay = Vec::with_capacity(51);
@@ -212,34 +237,30 @@ fn test_vorbis_inband_headers() {
                 let position = 1600 + (i - 1) * 1024 * 2;
 
                 let mut list = Vec::with_capacity(2);
-                for j in 0..2 {
-                    list.push(
-                        ExpectedBuffer::builder()
-                            .maybe_pts(if j == 0 {
-                                Some(gst::ClockTime::from_nseconds(
-                                    position
-                                        .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
-                                        .unwrap(),
-                                ))
-                            } else {
-                                None
-                            })
-                            .build(),
-                    );
+
+                let mut pts = Some(gst::ClockTime::from_nseconds(
+                    position
+                        .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
+                        .unwrap(),
+                ));
+
+                for _ in 0..2 {
+                    list.push(ExpectedBuffer::builder().maybe_pts(pts.take()).build());
                 }
 
                 expected_depay.push(list);
             }
             50 => {
                 let position = 1600 + (i - 1) * 1024 * 2;
+
+                let mut pts = Some(gst::ClockTime::from_nseconds(
+                    position
+                        .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
+                        .unwrap(),
+                ));
+
                 expected_depay.push(vec![
-                    ExpectedBuffer::builder()
-                        .pts(gst::ClockTime::from_nseconds(
-                            position
-                                .mul_div_floor(*gst::ClockTime::SECOND, 48_000)
-                                .unwrap(),
-                        ))
-                        .build(),
+                    ExpectedBuffer::builder().maybe_pts(pts.take()).build(),
                 ]);
             }
             _ => unreachable!(),
