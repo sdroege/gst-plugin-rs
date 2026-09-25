@@ -396,13 +396,124 @@ impl BaseTransformImpl for CtcTextTensorDec {
             return Err(gst::FlowError::Flushing);
         };
 
-        let Some(meta) = find_ctc_tensor_meta(buffer, state.tensor_output) else {
-            gst::trace!(CAT, imp = self, "No CTC tensor meta found");
-            return Ok(gst::FlowSuccess::Ok);
-        };
+        let tensor_id = glib::Quark::from_static_str(match state.tensor_output {
+            TensorOutput::Prob => CTC_TEXT_RECOGNITION_OUT_PROB,
+            TensorOutput::Logits => CTC_TEXT_RECOGNITION_OUT_LOGITS,
+        });
 
-        let tensor = &meta.as_slice()[0];
+        let mut decoded = Vec::new();
+        let list = buffer
+            .iter_meta::<gst_analytics::TensorListMeta>()
+            .find(|meta| {
+                meta.group_id() == Some(glib::Quark::from_static_str(CTC_TEXT_RECOGNITION_OUT))
+            });
 
+        if let Some(list) = list {
+            let rmeta = buffer.meta::<gst_analytics::AnalyticsRelationMeta>();
+            for item in 0..list.num_items() {
+                let tensor = list
+                    .typed_tensor(
+                        item,
+                        tensor_id,
+                        gst_analytics::TensorDataType::Float32,
+                        gst_analytics::TensorDimOrder::RowMajor,
+                        &[usize::MAX, usize::MAX, usize::MAX],
+                    )
+                    .ok_or_else(|| {
+                        gst::error!(CAT, imp = self, "Invalid CTC tensor in item {item}");
+                        gst::FlowError::Error
+                    })?;
+
+                let results = self.decode_tensor(state, tensor)?;
+                if results.is_empty() {
+                    continue;
+                }
+
+                let mut entries = list.provenance(item);
+                let provenance = entries.next().filter(|entry| {
+                    entries.next().is_none() && entry.correlation_ids.len() == results.len()
+                });
+
+                let Some(provenance) = provenance else {
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Missing or mismatched provenance for CTC tensor item {item}"
+                    );
+
+                    decoded.extend(
+                        results
+                            .into_iter()
+                            .map(|(text, confidence)| (text, confidence, None)),
+                    );
+                    continue;
+                };
+
+                for ((text, confidence), correlation) in
+                    results.into_iter().zip(provenance.correlation_ids)
+                {
+                    let correlation = correlation.get();
+                    let od = rmeta.as_ref().and_then(|meta| {
+                        find_related_od_from_tensor_provenance(meta, provenance.key, correlation)
+                    });
+                    if od.is_none() {
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Couldn't find related OD for CTC tensor item {item}, correlation {correlation}"
+                        );
+                    }
+
+                    decoded.push((text, confidence, od));
+                }
+            }
+        } else if let Some(meta) = find_ctc_tensor_meta(buffer, state.tensor_output) {
+            let tensor = meta
+                .typed_tensor(
+                    tensor_id,
+                    gst_analytics::TensorDataType::Float32,
+                    gst_analytics::TensorDimOrder::RowMajor,
+                    &[usize::MAX, usize::MAX, usize::MAX],
+                )
+                .unwrap();
+
+            decoded.extend(
+                self.decode_tensor(state, tensor)?
+                    .into_iter()
+                    .map(|(text, confidence)| (text, confidence, None)),
+            );
+        }
+
+        if !decoded.is_empty() {
+            let mut rmeta = gst_analytics::AnalyticsRelationMeta::add(buffer);
+            for (text, confidence, od) in decoded {
+                gst::debug!(CAT, imp = self, "Recognized '{text}' for OD {od:?}");
+                let id = rmeta
+                    .add_text_mtd(&text, confidence)
+                    .map_err(|_| gst::FlowError::Error)?
+                    .id();
+
+                if let Some(od) = od {
+                    rmeta
+                        .set_relation(gst_analytics::RelTypes::CONTAIN, od, id)
+                        .map_err(|_| gst::FlowError::Error)?;
+                    rmeta
+                        .set_relation(gst_analytics::RelTypes::IS_PART_OF, id, od)
+                        .map_err(|_| gst::FlowError::Error)?;
+                }
+            }
+        }
+
+        Ok(gst::FlowSuccess::Ok)
+    }
+}
+
+impl CtcTextTensorDec {
+    fn decode_tensor(
+        &self,
+        state: &mut State,
+        tensor: &gst_analytics::TensorRef,
+    ) -> Result<Vec<(String, f32)>, gst::FlowError> {
         let map = tensor
             .data()
             .map_readable()
@@ -417,12 +528,15 @@ impl BaseTransformImpl for CtcTextTensorDec {
         let batch_size = dims[0];
         if batch_size == 0 {
             gst::warning!(CAT, imp = self, "Empty batch");
-            return Ok(gst::FlowSuccess::Ok);
+            return Ok(Vec::new());
         }
 
         let seq_len = dims[1];
-        let num_classes = dims[2];
+        if seq_len == 0 {
+            return Ok(vec![(String::new(), 0.0); batch_size]);
+        }
 
+        let num_classes = dims[2];
         let Some(batch_stride) = seq_len.checked_mul(num_classes) else {
             gst::error!(
                 CAT,
@@ -507,15 +621,34 @@ impl BaseTransformImpl for CtcTextTensorDec {
 
         drop(map);
 
-        let mut rmeta = gst_analytics::AnalyticsRelationMeta::add(buffer);
-        for (text, confidence) in results {
-            rmeta
-                .add_text_mtd(&text, confidence)
-                .map_err(|_| gst::FlowError::Error)?;
-        }
-
-        Ok(gst::FlowSuccess::Ok)
+        Ok(results)
     }
+}
+
+fn find_related_od_from_tensor_provenance(
+    meta: &gst::MetaRef<'_, gst_analytics::AnalyticsRelationMeta>,
+    key: glib::Quark,
+    correlation: i64,
+) -> Option<u32> {
+    let provenance = meta
+        .iter::<gst_analytics::AnalyticsTensorProvenanceMtd>()
+        .find(|provenance| {
+            provenance.correlation_id() == correlation && provenance.tensor_id() == Some(key)
+        })?;
+
+    let mut detections = meta.iter_direct_related::<gst_analytics::AnalyticsODMtd>(
+        provenance.id(),
+        gst_analytics::RelTypes::RELATE_TO,
+    );
+
+    let id = detections.next()?.id();
+
+    // A tensor provenance must be related to exactly one OD
+    if detections.next().is_some() {
+        return None;
+    }
+
+    Some(id)
 }
 
 fn decode_greedy(state: &State, data: &[f32], num_classes: usize) -> (String, f64) {
