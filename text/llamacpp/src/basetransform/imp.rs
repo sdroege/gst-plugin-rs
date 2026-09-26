@@ -865,10 +865,19 @@ impl LlamaBaseTransform {
             }
         }
 
-        // TODO: make use of llama_memory_seq_rm() etc to keep as much of the
-        // KV cache as possible. Needs https://github.com/utilityai/llama-cpp-rs/pull/1050
-        // See completion example around
-        // https://github.com/ggml-org/llama.cpp/blob/bddfd2b1137cd6e51fbb939081caf50e9f496a66/tools/completion/completion.cpp#L604
+        // The full prompt is re-encoded on every turn. KV-cache prefix
+        // reuse (llama_memory_seq_rm()) was considered and is not viable:
+        // - Chat templates render completed assistant turns differently
+        //   than pending ones (e.g. Qwen3.5 drops the think scaffold), so
+        //   the next turn's prompt does not extend the cached
+        //   prompt+generation.
+        // - The history window (settings.history_size) prunes old messages
+        //   once full, so in steady state the common prefix shrinks to
+        //   just the system prompt.
+        // - Recurrent (linear attention) layers only keep a running state
+        //   at the sequence tail and cannot be rewound to intermediate
+        //   positions, so even a matching prefix cannot be reused and any
+        //   non-extending prompt requires a full re-encode.
         model.context.0.clear_kv_cache();
 
         while messages.len() > 1 + 2 * settings.history_size as usize {
