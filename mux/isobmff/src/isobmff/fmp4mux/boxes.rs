@@ -183,12 +183,16 @@ fn write_prft(
 ) -> Result<(), Error> {
     // Reference track ID
     v.extend((idx as u32 + 1).to_be_bytes());
-    // NTP timestamp
-    let start_ntp_time = start_ntp_time
-        .nseconds()
-        .mul_div_floor(1u64 << 32, gst::ClockTime::SECOND.nseconds())
-        .unwrap();
-    v.extend(start_ntp_time.to_be_bytes());
+
+    // The NTP timestamp is a 64-bit fixed-point value with the seconds
+    // since the NTP epoch in the upper 32 bits and the fraction of a
+    // second in the lower 32 bits. The seconds field wraps around every
+    // 2^32 seconds (in 2036), so only the lower 64 bits of the 128-bit
+    // conversion result are kept.
+    let ntp_time = start_ntp_time.nseconds() as u128 * (1u128 << 32)
+        / gst::ClockTime::SECOND.nseconds() as u128;
+    v.extend((ntp_time as u64).to_be_bytes());
+
     // Media time
     let timescale = stream.to_timescale();
     let media_time = start_time
@@ -680,4 +684,63 @@ pub(crate) fn create_mfra(
     v[offset..][..4].copy_from_slice(&len.to_be_bytes());
 
     Ok(gst::Buffer::from_mut_slice(v))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::isobmff::{DeltaFrames, Variant};
+
+    fn write_ntp_timestamp(start_ntp_time: gst::ClockTime) -> u64 {
+        let stream = FragmentHeaderStream {
+            caps: gst::Caps::new_empty(),
+            delta_frames: DeltaFrames::IntraOnly,
+            trak_timescale: 48_000,
+            start_time: Some(gst::ClockTime::ZERO),
+            start_ntp_time: Some(start_ntp_time),
+        };
+        let cfg = FragmentHeaderConfiguration {
+            variant: Variant::FragmentedISO,
+            sequence_number: 0,
+            chunk: false,
+            streams: std::slice::from_ref(&stream),
+            buffers: &[],
+            last_fragment: false,
+        };
+
+        let mut v = vec![];
+        write_prft(
+            &mut v,
+            &cfg,
+            0,
+            &stream,
+            gst::ClockTime::ZERO,
+            start_ntp_time,
+        )
+        .unwrap();
+
+        // Reference track ID, NTP timestamp, media time
+        u64::from_be_bytes(v[4..12].try_into().unwrap())
+    }
+
+    #[test]
+    fn prft_ntp_timestamp() {
+        gst::init().unwrap();
+
+        // 2036-02-07 06:28:15 UTC one second before the 32-bit NTP seconds field wraps
+        let start_ntp_time = gst::ClockTime::from_nseconds(4_294_967_295_000_000_000);
+        assert_eq!(write_ntp_timestamp(start_ntp_time), 0xffff_ffff_0000_0000);
+
+        // 2036-02-07 06:28:16 UTC the moment where it wraps
+        let start_ntp_time = gst::ClockTime::from_nseconds(4_294_967_296_000_000_000);
+        assert_eq!(write_ntp_timestamp(start_ntp_time), 0x0000_0000_0000_0000);
+
+        // 1000.5 seconds after the wrap
+        let start_ntp_time = gst::ClockTime::from_nseconds(4_294_968_296_500_000_000);
+        assert_eq!(write_ntp_timestamp(start_ntp_time), 0x0000_03e8_8000_0000);
+
+        // 2038-01-01 UTC
+        let start_ntp_time = gst::ClockTime::from_nseconds(4_354_905_600_000_000_000);
+        assert_eq!(write_ntp_timestamp(start_ntp_time), 0x0392_9600_0000_0000);
+    }
 }
