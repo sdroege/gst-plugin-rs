@@ -5699,6 +5699,18 @@
                         "type": "GstHlsSink3PlaylistType",
                         "writable": true
                     },
+                    "send-keyframe-requests": {
+                        "blurb": "Send keyframe requests to ensure correct fragmentation. If this is disabled then the input must have keyframes in regular intervals.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "sync": {
                         "blurb": "Sync on the clock",
                         "conditionally-available": false,

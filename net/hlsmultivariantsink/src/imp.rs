@@ -1753,9 +1753,7 @@ impl HlsMultivariantSink {
                 .unwrap_or(DEFAULT_PLAYLIST_TYPE)
                 .to_string(),
         );
-        if settings.muxer_type == HlsMultivariantSinkMuxerType::MpegTs {
-            hlssink.set_property("send-keyframe-requests", settings.send_keyframe_requests);
-        }
+        hlssink.set_property("send-keyframe-requests", settings.send_keyframe_requests);
         hlssink.set_property("target-duration", settings.target_duration);
 
         let mut signals = vec![

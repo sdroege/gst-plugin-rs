@@ -24,6 +24,7 @@ const DEFAULT_CMAF_LOCATION: &str = "segment%05d.m4s";
 const DEFAULT_TARGET_DURATION: u32 = 15;
 const DEFAULT_PLAYLIST_TYPE: HlsSink3PlaylistType = HlsSink3PlaylistType::Unspecified;
 const DEFAULT_SYNC: bool = true;
+const DEFAULT_SEND_KEYFRAME_REQUESTS: bool = true;
 const DEFAULT_LATENCY: gst::ClockTime =
     gst::ClockTime::from_mseconds((DEFAULT_TARGET_DURATION * 500) as u64);
 const SIGNAL_GET_INIT_STREAM: &str = "get-init-stream";
@@ -58,6 +59,7 @@ struct HlsCmafSinkSettings {
     latency: gst::ClockTime,
     playlist_root_init: Option<String>,
     iframe_playlist_location: Option<String>,
+    send_keyframe_requests: bool,
 
     cmafmux: gst::Element,
     appsink: gst_app::AppSink,
@@ -72,6 +74,7 @@ impl Default for HlsCmafSinkSettings {
                 gst::ClockTime::from_seconds(DEFAULT_TARGET_DURATION as u64),
             )
             .property("latency", DEFAULT_LATENCY)
+            .property("send-force-keyunit", DEFAULT_SEND_KEYFRAME_REQUESTS)
             .build()
             .expect("Could not make element cmafmux");
         let appsink = gst_app::AppSink::builder()
@@ -89,6 +92,7 @@ impl Default for HlsCmafSinkSettings {
             latency: DEFAULT_LATENCY,
             playlist_root_init: None,
             iframe_playlist_location: None,
+            send_keyframe_requests: DEFAULT_SEND_KEYFRAME_REQUESTS,
             cmafmux,
             appsink,
         }
@@ -169,6 +173,11 @@ impl ObjectImpl for HlsCmafSink {
                     .nick("I-frame playlist Location")
                     .blurb("Location of the I-frame playlist file to write")
                     .build(),
+                glib::ParamSpecBoolean::builder("send-keyframe-requests")
+                    .nick("Send Keyframe Requests")
+                    .blurb("Send keyframe requests to ensure correct fragmentation. If this is disabled then the input must have keyframes in regular intervals.")
+                    .default_value(DEFAULT_SEND_KEYFRAME_REQUESTS)
+                    .build(),
             ]
         });
 
@@ -227,6 +236,12 @@ impl ObjectImpl for HlsCmafSink {
                         .set_property_from_str("chunk-mode", "keyframe");
                 }
             }
+            "send-keyframe-requests" => {
+                settings.send_keyframe_requests = value.get().expect("type checked upstream");
+                settings
+                    .cmafmux
+                    .set_property("send-force-keyunit", settings.send_keyframe_requests);
+            }
             _ => unimplemented!(),
         };
     }
@@ -245,6 +260,7 @@ impl ObjectImpl for HlsCmafSink {
             "latency" => settings.latency.to_value(),
             "playlist-root-init" => settings.playlist_root_init.to_value(),
             "iframe-playlist-location" => settings.iframe_playlist_location.to_value(),
+            "send-keyframe-requests" => settings.send_keyframe_requests.to_value(),
             _ => unimplemented!(),
         }
     }
