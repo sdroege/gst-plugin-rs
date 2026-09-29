@@ -3184,7 +3184,20 @@ impl FallbackSrc {
             }) {
                 let output = stream.output.as_mut().unwrap();
                 let branch = output.fallback_branch.as_ref().unwrap();
-                let gst_stream = branch.source_srcpad.stream().unwrap();
+
+                // Keep it with the correct branches so that it at least
+                // gets blocked while the others relink.
+                let Some(gst_stream) = branch.source_srcpad.stream() else {
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "Pad {} has no stream, keeping it with the correct branches",
+                        branch.source_srcpad.name()
+                    );
+
+                    correct.push(output.fallback_branch.as_mut().unwrap());
+                    continue;
+                };
 
                 if gst_stream.stream_id() == stream.fallback_id {
                     correct.push(output.fallback_branch.as_mut().unwrap());
