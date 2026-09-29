@@ -550,8 +550,6 @@ impl FallbackSwitch {
         settings: &Settings,
         running_time: gst::ClockTime,
     ) -> bool {
-        state.cancel_timeout();
-
         let clock = match self.obj().clock() {
             None => return false,
             Some(clock) => clock,
@@ -564,7 +562,17 @@ impl FallbackSwitch {
 
         let timeout_running_time = running_time
             .saturating_add(state.upstream_latency + settings.timeout + settings.latency);
-        let wait_until = timeout_running_time + base_time;
+
+        // Keep the pending timeout if we can't calculate a time for a new one.
+        let Some(wait_until) = timeout_running_time.checked_add(base_time) else {
+            return false;
+        };
+
+        if wait_until >= gst::ClockTime::MAX {
+            return false;
+        }
+
+        state.cancel_timeout();
         state.timeout_running_time = Some(timeout_running_time);
 
         /* If we're already running behind, fire the timeout immediately */
@@ -684,6 +692,34 @@ impl FallbackSwitch {
                 }
             }
         };
+
+        // Drop buffers whose timestamps would overflow the clock waits
+        // and timeouts.
+        if let Some(base_time) = self.obj().base_time() {
+            let pad_state = pad_imp.state.lock();
+            let (start_running_time, end_running_time) = pad_state.get_sync_time(&buffer);
+            let extra_time = state
+                .upstream_latency
+                .saturating_add(settings.timeout)
+                .saturating_add(settings.latency);
+
+            if [start_running_time, end_running_time]
+                .into_iter()
+                .flatten()
+                .any(|running_time| {
+                    match running_time
+                        .checked_add(base_time)
+                        .and_then(|wait_until| wait_until.checked_add(extra_time))
+                    {
+                        Some(wait_until) => wait_until >= gst::ClockTime::MAX,
+                        None => true,
+                    }
+                })
+            {
+                log!(CAT, obj = pad, "Dropping buffer with unusable timestamps");
+                return Ok(gst::FlowSuccess::Ok);
+            }
+        }
 
         /* There are 4 cases coming in:
          *  1. This is not the active pad but is higher priority:
