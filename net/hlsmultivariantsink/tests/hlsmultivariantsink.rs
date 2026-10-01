@@ -14,7 +14,6 @@
 use gio::prelude::*;
 use gst::prelude::*;
 use gsthlsmultivariantsink::{HlsMultivariantSinkMuxerType, HlsMultivariantSinkPlaylistType};
-use serial_test::serial;
 use std::io::Write;
 use std::str::FromStr;
 use std::sync::mpsc::SyncSender;
@@ -352,7 +351,6 @@ fn setup_signals(
 }
 
 #[test]
-#[serial]
 fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant() -> Result<(), ()> {
     init();
 
@@ -449,13 +447,13 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant() -> Resu
     pipeline.add(&audio_bin2).unwrap();
     audio_bin2_pad.link(&audio2_pad).unwrap();
 
-    let video_bin1 = or_skip!(video_bin(1920, 1080, 30, 2500, false, false));
+    let video_bin1 = or_skip!(video_bin(1080, 720, 30, 1250, false, false));
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video1-variant")
         .field("uri", "hi/video.m3u8")
         .field("audio", "aac")
-        .field("bandwidth", 2500)
+        .field("bandwidth", 1250)
         .build();
     video1_pad.set_property("variant", v);
     video1_pad.set_property(
@@ -473,13 +471,13 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant() -> Resu
     pipeline.add(&video_bin1).unwrap();
     video_bin1_pad.link(&video1_pad).unwrap();
 
-    let video_bin2 = or_skip!(video_bin(1280, 720, 30, 1500, false, false));
+    let video_bin2 = or_skip!(video_bin(640, 480, 30, 750, false, false));
     let video_bin2_pad = video_bin2.static_pad("src").unwrap();
     let video2_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video2-variant")
         .field("uri", "mid/video.m3u8")
         .field("audio", "aac")
-        .field("bandwidth", 1500)
+        .field("bandwidth", 750)
         .build();
     video2_pad.set_property("variant", v);
     video2_pad.set_property(
@@ -497,13 +495,13 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant() -> Resu
     pipeline.add(&video_bin2).unwrap();
     video_bin2_pad.link(&video2_pad).unwrap();
 
-    let video_bin3 = or_skip!(video_bin(640, 360, 24, 700, false, false));
+    let video_bin3 = or_skip!(video_bin(320, 240, 24, 350, false, false));
     let video_bin3_pad = video_bin3.static_pad("src").unwrap();
     let video3_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video2-variant")
         .field("uri", "low/video.m3u8")
         .field("audio", "aac")
-        .field("bandwidth", 700)
+        .field("bandwidth", 350)
         .build();
     video3_pad.set_property("variant", v);
     video3_pad.set_property(
@@ -583,11 +581,11 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant() -> Resu
 #EXT-X-VERSION:6
 #EXT-X-MEDIA:TYPE=AUDIO,URI="hi-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="en",NAME="English",DEFAULT=YES
 #EXT-X-MEDIA:TYPE=AUDIO,URI="mid-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="fr",NAME="French"
-#EXT-X-STREAM-INF:BANDWIDTH=2500,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
+#EXT-X-STREAM-INF:BANDWIDTH=1250,CODECS="avc1.64000D,avc1.64001E,avc1.64001F,mp4a.40.2",AUDIO="aac"
 hi/video.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=1500,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
+#EXT-X-STREAM-INF:BANDWIDTH=750,CODECS="avc1.64000D,avc1.64001E,avc1.64001F,mp4a.40.2",AUDIO="aac"
 mid/video.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=700,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
+#EXT-X-STREAM-INF:BANDWIDTH=350,CODECS="avc1.64000D,avc1.64001E,avc1.64001F,mp4a.40.2",AUDIO="aac"
 low/video.m3u8
 "###,
             contents.to_string()
@@ -597,7 +595,6 @@ low/video.m3u8
 }
 
 #[test]
-#[serial]
 fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_relative_path()
 -> Result<(), ()> {
     /*
@@ -678,37 +675,37 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_rela
     pipeline.add(&audio_bin2).unwrap();
     audio_bin2_pad.link(&audio2_pad).unwrap();
 
-    let video_bin1 = or_skip!(video_bin(1920, 1080, 30, 2500, false, false));
+    let video_bin1 = or_skip!(video_bin(1080, 720, 30, 1250, false, false));
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video1-variant")
         .field("uri", "hi/video.m3u8")
         .field("audio", "aac")
-        .field("bandwidth", 2500)
+        .field("bandwidth", 1250)
         .build();
     video1_pad.set_property("variant", v);
     pipeline.add(&video_bin1).unwrap();
     video_bin1_pad.link(&video1_pad).unwrap();
 
-    let video_bin2 = or_skip!(video_bin(1280, 720, 30, 1500, false, false));
+    let video_bin2 = or_skip!(video_bin(640, 480, 30, 750, false, false));
     let video_bin2_pad = video_bin2.static_pad("src").unwrap();
     let video2_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video2-variant")
         .field("uri", "mid/video.m3u8")
         .field("audio", "aac")
-        .field("bandwidth", 1500)
+        .field("bandwidth", 750)
         .build();
     video2_pad.set_property("variant", v);
     pipeline.add(&video_bin2).unwrap();
     video_bin2_pad.link(&video2_pad).unwrap();
 
-    let video_bin3 = or_skip!(video_bin(640, 360, 24, 700, false, false));
+    let video_bin3 = or_skip!(video_bin(320, 240, 24, 350, false, false));
     let video_bin3_pad = video_bin3.static_pad("src").unwrap();
     let video3_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     let v = gst::Structure::builder("video2-variant")
         .field("uri", "low/video.m3u8")
         .field("audio", "aac")
-        .field("bandwidth", 700)
+        .field("bandwidth", 350)
         .build();
     video3_pad.set_property("variant", v);
     pipeline.add(&video_bin3).unwrap();
@@ -776,11 +773,11 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_rela
 #EXT-X-VERSION:6
 #EXT-X-MEDIA:TYPE=AUDIO,URI="hi-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="en",NAME="English",DEFAULT=YES
 #EXT-X-MEDIA:TYPE=AUDIO,URI="mid-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="fr",NAME="French"
-#EXT-X-STREAM-INF:BANDWIDTH=2500,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
+#EXT-X-STREAM-INF:BANDWIDTH=1250,CODECS="avc1.64000D,avc1.64001E,avc1.64001F,mp4a.40.2",AUDIO="aac"
 hi/video.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=1500,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
+#EXT-X-STREAM-INF:BANDWIDTH=750,CODECS="avc1.64000D,avc1.64001E,avc1.64001F,mp4a.40.2",AUDIO="aac"
 mid/video.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=700,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
+#EXT-X-STREAM-INF:BANDWIDTH=350,CODECS="avc1.64000D,avc1.64001E,avc1.64001F,mp4a.40.2",AUDIO="aac"
 low/video.m3u8
 "###,
             contents.to_string()
@@ -790,7 +787,6 @@ low/video.m3u8
 }
 
 #[test]
-#[serial]
 fn hlsmultivariantsink_multiple_audio_rendition_single_video_variant() -> Result<(), ()> {
     init();
 
@@ -887,7 +883,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_single_video_variant() -> Result
     pipeline.add(&audio_bin2).unwrap();
     audio_bin2_pad.link(&audio2_pad).unwrap();
 
-    let video_bin1 = or_skip!(video_bin(1920, 1080, 30, 2500, false, false));
+    let video_bin1 = or_skip!(video_bin(1080, 720, 30, 1250, false, false));
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     video1_pad.set_property(
@@ -905,7 +901,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_single_video_variant() -> Result
     let v = gst::Structure::builder("video1-variant")
         .field("uri", "hi/video.m3u8")
         .field("audio", "aac")
-        .field("bandwidth", 2500)
+        .field("bandwidth", 1250)
         .build();
     video1_pad.set_property("variant", v);
     pipeline.add(&video_bin1).unwrap();
@@ -965,7 +961,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_single_video_variant() -> Result
 #EXT-X-VERSION:6
 #EXT-X-MEDIA:TYPE=AUDIO,URI="hi-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="en",NAME="English",DEFAULT=YES
 #EXT-X-MEDIA:TYPE=AUDIO,URI="mid-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="fr",NAME="French"
-#EXT-X-STREAM-INF:BANDWIDTH=2500,CODECS="avc1.640028,mp4a.40.2",AUDIO="aac"
+#EXT-X-STREAM-INF:BANDWIDTH=1250,CODECS="avc1.64001F,mp4a.40.2",AUDIO="aac"
 hi/video.m3u8
 "###,
         contents.to_string()
@@ -975,7 +971,6 @@ hi/video.m3u8
 }
 
 #[test]
-#[serial]
 fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result<(), ()> {
     init();
 
@@ -1044,7 +1039,7 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
     pipeline.add(&audio_bin1).unwrap();
     audio_bin1_pad.link(&audio1_pad).unwrap();
 
-    let video_bin1 = or_skip!(video_bin(1920, 1080, 30, 2500, false, false));
+    let video_bin1 = or_skip!(video_bin(1080, 720, 30, 1250, false, false));
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     video1_pad.set_property(
@@ -1062,13 +1057,13 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
     let v = gst::Structure::builder("video1-variant")
         .field("uri", "hi/video.m3u8")
         .field("audio", "aac")
-        .field("bandwidth", 2500)
+        .field("bandwidth", 1250)
         .build();
     video1_pad.set_property("variant", v);
     pipeline.add(&video_bin1).unwrap();
     video_bin1_pad.link(&video1_pad).unwrap();
 
-    let video_bin2 = or_skip!(video_bin(1280, 720, 30, 1500, false, false));
+    let video_bin2 = or_skip!(video_bin(640, 480, 30, 750, false, false));
     let video_bin2_pad = video_bin2.static_pad("src").unwrap();
     let video2_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     video2_pad.set_property(
@@ -1086,13 +1081,13 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
     let v = gst::Structure::builder("video2-variant")
         .field("uri", "mid/video.m3u8")
         .field("audio", "aac")
-        .field("bandwidth", 1500)
+        .field("bandwidth", 750)
         .build();
     video2_pad.set_property("variant", v);
     pipeline.add(&video_bin2).unwrap();
     video_bin2_pad.link(&video2_pad).unwrap();
 
-    let video_bin3 = or_skip!(video_bin(640, 360, 24, 700, false, false));
+    let video_bin3 = or_skip!(video_bin(320, 240, 24, 350, false, false));
     let video_bin3_pad = video_bin3.static_pad("src").unwrap();
     let video3_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     video3_pad.set_property(
@@ -1110,7 +1105,7 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
     let v = gst::Structure::builder("video2-variant")
         .field("uri", "low/video.m3u8")
         .field("audio", "aac")
-        .field("bandwidth", 700)
+        .field("bandwidth", 350)
         .build();
     video3_pad.set_property("variant", v);
     pipeline.add(&video_bin3).unwrap();
@@ -1174,11 +1169,11 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
         r###"#EXTM3U
 #EXT-X-VERSION:6
 #EXT-X-MEDIA:TYPE=AUDIO,URI="hi-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="en",NAME="English",DEFAULT=YES
-#EXT-X-STREAM-INF:BANDWIDTH=2500,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
+#EXT-X-STREAM-INF:BANDWIDTH=1250,CODECS="avc1.64000D,avc1.64001E,avc1.64001F,mp4a.40.2",AUDIO="aac"
 hi/video.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=1500,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
+#EXT-X-STREAM-INF:BANDWIDTH=750,CODECS="avc1.64000D,avc1.64001E,avc1.64001F,mp4a.40.2",AUDIO="aac"
 mid/video.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=700,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
+#EXT-X-STREAM-INF:BANDWIDTH=350,CODECS="avc1.64000D,avc1.64001E,avc1.64001F,mp4a.40.2",AUDIO="aac"
 low/video.m3u8
 "###,
         contents.to_string()
@@ -1188,7 +1183,6 @@ low/video.m3u8
 }
 
 #[test]
-#[serial]
 fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpegts()
 -> Result<(), ()> {
     init();
@@ -1273,7 +1267,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     pipeline.add(&audio_bin2).unwrap();
     audio_bin2_pad.link(&audio2_pad).unwrap();
 
-    let video_bin1 = or_skip!(video_bin(1920, 1080, 30, 2500, false, false));
+    let video_bin1 = or_skip!(video_bin(1080, 720, 30, 1250, false, false));
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     video1_pad.set_property(
@@ -1287,13 +1281,13 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     let v = gst::Structure::builder("video1-variant")
         .field("uri", "hi/video.m3u8")
         .field("audio", "aac")
-        .field("bandwidth", 2500)
+        .field("bandwidth", 1250)
         .build();
     video1_pad.set_property("variant", v);
     pipeline.add(&video_bin1).unwrap();
     video_bin1_pad.link(&video1_pad).unwrap();
 
-    let video_bin2 = or_skip!(video_bin(1280, 720, 30, 1500, false, false));
+    let video_bin2 = or_skip!(video_bin(640, 480, 30, 750, false, false));
     let video_bin2_pad = video_bin2.static_pad("src").unwrap();
     let video2_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     video2_pad.set_property(
@@ -1307,13 +1301,13 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     let v = gst::Structure::builder("video2-variant")
         .field("uri", "mid/video.m3u8")
         .field("audio", "aac")
-        .field("bandwidth", 1500)
+        .field("bandwidth", 750)
         .build();
     video2_pad.set_property("variant", v);
     pipeline.add(&video_bin2).unwrap();
     video_bin2_pad.link(&video2_pad).unwrap();
 
-    let video_bin3 = or_skip!(video_bin(640, 360, 24, 700, false, false));
+    let video_bin3 = or_skip!(video_bin(320, 240, 24, 350, false, false));
     let video_bin3_pad = video_bin3.static_pad("src").unwrap();
     let video3_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     video3_pad.set_property(
@@ -1327,7 +1321,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     let v = gst::Structure::builder("video3-variant")
         .field("uri", "low/video.m3u8")
         .field("audio", "aac")
-        .field("bandwidth", 700)
+        .field("bandwidth", 350)
         .build();
     video3_pad.set_property("variant", v);
     pipeline.add(&video_bin3).unwrap();
@@ -1390,11 +1384,11 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
 #EXT-X-VERSION:4
 #EXT-X-MEDIA:TYPE=AUDIO,URI="hi-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="en",NAME="English",DEFAULT=YES
 #EXT-X-MEDIA:TYPE=AUDIO,URI="mid-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="fr",NAME="French"
-#EXT-X-STREAM-INF:BANDWIDTH=2500,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
+#EXT-X-STREAM-INF:BANDWIDTH=1250,CODECS="avc1.64000D,avc1.64001E,avc1.64001F,mp4a.40.2",AUDIO="aac"
 hi/video.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=1500,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
+#EXT-X-STREAM-INF:BANDWIDTH=750,CODECS="avc1.64000D,avc1.64001E,avc1.64001F,mp4a.40.2",AUDIO="aac"
 mid/video.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=700,CODECS="avc1.64001E,avc1.64001F,avc1.640028,mp4a.40.2",AUDIO="aac"
+#EXT-X-STREAM-INF:BANDWIDTH=350,CODECS="avc1.64000D,avc1.64001E,avc1.64001F,mp4a.40.2",AUDIO="aac"
 low/video.m3u8
 "###,
         contents.to_string()
@@ -1404,7 +1398,6 @@ low/video.m3u8
 }
 
 #[test]
-#[serial]
 fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() -> Result<(), ()> {
     init();
 
@@ -1440,7 +1433,7 @@ fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() ->
         HlsMultivariantSinkMuxerType::MpegTs,
     );
 
-    let video_bin1 = or_skip!(video_bin(1920, 1080, 30, 2500, false, false));
+    let video_bin1 = or_skip!(video_bin(1080, 720, 30, 1250, false, false));
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     video1_pad.set_property(
@@ -1453,14 +1446,14 @@ fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() ->
     );
     let v = gst::Structure::builder("video1-variant")
         .field("uri", "hi/video.m3u8")
-        .field("bandwidth", 2500)
+        .field("bandwidth", 1250)
         .field("codecs", "avc1,mp4a.40.2")
         .build();
     video1_pad.set_property("variant", v);
     pipeline.add(&video_bin1).unwrap();
     video_bin1_pad.link(&video1_pad).unwrap();
 
-    let video_bin2 = or_skip!(video_bin(1280, 720, 30, 1500, false, false));
+    let video_bin2 = or_skip!(video_bin(640, 480, 30, 750, false, false));
     let video_bin2_pad = video_bin2.static_pad("src").unwrap();
     let video2_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     video2_pad.set_property(
@@ -1473,7 +1466,7 @@ fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() ->
     );
     let v = gst::Structure::builder("video2-variant")
         .field("uri", "mid/video.m3u8")
-        .field("bandwidth", 1500)
+        .field("bandwidth", 750)
         .field("codecs", "avc1,mp4a.40.2")
         .build();
     video2_pad.set_property("variant", v);
@@ -1596,9 +1589,9 @@ fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() ->
     assert_eq!(
         r###"#EXTM3U
 #EXT-X-VERSION:4
-#EXT-X-STREAM-INF:BANDWIDTH=2500,CODECS="avc1.640028,mp4a.40.2"
+#EXT-X-STREAM-INF:BANDWIDTH=1250,CODECS="avc1.64001F,mp4a.40.2"
 hi/video.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=1500,CODECS="avc1.64001F,mp4a.40.2"
+#EXT-X-STREAM-INF:BANDWIDTH=750,CODECS="avc1.64001E,mp4a.40.2"
 mid/video.m3u8
 #EXT-X-STREAM-INF:BANDWIDTH=64000,CODECS="mp4a.40.2"
 low-audio/audio-only.m3u8
@@ -1610,7 +1603,6 @@ low-audio/audio-only.m3u8
 }
 
 #[test]
-#[serial]
 fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpegts_h265()
 -> Result<(), ()> {
     init();
@@ -1703,7 +1695,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     pipeline.add(&audio_bin2).unwrap();
     audio_bin2_pad.link(&audio2_pad).unwrap();
 
-    let video_bin1 = or_skip!(video_bin(1920, 1080, 30, 2500, false, true));
+    let video_bin1 = or_skip!(video_bin(1080, 720, 30, 1250, false, true));
     let video_bin1_pad = video_bin1.static_pad("src").unwrap();
     let video1_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     video1_pad.set_property(
@@ -1717,13 +1709,13 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     let v = gst::Structure::builder("video1-variant")
         .field("uri", "hi/video.m3u8")
         .field("audio", "aac")
-        .field("bandwidth", 2500)
+        .field("bandwidth", 1250)
         .build();
     video1_pad.set_property("variant", v);
     pipeline.add(&video_bin1).unwrap();
     video_bin1_pad.link(&video1_pad).unwrap();
 
-    let video_bin2 = or_skip!(video_bin(1280, 720, 30, 1500, false, true));
+    let video_bin2 = or_skip!(video_bin(640, 480, 30, 750, false, true));
     let video_bin2_pad = video_bin2.static_pad("src").unwrap();
     let video2_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     video2_pad.set_property(
@@ -1737,13 +1729,13 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     let v = gst::Structure::builder("video2-variant")
         .field("uri", "mid/video.m3u8")
         .field("audio", "aac")
-        .field("bandwidth", 1500)
+        .field("bandwidth", 750)
         .build();
     video2_pad.set_property("variant", v);
     pipeline.add(&video_bin2).unwrap();
     video_bin2_pad.link(&video2_pad).unwrap();
 
-    let video_bin3 = or_skip!(video_bin(640, 360, 24, 700, false, true));
+    let video_bin3 = or_skip!(video_bin(320, 240, 24, 350, false, true));
     let video_bin3_pad = video_bin3.static_pad("src").unwrap();
     let video3_pad = hlsmultivariantsink.request_pad_simple("video_%u").unwrap();
     video3_pad.set_property(
@@ -1757,7 +1749,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
     let v = gst::Structure::builder("video3-variant")
         .field("uri", "low/video.m3u8")
         .field("audio", "aac")
-        .field("bandwidth", 700)
+        .field("bandwidth", 350)
         .build();
     video3_pad.set_property("variant", v);
     pipeline.add(&video_bin3).unwrap();
@@ -1820,11 +1812,11 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
 #EXT-X-VERSION:4
 #EXT-X-MEDIA:TYPE=AUDIO,URI="hi-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="en",NAME="English",DEFAULT=YES
 #EXT-X-MEDIA:TYPE=AUDIO,URI="mid-audio/audio.m3u8",GROUP-ID="aac",LANGUAGE="fr",NAME="French"
-#EXT-X-STREAM-INF:BANDWIDTH=2500,CODECS="hvc1.1.6.L120.90,hvc1.1.6.L63.90,hvc1.1.6.L93.90,mp4a.40.2",AUDIO="aac"
+#EXT-X-STREAM-INF:BANDWIDTH=1250,CODECS="hvc1.1.6.L60.90,hvc1.1.6.L90.90,hvc1.1.6.L93.90,mp4a.40.2",AUDIO="aac"
 hi/video.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=1500,CODECS="hvc1.1.6.L120.90,hvc1.1.6.L63.90,hvc1.1.6.L93.90,mp4a.40.2",AUDIO="aac"
+#EXT-X-STREAM-INF:BANDWIDTH=750,CODECS="hvc1.1.6.L60.90,hvc1.1.6.L90.90,hvc1.1.6.L93.90,mp4a.40.2",AUDIO="aac"
 mid/video.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=700,CODECS="hvc1.1.6.L120.90,hvc1.1.6.L63.90,hvc1.1.6.L93.90,mp4a.40.2",AUDIO="aac"
+#EXT-X-STREAM-INF:BANDWIDTH=350,CODECS="hvc1.1.6.L60.90,hvc1.1.6.L90.90,hvc1.1.6.L93.90,mp4a.40.2",AUDIO="aac"
 low/video.m3u8
 "###,
         contents.to_string()

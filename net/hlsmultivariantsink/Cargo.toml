@@ -30,7 +30,6 @@ m3u8-rs = "6.0"
 anyhow = "1"
 gst-plugin-hlssink3.workspace = true
 gst-plugin-isobmff.workspace = true
-serial_test = "3"
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true
