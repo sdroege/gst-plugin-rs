@@ -1093,7 +1093,9 @@ impl ObjectImpl for HlsMultivariantSink {
             "target-duration" => {
                 settings.target_duration = value.get().expect("type checked upstream");
             }
-
+            "send-keyframe-requests" => {
+                settings.send_keyframe_requests = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
