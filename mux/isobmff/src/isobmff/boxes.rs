@@ -214,15 +214,8 @@ fn write_trak(
 
     // TODO: write edts optionally for negative DTS instead of offsetting the DTS
     write_box(v, b"mdia", |v| write_mdia(v, cfg, stream, creation_time))?;
-    // TODO: see if we can handle this better
-    if cfg.variant.is_fragmented() {
-        if !stream.elst_infos.is_empty()
-            && cfg.write_edts
-            && let Err(e) = write_box(v, b"edts", |v| write_elst(v, cfg, stream))
-        {
-            gst::warning!(CAT, "Failed to write edts: {e}");
-        }
-    } else {
+
+    if cfg.write_edts && !stream.elst_infos.is_empty() {
         write_box(v, b"edts", |v| write_elst(v, cfg, stream))?;
     }
 
@@ -2489,7 +2482,7 @@ pub(crate) fn create_pcmc(audio_info: &gst_audio::AudioInfo) -> Result<Vec<u8>, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::isobmff::{DeltaFrames, ElstInfo};
+    use crate::isobmff::{DeltaFrames, ElstInfo, Sample};
     use mp4_atom::{Atom, ReadAtom as _, ReadFrom as _};
     use std::collections::BTreeMap;
 
@@ -2524,22 +2517,50 @@ mod tests {
         }
     }
 
-    fn fragmented_moov(tracks: Vec<TrackConfiguration>) -> gst::Buffer {
+    fn one_chunk() -> Chunk {
+        Chunk {
+            offset: 0,
+            samples: vec![Sample {
+                sync_point: true,
+                // The full 2s track fixture, one sample.
+                duration: gst::ClockTime::from_seconds(2),
+                composition_time_offset: None,
+                size: 4,
+                sample_desc_idx: 1,
+            }],
+        }
+    }
+
+    fn make_moov(
+        variant: Variant,
+        write_edts: bool,
+        tracks: Vec<TrackConfiguration>,
+    ) -> gst::Buffer {
         create_moov(
             PresentationConfiguration {
-                variant: Variant::FragmentedISO,
+                variant,
                 update: false,
                 movie_timescale: 1_000,
                 tracks,
                 write_mehd: false,
                 duration: None,
-                write_edts: true,
+                write_edts,
             },
             0,
             None,
             None,
         )
         .unwrap()
+    }
+
+    fn parse_trak(buffer: &gst::Buffer) -> mp4_atom::Trak {
+        let map = buffer.map_readable().unwrap();
+        let mut input = map.as_slice();
+
+        let header = mp4_atom::Header::read_from(&mut input).unwrap();
+        assert_eq!(header.kind, mp4_atom::Moov::KIND);
+        let moov = mp4_atom::Moov::read_atom(&header, &mut input).unwrap();
+        moov.trak.into_iter().next().expect("one track")
     }
 
     #[test]
@@ -2560,15 +2581,12 @@ mod tests {
             },
         ];
 
-        let buffer = fragmented_moov(vec![mono_pcm_track(elst_infos)]);
-        let map = buffer.map_readable().unwrap();
-        let mut input = map.as_slice();
+        let trak = parse_trak(&make_moov(
+            Variant::FragmentedISO,
+            true,
+            vec![mono_pcm_track(elst_infos)],
+        ));
 
-        let header = mp4_atom::Header::read_from(&mut input).unwrap();
-        assert_eq!(header.kind, mp4_atom::Moov::KIND);
-        let moov = mp4_atom::Moov::read_atom(&header, &mut input).unwrap();
-
-        let trak = moov.trak.first().expect("one track");
         let edts = trak
             .edts
             .as_ref()
@@ -2592,5 +2610,86 @@ mod tests {
         assert_eq!(elst.entries[1].segment_duration, 1_500);
         assert_eq!(elst.entries[1].media_time, Some(12_000));
         assert_eq!(elst.entries[1].media_rate, rate);
+    }
+
+    // `write_edts` gates the `edts` the same way for both variants: no edit list
+    // when it is off, and an `edts` wrapping the `elst` when it is on.
+    #[test]
+    fn write_edts_flag_gates_edts_for_both_variants() {
+        gst::init().unwrap();
+
+        for variant in [Variant::FragmentedISO, Variant::ISO] {
+            for write_edts in [false, true] {
+                let elst_infos = vec![
+                    // An empty edit delaying the presentation start by 250ms.
+                    ElstInfo {
+                        start: None,
+                        duration: Some(gst::ClockTime::from_mseconds(250)),
+                    },
+                    // Then the media from 250ms in, to its end at 2s. The edit
+                    // durations add up to 2s, the `end_pts - earliest_pts` of
+                    // the track fixture.
+                    ElstInfo {
+                        start: Some(gst::Signed::Positive(gst::ClockTime::from_mseconds(250))),
+                        duration: Some(gst::ClockTime::from_mseconds(1750)),
+                    },
+                ];
+                let mut track = mono_pcm_track(elst_infos);
+                if !variant.is_fragmented() {
+                    // The non-fragmented sample tables are built from the chunks.
+                    track.chunks = vec![one_chunk()];
+                }
+
+                let trak = parse_trak(&make_moov(variant, write_edts, vec![track]));
+                assert_eq!(
+                    trak.edts.is_some(),
+                    write_edts,
+                    "variant {variant:?} with write_edts {write_edts}"
+                );
+
+                if write_edts {
+                    let elst = trak
+                        .edts
+                        .as_ref()
+                        .expect("edts box")
+                        .elst
+                        .as_ref()
+                        .expect("elst box");
+                    assert_eq!(elst.entries.len(), 2);
+
+                    let rate = mp4_atom::FixedPoint::new(1i16, 0i16);
+
+                    // 8.6.6.3: edit_duration is in movie timescale units.
+                    assert_eq!(elst.entries[0].segment_duration, 250);
+                    assert!(elst.entries[0].media_time.is_none());
+                    assert_eq!(elst.entries[0].media_rate, rate);
+
+                    // 8.6.6.3: media_time is in media timescale units, 250ms at
+                    // 48000 is 12000. Scaling with the movie timescale would
+                    // give 250.
+                    assert_eq!(elst.entries[1].segment_duration, 1_750);
+                    assert_eq!(elst.entries[1].media_time, Some(12_000));
+                    assert_eq!(elst.entries[1].media_rate, rate);
+
+                    if !variant.is_fragmented() {
+                        // 8.3.2.3: with an edit list, the tkhd duration is the
+                        // sum of the edit durations. The fixture's edits cover
+                        // the full media span (250ms + 1750ms = 2s), so that sum
+                        // equals the media span which write_tkhd() writes as the
+                        // tkhd duration. This does not hold for edit lists that
+                        // cover only part of the media e.g. from AudioClippingMeta.
+                        let edit_duration_sum =
+                            elst.entries.iter().map(|e| e.segment_duration).sum::<u64>();
+
+                        assert_eq!(edit_duration_sum, 2_000);
+                        assert_eq!(trak.tkhd.duration, 2_000);
+                    }
+                } else if !variant.is_fragmented() {
+                    // 8.3.2.3: without an edit list, the tkhd duration is the
+                    // media duration, 2s here.
+                    assert_eq!(trak.tkhd.duration, 2_000);
+                }
+            }
+        }
     }
 }
