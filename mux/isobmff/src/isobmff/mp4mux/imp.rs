@@ -2607,7 +2607,7 @@ impl AggregatorImpl for MP4Mux {
                     update: false,
                     write_mehd: false,
                     duration: None,
-                    write_edts: false,
+                    write_edts: true,
                 },
                 0,
                 None,
