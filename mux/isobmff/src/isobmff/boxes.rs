@@ -208,12 +208,12 @@ fn write_trak(
     if cfg.variant.is_fragmented() {
         if !stream.elst_infos.is_empty()
             && cfg.write_edts
-            && let Err(e) = write_edts(v, cfg, stream)
+            && let Err(e) = write_box(v, b"edts", |v| write_elst(v, cfg, stream))
         {
             gst::warning!(CAT, "Failed to write edts: {e}");
         }
     } else {
-        write_box(v, b"edts", |v| write_edts(v, cfg, stream))?;
+        write_box(v, b"edts", |v| write_elst(v, cfg, stream))?;
     }
 
     if !references.is_empty() {
@@ -1273,71 +1273,61 @@ pub(crate) fn write_esds_aac(
     )
 }
 
-fn write_edts(
-    v: &mut Vec<u8>,
-    cfg: &PresentationConfiguration,
-    stream: &TrackConfiguration,
-) -> Result<(), Error> {
-    write_full_box(v, b"elst", FULL_BOX_VERSION_1, 0, |v| {
-        write_elst(v, cfg, stream)
-    })?;
-
-    Ok(())
-}
-
 fn write_elst(
     v: &mut Vec<u8>,
     cfg: &PresentationConfiguration,
     stream: &TrackConfiguration,
 ) -> Result<(), Error> {
-    let movie_timescale = cfg.to_timescale();
-    let track_timescale = stream.to_timescale();
+    write_full_box(v, b"elst", FULL_BOX_VERSION_1, 0, |v| {
+        let movie_timescale = cfg.to_timescale();
+        let track_timescale = stream.to_timescale();
 
-    // Entry count
-    let mut num_entries = 0u32;
-    let entry_count_position = v.len();
-    // Entry count, rewritten in the end
-    v.extend(0u32.to_be_bytes());
+        // Entry count
+        let mut num_entries = 0u32;
+        let entry_count_position = v.len();
+        // Entry count, rewritten in the end
+        v.extend(0u32.to_be_bytes());
 
-    for elst_info in &stream.elst_infos {
-        // Edit duration (in movie timescale)
-        let edit_duration = elst_info
-            .duration
-            .expect("Should have been set by `get_elst_infos`")
-            .nseconds()
-            .mul_div_round(movie_timescale as u64, gst::ClockTime::SECOND.nseconds())
-            .unwrap();
+        for elst_info in &stream.elst_infos {
+            // Edit duration (in movie timescale)
+            let edit_duration = elst_info
+                .duration
+                .expect("Should have been set by `get_elst_infos`")
+                .nseconds()
+                .mul_div_round(movie_timescale as u64, gst::ClockTime::SECOND.nseconds())
+                .unwrap();
 
-        if edit_duration == 0 {
-            continue;
+            if edit_duration == 0 {
+                continue;
+            }
+            v.extend(edit_duration.to_be_bytes());
+
+            // Media time (in media timescale)
+            let media_time = elst_info
+                .start
+                .map(|start| {
+                    i64::try_from(start)
+                        .unwrap()
+                        .mul_div_round(
+                            track_timescale as i64,
+                            gst::ClockTime::SECOND.nseconds() as i64,
+                        )
+                        .unwrap()
+                })
+                .unwrap_or(-1i64);
+            v.extend(media_time.to_be_bytes());
+
+            // Media rate
+            v.extend(1u16.to_be_bytes());
+            v.extend(0u16.to_be_bytes());
+            num_entries += 1;
         }
-        v.extend(edit_duration.to_be_bytes());
 
-        // Media time (in media timescale)
-        let media_time = elst_info
-            .start
-            .map(|start| {
-                i64::try_from(start)
-                    .unwrap()
-                    .mul_div_round(
-                        track_timescale as i64,
-                        gst::ClockTime::SECOND.nseconds() as i64,
-                    )
-                    .unwrap()
-            })
-            .unwrap_or(-1i64);
-        v.extend(media_time.to_be_bytes());
+        // Rewrite entry count
+        v[entry_count_position..][..4].copy_from_slice(&num_entries.to_be_bytes());
 
-        // Media rate
-        v.extend(1u16.to_be_bytes());
-        v.extend(0u16.to_be_bytes());
-        num_entries += 1;
-    }
-
-    // Rewrite entry count
-    v[entry_count_position..][..4].copy_from_slice(&num_entries.to_be_bytes());
-
-    Ok(())
+        Ok(())
+    })
 }
 
 pub(crate) fn write_stsd(v: &mut Vec<u8>, stream: &TrackConfiguration) -> Result<(), Error> {
@@ -2483,4 +2473,113 @@ pub(crate) fn create_pcmc(audio_info: &gst_audio::AudioInfo) -> Result<Vec<u8>, 
     )?;
 
     Ok(v)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::isobmff::{DeltaFrames, ElstInfo};
+    use mp4_atom::{Atom, ReadAtom as _, ReadFrom as _};
+    use std::collections::BTreeMap;
+
+    fn mono_pcm_track(elst_infos: Vec<ElstInfo>) -> TrackConfiguration {
+        let caps = gst::Caps::builder("audio/x-raw")
+            .field("format", "S16LE")
+            .field("channels", 1i32)
+            .field("rate", 48_000i32)
+            .field("layout", "interleaved")
+            .build();
+        let audio_info = gst_audio::AudioInfo::from_caps(&caps).unwrap();
+
+        TrackConfiguration {
+            caps: vec![caps],
+            delta_frames: DeltaFrames::IntraOnly,
+            trak_timescale: 48_000,
+            extra_header_data: None,
+            codec_specific_boxes: create_pcmc(&audio_info).unwrap(),
+            language_code: None,
+            orientation: &IDENTITY_MATRIX,
+            avg_bitrate: None,
+            max_bitrate: None,
+            elst_infos,
+            earliest_pts: gst::ClockTime::ZERO,
+            end_pts: gst::ClockTime::from_seconds(2),
+            chunks: Vec::new(),
+            image_sequence: false,
+            #[cfg(feature = "v1_28")]
+            tai_clock_info: None,
+            auxiliary_info: BTreeMap::new(),
+            chnl_layout_info: None,
+        }
+    }
+
+    fn fragmented_moov(tracks: Vec<TrackConfiguration>) -> gst::Buffer {
+        create_moov(
+            PresentationConfiguration {
+                variant: Variant::FragmentedISO,
+                update: false,
+                movie_timescale: 1_000,
+                tracks,
+                write_mehd: false,
+                duration: None,
+                write_edts: true,
+            },
+            0,
+            None,
+            None,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn fragmented_trak_wraps_elst_in_edts() {
+        gst::init().unwrap();
+
+        let elst_infos = vec![
+            // An empty edit delaying the presentation start by 500ms.
+            ElstInfo {
+                start: None,
+                duration: Some(gst::ClockTime::from_mseconds(500)),
+            },
+            // Then the media from 250ms in, for 1.5s. The edit durations add
+            // up to 2s, the `end_pts - earliest_pts` of the track fixture.
+            ElstInfo {
+                start: Some(gst::Signed::Positive(gst::ClockTime::from_mseconds(250))),
+                duration: Some(gst::ClockTime::from_mseconds(1500)),
+            },
+        ];
+
+        let buffer = fragmented_moov(vec![mono_pcm_track(elst_infos)]);
+        let map = buffer.map_readable().unwrap();
+        let mut input = map.as_slice();
+
+        let header = mp4_atom::Header::read_from(&mut input).unwrap();
+        assert_eq!(header.kind, mp4_atom::Moov::KIND);
+        let moov = mp4_atom::Moov::read_atom(&header, &mut input).unwrap();
+
+        let trak = moov.trak.first().expect("one track");
+        let edts = trak
+            .edts
+            .as_ref()
+            .expect("fragmented trak must carry an edts box");
+        let elst = edts.elst.as_ref().expect("edts must carry an elst box");
+
+        assert_eq!(elst.entries.len(), 2);
+
+        let rate = mp4_atom::FixedPoint::new(1i16, 0i16);
+
+        // 8.6.6.3: edit_duration is in movie timescale units, 500ms at 1000.
+        assert_eq!(elst.entries[0].segment_duration, 500);
+        assert!(
+            elst.entries[0].media_time.is_none(),
+            "the empty edit must have media_time -1"
+        );
+        assert_eq!(elst.entries[0].media_rate, rate);
+
+        // 8.6.6.3: media_time is in media timescale units, 250ms at 48000 is
+        // 12000. Scaling with the movie timescale would give 250.
+        assert_eq!(elst.entries[1].segment_duration, 1_500);
+        assert_eq!(elst.entries[1].media_time, Some(12_000));
+        assert_eq!(elst.entries[1].media_rate, rate);
+    }
 }
