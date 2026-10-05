@@ -215,6 +215,7 @@ gst-plugin-isobmff = { path="mux/isobmff", version = "0.16.0-alpha" }
 gst-plugin-gtk4 = { path="video/gtk4", version = "0.16.0-alpha" }
 gst-plugin-rtp = { path="net/rtp", version = "0.16.0-alpha" }
 gst-plugin-hlssink3 = { path="net/hlssink3", version = "0.16.0-alpha" }
+gst-plugin-webrtcbin2 = { path="net/webrtcbin2", version = "0.16.0-alpha" }
 lru = "0.18"
 rustls = { version = "0.23", default-features = false, features = ["std"] }
 rustls-platform-verifier = "0.7"

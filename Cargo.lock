@@ -5984,8 +5984,10 @@ dependencies = [
 name = "gst-plugin-threadshare"
 version = "0.16.0-alpha"
 dependencies = [
+ "anyhow",
  "async-lock",
  "async-task",
+ "async-tungstenite",
  "byte-slice-cast",
  "cfg-if",
  "clap",
@@ -5997,6 +5999,7 @@ dependencies = [
  "gio",
  "gst-plugin-rtp",
  "gst-plugin-version-helper",
+ "gst-plugin-webrtcbin2",
  "gstreamer",
  "gstreamer-app",
  "gstreamer-audio",
@@ -6011,10 +6014,15 @@ dependencies = [
  "rand 0.10.3",
  "rtp-types",
  "rustix 1.1.5",
+ "rustls 0.23.45",
+ "sdp-types",
+ "serde",
+ "serde_json",
  "slab",
  "smallvec",
  "socket2 0.6.5",
  "thiserror 2.0.20",
+ "tokio",
  "waker-fn",
  "windows-sys 0.61.2",
 ]
