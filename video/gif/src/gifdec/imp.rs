@@ -88,15 +88,19 @@ impl GifDec {
 
         let mut do_loop = self.settings.lock().unwrap().do_loop;
 
-        let mut repeat = match d.repeat() {
-            gif::Repeat::Finite(n) => {
-                gst::info!(CAT, "repeat {n}");
-                n
-            }
-            gif::Repeat::Infinite => {
-                gst::info!(CAT, "repeat infinite");
-                do_loop = LoopStrategy::Yes;
-                0
+        let mut repeat = if do_loop == LoopStrategy::No {
+            1
+        } else {
+            match d.repeat() {
+                gif::Repeat::Finite(n) => {
+                    gst::info!(CAT, imp = self, "repeat {n}");
+                    n
+                }
+                gif::Repeat::Infinite => {
+                    gst::info!(CAT, imp = self, "repeat infinite");
+                    do_loop = LoopStrategy::Yes;
+                    0
+                }
             }
         };
 
