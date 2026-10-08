@@ -38,7 +38,7 @@ pub(crate) fn fill_sockaddr(addr: &SocketAddr) -> (libc::sockaddr_storage, u32) 
             let sa = unsafe {
                 &mut *(&mut storage as *mut libc::sockaddr_storage as *mut libc::sockaddr_in)
             };
-            sa.sin_family = libc::AF_INET as u16;
+            sa.sin_family = libc::AF_INET.try_into().unwrap();
             sa.sin_port = v4.port().to_be();
             sa.sin_addr.s_addr = u32::from_ne_bytes(v4.ip().octets());
             mem::size_of::<libc::sockaddr_in>() as u32
@@ -47,7 +47,7 @@ pub(crate) fn fill_sockaddr(addr: &SocketAddr) -> (libc::sockaddr_storage, u32) 
             let sa = unsafe {
                 &mut *(&mut storage as *mut libc::sockaddr_storage as *mut libc::sockaddr_in6)
             };
-            sa.sin6_family = libc::AF_INET6 as u16;
+            sa.sin6_family = libc::AF_INET6.try_into().unwrap();
             sa.sin6_port = v6.port().to_be();
             sa.sin6_addr.s6_addr = v6.ip().octets();
             sa.sin6_flowinfo = 0;
