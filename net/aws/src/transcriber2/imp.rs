@@ -32,9 +32,8 @@ use crate::s3utils::RUNTIME;
 use crate::transcriber::remote_types::{ItemDef, TranscriptDef};
 use crate::transcriber::{AwsTranscriberResultStability, AwsTranscriberVocabularyFilterMethod};
 
-#[allow(deprecated)]
 static AWS_BEHAVIOR_VERSION: LazyLock<aws_config::BehaviorVersion> =
-    LazyLock::new(aws_config::BehaviorVersion::v2023_11_09);
+    LazyLock::new(aws_config::BehaviorVersion::v2026_01_12);
 
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(1);
 const DEFAULT_LATENESS: gst::ClockTime = gst::ClockTime::ZERO;

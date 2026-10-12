@@ -8,7 +8,7 @@
 
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::{
-    config::{Credentials, Region, timeout::TimeoutConfig},
+    config::{Credentials, Region, StalledStreamProtectionConfig, timeout::TimeoutConfig},
     error::{DisplayErrorContext, ProvideErrorMetadata},
     primitives::{ByteStream, ByteStreamError},
 };
@@ -24,9 +24,8 @@ use tokio::runtime;
 
 pub const DEFAULT_S3_REGION: &str = "us-west-2";
 
-#[allow(deprecated)]
 pub static AWS_BEHAVIOR_VERSION: LazyLock<aws_config::BehaviorVersion> =
-    LazyLock::new(aws_config::BehaviorVersion::v2023_11_09);
+    LazyLock::new(aws_config::BehaviorVersion::v2026_01_12);
 
 pub static RUNTIME: LazyLock<runtime::Runtime> = LazyLock::new(|| {
     runtime::Builder::new_multi_thread()
@@ -151,15 +150,23 @@ pub fn wait_config(
     } else {
         RegionProviderChain::default_provider()
     };
+
+    // See https://github.com/awslabs/aws-sdk-rust/discussions/956
+    // Stalled-stream protection is deliberately disabled to maintain
+    // old behaviour. translate, transcriber and polly plugins already
+    // disable this. We would also need to provide a property as this
+    // needs to be specified by the user ideally.
     let config_future = match credentials {
         Some(cred) => aws_config::defaults(*AWS_BEHAVIOR_VERSION)
             .timeout_config(timeout_config)
             .region(region_provider)
+            .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
             .credentials_provider(cred)
             .load(),
         None => aws_config::defaults(*AWS_BEHAVIOR_VERSION)
             .timeout_config(timeout_config)
             .region(region_provider)
+            .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
             .load(),
     };
 

@@ -25,9 +25,8 @@ use gst::{glib, prelude::*};
 use std::sync::LazyLock;
 use std::sync::{Mutex, MutexGuard};
 
-#[allow(deprecated)]
 static AWS_BEHAVIOR_VERSION: LazyLock<aws_config::BehaviorVersion> =
-    LazyLock::new(aws_config::BehaviorVersion::v2023_11_09);
+    LazyLock::new(aws_config::BehaviorVersion::v2026_01_12);
 
 const DEFAULT_LATENCY_MS: u32 = 2_000;
 const DEFAULT_LATENESS: gst::ClockTime = gst::ClockTime::from_seconds(0);
