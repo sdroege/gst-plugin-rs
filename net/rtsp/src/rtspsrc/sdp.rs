@@ -14,7 +14,7 @@ use super::imp::RtspProtocol;
 use gst::prelude::*;
 use mykey::{
     MikeyMessage,
-    payload::{Payload::Kemac, SrtpParamType},
+    payload::{KeyDataSubPayload, Payload::Kemac, SrtpParamType},
 };
 use rtsp_types::headers::RtpProfile;
 use sdp_types::Attribute;
@@ -611,46 +611,19 @@ fn mikey_to_caps(mikey: MikeyMessage, s: &mut gst::Structure) -> bool {
             continue;
         }
 
-        let enc_data = kemac.enc_data.as_slice();
-
-        // See Section 6.13 Key data sub-payload.
-        // Next Payload (1) + type (4-bits) + KV (4-bits) + Key data len (2)
-        //                        1                   2                   3
-        //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-        // !  Next Payload ! Type  ! KV    ! Key data len                  !
-        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-        // !                         Key data                              ~
-        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-        // ! Salt len (optional)           ! Salt data (optional)          ~
-        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-        // !                        KV data (optional)                     ~
-        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-        //
-        if enc_data.len() >= 4 {
-            let key_data_len = u16::from_be_bytes([enc_data[2], enc_data[3]]) as usize;
-
-            // Verify we have enough data for the received key_data_len
-            if enc_data.len() >= 4 + key_data_len {
-                let mut key_data = enc_data[4..4 + key_data_len].to_vec();
-
-                // Append Salt if available
-                let salt_len_start = 4 + key_data_len;
-                if enc_data.len() >= salt_len_start + 2 {
-                    let salt_data_len = u16::from_be_bytes([
-                        enc_data[salt_len_start],
-                        enc_data[salt_len_start + 1],
-                    ]) as usize;
-
-                    if salt_data_len > 0 && enc_data.len() >= salt_len_start + 2 + salt_data_len {
-                        key_data.extend_from_slice(
-                            &enc_data[salt_len_start + 2..salt_len_start + 2 + salt_data_len],
-                        );
-                    }
-                }
-
+        // Parse the first Key data sub-payload as per Section 6.13 of
+        // RFC 3830, matching `gst_mikey_message_to_caps`, which also
+        // only uses the first one. `srtp-key` is key ++ salt, as in
+        // gstmikey.c.
+        match KeyDataSubPayload::parse(kemac.enc_data.as_slice()) {
+            Ok((sub, _consumed)) => {
+                let mut key_data = sub.key_data;
+                key_data.extend_from_slice(sub.salt.as_deref().unwrap_or_default());
                 srtp_key = Some(gst::Buffer::from_slice(key_data));
                 break;
+            }
+            Err(err) => {
+                gst::warning!(CAT, "Could not parse MIKEY key data sub-payload: {err}");
             }
         }
     }
