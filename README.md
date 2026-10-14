@@ -466,6 +466,9 @@ You will find the following plugins in this repository:
        - `imagersdec`: Multiformat still image decoder. Supports a variety of formats: BMP, DirectDraw surfaces, Farbfeld, Radiance HDR, Windows icons, JPEG, NetPBM (by default only the pixmap variant), Quite OK Image, Truevision Targa, and TIFF. Through `image-extras` it can also read OpenRaster, Nokia Over-The-Air bitmaps, PCX, SGI, Wireless Bitmap, and the bitmap and graymap variants of NetPBM. AVIF and OpenEXR are also supported but are disabled by default.
        - `imagersenc`: Multiformat still image encoder. Supports a variety of formats: BMP, Farbfeld, JPEG, PNG, Quite OK Image, Truevision Targa, and TIFF. AVIF is also supported but is disabled by default.
 
+    - `overlaycompositor`:
+      - `overlaycompositor`: Blends overlay composition metadata into video frames.
+
     - `png`: PNG encoder based on the [png](https://github.com/image-rs/image-png) library.
       - `rspngenc`: PNG encoder.
 

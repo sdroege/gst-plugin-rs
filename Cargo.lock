@@ -5675,6 +5675,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-overlaycompositor"
+version = "0.16.0-alpha"
+dependencies = [
+ "atomic_refcell",
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-check",
+ "gstreamer-video",
+]
+
+[[package]]
 name = "gst-plugin-pcap"
 version = "0.16.0-alpha"
 dependencies = [

@@ -193,6 +193,7 @@ plugins = {
   'hsv': {'library': 'libgsthsv'},
   'imagers': {'library': 'libgstimagers'},
   'pcap': {'library': 'libgstpcap'},
+  'overlaycompositor': {'library': 'libgstoverlaycompositor'},
   'png': {
     'library': 'libgstrspng',
     'examples': ['pngenc'],

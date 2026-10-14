@@ -79,6 +79,7 @@ members = [
     "video/gtk4",
     "video/hsv",
     "video/image",
+    "video/overlaycompositor",
     "video/png",
     "video/rav1e",
     "video/skia",
@@ -149,6 +150,7 @@ default-members = [
     "video/gif",
     "video/hsv",
     "video/image",
+    "video/overlaycompositor",
     "video/png",
     "video/rav1e",
 ]
