@@ -2007,6 +2007,7 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8cf2a2c93cd704877c0858356ed03480ff301ee950b43f1cbe4573b088bfa6c"
 dependencies = [
+ "block-buffer 0.12.1",
  "crypto-common 0.2.2",
  "inout 0.2.2",
 ]
@@ -2502,6 +2503,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0369ee1ad671834580515889b80f2ea915f23b8be8d0daa4bbaf2ac5c7590835"
 dependencies = [
  "cipher 0.4.4",
+]
+
+[[package]]
+name = "ctr"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baaca1c4b237092596f64d571e9db6ce4109c4ef9742e27590f1709594461f21"
+dependencies = [
+ "cipher 0.5.2",
 ]
 
 [[package]]
@@ -8138,7 +8148,7 @@ checksum = "b3fe76acb49f58165484303edf0e7bd778f0e6d96f5c59e9d6b6fde1a90d36ff"
 dependencies = [
  "aes 0.8.4",
  "bytes",
- "ctr",
+ "ctr 0.9.2",
  "futures-util",
  "http-body-util",
  "hyper 1.11.1",
@@ -8802,11 +8812,13 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
 name = "mykey"
-version = "1.0.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "238a3040fa73be8aabde857ed01f83f55c722c37b386d668261f1d2da31aa13f"
+checksum = "4a709e7fc4d5d791abd13cc91b4149ca9c0d6fda8dbd65d32000226ede29cb6c"
 dependencies = [
+ "aes 0.9.3",
  "base64 0.22.1",
+ "ctr 0.10.1",
  "hex",
  "hmac 0.12.1",
  "rand 0.9.5",
