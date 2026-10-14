@@ -16,8 +16,8 @@
 //! require access to the raw keypoint coordinates.
 //!
 //! The element is designed to work with hand landmark models that output tensors with:
-//! - `hand_landmarks`: Keypoints for each hand (commonly 21 points with x/y/(optional z)); this decoder currently uses x/y and ignores z/depth.
-//! - `hand_score`: Confidence score per hand. When this tensor is present it is used; otherwise the decoder falls back to 1.0 confidence.
+//! - `hand-landmark-out-landmarks`: Keypoints for each hand (21 points of x/y/z); this decoder currently uses x/y and ignores z/depth.
+//! - `hand-landmark-out-score`: Confidence score per hand. When this tensor is present it is used; otherwise the decoder falls back to 1.0 confidence.
 //!
 //! ## Properties
 //! - `confidence-threshold` (f32, 0.0-1.0, default: 0.5): Minimum confidence to consider a hand
@@ -69,8 +69,9 @@ const DEFAULT_NMS_IOU_THRESHOLD: f32 = 0.2;
 const DEFAULT_ATTACH_BOUNDING_BOX: bool = true;
 const HAND_CLASS_LABEL: &str = "hand";
 const HAND_KEYPOINT_GROUP_SEMANTIC_TAG: &str = "hand-21-kp";
-const HAND_LANDMARKS_TENSOR_ID: &str = "hand_landmarks";
-const HAND_SCORE_TENSOR_ID: &str = "hand_score";
+const HAND_LANDMARK_GROUP_ID: &str = "hand-landmark-out";
+const HAND_LANDMARKS_TENSOR_ID: &str = "hand-landmark-out-landmarks";
+const HAND_SCORE_TENSOR_ID: &str = "hand-landmark-out-score";
 const HAND_KEYPOINT_COUNT: usize = 21;
 const HAND_BBOX_PADDING: f32 = 0.15;
 /// Offset applied to the hand-axis rotation to reach the oriented-OD +X baseline.
@@ -540,7 +541,7 @@ impl ElementImpl for HandLandmarkTensorDec {
                     "tensors",
                     gst::Structure::builder("tensorgroups")
                         .field(
-                            HAND_LANDMARKS_TENSOR_ID,
+                            HAND_LANDMARK_GROUP_ID,
                             gst::UniqueList::new([gst::Caps::builder("tensor/strided")
                                 .field("tensor-id", HAND_LANDMARKS_TENSOR_ID)
                                 .field(

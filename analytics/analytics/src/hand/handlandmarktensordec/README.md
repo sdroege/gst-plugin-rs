@@ -47,10 +47,10 @@ confidence-threshold=0.45..0.60 and nms-iou-threshold=0.15..0.25.
 
 Your .modelinfo must map ONNX outputs to the tensor IDs expected by the decoder.
 The advertised tensor-group name should match the registry output group name:
-hand_landmark.
+hand-landmark-out.
 
-- Required tensor id: hand_landmarks
-- Optional tensor ids: hand_score
+- Required tensor id: hand-landmark-out-landmarks
+- Optional tensor ids: hand-landmark-out-score
 
 ## Debugging
 
@@ -62,7 +62,7 @@ GST_DEBUG=handlandmarktensordec:5 gst-launch-1.0 ...
 
 Common symptoms:
 
-- No keypoints: check .modelinfo IDs and hand_landmarks tensor layout.
+- No keypoints: check .modelinfo IDs and hand-landmark-out-landmarks tensor layout.
 - Too many low-confidence hands: increase confidence-threshold.
 - Missing boxes but visible keypoints: verify attach-bounding-box=true.
 
