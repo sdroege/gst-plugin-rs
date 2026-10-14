@@ -39,7 +39,7 @@ httparse = "1.10"
 base64 = "0.23"
 bytes = "1"
 tokio-util = "0.7"
-mykey = "1"
+mykey = "2"
 x509-parser = { version = "0.18", default-features = false, features = ["verify-aws", "validate"] }
 
 [dev-dependencies]
