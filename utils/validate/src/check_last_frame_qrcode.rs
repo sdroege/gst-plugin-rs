@@ -260,7 +260,7 @@ fn check_last_frame_qrcode(
         }
     };
 
-    let decoded_codes = decode_qrcodes_from_sample(&sample).map_err(&make_error)?;
+    let decoded_codes = decode_qrcodes_from_sample(&sample).map_err(make_error)?;
 
     // Check if JSON field validation is requested
     let json_field_specs: Option<Vec<gst::Structure>> =

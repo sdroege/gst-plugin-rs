@@ -1,3 +1,7 @@
+// `#[derive(Config)]` generates `field: field` initializers whose spans point at
+// the field declarations, so this cannot be silenced on the struct itself.
+#![allow(clippy::redundant_field_names)]
+
 use burn::{
     config::Config,
     module::Module,

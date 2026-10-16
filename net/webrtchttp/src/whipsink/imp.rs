@@ -12,7 +12,6 @@ use crate::utils::{
     self, RUNTIME, WaitError, build_reqwest_client, parse_redirect_location, set_ice_servers, wait,
     wait_async,
 };
-use async_recursion::async_recursion;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -590,7 +589,6 @@ impl WhipSink {
         }
     }
 
-    #[async_recursion]
     async fn do_post(&self, offer: gst_webrtc::WebRTCSessionDescription, endpoint: reqwest::Url) {
         let auth_token;
 
@@ -799,7 +797,7 @@ impl WhipSink {
                                 redirect_url.as_str()
                             );
 
-                            self.do_post(offer, redirect_url).await
+                            Box::pin(self.do_post(offer, redirect_url)).await
                         }
                         Err(e) => self.raise_error(gst::ResourceError::Failed, e.to_string()),
                     }
