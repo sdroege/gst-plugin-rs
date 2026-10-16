@@ -13026,6 +13026,72 @@
                 },
                 "rank": "none"
             },
+            "rtph263pdepay2": {
+                "author": "Edward Hervey <edward@centricular.com>",
+                "description": "Extracts an H.263+/H.263++ video stream from RTP packets (RFC 4629)",
+                "hierarchy": [
+                    "GstRtpH263PDepay2",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: video\n  encoding-name: H263-1998\n     clock-rate: 90000\napplication/x-rtp:\n          media: video\n  encoding-name: H263-2000\n     clock-rate: 90000\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-h263:\n        variant: itu\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "primary"
+            },
+            "rtph263ppay2": {
+                "author": "Edward Hervey <edward@centricular.com>",
+                "description": "Payload an H.263+/H.263++ video stream into RTP packets (RFC 4629)",
+                "hierarchy": [
+                    "GstRtpH263PPay2",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-h263:\n        variant: itu\n         parsed: true\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: video\n  encoding-name: H263-1998\n     clock-rate: 90000\napplication/x-rtp:\n          media: video\n  encoding-name: H263-2000\n     clock-rate: 90000\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "fragmentation-mode": {
+                        "blurb": "How to fragment frames larger than the MTU: follow-on packets ('normal') or packets that start at segment boundaries ('sync')",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "normal (0)",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstRtpH263PPay2FragmentationMode",
+                        "writable": true
+                    }
+                },
+                "rank": "primary"
+            },
             "rtpjpegdepay2": {
                 "author": "Sebastian Dröge <sebastian@centricular.com>",
                 "description": "Depayload a JPEG Video stream from RTP packets (RFC 2435)",
@@ -14600,6 +14666,21 @@
                     {
                         "desc": "Use linear regression slope",
                         "name": "linear-regression",
+                        "value": "1"
+                    }
+                ]
+            },
+            "GstRtpH263PPay2FragmentationMode": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Follow-on packets",
+                        "name": "normal",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Fragment at segment boundaries",
+                        "name": "sync",
                         "value": "1"
                     }
                 ]

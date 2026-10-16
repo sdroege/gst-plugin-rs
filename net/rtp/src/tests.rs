@@ -108,6 +108,8 @@ pub struct ExpectedBuffer {
     /// If not set the size will not be checked.
     pub size: Option<usize>,
     pub flags: gst::BufferFlags,
+    /// Flags that are not checked on the depayloaded buffer.
+    pub ignored_flags: gst::BufferFlags,
 }
 
 impl ExpectedBuffer {
@@ -127,6 +129,7 @@ impl ExpectedBuffer {
             duration: None,
             size: None,
             flags: gst::BufferFlags::empty(),
+            ignored_flags: gst::BufferFlags::empty(),
         })
     }
 }
@@ -169,6 +172,13 @@ impl ExpectedBufferBuilder {
         self
     }
 
+    /// Do not check `flags` on the depayloaded buffer: for interop tests
+    /// where the peer's flag handling is out of scope.
+    pub fn ignore_flags(mut self, flags: gst::BufferFlags) -> Self {
+        self.0.ignored_flags = flags;
+        self
+    }
+
     pub fn build(self) -> ExpectedBuffer {
         self.0
     }
@@ -198,6 +208,57 @@ impl std::ops::Deref for Pipeline {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
+}
+
+/// True if every element in `names` can be created.
+fn have_elements(names: &[&str]) -> bool {
+    names
+        .iter()
+        .all(|name| gst::ElementFactory::find(name).is_some())
+}
+
+/// PTS of the first buffer produced by the pipeline description `desc`, or
+/// `None` if one of `elements` is missing.
+///
+/// Encoders shift the timestamps they output (gst-libav raises them by
+/// `gst_video_encoder_set_min_pts()`), so tests that run a real encoder take
+/// the expected timestamps from the encoder instead of assuming that the
+/// source starts at zero.
+///
+/// Panics if `desc` does not build or produces no buffer: `Source::Bin`
+/// silently skips a description that does not build, which would turn a
+/// broken description into a passing test.
+pub fn source_first_pts(desc: &str, elements: &[&str]) -> Option<gst::ClockTime> {
+    if !have_elements(elements) {
+        return None;
+    }
+
+    let pipeline = Pipeline(gst::Pipeline::new());
+    let src = gst::parse::bin_from_description(desc, true)
+        .unwrap_or_else(|err| panic!("Failed to build test source bin from {desc}: {err}"))
+        .upcast::<gst::Element>();
+    let appsink = gst_app::AppSink::builder()
+        .sync(false)
+        .max_buffers(1)
+        .build();
+
+    pipeline
+        .add_many([&src, appsink.upcast_ref()])
+        .expect("Failed to add test source elements to the pipeline");
+    gst::Element::link_many([&src, appsink.upcast_ref()])
+        .expect("Failed to link test source elements");
+
+    pipeline.set_state(gst::State::Playing).unwrap();
+    let sample = appsink.try_pull_sample(gst::ClockTime::from_seconds(10));
+    let _ = pipeline.set_state(gst::State::Null);
+
+    let sample = sample.expect("Test source produced no buffer");
+    Some(
+        sample
+            .buffer()
+            .and_then(|buffer| buffer.pts())
+            .expect("First buffer of the test source has no PTS"),
+    )
 }
 
 pub fn run_test_pipeline(
@@ -674,7 +735,8 @@ pub fn run_test_pipeline_full_and_validate_data<
                 );
             }
 
-            let buffer_flags = buffer.flags() - gst::BufferFlags::TAG_MEMORY;
+            let buffer_flags =
+                buffer.flags() - gst::BufferFlags::TAG_MEMORY - expected_buffer.ignored_flags;
             assert_eq!(
                 buffer_flags, expected_buffer.flags,
                 "Buffer {} of depayload buffer list {} has unexpected flags {:?} instead of {:?}",

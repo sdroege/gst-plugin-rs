@@ -90,6 +90,8 @@ You will find the following plugins in this repository:
       - `rtpav1pay` / `rtpav1depay`: RTP (de)payloader for the AV1 video codec.
 
       - `rtpgccbwe`: RTP bandwidth estimator based on the Google Congestion Control algorithm.
+      - `rtph263pdepay2`: Depayload an H.263+/H.263++ video stream from RTP packets (RFC 4629).
+      - `rtph263ppay2`: Payload an H.263+/H.263++ video stream into RTP packets (RFC 4629).
 
     - `rtsp`:
 
