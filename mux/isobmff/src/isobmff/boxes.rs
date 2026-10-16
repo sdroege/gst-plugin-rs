@@ -147,11 +147,17 @@ fn write_moov(v: &mut Vec<u8>, cfg: &PresentationConfiguration) -> Result<(), Er
     let creation_time =
         u64::try_from(now.difference(&base).as_seconds()).expect("time before 1904");
 
+    let tracks = cfg
+        .tracks
+        .iter()
+        .map(|stream| TrackBoxData::new(cfg, stream))
+        .collect::<Result<Vec<_>, _>>()?;
+
     write_full_box(v, b"mvhd", FULL_BOX_VERSION_1, FULL_BOX_FLAGS_NONE, |v| {
-        write_mvhd(v, cfg, creation_time)
+        write_mvhd(v, cfg, &tracks, creation_time)
     })?;
 
-    for (idx, stream) in cfg.tracks.iter().enumerate() {
+    for (idx, (stream, track)) in cfg.tracks.iter().zip(&tracks).enumerate() {
         write_box(v, b"trak", |v| {
             let mut references = Vec::new();
 
@@ -181,7 +187,7 @@ fn write_moov(v: &mut Vec<u8>, cfg: &PresentationConfiguration) -> Result<(), Er
                 }
             }
 
-            write_trak(v, cfg, idx, stream, creation_time, &references)
+            write_trak(v, cfg, idx, stream, track, creation_time, &references)
         })?;
     }
 
@@ -201,6 +207,7 @@ fn write_trak(
     cfg: &PresentationConfiguration,
     idx: usize,
     stream: &TrackConfiguration,
+    track: &TrackBoxData,
     creation_time: u64,
     references: &[TrackReference],
 ) -> Result<(), Error> {
@@ -209,14 +216,14 @@ fn write_trak(
         b"tkhd",
         FULL_BOX_VERSION_1,
         TKHD_FLAGS_TRACK_ENABLED | TKHD_FLAGS_TRACK_IN_MOVIE | TKHD_FLAGS_TRACK_IN_PREVIEW,
-        |v| write_tkhd(v, cfg, idx, stream, creation_time),
+        |v| write_tkhd(v, idx, stream, track.duration_ticks, creation_time),
     )?;
 
     // TODO: write edts optionally for negative DTS instead of offsetting the DTS
     write_box(v, b"mdia", |v| write_mdia(v, cfg, stream, creation_time))?;
 
-    if cfg.write_edts && !elst_entries(cfg, stream).is_empty() {
-        write_box(v, b"edts", |v| write_elst(v, cfg, stream))?;
+    if let Some(entries) = &track.elst_entries {
+        write_box(v, b"edts", |v| write_elst(v, entries))?;
     }
 
     if !references.is_empty() {
@@ -925,6 +932,7 @@ fn write_xml_meta_data_sample_entry(
 fn write_mvhd(
     v: &mut Vec<u8>,
     cfg: &PresentationConfiguration,
+    tracks: &[TrackBoxData],
     creation_time: u64,
 ) -> Result<(), Error> {
     let timescale = cfg.to_timescale();
@@ -934,22 +942,18 @@ fn write_mvhd(
     v.extend(creation_time.to_be_bytes());
     // Timescale
     v.extend(timescale.to_be_bytes());
+
     // Duration
-    if cfg.variant.is_fragmented() {
-        // Track durations are 0 here as there is no media in the MovieBox,
-        // so 8.8.2.1 recommends 0 (or indefinite). When written, the
-        // MovieExtendsHeaderBox provides the overall duration including
-        // fragments (8.8.2.1/8.8.2.3).
-        v.extend(0u64.to_be_bytes());
-    } else {
-        // 8.2.2.3: the duration of the presentation is the duration of the
-        // longest track.
-        let mut duration = 0u64;
-        for stream in &cfg.tracks {
-            duration = duration.max(track_duration_ticks(cfg, stream)?);
-        }
-        v.extend(duration.to_be_bytes());
-    }
+    // 8.2.2.3: the duration of the presentation is the duration of the longest
+    // track. Fragmented tracks have a duration of 0 (8.3.2.1), so this is 0 as
+    // recommended by 8.8.2.1; the MovieExtendsHeaderBox provides the overall
+    // duration including fragments when written (8.8.2.1/8.8.2.3).
+    let duration = tracks
+        .iter()
+        .map(|track| track.duration_ticks)
+        .max()
+        .unwrap_or(0);
+    v.extend(duration.to_be_bytes());
 
     // Rate 1.0
     v.extend((1u32 << 16).to_be_bytes());
@@ -1047,34 +1051,59 @@ fn find_width_and_height(caps: &[gst::Caps]) -> (u32, u32) {
     (width, height)
 }
 
-// The duration of the track in movie timescale ticks, as written to `tkhd`.
-fn track_duration_ticks(
-    cfg: &PresentationConfiguration,
-    stream: &TrackConfiguration,
-) -> Result<u64, Error> {
-    if cfg.write_edts {
-        // 8.3.2.3: the duration is the sum of the durations of the track's
-        // edits when an edit list is written, and the media duration given
-        // in the MediaHeaderBox converted into the movie timescale otherwise.
-        let entries = elst_entries(cfg, stream);
-        if !entries.is_empty() {
-            return Ok(entries
+// Per-track data derived once from the track configuration and shared by the
+// `mvhd`, `tkhd` and `elst` boxes.
+struct TrackBoxData {
+    // The `elst` entries as `(edit_duration, media_time)` pairs, or `None` when
+    // no edit list is written.
+    elst_entries: Option<Vec<(u64, i64)>>,
+    // The track duration in movie timescale ticks, as written to `tkhd` and
+    // considered for the longest track in `mvhd`.
+    duration_ticks: u64,
+}
+
+impl TrackBoxData {
+    fn new(cfg: &PresentationConfiguration, stream: &TrackConfiguration) -> Result<Self, Error> {
+        // Only build the entries when an edit list is written. An empty list
+        // is stored as `None`.
+        let elst_entries = if cfg.write_edts {
+            let entries = elst_entries(cfg, stream);
+            (!entries.is_empty()).then_some(entries)
+        } else {
+            None
+        };
+
+        // 8.3.2.1: for fragmented variants the duration only covers the media
+        // in the enclosing MovieBox, of which there is none here.
+        //
+        // 8.3.2.3: otherwise it is the sum of the edit durations when an edit
+        // list is written, and the media duration given in the MediaHeaderBox
+        // converted into the movie timescale otherwise.
+        let duration_ticks = if cfg.variant.is_fragmented() {
+            0
+        } else if let Some(entries) = &elst_entries {
+            entries
                 .iter()
                 .map(|(edit_duration, _)| *edit_duration)
-                .sum());
-        }
-    }
+                .sum()
+        } else {
+            media_duration_ticks(stream)?
+                .mul_div_round(cfg.to_timescale() as u64, stream.to_timescale() as u64)
+                .context("too big track duration")?
+        };
 
-    media_duration_ticks(stream)?
-        .mul_div_round(cfg.to_timescale() as u64, stream.to_timescale() as u64)
-        .context("too big track duration")
+        Ok(Self {
+            elst_entries,
+            duration_ticks,
+        })
+    }
 }
 
 fn write_tkhd(
     v: &mut Vec<u8>,
-    cfg: &PresentationConfiguration,
     idx: usize,
     stream: &TrackConfiguration,
+    duration_ticks: u64,
     creation_time: u64,
 ) -> Result<(), Error> {
     // Creation time
@@ -1085,15 +1114,8 @@ fn write_tkhd(
     v.extend((idx as u32 + 1).to_be_bytes());
     // Reserved
     v.extend(0u32.to_be_bytes());
-    // Duration
-    if cfg.variant.is_fragmented() {
-        // Only the media in the enclosing MovieBox counts (8.3.2.1), of which
-        // there is none here.
-        v.extend(0u64.to_be_bytes());
-    } else {
-        // Track header duration is in movie header timescale
-        v.extend(track_duration_ticks(cfg, stream)?.to_be_bytes());
-    }
+    // Duration, in movie timescale ticks (see `TrackBoxData`)
+    v.extend(duration_ticks.to_be_bytes());
     // Reserved
     v.extend([0u8; 2 * 4]);
 
@@ -1358,18 +1380,12 @@ fn elst_entries(cfg: &PresentationConfiguration, stream: &TrackConfiguration) ->
     entries
 }
 
-fn write_elst(
-    v: &mut Vec<u8>,
-    cfg: &PresentationConfiguration,
-    stream: &TrackConfiguration,
-) -> Result<(), Error> {
+fn write_elst(v: &mut Vec<u8>, entries: &[(u64, i64)]) -> Result<(), Error> {
     write_full_box(v, b"elst", FULL_BOX_VERSION_1, 0, |v| {
-        let entries = elst_entries(cfg, stream);
-
         // Entry count
         v.extend((entries.len() as u32).to_be_bytes());
 
-        for (edit_duration, media_time) in entries {
+        for &(edit_duration, media_time) in entries {
             v.extend(edit_duration.to_be_bytes());
             v.extend(media_time.to_be_bytes());
 
