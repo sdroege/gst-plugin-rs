@@ -615,10 +615,6 @@ impl HlsBaseSink {
         let context = state.context.as_mut().unwrap();
 
         if let Some(running_time) = running_time {
-            if context.pdt_base_running_time.is_none() {
-                context.pdt_base_running_time = Some(running_time);
-            }
-
             let settings = self.settings.lock().unwrap();
 
             // Calculate the mapping from running time to UTC
@@ -638,6 +634,9 @@ impl HlsBaseSink {
                     .checked_sub_signed(Duration::nanoseconds(diff))
                     .expect("offsetting the utc with gstreamer clock-diff overflow");
 
+                // Keep pdt_base_running_time in sync with pdt_base_utc
+                // or the delta is applied twice.
+                context.pdt_base_running_time = Some(running_time);
                 context.pdt_base_utc = Some(pts_utc);
             }
 
