@@ -12,7 +12,6 @@ use crate::utils::{
     self, RUNTIME, WaitError, build_reqwest_client, parse_redirect_location, set_ice_servers, wait,
     wait_async,
 };
-use async_recursion::async_recursion;
 use bytes::Bytes;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_sdp::*;
@@ -786,7 +785,7 @@ impl WhepSrc {
                                 redirect_url.as_str()
                             );
 
-                            self.do_post(sess_desc, redirect_url).await
+                            Box::pin(self.do_post(sess_desc, redirect_url)).await
                         }
                         Err(e) => self.raise_error(gst::ResourceError::Failed, e.to_string()),
                     }
@@ -982,7 +981,6 @@ impl WhepSrc {
         }
     }
 
-    #[async_recursion]
     async fn do_post(&self, offer: WebRTCSessionDescription, endpoint: reqwest::Url) {
         let auth_token;
 
