@@ -1048,6 +1048,29 @@ fn find_width_and_height(caps: &[gst::Caps]) -> (u32, u32) {
     (width, height)
 }
 
+// The duration of the track in movie timescale ticks, as written to `tkhd`.
+fn track_duration_ticks(
+    cfg: &PresentationConfiguration,
+    stream: &TrackConfiguration,
+) -> Result<u64, Error> {
+    if cfg.write_edts {
+        // 8.3.2.3: the duration is the sum of the durations of the track's
+        // edits when an edit list is written, and the media duration given
+        // in the MediaHeaderBox converted into the movie timescale otherwise.
+        let entries = elst_entries(cfg, stream);
+        if !entries.is_empty() {
+            return Ok(entries
+                .iter()
+                .map(|(edit_duration, _)| *edit_duration)
+                .sum());
+        }
+    }
+
+    media_duration_ticks(stream)?
+        .mul_div_round(cfg.to_timescale() as u64, stream.to_timescale() as u64)
+        .context("too big track duration")
+}
+
 fn write_tkhd(
     v: &mut Vec<u8>,
     cfg: &PresentationConfiguration,
@@ -1070,24 +1093,7 @@ fn write_tkhd(
         v.extend(0u64.to_be_bytes());
     } else {
         // Track header duration is in movie header timescale
-        let timescale = cfg.to_timescale();
-
-        // 8.3.2.3: the duration is the sum of the durations of the track's
-        // edits when an edit list is written, and the media duration given
-        // in the MediaHeaderBox converted into the movie timescale otherwise.
-        let entries = elst_entries(cfg, stream);
-        let duration = if cfg.write_edts && !entries.is_empty() {
-            entries
-                .iter()
-                .map(|(edit_duration, _)| *edit_duration)
-                .sum::<u64>()
-        } else {
-            media_duration_ticks(stream)?
-                .mul_div_round(timescale as u64, stream.to_timescale() as u64)
-                .context("too big track duration")?
-        };
-
-        v.extend(duration.to_be_bytes());
+        v.extend(track_duration_ticks(cfg, stream)?.to_be_bytes());
     }
     // Reserved
     v.extend([0u8; 2 * 4]);
