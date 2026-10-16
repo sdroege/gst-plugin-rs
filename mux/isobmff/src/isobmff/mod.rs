@@ -287,6 +287,69 @@ pub(crate) struct ElstInfo {
     pub(crate) duration: Option<gst::ClockTime>,
 }
 
+impl ElstInfo {
+    // Builds an edit list entry from the `AudioClippingMeta` of a buffer.
+    //
+    // The meta amounts are clipped from the start/end of the buffer, so
+    // valid data of a buffer with PTS `pts` and end `buffer_end` spans
+    // `[pts + clip_start, buffer_end - clip_end]`.
+    //
+    // `timescale` is the sample rate used to convert `default`-format clip
+    // amounts (sample counts) to time. `buffer_end` is the PTS end of the
+    // buffer, if known.
+    pub(crate) fn from_audio_clipping(
+        clip_meta: &gst_audio::AudioClippingMeta,
+        timescale: u64,
+        pts: gst::ClockTime,
+        buffer_end: Option<gst::ClockTime>,
+    ) -> Result<Self, anyhow::Error> {
+        use anyhow::Context;
+
+        let to_clocktime =
+            |t: gst::GenericFormattedValue| -> Result<Option<gst::ClockTime>, anyhow::Error> {
+                if let gst::GenericFormattedValue::Default(Some(v)) = t {
+                    let v = u64::from(v);
+                    let nseconds = v
+                        .mul_div_round(gst::ClockTime::SECOND.nseconds(), timescale)
+                        .context("Invalid sample count in the AudioClippingMeta")?;
+
+                    Ok(Some(gst::ClockTime::from_nseconds(nseconds)).filter(|x| !x.is_zero()))
+                } else if let gst::GenericFormattedValue::Time(Some(v)) = t {
+                    Ok(Some(v).filter(|x| !x.is_zero()))
+                } else {
+                    Ok(None)
+                }
+            };
+
+        let clip_start = to_clocktime(clip_meta.start())?;
+        let clip_end = to_clocktime(clip_meta.end())?;
+
+        if clip_start.is_none() && clip_end.is_none() {
+            anyhow::bail!("Start and end time missing in AudioClippingMeta");
+        }
+
+        let start = pts + clip_start.unwrap_or(gst::ClockTime::ZERO);
+        let duration = match buffer_end {
+            Some(buffer_end) => Some(
+                buffer_end
+                    .saturating_sub(clip_end.unwrap_or(gst::ClockTime::ZERO))
+                    .saturating_sub(start),
+            ),
+            None => {
+                if clip_end.is_some() {
+                    anyhow::bail!("No duration on buffer, we can't add edit list");
+                }
+                None
+            }
+        };
+
+        Ok(ElstInfo {
+            start: Some(start.into()),
+            duration,
+        })
+    }
+}
+
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Variant {
@@ -638,4 +701,155 @@ pub(crate) struct ChnlLayoutInfo {
     layout_idx: u8, /* Must be u8 for `chnl` box */
     reorder_map: Option<Vec<usize>>,
     omitted_channels_map: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gst::format::DefaultFormatConstructor;
+
+    fn clipping_elst_info(
+        clip_start: gst::ClockTime,
+        clip_end: gst::ClockTime,
+        pts: gst::ClockTime,
+        buffer_end: Option<gst::ClockTime>,
+    ) -> Result<ElstInfo, anyhow::Error> {
+        gst::init().unwrap();
+
+        let mut buffer = gst::Buffer::with_size(1).unwrap();
+        let cmeta =
+            gst_audio::AudioClippingMeta::add(buffer.get_mut().unwrap(), clip_start, clip_end);
+
+        ElstInfo::from_audio_clipping(&cmeta, 48_000, pts, buffer_end)
+    }
+
+    #[test]
+    fn clipping_head_and_tail() {
+        // Buffer [1s, 3s) with 250ms clipped from each side: the valid data is
+        // [1.25s, 2.75s).
+        let info = clipping_elst_info(
+            gst::ClockTime::from_mseconds(250),
+            gst::ClockTime::from_mseconds(250),
+            gst::ClockTime::from_seconds(1),
+            Some(gst::ClockTime::from_seconds(3)),
+        )
+        .unwrap();
+
+        assert_eq!(
+            info.start,
+            Some(gst::Signed::Positive(gst::ClockTime::from_mseconds(1250)))
+        );
+        assert_eq!(info.duration, Some(gst::ClockTime::from_mseconds(1500)));
+    }
+
+    #[test]
+    fn clipping_tail_only() {
+        // With no clipping from the start, the valid data still starts at the
+        // buffer PTS.
+        let info = clipping_elst_info(
+            gst::ClockTime::ZERO,
+            gst::ClockTime::from_mseconds(250),
+            gst::ClockTime::from_seconds(1),
+            Some(gst::ClockTime::from_seconds(3)),
+        )
+        .unwrap();
+
+        assert_eq!(
+            info.start,
+            Some(gst::Signed::Positive(gst::ClockTime::from_seconds(1)))
+        );
+        assert_eq!(info.duration, Some(gst::ClockTime::from_mseconds(1750)));
+    }
+
+    #[test]
+    fn clipping_head_only() {
+        let info = clipping_elst_info(
+            gst::ClockTime::from_mseconds(250),
+            gst::ClockTime::ZERO,
+            gst::ClockTime::from_seconds(1),
+            Some(gst::ClockTime::from_seconds(3)),
+        )
+        .unwrap();
+
+        assert_eq!(
+            info.start,
+            Some(gst::Signed::Positive(gst::ClockTime::from_mseconds(1250)))
+        );
+        assert_eq!(info.duration, Some(gst::ClockTime::from_mseconds(1750)));
+    }
+
+    #[test]
+    fn clipping_sample_units() {
+        gst::init().unwrap();
+
+        // 12000 samples at 48kHz is 250ms, as in `clipping_head_and_tail`.
+        let mut buffer = gst::Buffer::with_size(1).unwrap();
+        let cmeta = gst_audio::AudioClippingMeta::add(
+            buffer.get_mut().unwrap(),
+            12_000u64.default_format(),
+            12_000u64.default_format(),
+        );
+
+        let info = ElstInfo::from_audio_clipping(
+            &cmeta,
+            48_000,
+            gst::ClockTime::from_seconds(1),
+            Some(gst::ClockTime::from_seconds(3)),
+        )
+        .unwrap();
+
+        assert_eq!(
+            info.start,
+            Some(gst::Signed::Positive(gst::ClockTime::from_mseconds(1250)))
+        );
+        assert_eq!(info.duration, Some(gst::ClockTime::from_mseconds(1500)));
+    }
+
+    #[test]
+    fn clipping_unknown_buffer_end() {
+        // Without the buffer end the edit duration stays unknown and is
+        // filled in later.
+        let info = clipping_elst_info(
+            gst::ClockTime::from_mseconds(250),
+            gst::ClockTime::ZERO,
+            gst::ClockTime::from_seconds(1),
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(
+            info.start,
+            Some(gst::Signed::Positive(gst::ClockTime::from_mseconds(1250)))
+        );
+        assert_eq!(info.duration, None);
+
+        // Clipping from the end is required to compute the edit duration.
+        assert!(
+            clipping_elst_info(
+                gst::ClockTime::ZERO,
+                gst::ClockTime::from_mseconds(250),
+                gst::ClockTime::from_seconds(1),
+                None,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn clipping_exceeding_buffer() {
+        // Clips larger than the buffer leave a zero-length edit.
+        let info = clipping_elst_info(
+            gst::ClockTime::from_seconds(2),
+            gst::ClockTime::from_seconds(2),
+            gst::ClockTime::ZERO,
+            Some(gst::ClockTime::from_seconds(1)),
+        )
+        .unwrap();
+
+        assert_eq!(
+            info.start,
+            Some(gst::Signed::Positive(gst::ClockTime::from_seconds(2)))
+        );
+        assert_eq!(info.duration, Some(gst::ClockTime::ZERO));
+    }
 }
