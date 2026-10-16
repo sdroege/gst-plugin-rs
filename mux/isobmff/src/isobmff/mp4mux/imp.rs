@@ -1,4 +1,3 @@
-use anyhow::{Context, bail};
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -108,7 +107,7 @@ impl FromStr for TaicClockType {
             "unknown" => Ok(TaicClockType::Unknown),
             "cannot-sync-to-tai" => Ok(TaicClockType::CannotSync),
             "can-sync-to-tai" => Ok(TaicClockType::CanSync),
-            _ => bail!("unknown TAI Clock type: {}", s),
+            _ => anyhow::bail!("unknown TAI Clock type: {}", s),
         }
     }
 }
@@ -490,53 +489,12 @@ impl MP4Mux {
             .get::<i32>("rate")
             .unwrap_or_else(|_| stream.timescale() as i32);
 
-        let samples_to_gstclocktime = move |v: u64| {
-            let nseconds = v
-                .mul_div_round(gst::ClockTime::SECOND.nseconds(), timescale as u64)
-                .context("Invalid start in the AudioClipMeta")?;
-            Ok::<_, anyhow::Error>(gst::ClockTime::from_nseconds(nseconds))
-        };
-
-        let generic_to_gstclocktime = move |t| -> Result<Option<gst::ClockTime>, anyhow::Error> {
-            if let gst::GenericFormattedValue::Default(Some(v)) = t {
-                let v = u64::from(v);
-                let v = samples_to_gstclocktime(v)?;
-                Ok(Some(v).filter(|x| !x.is_zero()))
-            } else if let gst::GenericFormattedValue::Time(Some(v)) = t {
-                Ok(Some(v).filter(|x| !x.is_zero()))
-            } else {
-                Ok(None)
-            }
-        };
-
-        let start = generic_to_gstclocktime(cmeta.start())?;
-        let end = generic_to_gstclocktime(cmeta.end())?;
-
-        if end.is_none() && start.is_none() {
-            bail!("No start or end time in `default` format in the AudioClippingMeta");
-        }
-
-        let start = if let Some(start) = generic_to_gstclocktime(cmeta.start())? {
-            start + buffer.pts
-        } else {
-            gst::ClockTime::ZERO
-        };
-        let duration = if let Some(end) = end {
-            Some(
-                buffer.pts
-                    + buffer
-                        .duration
-                        .context("No duration on buffer, we can't add edit list")?
-                    - end,
-            )
-        } else {
-            None
-        };
-
-        stream.elst_infos.push(ElstInfo {
-            start: Some(start.into()),
-            duration,
-        });
+        stream.elst_infos.push(ElstInfo::from_audio_clipping(
+            &cmeta,
+            timescale as u64,
+            buffer.pts,
+            buffer.duration.map(|duration| buffer.pts + duration),
+        )?);
 
         Ok(())
     }
