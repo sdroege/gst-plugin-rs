@@ -2601,57 +2601,11 @@ mod tests {
             .expect("one track")
     }
 
-    #[test]
-    fn fragmented_trak_wraps_elst_in_edts() {
-        gst::init().unwrap();
-
-        let elst_infos = vec![
-            // An empty edit delaying the presentation start by 500ms.
-            ElstInfo {
-                start: None,
-                duration: Some(gst::ClockTime::from_mseconds(500)),
-            },
-            // Then the media from 250ms in, for 1.5s. The edit durations add
-            // up to 2s, the `end_pts - earliest_pts` of the track fixture.
-            ElstInfo {
-                start: Some(gst::Signed::Positive(gst::ClockTime::from_mseconds(250))),
-                duration: Some(gst::ClockTime::from_mseconds(1500)),
-            },
-        ];
-
-        let trak = parse_trak(&make_moov(
-            Variant::FragmentedISO,
-            true,
-            vec![mono_pcm_track(elst_infos)],
-        ));
-
-        let edts = trak
-            .edts
-            .as_ref()
-            .expect("fragmented trak must carry an edts box");
-        let elst = edts.elst.as_ref().expect("edts must carry an elst box");
-
-        assert_eq!(elst.entries.len(), 2);
-
-        let rate = mp4_atom::FixedPoint::new(1i16, 0i16);
-
-        // 8.6.6.3: edit_duration is in movie timescale units, 500ms at 1000.
-        assert_eq!(elst.entries[0].segment_duration, 500);
-        assert!(
-            elst.entries[0].media_time.is_none(),
-            "the empty edit must have media_time -1"
-        );
-        assert_eq!(elst.entries[0].media_rate, rate);
-
-        // 8.6.6.3: media_time is in media timescale units, 250ms at 48000 is
-        // 12000. Scaling with the movie timescale would give 250.
-        assert_eq!(elst.entries[1].segment_duration, 1_500);
-        assert_eq!(elst.entries[1].media_time, Some(12_000));
-        assert_eq!(elst.entries[1].media_rate, rate);
-    }
-
-    // `write_edts` gates the `edts` the same way for both variants: no edit list
-    // when it is off, and an `edts` wrapping the `elst` when it is on.
+    // `write_edts` gates the `edts` the same way for both variants: no
+    // edit list when it is off, and an `edts` wrapping the `elst` when
+    // it is on. Also covers the regression where fragmented files got
+    // a bare `elst` outside any `edts` (8.6.6.1: the container of an
+    // `elst` is the EditBox).
     #[test]
     fn write_edts_flag_gates_edts_for_both_variants() {
         gst::init().unwrap();
@@ -2665,8 +2619,7 @@ mod tests {
                         duration: Some(gst::ClockTime::from_mseconds(250)),
                     },
                     // Then the media from 250ms in, to its end at 2s. The edit
-                    // durations add up to 2s, the `end_pts - earliest_pts` of
-                    // the track fixture.
+                    // durations add up to the 2s track duration.
                     ElstInfo {
                         start: Some(gst::Signed::Positive(gst::ClockTime::from_mseconds(250))),
                         duration: Some(gst::ClockTime::from_mseconds(1750)),
@@ -2708,21 +2661,14 @@ mod tests {
                     assert_eq!(elst.entries[1].segment_duration, 1_750);
                     assert_eq!(elst.entries[1].media_time, Some(12_000));
                     assert_eq!(elst.entries[1].media_rate, rate);
+                }
 
-                    if !variant.is_fragmented() {
-                        // 8.3.2.3: with an edit list, the tkhd duration is the
-                        // sum of the edit durations. The fixture's edits cover
-                        // the full media span (250ms + 1750ms = 2s).
-                        let edit_duration_sum =
-                            elst.entries.iter().map(|e| e.segment_duration).sum::<u64>();
-
-                        assert_eq!(edit_duration_sum, 2_000);
-                        assert_eq!(trak.tkhd.duration, edit_duration_sum);
-                    }
-                } else if !variant.is_fragmented() {
-                    // 8.3.2.3: without an edit list, the tkhd duration is the
-                    // media duration, 2s here.
-                    assert_eq!(trak.tkhd.duration, 2_000);
+                // The 8.3.2.3 tkhd duration rules are covered by the tkhd_*
+                // tests below.
+                if variant.is_fragmented() {
+                    // 8.3.2.1: the tkhd duration only covers media in the
+                    // MovieBox, of which there is none in a fragmented file.
+                    assert_eq!(trak.tkhd.duration, 0);
                 }
             }
         }
