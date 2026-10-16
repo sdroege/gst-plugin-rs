@@ -936,19 +936,18 @@ fn write_mvhd(
     v.extend(timescale.to_be_bytes());
     // Duration
     if cfg.variant.is_fragmented() {
+        // Track durations are 0 here as there is no media in the MovieBox,
+        // so 8.8.2.1 recommends 0 (or indefinite). When written, the
+        // MovieExtendsHeaderBox provides the overall duration including
+        // fragments (8.8.2.1/8.8.2.3).
         v.extend(0u64.to_be_bytes());
     } else {
-        let min_earliest_pts = cfg.tracks.iter().map(|s| s.earliest_pts).min().unwrap();
-        let max_end_pts = cfg
-            .tracks
-            .iter()
-            .map(|stream| stream.end_pts)
-            .max()
-            .unwrap();
-        let duration = (max_end_pts - min_earliest_pts)
-            .nseconds()
-            .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
-            .context("too big track duration")?;
+        // 8.2.2.3: the duration of the presentation is the duration of the
+        // longest track.
+        let mut duration = 0u64;
+        for stream in &cfg.tracks {
+            duration = duration.max(track_duration_ticks(cfg, stream)?);
+        }
         v.extend(duration.to_be_bytes());
     }
 
@@ -2549,18 +2548,21 @@ mod tests {
         }
     }
 
-    fn one_chunk() -> Chunk {
+    fn chunk(duration: gst::ClockTime) -> Chunk {
         Chunk {
             offset: 0,
             samples: vec![Sample {
                 sync_point: true,
-                // The full 2s track fixture, one sample.
-                duration: gst::ClockTime::from_seconds(2),
+                duration,
                 composition_time_offset: None,
                 size: 4,
                 sample_desc_idx: 1,
             }],
         }
+    }
+
+    fn one_chunk() -> Chunk {
+        chunk(gst::ClockTime::from_seconds(2))
     }
 
     fn make_moov(
@@ -2585,14 +2587,21 @@ mod tests {
         .unwrap()
     }
 
-    fn parse_trak(buffer: &gst::Buffer) -> mp4_atom::Trak {
+    fn parse_moov(buffer: &gst::Buffer) -> mp4_atom::Moov {
         let map = buffer.map_readable().unwrap();
         let mut input = map.as_slice();
 
         let header = mp4_atom::Header::read_from(&mut input).unwrap();
         assert_eq!(header.kind, mp4_atom::Moov::KIND);
-        let moov = mp4_atom::Moov::read_atom(&header, &mut input).unwrap();
-        moov.trak.into_iter().next().expect("one track")
+        mp4_atom::Moov::read_atom(&header, &mut input).unwrap()
+    }
+
+    fn parse_trak(buffer: &gst::Buffer) -> mp4_atom::Trak {
+        parse_moov(buffer)
+            .trak
+            .into_iter()
+            .next()
+            .expect("one track")
     }
 
     #[test]
@@ -2798,5 +2807,78 @@ mod tests {
         assert!(trak.edts.is_none());
         // Without an edit list, the tkhd duration is the media duration.
         assert_eq!(trak.tkhd.duration, 2_000);
+    }
+
+    #[test]
+    fn mvhd_duration_is_longest_track() {
+        gst::init().unwrap();
+
+        // Track A presents 1s.
+        let mut track_a = mono_pcm_track(vec![ElstInfo {
+            start: Some(gst::Signed::Positive(gst::ClockTime::ZERO)),
+            duration: Some(gst::ClockTime::from_mseconds(1000)),
+        }]);
+
+        // Track B presents 1.75s: a 250ms empty edit delaying the start, then
+        // 1.5s of media from 250ms in. It is deliberately the middle track, so
+        // that using the first or last track would give the wrong result.
+        let mut track_b = mono_pcm_track(vec![
+            ElstInfo {
+                start: None,
+                duration: Some(gst::ClockTime::from_mseconds(250)),
+            },
+            ElstInfo {
+                start: Some(gst::Signed::Positive(gst::ClockTime::from_mseconds(250))),
+                duration: Some(gst::ClockTime::from_mseconds(1500)),
+            },
+        ]);
+
+        // Track C presents 1.25s.
+        let mut track_c = mono_pcm_track(vec![ElstInfo {
+            start: Some(gst::Signed::Positive(gst::ClockTime::ZERO)),
+            duration: Some(gst::ClockTime::from_mseconds(1250)),
+        }]);
+
+        // The non-fragmented sample tables are built from the chunks.
+        track_a.chunks = vec![one_chunk()];
+        track_b.chunks = vec![one_chunk()];
+        track_c.chunks = vec![one_chunk()];
+
+        let moov = parse_moov(&make_moov(
+            Variant::ISO,
+            true,
+            vec![track_a, track_b, track_c],
+        ));
+
+        // 8.2.2.3: the presentation duration is the duration of the longest
+        // track, i.e. the largest tkhd duration.
+        let tkhd_durations: Vec<u64> = moov.trak.iter().map(|trak| trak.tkhd.duration).collect();
+        assert_eq!(tkhd_durations, vec![1_000, 1_750, 1_250]);
+        assert_eq!(moov.mvhd.duration, 1_750);
+    }
+
+    #[test]
+    fn mvhd_duration_without_edit_list_is_longest_media_duration() {
+        gst::init().unwrap();
+
+        // Track A has a 2s media duration but a 5s presentation span, so a
+        // span-based duration would give the wrong result.
+        let mut track_a = mono_pcm_track(vec![ElstInfo {
+            start: Some(gst::Signed::Positive(gst::ClockTime::from_mseconds(250))),
+            duration: Some(gst::ClockTime::from_mseconds(1500)),
+        }]);
+        track_a.chunks = vec![one_chunk()];
+        track_a.end_pts = gst::ClockTime::from_seconds(5);
+
+        // Track B is the longest at 3s of media, and is the second track so
+        // that using the first track would give the wrong result.
+        let mut track_b = mono_pcm_track(Vec::new());
+        track_b.chunks = vec![chunk(gst::ClockTime::from_seconds(3))];
+
+        let moov = parse_moov(&make_moov(Variant::ISO, false, vec![track_a, track_b]));
+
+        // 8.2.2.3: without edit lists the duration is the media duration, 3s
+        // for the longest track.
+        assert_eq!(moov.mvhd.duration, 3_000);
     }
 }
