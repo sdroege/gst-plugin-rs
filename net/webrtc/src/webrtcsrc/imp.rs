@@ -1692,12 +1692,12 @@ impl BaseWebRTCSrc {
         gst::info!(CAT, imp = self, "unpreparing");
 
         let mut state = self.state.lock().unwrap();
-        let session = state.end_session(&self.obj());
+        let session_id = state.end_session(&self.obj());
         drop(state);
 
         gst::debug!(CAT, imp = self, "Ending sessions");
-        if let Some(session) = session {
-            self.signaller().end_session(&session.0.lock().unwrap().id);
+        if let Some(session_id) = session_id {
+            self.signaller().end_session(&session_id);
         }
         gst::debug!(CAT, imp = self, "All sessions have started finalizing");
 
@@ -2149,10 +2149,9 @@ impl BaseWebRTCSrc {
         // with the state lock already acquired here.
         self.flush_src_pad()?;
 
-        if let Some(session) = state.end_session(&self.obj()) {
+        if let Some(session_id) = state.end_session(&self.obj()) {
             drop(state);
-            let session = session.0.lock().unwrap();
-            self.signaller().end_session(&session.id);
+            self.signaller().end_session(&session_id);
         }
 
         self.remove_src_pad()?;
@@ -2499,10 +2498,14 @@ impl State {
         });
     }
 
-    fn end_session(&mut self, element: &super::BaseWebRTCSrc) -> Option<Session> {
+    // Returns the ID of the ended session. Its lock must not be taken
+    // afterwards: finalizing holds it while stopping webrtcbin, which waits for
+    // webrtcbin's thread, and this runs on that thread when ICE fails.
+    fn end_session(&mut self, element: &super::BaseWebRTCSrc) -> Option<String> {
         if let Some(session) = self.session.take() {
-            self.finalize_session(element, session.clone());
-            return Some(session);
+            let session_id = session.0.lock().unwrap().id.clone();
+            self.finalize_session(element, session);
+            return Some(session_id);
         }
 
         None
