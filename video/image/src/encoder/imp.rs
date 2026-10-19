@@ -71,13 +71,14 @@ impl ElementImpl for Encoder {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
-            let formats = {
-                let mut downstream_depths = BTreeSet::new();
-                for (_, formats) in Format::all_encoding_formats() {
-                    downstream_depths.extend(formats);
-                }
-                downstream_depths.into_iter().collect::<Vec<_>>()
-            };
+            let formats = Format::all_encoding_formats()
+                .into_iter()
+                .map(|v| v.1)
+                // These need to be kept in order!
+                .fold(BTreeSet::new(), |mut a, b| {
+                    a.extend(b);
+                    a
+                });
             let sink_caps = gst_video::VideoCapsBuilder::new()
                 .format_list(formats)
                 .build();
@@ -89,19 +90,15 @@ impl ElementImpl for Encoder {
             )
             .unwrap();
 
-            let mut src_caps = gst::Caps::new_empty();
-            {
-                let caps = src_caps.make_mut();
-
-                for (c, _) in Format::all_encoding_formats() {
-                    caps.append(c);
-                }
-            };
+            let caps = Format::all_encoding_formats()
+                .into_iter()
+                .map(|v| v.0)
+                .collect::<gst::Caps>();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
                 gst::PadPresence::Always,
-                &src_caps,
+                &caps,
             )
             .unwrap();
 

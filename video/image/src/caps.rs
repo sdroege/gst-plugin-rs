@@ -1,10 +1,10 @@
 #[allow(unused_macros)]
 macro_rules! append_caps {
     ($c:ident, $mime:literal) => (
-        $c.append(gst::Caps::builder($mime).build());
+        $c.append(gst::Caps::new_empty_simple($mime));
     );
     ($c:ident, $mime:literal, $($mime2:literal),+) => (
-        $c.append(gst::Caps::builder($mime).build());
+        $c.append(gst::Caps::new_empty_simple($mime));
         append_caps!($c, $($mime2),+)
     );
 }
@@ -12,7 +12,7 @@ macro_rules! append_caps {
 #[allow(unused_macros)]
 macro_rules! make_caps {
     ($mime:literal) => {
-        gst::Caps::builder($mime).build()
+        gst::Caps::new_empty_simple($mime)
     };
 
     ($($mime:literal),+) => {
@@ -25,7 +25,7 @@ macro_rules! make_caps {
     };
 
     ($format:expr) => {
-        gst::Caps::builder($format.to_mime_type()).build()
+        gst::Caps::new_empty_simple($format.to_mime_type())
     };
 }
 
@@ -35,7 +35,7 @@ macro_rules! make_caps_with_extra_mimetypes {
         {
             let mut caps = gst::Caps::new_empty();
             let c = caps.make_mut();
-            c.append(gst::Caps::builder($format.to_mime_type()).build());
+            c.append(gst::Caps::new_empty_simple($format.to_mime_type()));
             append_caps!(c, $($mime),+);
             caps
         }
@@ -45,12 +45,12 @@ macro_rules! make_caps_with_extra_mimetypes {
 #[allow(unused_macros)]
 macro_rules! make_encoder_caps {
     ($mime:literal, $formats:expr) => {{
-        let caps = gst::Caps::builder($mime).build();
+        let caps = gst::Caps::new_empty_simple($mime);
         (caps, Vec::from_iter($formats))
     }};
 
     ($format:expr, $formats:expr) => {{
-        let caps = gst::Caps::builder($format.to_mime_type()).build();
+        let caps = gst::Caps::new_empty_simple($format.to_mime_type());
         (caps, Vec::from_iter($formats))
     }};
 }
@@ -60,7 +60,7 @@ macro_rules! make_encoder_caps_with_extra_mimetypes {
     ($format:expr, $($mime:literal),+, $formats:expr) => {{
         let mut caps = gst::Caps::new_empty();
         let c = caps.make_mut();
-        c.append(gst::Caps::builder($format.to_mime_type()).build());
+        c.append(gst::Caps::new_empty_simple($format.to_mime_type()));
         append_caps!(c, $($mime),+);
         (caps, Vec::from_iter($formats))
     }};

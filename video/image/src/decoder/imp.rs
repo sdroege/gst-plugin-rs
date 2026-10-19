@@ -873,14 +873,9 @@ impl ElementImpl for Decoder {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: LazyLock<Vec<gst::PadTemplate>> = LazyLock::new(|| {
-            let mut caps = gst::Caps::new_empty();
-            {
-                let caps = caps.make_mut();
-
-                for f in Format::all_decoding_formats() {
-                    caps.append(f);
-                }
-            }
+            let caps = Format::all_decoding_formats()
+                .into_iter()
+                .collect::<gst::Caps>();
 
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
