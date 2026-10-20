@@ -15,6 +15,7 @@ use llama_cpp_2::{
 };
 
 use std::{
+    num::NonZeroU16,
     num::NonZeroU32,
     str::FromStr,
     sync::{LazyLock, Mutex},
@@ -35,6 +36,26 @@ pub struct TextTransform {
     sinkpad: gst::Pad,
     state: Mutex<State>,
     settings: Mutex<Settings>,
+}
+
+/// https://github.com/utilityai/llama-cpp-rs/commit/e5ba656d8a1ff0715c0707cf6291aa9af0de3064
+fn token_to_piece<'a>(
+    model: &'a llama_cpp_2::model::LlamaModel,
+    token: llama_cpp_2::token::LlamaToken,
+    decoder: &mut encoding_rs::Decoder,
+    special: bool,
+    lstrip: Option<NonZeroU16>,
+) -> Result<String, &'a str> {
+    let bytes = model.vocab().token_to_piece(token, special, lstrip);
+    let length = decoder
+        .max_utf8_buffer_length(bytes.len())
+        .ok_or("token output is too large to decode")?;
+    let mut output = String::with_capacity(length);
+    let (result, read, _) = decoder.decode_to_string(&bytes, &mut output, false);
+    if result != encoding_rs::CoderResult::InputEmpty || read != bytes.len() {
+        return Err("UTF-8 decoder capacity bound must consume the complete token");
+    }
+    Ok(output)
 }
 
 struct ModelState {
@@ -779,16 +800,7 @@ impl TextTransform {
             }
         };
 
-        let tokens_list = match model
-            .model
-            .str_to_token(&prompt, llama_cpp_2::model::AddBos::Always)
-        {
-            Ok(tokens_list) => tokens_list,
-            Err(err) => {
-                gst::error!(CAT, imp = self, "Can't convert prompt to tokens: {err}");
-                return Err(gst::FlowError::Error);
-            }
-        };
+        let tokens_list = model.model.vocab().tokenize(prompt.as_bytes(), true, true);
 
         if CAT.above_threshold(gst::DebugLevel::Memdump) {
             let mut decoder = encoding_rs::UTF_8.new_decoder();
@@ -796,9 +808,7 @@ impl TextTransform {
             let mut prompt_str = String::new();
             for token in &tokens_list {
                 prompt_str.push_str(
-                    &model
-                        .model
-                        .token_to_piece(*token, &mut decoder, true, None)
+                    &token_to_piece(&model.model, *token, &mut decoder, true, None)
                         .unwrap_or("�".to_string()),
                 );
             }
@@ -846,11 +856,12 @@ impl TextTransform {
                 model.sampler.0.accept(token);
 
                 // is it an end of stream?
-                if model.model.is_eog_token(token) {
+                if model.model.vocab().is_eog(token) {
                     break;
                 }
 
-                let token_str = match model.model.token_to_piece(token, &mut decoder, true, None) {
+                let token_str = match token_to_piece(&model.model, token, &mut decoder, true, None)
+                {
                     Ok(token_str) => token_str,
                     Err(err) => {
                         gst::warning!(CAT, imp = self, "Can't convert token to string: {err}");

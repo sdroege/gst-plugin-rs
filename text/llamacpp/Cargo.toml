@@ -12,7 +12,7 @@ rust-version.workspace = true
 encoding_rs = "0.8"
 glib.workspace = true
 gst.workspace = true
-llama-cpp-2 = { version = "0.1.150" }
+llama-cpp-2 = { version = "0.1.160" }
 minijinja = { version = "2.21.0", features = ["builtins", "loop_controls", "json"] }
 minijinja-contrib = { version = "2.21.0", features = ["pycompat"] }
 once_cell = "1.0"
@@ -36,6 +36,7 @@ capi = []
 doc = ["gst/v1_18"]
 
 # Re-export llama-cpp-2 features
+system-ggml = ["llama-cpp-2/system-ggml"]
 cuda = ["llama-cpp-2/cuda"]
 metal = ["llama-cpp-2/metal"]
 vulkan = ["llama-cpp-2/vulkan"]
