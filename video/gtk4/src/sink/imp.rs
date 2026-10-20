@@ -24,6 +24,9 @@ use gst_base::subclass::prelude::*;
 use gst_gl::prelude::{GLContextExt as _, *};
 use gst_video::subclass::prelude::*;
 
+#[cfg(all(feature = "waylandegl", feature = "v1_26"))]
+use gst_gl_egl::prelude::GLDisplayEGLExt as _;
+
 use std::sync::LazyLock;
 use std::sync::{
     Mutex,
@@ -1346,6 +1349,13 @@ impl PaintableSink {
                 gst_gl_wayland::ffi::gst_gl_display_wayland_new_with_display(wayland_display);
             let gst_display =
                 gst_gl::GLDisplay::from_glib_full(gst_display as *mut gst_gl::ffi::GstGLDisplay);
+
+            // The EGLDisplay GStreamer derives from this wl_display is GDK's own, so GStreamer
+            // must not eglTerminate() it when the last GL user of the display goes away.
+            #[cfg(feature = "v1_26")]
+            if let Some(egl_display) = gst_gl_egl::GLDisplayEGL::from_gl_display(&gst_display) {
+                egl_display.set_foreign(true);
+            }
 
             let wrapped_context =
                 gst_gl::GLContext::new_wrapped(&gst_display, gl_ctx, platform, gl_api);
