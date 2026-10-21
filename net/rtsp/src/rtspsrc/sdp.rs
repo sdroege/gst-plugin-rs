@@ -328,17 +328,19 @@ fn parse_fmtp(fmtp: &str, s: &mut gst::structure::Structure) {
             continue;
         }
         if encoding_name == "H264" && k == "profile-level-id" {
-            let profile_idc = u8::from_str_radix(&v[0..2], 16);
-            let csf_idc = u8::from_str_radix(&v[2..4], 16);
-            let level_idc = u8::from_str_radix(&v[4..6], 16);
-            if let (Ok(p), Ok(c), Ok(l)) = (profile_idc, csf_idc, level_idc) {
-                let sps = &[p, c, l];
-                let profile = gst_pbutils::codec_utils_h264_get_profile(sps);
-                let level = gst_pbutils::codec_utils_h264_get_level(sps);
-                if let (Ok(profile), Ok(level)) = (profile, level) {
-                    s.set("profile", profile);
-                    s.set("level", level);
-                    continue;
+            if v.len() == 6 && v.is_ascii() {
+                let profile_idc = u8::from_str_radix(&v[0..2], 16);
+                let csf_idc = u8::from_str_radix(&v[2..4], 16);
+                let level_idc = u8::from_str_radix(&v[4..6], 16);
+                if let (Ok(p), Ok(c), Ok(l)) = (profile_idc, csf_idc, level_idc) {
+                    let sps = &[p, c, l];
+                    let profile = gst_pbutils::codec_utils_h264_get_profile(sps);
+                    let level = gst_pbutils::codec_utils_h264_get_level(sps);
+                    if let (Ok(profile), Ok(level)) = (profile, level) {
+                        s.set("profile", profile);
+                        s.set("level", level);
+                        continue;
+                    }
                 }
             }
             gst::warning!(CAT, "Failed to parse profile-level-id {v}, ignoring...");
@@ -647,4 +649,42 @@ fn mikey_to_caps(mikey: MikeyMessage, s: &mut gst::Structure) -> bool {
         }
         None => false,
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn h264_structure() -> gst::Structure {
+        gst::Structure::builder("application/x-rtp")
+            .field("media", "video")
+            .field("encoding-name", "H264")
+            .build()
+    }
+
+    #[test]
+    fn parse_fmtp_h264_profile_level_id() {
+        let _ = gst::init();
+
+        // Malformed values are ignored with a warning instead of panicking on
+        // the hex slicing, including non-ASCII values of exactly 6 bytes.
+        for value in ["42e0", "zzz01f", "42e01g", "42e01f00", "42e日"] {
+            let mut s = h264_structure();
+            parse_fmtp(&format!("96 profile-level-id={value}"), &mut s);
+            assert!(!s.has_field("profile"), "{value}");
+            assert!(!s.has_field("level"), "{value}");
+            assert!(!s.has_field("profile-level-id"), "{value}");
+        }
+
+        let mut s = h264_structure();
+        parse_fmtp("96 profile-level-id=42e01f", &mut s);
+        assert_eq!(
+            s.get::<&str>("profile").unwrap(),
+            "constrained-baseline",
+            "valid profile-level-id"
+        );
+        // Without level-asymmetry-allowed=0 the level is dropped again.
+        assert!(!s.has_field("level"));
+    }
+
 }
