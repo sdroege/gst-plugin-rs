@@ -284,6 +284,8 @@ You will find the following plugins in this repository:
       - `rtpav1depay`: Depayload AV1 from RTP packets.
       - `rtpav1pay`: Payload AV1 as RTP packets.
       - `rtpgccbwe`: RTP bandwidth estimator based on the Google Congestion Control algorithm.
+      - `rtph261depay2`: Depayload an H.261 video stream from RTP packets (RFC 4587).
+      - `rtph261pay2`: Payload an H.261 video stream into RTP packets (RFC 4587).
       - `rtph263pdepay2`: Depayload an H.263+/H.263++ video stream from RTP packets (RFC 4629).
       - `rtph263ppay2`: Payload an H.263+/H.263++ video stream into RTP packets (RFC 4629).
       - `rtpjpegdepay2`: Depayload a JPEG Video stream from RTP packets (RFC 2435).

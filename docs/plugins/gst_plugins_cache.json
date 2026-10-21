@@ -16115,6 +16115,58 @@
                 },
                 "rank": "none"
             },
+            "rtph261depay2": {
+                "author": "Edward Hervey <edward@centricular.com>",
+                "description": "Extract an H.261 video stream from RTP packets (RFC 4587)",
+                "hierarchy": [
+                    "GstRtpH261Depay2",
+                    "GstRtpBaseDepay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: video\n  encoding-name: H261\n     clock-rate: 90000\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-h261:\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "primary"
+            },
+            "rtph261pay2": {
+                "author": "Edward Hervey <edward@centricular.com>",
+                "description": "Payload an H.261 video stream into RTP packets (RFC 4587)",
+                "hierarchy": [
+                    "GstRtpH261Pay2",
+                    "GstRtpBasePay2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-h261:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: video\n  encoding-name: H261\n     clock-rate: 90000\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "primary"
+            },
             "rtph263pdepay2": {
                 "author": "Edward Hervey <edward@centricular.com>",
                 "description": "Extracts an H.263+/H.263++ video stream from RTP packets (RFC 4629)",
