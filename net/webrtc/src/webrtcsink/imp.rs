@@ -974,6 +974,11 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                     enc.set_property("extra-controls", extra_controls);
                 }
             }
+            "mpph264enc" => {
+                // bps-min / bps-max are derived from bps when left at 0
+                enc.set_property("bps", start_bitrate);
+                enc.set_property("gop", 2560i32);
+            }
             _ => (),
         }
     }
@@ -1328,6 +1333,7 @@ impl VideoEncoder {
                 | "vaav1enc"
                 | "vaav1lpenc"
                 | "v4l2h264enc"
+                | "mpph264enc"
         )
     }
 
@@ -1355,6 +1361,7 @@ impl VideoEncoder {
                         .map_err(|_| WebRTCSinkError::BitrateNotSupported)?
                 }
             }
+            "mpph264enc" => (self.element.property::<u32>("bps")) as i32,
             _ => return Err(WebRTCSinkError::BitrateNotSupported),
         };
 
@@ -1415,6 +1422,7 @@ impl VideoEncoder {
                 self.element.set_property("bitrate", bitrate);
             }
             "qtic2venc" => self.element.set_property("target-bitrate", bitrate as u32),
+            "mpph264enc" => self.element.set_property("bps", bitrate as u32),
             _ => return Err(WebRTCSinkError::BitrateNotSupported),
         }
 
