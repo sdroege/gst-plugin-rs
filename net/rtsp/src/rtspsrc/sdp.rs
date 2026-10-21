@@ -46,7 +46,7 @@ struct PayloadInfo<'a> {
     pt: u8,
     media: &'a str,
     encoding_name: &'a str,
-    clock_rate: u32,
+    clock_rate: i32,
     encoding_params: Option<&'a str>,
 }
 
@@ -222,19 +222,16 @@ fn parse_rtpmap(
     s.set("encoding-name", &encoding_name);
 
     let Some(v) = iter.next() else {
-        if pt >= 96 {
-            return guess_rtpmap_from_pt(pt, media, s).map_err(|err| {
-                RtspError::Fatal(format!(
-                    "Could not get clock-rate from rtpmap {rtpmap}: {err}"
-                ))
-            });
+        let guess = if pt >= 96 {
+            guess_rtpmap_from_encoding_name(&encoding_name, media, s)
         } else {
-            return guess_rtpmap_from_encoding_name(&encoding_name, media, s).map_err(|err| {
-                RtspError::Fatal(format!(
-                    "Could not get clock-rate from rtpmap {rtpmap}: {err}"
-                ))
-            });
-        }
+            guess_rtpmap_from_pt(pt, media, s)
+        };
+        return guess.map_err(|err| {
+            RtspError::Fatal(format!(
+                "Could not get clock-rate from rtpmap {rtpmap}: {err}"
+            ))
+        });
     };
 
     let Ok(clock_rate) = v.parse::<i32>() else {
@@ -263,8 +260,8 @@ fn guess_rtpmap_from_encoding_name(
         .iter()
         .chain(DYNAMIC_PAYLOAD_INFO.iter())
     {
-        if media == info.media && encoding_name == info.encoding_name {
-            s.set("encoding-name", info.encoding_name);
+        if media == info.media && encoding_name.eq_ignore_ascii_case(info.encoding_name) {
+            s.set("encoding-name", info.encoding_name.to_ascii_uppercase());
             if info.clock_rate > 0 {
                 s.set("clock-rate", info.clock_rate);
             }
@@ -292,7 +289,7 @@ fn guess_rtpmap_from_pt(
     }
     for info in STATIC_PAYLOAD_INFO {
         if pt == info.pt && media == info.media {
-            s.set("encoding-name", info.encoding_name);
+            s.set("encoding-name", info.encoding_name.to_ascii_uppercase());
             if info.clock_rate > 0 {
                 s.set("clock-rate", info.clock_rate);
             }
@@ -687,4 +684,30 @@ mod tests {
         assert!(!s.has_field("level"));
     }
 
+    #[test]
+    fn parse_rtpmap_guesses_clock_rate() {
+        let _ = gst::init();
+
+        // Without clock rate, dynamic payload types are resolved via the
+        // encoding name and static payload types via the payload type.
+        let mut s = gst::Structure::builder("application/x-rtp").build();
+        parse_rtpmap("96 x-pn-realaudio", 96, "audio", &mut s).unwrap();
+        assert_eq!(s.get::<i32>("clock-rate").unwrap(), 1000);
+        // Lowercase table entries are uppercased in the caps.
+        assert_eq!(s.get::<&str>("encoding-name").unwrap(), "X-PN-REALAUDIO");
+
+        let mut s = gst::Structure::builder("application/x-rtp").build();
+        parse_rtpmap("0 PCMU", 0, "audio", &mut s).unwrap();
+        assert_eq!(s.get::<i32>("clock-rate").unwrap(), 8000);
+        assert_eq!(s.get::<&str>("encoding-name").unwrap(), "PCMU");
+
+        let mut s = gst::Structure::builder("application/x-rtp").build();
+        parse_rtpmap("28 nv", 28, "video", &mut s).unwrap();
+        assert_eq!(s.get::<i32>("clock-rate").unwrap(), 90000);
+        assert_eq!(s.get::<&str>("encoding-name").unwrap(), "NV");
+
+        // Unknown dynamic payload types still fail.
+        let mut s = gst::Structure::builder("application/x-rtp").build();
+        assert!(parse_rtpmap("96 nonexistent", 96, "audio", &mut s).is_err());
+    }
 }
