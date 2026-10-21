@@ -884,6 +884,11 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property_from_str("preset-level", "UltraFastPreset");
                 add_nv4l2enc_force_keyunit_workaround(enc);
             }
+            "mpph264enc" => {
+                // bps-min / bps-max are derived from bps when left at 0
+                enc.set_property("bps", start_bitrate);
+                enc.set_property("gop", 2560i32);
+            }
             _ => (),
         }
     }
@@ -1195,6 +1200,7 @@ impl VideoEncoder {
                 | "vah265lpenc"
                 | "vaav1enc"
                 | "vaav1lpenc"
+                | "mpph264enc"
         )
     }
 
@@ -1211,6 +1217,7 @@ impl VideoEncoder {
             "openh264enc" | "nvv4l2h264enc" | "nvv4l2h265enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc"
             | "nvv4l2av1enc" => (self.element.property::<u32>("bitrate")) as i32,
             "rav1enc" => self.element.property::<i32>("bitrate"),
+            "mpph264enc" => (self.element.property::<u32>("bps")) as i32,
             _ => return Err(WebRTCSinkError::BitrateNotSupported),
         };
 
@@ -1252,6 +1259,7 @@ impl VideoEncoder {
             "openh264enc" | "nvv4l2h264enc" | "nvv4l2h265enc" | "nvv4l2vp8enc" | "nvv4l2vp9enc"
             | "nvv4l2av1enc" => self.element.set_property("bitrate", bitrate as u32),
             "rav1enc" => self.element.set_property("bitrate", bitrate),
+            "mpph264enc" => self.element.set_property("bps", bitrate as u32),
             _ => return Err(WebRTCSinkError::BitrateNotSupported),
         }
 
