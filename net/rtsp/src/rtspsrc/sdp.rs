@@ -170,6 +170,8 @@ const DYNAMIC_PAYLOAD_INFO: &[PayloadInfo] = &init_payload_info!(
     (0, "application", "MPEG4-GENERIC", 0, None),
     (0, "video", "H264", 90000, None),
     (0, "video", "H265", 90000, None),
+    (0, "video", "H266", 90000, None),
+    (0, "video", "AV1", 90000, None),
     (0, "video", "MPEG4-GENERIC", 90000, None),
     (0, "video", "THEORA", 0, None),
     (0, "video", "VORBIS", 0, None),
@@ -177,6 +179,9 @@ const DYNAMIC_PAYLOAD_INFO: &[PayloadInfo] = &init_payload_info!(
     (0, "video", "X-SORENSON-VIDEO", 90000, None),
     (0, "video", "VP8", 90000, None),
     (0, "video", "VP9", 90000, None),
+    (0, "application", "x-pn-realmedia", 1000, None),
+    (0, "audio", "x-pn-realaudio", 1000, None),
+    (0, "video", "x-pn-realvideo", 1000, None),
 );
 
 // https://datatracker.ietf.org/doc/html/rfc2326#appendix-C.1.1
