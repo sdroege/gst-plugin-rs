@@ -514,8 +514,21 @@ impl RTPAv1Depay {
             if is_last_obu {
                 (reader.get_ref().len() - reader.position() as usize) as u32
             } else {
-                let mut bitreader = BitReader::endian(reader, ENDIANNESS);
-                let (size, _) = parse_leb128(&mut bitreader).map_err(err_flow!(self, leb_read))?;
+                let (size, _) = {
+                    let mut bitreader = BitReader::endian(&mut *reader, ENDIANNESS);
+                    parse_leb128(&mut bitreader).map_err(err_flow!(self, leb_read))?
+                };
+                // A non-last element must be contained in the packet; a forged
+                // size would otherwise trigger a huge allocation before the
+                // fragment is read.
+                if size as usize > reader.get_ref().len() - reader.position() as usize {
+                    gst::error!(
+                        CAT,
+                        imp = self,
+                        "invalid packet: size field gives impossibly large OBU size"
+                    );
+                    return Err(gst::FlowError::Error);
+                }
                 size
             }
         } else {
