@@ -2965,7 +2965,7 @@ impl RtspTaskState {
             {
                 gst::warning!(
                     CAT,
-                    "Skipping media {} {}, no rtpmap: {err:?}",
+                    "Skipping media {} {}, no caps: {err:?}",
                     m.media,
                     m.fmt
                 );

@@ -261,10 +261,13 @@ fn guess_rtpmap_from_encoding_name(
         .chain(DYNAMIC_PAYLOAD_INFO.iter())
     {
         if media == info.media && encoding_name.eq_ignore_ascii_case(info.encoding_name) {
-            s.set("encoding-name", info.encoding_name.to_ascii_uppercase());
-            if info.clock_rate > 0 {
-                s.set("clock-rate", info.clock_rate);
+            if info.clock_rate == 0 {
+                return Err(RtspError::Fatal(format!(
+                    "Cannot guess rtpmap: clock-rate unknown for encoding name {encoding_name}"
+                )));
             }
+            s.set("encoding-name", info.encoding_name.to_ascii_uppercase());
+            s.set("clock-rate", info.clock_rate);
             if let Some(v) = info.encoding_params {
                 s.set("encoding-params", v);
             };
@@ -289,10 +292,13 @@ fn guess_rtpmap_from_pt(
     }
     for info in STATIC_PAYLOAD_INFO {
         if pt == info.pt && media == info.media {
-            s.set("encoding-name", info.encoding_name.to_ascii_uppercase());
-            if info.clock_rate > 0 {
-                s.set("clock-rate", info.clock_rate);
+            if info.clock_rate == 0 {
+                return Err(RtspError::Fatal(format!(
+                    "Cannot guess rtpmap: clock-rate unknown for static payload type {pt}"
+                )));
             }
+            s.set("encoding-name", info.encoding_name.to_ascii_uppercase());
+            s.set("clock-rate", info.clock_rate);
             if let Some(v) = info.encoding_params {
                 s.set("encoding-params", v);
             };
@@ -709,5 +715,15 @@ mod tests {
         // Unknown dynamic payload types still fail.
         let mut s = gst::Structure::builder("application/x-rtp").build();
         assert!(parse_rtpmap("96 nonexistent", 96, "audio", &mut s).is_err());
+
+        // Known payload types without a default clock rate also fail instead of
+        // producing caps without a clock rate.
+        let mut s = gst::Structure::builder("application/x-rtp").build();
+        assert!(parse_rtpmap("96 rtx", 96, "video", &mut s).is_err());
+        assert!(!s.has_field("clock-rate"));
+
+        let mut s = gst::Structure::builder("application/x-rtp").build();
+        assert!(parse_rtpmap("100 telephone-event", 100, "audio", &mut s).is_err());
+        assert!(!s.has_field("clock-rate"));
     }
 }
