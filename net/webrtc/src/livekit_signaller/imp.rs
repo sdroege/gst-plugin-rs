@@ -19,8 +19,8 @@ use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant};
 
 use livekit_api::access_token::{AccessToken, VideoGrants};
-use livekit_api::signal_client;
 use livekit_protocol::{self as proto, UpdateTrackSettings};
+use livekit_signaling::{SignalClient, SignalEvent, SignalEvents, SignalOptions};
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -82,7 +82,7 @@ struct Channels {
 }
 
 struct Connection {
-    signal_client: Arc<signal_client::SignalClient>,
+    signal_client: Arc<SignalClient>,
     pending_tracks: HashMap<String, oneshot::Sender<proto::TrackInfo>>,
     signal_task: JoinHandle<()>,
     early_candidates: Option<Vec<String>>,
@@ -171,12 +171,12 @@ impl Signaller {
             .any(|id| id == peer_id)
     }
 
-    fn signal_client(&self) -> Option<Arc<signal_client::SignalClient>> {
+    fn signal_client(&self) -> Option<Arc<SignalClient>> {
         let connection = self.connection.lock().unwrap();
         Some(connection.as_ref()?.signal_client.clone())
     }
 
-    fn require_signal_client(&self) -> Arc<signal_client::SignalClient> {
+    fn require_signal_client(&self) -> Arc<SignalClient> {
         self.signal_client().unwrap()
     }
 
@@ -219,14 +219,14 @@ impl Signaller {
         }
     }
 
-    async fn signal_task(&self, mut signal_events: signal_client::SignalEvents) {
+    async fn signal_task(&self, mut signal_events: SignalEvents) {
         loop {
             match wait_async(&self.signal_task_canceller, signal_events.recv(), 0).await {
                 Ok(Some(signal)) => match signal {
-                    signal_client::SignalEvent::Message(signal) => {
+                    SignalEvent::Message(signal) => {
                         self.on_signal_event(*signal).await;
                     }
-                    signal_client::SignalEvent::Close(reason) => {
+                    SignalEvent::Close(reason) => {
                         gst::debug!(CAT, imp = self, "Close: {reason}");
                         self.raise_error("Server disconnected".to_string());
                         break;
@@ -681,7 +681,7 @@ impl Signaller {
         }
     }
 
-    async fn close_signal_client(signal_client: &signal_client::SignalClient) {
+    async fn close_signal_client(signal_client: &SignalClient) {
         signal_client
             .send(proto::signal_request::Message::Leave(proto::LeaveRequest {
                 can_reconnect: false,
@@ -749,7 +749,7 @@ impl SignallableImpl for Signaller {
             ) {
                 let grants = VideoGrants {
                     room_join: true,
-                    can_subscribe: role == WebRTCSignallerRole::Consumer,
+                    can_subscribe: Some(role == WebRTCSignallerRole::Consumer),
                     room: room_name.clone(),
                     ..Default::default()
                 };
@@ -781,13 +781,12 @@ impl SignallableImpl for Signaller {
                 return;
             };
 
-            let mut options = signal_client::SignalOptions::default();
+            let mut options = SignalOptions::default();
             options.auto_subscribe = imp.auto_subscribe();
 
             gst::debug!(CAT, imp = imp, "Connecting to {}", wsurl);
 
-            let res =
-                signal_client::SignalClient::connect(&wsurl, &auth_token, options, None).await;
+            let res = SignalClient::connect(&wsurl, &auth_token, options, None).await;
             let (signal_client, join_response, signal_events) = match res {
                 Err(err) => {
                     imp.obj()
