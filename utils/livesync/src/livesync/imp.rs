@@ -94,14 +94,44 @@ fn audio_info_from_caps(
         .transpose()
 }
 
-fn duration_from_caps(caps: &gst::CapsRef) -> Option<gst::ClockTime> {
+fn framerate_from_caps(caps: &gst::CapsRef) -> Option<gst::Fraction> {
     caps.structure(0)
         .filter(|s| s.name().starts_with("video/") || s.name().starts_with("image/"))
         .and_then(|s| s.get::<gst::Fraction>("framerate").ok())
         .filter(|framerate| framerate.denom() > 0 && framerate.numer() > 0)
-        .and_then(|framerate| {
-            gst::ClockTime::SECOND.mul_div_round(framerate.denom() as u64, framerate.numer() as u64)
-        })
+}
+
+fn duration_from_caps(caps: &gst::CapsRef) -> Option<gst::ClockTime> {
+    framerate_from_caps(caps).and_then(|framerate| {
+        gst::ClockTime::SECOND.mul_div_round(framerate.denom() as u64, framerate.numer() as u64)
+    })
+}
+
+fn duration_of(frames: u64, rate: gst::Fraction) -> gst::ClockTime {
+    // Rounded up to avoid being early by 1ns by accident.
+    // Being possibly 1ns late on the other hand shouldn't cause any problems
+    gst::ClockTime::SECOND
+        .mul_div_ceil(frames * rate.denom() as u64, rate.numer() as u64)
+        .unwrap()
+}
+
+fn duration_within_one_sample(
+    audio_info: &gst_audio::AudioInfo,
+    samples: u64,
+    duration: gst::ClockTime,
+) -> bool {
+    let samples_duration = duration_of(samples, gst::Fraction::new(audio_info.rate() as i32, 1));
+    let diff = if duration < samples_duration {
+        samples_duration - duration
+    } else {
+        duration - samples_duration
+    };
+
+    let sample_duration = gst::ClockTime::SECOND
+        .mul_div_round(1, audio_info.rate().into())
+        .unwrap();
+
+    diff <= sample_duration
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -132,6 +162,71 @@ unsafe impl Send for Item {}
 struct RunningTimeRange {
     start: gst::ClockTime,
     end: gst::ClockTime,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum FrameRepeatStep {
+    /// Audio samples or a video frame at the rate from caps
+    Frames { count: u64, rate: gst::Fraction },
+
+    /// Streams without a framerate or with frames outside the min/max duration limits
+    Duration(gst::ClockTime),
+}
+
+impl FrameRepeatStep {
+    /// How far one repeat moves the count
+    fn size(self) -> u64 {
+        match self {
+            FrameRepeatStep::Frames { count, .. } => count,
+            FrameRepeatStep::Duration(duration) => duration.nseconds(),
+        }
+    }
+
+    /// Time taken by `count` frames at the rate, or `count` nanoseconds
+    fn time_of(self, count: u64) -> gst::ClockTime {
+        match self {
+            FrameRepeatStep::Frames { rate, .. } => duration_of(count, rate),
+            FrameRepeatStep::Duration(_) => gst::ClockTime::from_nseconds(count),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct FrameRepeat {
+    step: FrameRepeatStep,
+    is_forward: bool,
+
+    /// End (or start in reverse) of the buffer that we started repeating
+    origin: Option<gst::ClockTime>,
+    /// Frames at the rate or nanoseconds we've already repeated since `origin`
+    count: u64,
+}
+
+impl FrameRepeat {
+    fn new(origin: Option<gst::ClockTime>, is_forward: bool, step: FrameRepeatStep) -> Self {
+        FrameRepeat {
+            step,
+            is_forward,
+            origin,
+            count: 0,
+        }
+    }
+
+    /// Returns the pts and duration of the next repeated frame
+    fn advance(&mut self) -> (Option<gst::ClockTime>, gst::ClockTime) {
+        let start = self.step.time_of(self.count);
+        self.count += self.step.size();
+        let end = self.step.time_of(self.count);
+
+        let pts = self.origin.map(|origin| {
+            if self.is_forward {
+                origin + start
+            } else {
+                origin.saturating_sub(end)
+            }
+        });
+        (pts, end - start)
+    }
 }
 
 #[derive(Debug)]
@@ -198,14 +293,17 @@ struct State {
     /// Duration from caps on our srcpad
     out_duration: Option<gst::ClockTime>,
 
+    /// Framerate from caps on our srcpad
+    out_framerate: Option<gst::Fraction>,
+
     /// Queue between sinkpad and srcpad
     queue: VecDeque<Item>,
 
     /// Current buffer of our srcpad
     out_buffer: Option<gst::Buffer>,
 
-    /// Whether our last output buffer was a duplicate
-    out_buffer_duplicate: bool,
+    /// Set when our last output buffer was a duplicate
+    out_repeat: Option<FrameRepeat>,
 
     /// Running time of our sinkpad
     in_last_rt_range: Option<RunningTimeRange>,
@@ -267,11 +365,12 @@ impl Default for State {
             pending_caps: None,
             in_duration: None,
             out_duration: None,
+            out_framerate: None,
             in_audio_info: None,
             out_audio_info: None,
             queue: VecDeque::with_capacity(32),
             out_buffer: None,
-            out_buffer_duplicate: false,
+            out_repeat: None,
             in_last_rt_range: None,
             out_last_rt_range: None,
             silent: DEFAULT_SILENT,
@@ -740,7 +839,7 @@ impl LiveSync {
         state.out_segment = None;
         state.pending_caps = None;
         state.out_buffer = None;
-        state.out_buffer_duplicate = false;
+        state.out_repeat = None;
         state.out_last_rt_range = None;
     }
 
@@ -748,6 +847,7 @@ impl LiveSync {
         self.src_flush(state);
         state.out_audio_info = None;
         state.out_duration = None;
+        state.out_framerate = None;
     }
 
     fn sink_event(&self, pad: &gst::Pad, mut event: gst::Event) -> bool {
@@ -847,7 +947,10 @@ impl LiveSync {
                     }
                 };
 
-                let duration = duration_from_caps(&caps);
+                // Round up to match repeat durations, makes sure we never end up repeating
+                // a frame too early if it arrived without a duration
+                let duration =
+                    framerate_from_caps(&caps).map(|framerate| duration_of(1, framerate));
 
                 let mut state = self.state.lock();
                 state.in_caps = Some(caps);
@@ -1116,30 +1219,12 @@ impl LiveSync {
         }
 
         if let Some(audio_info) = &state.in_audio_info {
-            let Some(calc_duration) = audio_info
-                .convert::<Option<gst::ClockTime>>(gst::format::Bytes::from_usize(buf_mut.size()))
-                .flatten()
-            else {
-                gst::error!(
-                    CAT,
-                    obj = pad,
-                    "Failed to calculate duration of {buf_mut:?}",
-                );
-                return Err(gst::FlowError::Error);
-            };
+            let samples = (buf_mut.size() / audio_info.bpf() as usize) as u64;
+            let calc_duration =
+                duration_of(samples, gst::Fraction::new(audio_info.rate() as i32, 1));
 
             if let Some(buf_duration) = buf_mut.duration() {
-                let diff = if buf_duration < calc_duration {
-                    calc_duration - buf_duration
-                } else {
-                    buf_duration - calc_duration
-                };
-
-                let sample_duration = gst::ClockTime::SECOND
-                    .mul_div_round(1, audio_info.rate().into())
-                    .unwrap();
-
-                if diff > sample_duration {
+                if !duration_within_one_sample(audio_info, samples, buf_duration) {
                     gst::warning!(
                         CAT,
                         obj = pad,
@@ -1449,7 +1534,7 @@ impl LiveSync {
 
                     gst::EventView::Eos(_) | gst::EventView::SegmentDone(_) => {
                         state.out_buffer = None;
-                        state.out_buffer_duplicate = false;
+                        state.out_repeat = None;
                         state.out_last_rt_range = None;
 
                         self.cond.notify_all();
@@ -1518,13 +1603,13 @@ impl LiveSync {
             Some((mut buffer, rt_range, BufferLateness::OnTime)) => {
                 state.num_in += 1;
 
-                if state.out_buffer.is_none() || state.out_buffer_duplicate {
+                if state.out_buffer.is_none() || state.out_repeat.is_some() {
                     // We are just starting or done bridging a gap
                     buffer.make_mut().set_flags(gst::BufferFlags::DISCONT);
                 }
 
                 state.out_buffer = Some(buffer);
-                state.out_buffer_duplicate = false;
+                state.out_repeat = None;
                 state.out_last_rt_range = rt_range;
 
                 caps = state.pending_caps.take();
@@ -1573,6 +1658,7 @@ impl LiveSync {
 
             state.out_audio_info = audio_info_from_caps(&caps).unwrap();
             state.out_duration = duration_from_caps(&caps);
+            state.out_framerate = framerate_from_caps(&caps);
         }
 
         if let Some((in_segment, in_seqnum)) = segment {
@@ -1630,7 +1716,7 @@ impl LiveSync {
                 };
 
                 state.out_buffer = None;
-                state.out_buffer_duplicate = false;
+                state.out_repeat = None;
                 state.out_last_rt_range = None;
 
                 self.cond.notify_all();
@@ -1763,7 +1849,7 @@ impl LiveSync {
         );
     }
 
-    /// Patches the output buffer for repeating, setting out_buffer, out_buffer_duplicate and
+    /// Patches the output buffer for repeating, setting out_buffer, out_repeat and
     /// out_last_rt_range
     fn patch_output_buffer(
         &self,
@@ -1771,16 +1857,8 @@ impl LiveSync {
         source: Option<gst::Buffer>,
     ) -> Result<(), gst::FlowError> {
         let out_buffer = state.out_buffer.as_mut().unwrap();
-        let mut duplicate = state.out_buffer_duplicate;
 
-        let duration = out_buffer.duration().unwrap();
-        let pts = if state.single_segment || state.out_segment.as_ref().unwrap().0.rate() > 0.0 {
-            out_buffer.pts().opt_add(duration)
-        } else {
-            out_buffer.pts().opt_saturating_sub(duration)
-        };
-
-        if let Some(source) = source {
+        if let Some(source) = &source {
             gst::debug!(
                 CAT,
                 imp = self,
@@ -1788,8 +1866,6 @@ impl LiveSync {
                 out_buffer.pts(),
                 out_buffer.duration(),
             );
-            *out_buffer = source;
-            duplicate = false;
         } else {
             gst::debug!(
                 CAT,
@@ -1800,61 +1876,135 @@ impl LiveSync {
             );
         }
 
-        let buffer = out_buffer.make_mut();
+        let repeat = match &mut state.out_repeat {
+            // Already repeating
+            Some(repeat) => {
+                // If a late buffer got accepted now,
+                // we need to change the repeat duration to match it
+                if let Some(source) = source {
+                    *out_buffer = source;
 
-        let duration_is_valid =
-            (MINIMUM_DURATION..=MAXIMUM_DURATION).contains(&buffer.duration().unwrap());
-
-        if state.out_duration.is_some() || !duration_is_valid {
-            // Resize the buffer if caps gave us a duration
-            // or the current duration is unreasonable
-
-            let duration = state.out_duration.map_or(DEFAULT_DURATION, |dur| {
-                dur.clamp(MINIMUM_DURATION, MAXIMUM_DURATION)
-            });
-
-            if let Some(audio_info) = &state.out_audio_info {
-                let Some(size) = audio_info
-                    .convert::<Option<gst::format::Bytes>>(duration)
-                    .flatten()
-                    .and_then(|bytes| usize::try_from(bytes).ok())
-                else {
-                    gst::error!(CAT, imp = self, "Failed to calculate size of repeat buffer");
-                    return Err(gst::FlowError::Error);
+                    // Silences audio and adjusts buffer duration if needed
+                    repeat.step = self.prepare_repeat(
+                        out_buffer.make_mut(),
+                        state.out_audio_info.as_ref(),
+                        state.out_framerate,
+                    )?;
+                }
+                repeat
+            }
+            // First repeat so we start counting from where the current frame ends
+            None => {
+                let is_forward =
+                    state.single_segment || state.out_segment.as_ref().unwrap().0.rate() > 0.0;
+                let origin = if is_forward {
+                    out_buffer.pts().opt_add(out_buffer.duration())
+                } else {
+                    out_buffer.pts()
                 };
 
-                buffer.replace_all_memory(gst::Memory::with_size(size));
+                if let Some(source) = source {
+                    *out_buffer = source;
+                }
+
+                // Silences audio and adjusts duration if needed
+                let step = self.prepare_repeat(
+                    out_buffer.make_mut(),
+                    state.out_audio_info.as_ref(),
+                    state.out_framerate,
+                )?;
+                state
+                    .out_repeat
+                    .insert(FrameRepeat::new(origin, is_forward, step))
             }
+        };
 
-            buffer.set_duration(duration);
-            gst::debug!(
-                CAT,
-                imp = self,
-                "Patched output buffer duration to {duration}"
-            );
-        }
-
-        if !duplicate && let Some(audio_info) = &state.out_audio_info {
-            let mut map_info = buffer.map_writable().map_err(|e| {
-                gst::error!(CAT, imp = self, "Failed to map buffer: {e}");
-                gst::FlowError::Error
-            })?;
-            audio_info
-                .format_info()
-                .fill_silence(map_info.as_mut_slice());
-        }
-
+        let buffer = out_buffer.make_mut();
+        let (pts, duration) = repeat.advance();
         buffer.set_pts(pts);
+        buffer.set_duration(duration);
+
         buffer.set_flags(gst::BufferFlags::GAP);
         buffer.unset_flags(gst::BufferFlags::DISCONT);
 
-        state.out_buffer_duplicate = true;
         let (out_segment, _seqnum) = state.out_segment.as_ref().unwrap();
         state.out_last_rt_range =
             state.running_time_range(state.out_buffer.as_ref().unwrap(), out_segment);
         state.num_duplicate += 1;
 
         Ok(())
+    }
+
+    /// Returns how long a repeat of the given buffer will last.
+    /// Video with a framerate repeats one frame from caps, clamped to the min/max limits.
+    /// Other buffers with duration outside the min/max limits get the default duration.
+    /// Audio gets silenced for repeating and resized if its duration isn't within
+    /// 1 sample duration of how long its samples actually last.
+    fn prepare_repeat(
+        &self,
+        buffer: &mut gst::BufferRef,
+        audio_info: Option<&gst_audio::AudioInfo>,
+        framerate: Option<gst::Fraction>,
+    ) -> Result<FrameRepeatStep, gst::FlowError> {
+        let duration = buffer
+            .duration()
+            .filter(|duration| (MINIMUM_DURATION..=MAXIMUM_DURATION).contains(duration))
+            .unwrap_or(DEFAULT_DURATION);
+
+        let step = if let Some(audio_info) = audio_info {
+            let samples = self.fill_silence(buffer, audio_info, duration)?;
+            FrameRepeatStep::Frames {
+                count: samples,
+                rate: gst::Fraction::new(audio_info.rate() as i32, 1),
+            }
+        } else if let Some(framerate) = framerate {
+            let frame_duration = duration_of(1, framerate);
+            let clamped = frame_duration.clamp(MINIMUM_DURATION, MAXIMUM_DURATION);
+            if clamped == frame_duration {
+                FrameRepeatStep::Frames {
+                    count: 1,
+                    rate: framerate,
+                }
+            } else {
+                FrameRepeatStep::Duration(clamped)
+            }
+        } else {
+            FrameRepeatStep::Duration(duration)
+        };
+
+        gst::debug!(CAT, imp = self, "Repeating with {step:?}");
+        Ok(step)
+    }
+
+    fn fill_silence(
+        &self,
+        buffer: &mut gst::BufferRef,
+        audio_info: &gst_audio::AudioInfo,
+        duration: gst::ClockTime,
+    ) -> Result<u64, gst::FlowError> {
+        let samples = (buffer.size() / audio_info.bpf() as usize) as u64;
+        if !duration_within_one_sample(audio_info, samples, duration) {
+            let Some(size) = audio_info
+                .convert::<Option<gst::format::Bytes>>(duration)
+                .flatten()
+                .and_then(|bytes| usize::try_from(bytes).ok())
+            else {
+                gst::error!(CAT, imp = self, "Failed to calculate size of repeat buffer");
+                return Err(gst::FlowError::Error);
+            };
+
+            buffer.replace_all_memory(gst::Memory::with_size(size));
+        }
+
+        let mut map_info = buffer.map_writable().map_err(|e| {
+            gst::error!(CAT, imp = self, "Failed to map buffer: {e}");
+            gst::FlowError::Error
+        })?;
+        audio_info
+            .format_info()
+            .fill_silence(map_info.as_mut_slice());
+
+        Ok(map_info.len() as u64 / audio_info.bpf() as u64)
     }
 
     // Reverses raw audio buffer samples.
