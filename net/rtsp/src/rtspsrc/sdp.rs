@@ -221,17 +221,21 @@ fn parse_rtpmap(
     let encoding_name = encoding_name.to_ascii_uppercase();
     s.set("encoding-name", &encoding_name);
 
-    let Some(v) = iter.next() else {
+    let guess_clock_rate = |s: &mut gst::structure::Structure| {
         let guess = if pt >= 96 {
             guess_rtpmap_from_encoding_name(&encoding_name, media, s)
         } else {
             guess_rtpmap_from_pt(pt, media, s)
         };
-        return guess.map_err(|err| {
+        guess.map_err(|err| {
             RtspError::Fatal(format!(
                 "Could not get clock-rate from rtpmap {rtpmap}: {err}"
             ))
-        });
+        })
+    };
+
+    let Some(v) = iter.next() else {
+        return guess_clock_rate(s);
     };
 
     let Ok(clock_rate) = v.parse::<i32>() else {
@@ -239,6 +243,11 @@ fn parse_rtpmap(
             "Could not parse clock-rate from rtpmap: {rtpmap}"
         )));
     };
+    // Some broken RTSP servers put a rate of 0. Treat it as unknown and
+    // guess the clock rate from the payload tables.
+    if clock_rate <= 0 {
+        return guess_clock_rate(s);
+    }
     s.set("clock-rate", clock_rate);
 
     if let Some(v) = iter.next() {
@@ -711,6 +720,16 @@ mod tests {
         parse_rtpmap("28 nv", 28, "video", &mut s).unwrap();
         assert_eq!(s.get::<i32>("clock-rate").unwrap(), 90000);
         assert_eq!(s.get::<&str>("encoding-name").unwrap(), "NV");
+
+        // Broken servers put a clock rate of 0: it is treated as unknown and
+        // guessed from the payload tables.
+        let mut s = gst::Structure::builder("application/x-rtp").build();
+        parse_rtpmap("96 opus/0", 96, "audio", &mut s).unwrap();
+        assert_eq!(s.get::<i32>("clock-rate").unwrap(), 48000);
+
+        let mut s = gst::Structure::builder("application/x-rtp").build();
+        parse_rtpmap("0 PCMU/0", 0, "audio", &mut s).unwrap();
+        assert_eq!(s.get::<i32>("clock-rate").unwrap(), 8000);
 
         // Unknown dynamic payload types still fail.
         let mut s = gst::Structure::builder("application/x-rtp").build();
