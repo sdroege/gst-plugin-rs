@@ -61,8 +61,9 @@ rustls.workspace = true
 rustls-platform-verifier.workspace = true
 parse_link_header = {version = "0.4", features = ["url"]}
 
-livekit-protocol = { version = "0.7", optional = true }
-livekit-api = { version = "0.5", default-features = false, features = ["signal-client-tokio", "services-tokio", "access-token", "rustls-tls-native-roots"], optional = true }
+livekit-protocol = { version = "0.8.0", optional = true }
+livekit-api = { version = "0.9.1", default-features = false, features = ["services", "access-token", "rustls-tls-native-roots"], optional = true }
+livekit-signaling = { version = "0.1.7", default-features = false, features = ["native", "rustls-tls-native-roots"], optional = true }
 
 warp = {version = "0.4", optional = true, features = ["server"] }
 ctrlc = {version = "3.4.0", optional = true }
@@ -106,7 +107,7 @@ aws = ["dep:aws-config", "dep:aws-types", "dep:aws-credential-types", "dep:aws-s
        "dep:aws-sdk-kinesisvideosignaling", "dep:data-encoding", "dep:url-escape", "dep:aws-smithy-http-client",
        "dep:aws-sdk-sso", "dep:aws-sdk-sts"]
 janus = []
-livekit = ["dep:livekit-protocol", "dep:livekit-api"]
+livekit = ["dep:livekit-protocol", "dep:livekit-api", "dep:livekit-signaling"]
 whip = ["dep:reqwest", "dep:warp", "dep:ctrlc"]
 web_server = ["dep:warp"]
 # Builds the gstwebrtc-api web page with npm at compile time and embeds it

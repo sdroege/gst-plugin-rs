@@ -14,9 +14,11 @@ gst-base.workspace = true
 librespot-core = { version = "0.8", default-features = false, features = [
     "rustls-tls-native-roots",
 ] }
-librespot-metadata = { version = "0.8", default-features = false }
+librespot-metadata = { version = "0.8", default-features = false, features = [
+    "rustls-tls-native-roots",
+] }
 librespot-playback = { version = "0.8", default-features = false, features = [
-    'passthrough-decoder',
+    'passthrough-decoder', "rustls-tls-native-roots",
 ] }
 librespot-oauth = { version = "0.8", default-features = false, features = [
     "rustls-tls-native-roots",
