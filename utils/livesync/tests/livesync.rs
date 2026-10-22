@@ -21,10 +21,158 @@ fn init() {
 
 const DURATION: gst::ClockTime = gst::ClockTime::from_mseconds(100);
 const LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(200);
+const REVERSE_STOP: gst::ClockTime = gst::ClockTime::from_seconds(100);
+const LATE_THRESHOLD: gst::ClockTime = gst::ClockTime::from_mseconds(200);
+
+// Duration limits copied from livesync/imp.rs
+const MINIMUM_DURATION: gst::ClockTime = gst::ClockTime::from_mseconds(8);
+const DEFAULT_DURATION: gst::ClockTime = gst::ClockTime::from_mseconds(100);
+const MAXIMUM_DURATION: gst::ClockTime = gst::ClockTime::from_seconds(10);
+
+struct TestAudio {
+    rate: u64,
+}
+
+impl TestAudio {
+    fn for_rate(rate: u64) -> Self {
+        TestAudio { rate }
+    }
+
+    fn caps(&self) -> String {
+        format!(
+            "audio/x-raw,format=S8,rate={},channels=1,layout=interleaved",
+            self.rate
+        )
+    }
+
+    fn samples(&self, duration: gst::ClockTime) -> usize {
+        let second = gst::ClockTime::SECOND.nseconds();
+        let samples = duration.nseconds() * self.rate;
+        assert_eq!(samples % second, 0, "{duration} isn't whole samples");
+        (samples / second) as usize
+    }
+
+    fn buffer(&self, duration: gst::ClockTime) -> gst::Buffer {
+        audio_buffer(self.samples(duration), duration)
+    }
+}
+
+fn audio_buffer(samples: usize, duration: gst::ClockTime) -> gst::Buffer {
+    let mut buf = gst::Buffer::from_slice(vec![0x11; samples]);
+    {
+        let buf = buf.make_mut();
+        buf.set_pts(gst::ClockTime::ZERO);
+        buf.set_duration(duration);
+    }
+    buf
+}
+
+struct TestVideo {
+    framerate: gst::Fraction,
+}
+
+impl TestVideo {
+    fn for_framerate(numer: i32, denom: i32) -> Self {
+        TestVideo {
+            framerate: gst::Fraction::new(numer, denom),
+        }
+    }
+
+    fn for_duration(frame_duration: gst::ClockTime) -> Self {
+        let video = Self::for_framerate(1_000_000, frame_duration.useconds() as i32);
+        assert_eq!(
+            video.pts(1),
+            frame_duration,
+            "{frame_duration} isn't whole microseconds"
+        );
+        video
+    }
+
+    fn caps(&self) -> String {
+        format!(
+            "video/x-raw,format=GRAY8,width=4,height=4,framerate={}/{}",
+            self.framerate.numer(),
+            self.framerate.denom(),
+        )
+    }
+
+    // Same pts for frame n as what videotestsrc would output
+    fn pts(&self, n: u64) -> gst::ClockTime {
+        let numer = self.framerate.numer() as u64;
+        let denom = self.framerate.denom() as u64;
+        gst::ClockTime::SECOND
+            .mul_div_floor(n * denom, numer)
+            .unwrap()
+    }
+
+    // Frame with pts and duration matching what videotestsrc would generate
+    fn frame(&self, n: u64) -> gst::Buffer {
+        let pts = self.pts(n);
+        let mut buf = video_buffer(self.pts(n + 1) - pts);
+        {
+            let buf = buf.make_mut();
+            buf.set_pts(pts);
+            buf.set_offset(n);
+        }
+        buf
+    }
+}
+
+fn video_buffer(duration: gst::ClockTime) -> gst::Buffer {
+    let mut buf = gst::Buffer::from_slice(vec![0x11; 16]);
+    {
+        let buf = buf.make_mut();
+        buf.set_pts(gst::ClockTime::ZERO);
+        buf.set_duration(duration);
+    }
+    buf
+}
 
 fn crank_pull(harness: &mut gst_check::Harness) -> gst::Buffer {
     harness.crank_single_clock_wait().unwrap();
     harness.pull().unwrap()
+}
+
+fn livesync_harness(caps: &str, single_segment: bool, rate: f64) -> gst_check::Harness {
+    init();
+
+    let mut h = gst_check::Harness::new("livesync");
+    h.element()
+        .unwrap()
+        .set_property("single-segment", single_segment);
+    h.set_src_caps_str(caps);
+
+    let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
+    segment.set_rate(rate);
+    if rate < 0.0 {
+        segment.set_stop(REVERSE_STOP);
+    }
+    assert!(h.push_event(gst::event::Segment::new(&segment)));
+
+    h
+}
+
+fn push_and_pull_repeats(
+    h: &mut gst_check::Harness,
+    buffer: gst::Buffer,
+    repeats: usize,
+) -> Vec<gst::Buffer> {
+    h.push(buffer).unwrap();
+    (0..=repeats).map(|_| crank_pull(h)).collect()
+}
+
+fn with_pts(mut buffer: gst::Buffer, pts: gst::ClockTime) -> gst::Buffer {
+    buffer.make_mut().set_pts(pts);
+    buffer
+}
+
+fn without_duration(mut buffer: gst::Buffer) -> gst::Buffer {
+    buffer.make_mut().set_duration(gst::ClockTime::NONE);
+    buffer
+}
+
+fn filled_with(buf: &gst::BufferRef, byte: u8) -> bool {
+    buf.map_readable().unwrap().iter().all(|&b| b == byte)
 }
 
 #[track_caller]
@@ -66,6 +214,29 @@ fn assert_crank_pull(
         DURATION,
         flags,
     );
+}
+
+#[track_caller]
+fn assert_contiguous(buffers: &[gst::Buffer], is_forward: bool) {
+    for pair in buffers.windows(2) {
+        let (earlier, later) = if is_forward {
+            (&pair[0], &pair[1])
+        } else {
+            (&pair[1], &pair[0])
+        };
+        assert_eq!(
+            earlier.pts().unwrap() + earlier.duration().unwrap(),
+            later.pts().unwrap(),
+            "{earlier:?} and {later:?} don't line up"
+        );
+    }
+}
+
+#[track_caller]
+fn assert_repeats_last(buffers: &[gst::Buffer], duration: gst::ClockTime) {
+    for buf in &buffers[1..] {
+        assert_eq!(buf.duration(), Some(duration), "{buf:?}");
+    }
 }
 
 #[test]
@@ -445,4 +616,303 @@ fn segment_change(single_segment: bool, segment_flags: gst::SegmentFlags) {
 
     seg_evt_seqnum.expect("second event must be sent at this point");
     pipe.set_state(gst::State::Null).unwrap();
+}
+
+#[test]
+fn repeat_short_video_frames() {
+    // Frames shorter than the minimum are repeated for the minimum duration
+    let video = TestVideo::for_duration(MINIMUM_DURATION / 2);
+    let mut h = livesync_harness(&video.caps(), false, 1.0);
+    let buffers = push_and_pull_repeats(&mut h, video.frame(0), 3);
+
+    assert_repeats_last(&buffers, MINIMUM_DURATION);
+}
+
+#[test]
+fn repeat_long_video_frames() {
+    // Frames longer than the maximum are repeated for the maximum duration
+    let video = TestVideo::for_duration(MAXIMUM_DURATION * 2);
+    let mut h = livesync_harness(&video.caps(), false, 1.0);
+    let buffers = push_and_pull_repeats(&mut h, video.frame(0), 3);
+
+    assert_repeats_last(&buffers, MAXIMUM_DURATION);
+}
+
+#[test]
+fn repeat_video_without_framerate() {
+    // Frames without a framerate are repeated for their own duration
+    let video = TestVideo::for_framerate(0, 1);
+    let mut h = livesync_harness(&video.caps(), false, 1.0);
+    let duration = gst::ClockTime::from_mseconds(40);
+    let buffers = push_and_pull_repeats(&mut h, video_buffer(duration), 3);
+
+    assert_repeats_last(&buffers, duration);
+}
+
+#[test]
+fn repeat_video_without_framerate_outside_duration_limits() {
+    // Frames without a framerate outside limits are repeated for the default duration
+    let video = TestVideo::for_framerate(0, 1);
+
+    for duration in [MINIMUM_DURATION / 2, MAXIMUM_DURATION * 2] {
+        let mut h = livesync_harness(&video.caps(), false, 1.0);
+        let buffers = push_and_pull_repeats(&mut h, video_buffer(duration), 3);
+
+        assert_repeats_last(&buffers, DEFAULT_DURATION);
+    }
+}
+
+#[test]
+fn repeat_video_frame() {
+    let duration = gst::ClockTime::from_mseconds(40);
+    let video = TestVideo::for_duration(duration);
+    let mut h = livesync_harness(&video.caps(), false, 1.0);
+    let buffers = push_and_pull_repeats(&mut h, video.frame(0), 3);
+
+    // Original buffer goes out as is...
+    assert_buf(
+        &buffers[0],
+        0,
+        gst::ClockTime::ZERO,
+        duration,
+        gst::BufferFlags::DISCONT,
+    );
+
+    // ...and repeats copy its offset and contents + add GAP flags
+    for (n, buf) in buffers.iter().enumerate().skip(1) {
+        assert_buf(buf, 0, duration * n as u64, duration, gst::BufferFlags::GAP);
+        assert!(filled_with(buf, 0x11), "{buf:?}");
+    }
+}
+
+#[test]
+fn repeat_audio_silence() {
+    let audio = TestAudio::for_rate(48_000);
+    let mut h = livesync_harness(&audio.caps(), false, 1.0);
+    let duration = gst::ClockTime::from_mseconds(10);
+    let buffers = push_and_pull_repeats(&mut h, audio.buffer(duration), 3);
+
+    // Original buffer keeps its audio...
+    let original = &buffers[0];
+    assert!(!filled_with(original, 0), "{original:?}");
+    assert!(
+        !original.flags().contains(gst::BufferFlags::GAP),
+        "{original:?}"
+    );
+
+    // ...while repeats are silence flagged as gaps
+    for buf in &buffers[1..] {
+        assert!(buf.flags().contains(gst::BufferFlags::GAP), "{buf:?}");
+        assert!(filled_with(buf, 0), "{buf:?}");
+    }
+}
+
+#[test]
+fn repeat_audio_outside_duration_limits() {
+    // Audio outside duration limits is repeated as silence of the default duration
+    let audio = TestAudio::for_rate(48_000);
+
+    for duration in [MINIMUM_DURATION / 2, MAXIMUM_DURATION * 2] {
+        let mut h = livesync_harness(&audio.caps(), false, 1.0);
+        let buffers = push_and_pull_repeats(&mut h, audio.buffer(duration), 3);
+
+        assert_repeats_last(&buffers, DEFAULT_DURATION);
+        for buf in &buffers[1..] {
+            assert_eq!(buf.size(), audio.samples(DEFAULT_DURATION), "{buf:?}");
+        }
+    }
+}
+
+#[test]
+fn audio_buffer_duration_more_than_one_sample_off() {
+    // 480 samples last 10ms, so a 20ms duration is surely more than 1 sample off
+    // and livesync should correct the output duration
+    let audio = TestAudio::for_rate(48_000);
+    let mut h = livesync_harness(&audio.caps(), false, 1.0);
+    let duration = gst::ClockTime::from_mseconds(10);
+    let original = audio_buffer(audio.samples(duration), duration * 2);
+    let buffers = push_and_pull_repeats(&mut h, original, 3);
+
+    // Original buffer's duration was changed to match samples...
+    assert_eq!(buffers[0].duration(), Some(duration), "{buffers:?}");
+
+    // ...and repeats also use the same duration and don't leave gaps
+    assert_contiguous(&buffers, true);
+    assert_repeats_last(&buffers, duration);
+}
+
+#[test]
+fn repeat_single_segment_rate_video() {
+    // Video repeats last one frame from caps whatever the rate
+    let duration = gst::ClockTime::from_mseconds(40);
+    let video = TestVideo::for_duration(duration);
+
+    for rate in [2.0, 0.5, -2.0, -0.5] {
+        let mut h = livesync_harness(&video.caps(), true, rate);
+        let buffers = push_and_pull_repeats(&mut h, video.frame(0), 3);
+
+        assert_repeats_last(&buffers, duration);
+    }
+}
+
+#[test]
+fn late_threshold_video() {
+    let duration = gst::ClockTime::from_mseconds(40);
+    let video = TestVideo::for_duration(duration);
+
+    for single_segment in [false, true] {
+        let mut h = livesync_harness(&video.caps(), single_segment, 1.0);
+        h.element()
+            .unwrap()
+            .set_property("late-threshold", LATE_THRESHOLD.nseconds());
+
+        // Source stalls after frame 0 and livesync repeats it up to 440ms
+        let mut buffers = push_and_pull_repeats(&mut h, video.frame(0), 10);
+        let after_stall = buffers.len();
+
+        // Source resumes with frames 1 to 8, all already behind livesync's output
+        for n in 1..=8 {
+            h.push(video.frame(n)).unwrap();
+        }
+        buffers.extend((0..3).map(|_| crank_pull(&mut h)));
+
+        // Frame 7 is the first one more than late-threshold (200ms) after frame 0
+        assert_eq!(
+            h.element().unwrap().property::<u64>("drop"),
+            7,
+            "single-segment {single_segment}"
+        );
+        assert_buf(
+            &buffers[0],
+            0,
+            gst::ClockTime::ZERO,
+            duration,
+            gst::BufferFlags::DISCONT,
+        );
+
+        // Repeats copy frame 0 until frame 7 shows up
+        for (n, buf) in buffers.iter().enumerate().skip(1) {
+            let offset = if n < after_stall { 0 } else { 7 };
+            assert_buf(
+                buf,
+                offset,
+                duration * n as u64,
+                duration,
+                gst::BufferFlags::GAP,
+            );
+        }
+    }
+}
+
+#[test]
+fn late_threshold_video_without_framerate() {
+    // Without a fixed framerate, we repeat only based on frame durations,
+    // so when a late frame with a new duration should make livesync
+    // change its repeat duration as well.
+    let video = TestVideo::for_framerate(0, 1);
+    let duration = gst::ClockTime::from_mseconds(40);
+    let late_duration = gst::ClockTime::from_mseconds(20);
+
+    for single_segment in [false, true] {
+        let mode = format!("single-segment {single_segment}");
+        let mut h = livesync_harness(&video.caps(), single_segment, 1.0);
+        h.element()
+            .unwrap()
+            .set_property("late-threshold", LATE_THRESHOLD.nseconds());
+
+        // Source stalls after a 40ms frame and livesync repeats it up to 440ms
+        let mut buffers = push_and_pull_repeats(&mut h, video_buffer(duration), 10);
+        let after_stall = buffers.len();
+
+        // Source resumes with 20ms frames from 40ms to 320ms, all already behind livesync's output
+        for ms in (40..=300).step_by(20) {
+            let pts = gst::ClockTime::from_mseconds(ms);
+            h.push(with_pts(video_buffer(late_duration), pts)).unwrap();
+        }
+        buffers.extend((0..3).map(|_| crank_pull(&mut h)));
+
+        // The frame at 260ms is the first more than late-threshold (200ms) after the first one,
+        // so livesync starts repeating it with its new duration
+        assert_contiguous(&buffers, true);
+        for buf in &buffers[after_stall..] {
+            assert_eq!(buf.duration(), Some(late_duration), "{mode}: {buf:?}");
+        }
+    }
+}
+
+#[test]
+fn late_threshold_audio() {
+    let audio = TestAudio::for_rate(48_000);
+
+    for single_segment in [false, true] {
+        let mut h = livesync_harness(&audio.caps(), single_segment, 1.0);
+        h.element()
+            .unwrap()
+            .set_property("late-threshold", LATE_THRESHOLD.nseconds());
+
+        // Source stalls after a 20ms buffer and livesync repeats it up to 320ms
+        let first = audio.buffer(gst::ClockTime::from_mseconds(20));
+        let mut buffers = push_and_pull_repeats(&mut h, first, 15);
+        let after_stall = buffers.len();
+
+        // Source resumes with 10ms buffers from 20ms to 260ms, all already behind livesync's output
+        let duration = gst::ClockTime::from_mseconds(10);
+        for ms in (20..=250).step_by(10) {
+            let pts = gst::ClockTime::from_mseconds(ms);
+            h.push(with_pts(audio.buffer(duration), pts)).unwrap();
+        }
+        buffers.extend((0..3).map(|_| crank_pull(&mut h)));
+
+        // The buffer at 230ms is the first more than late-threshold (200ms) after the first one
+        let mode = format!("single-segment {single_segment}");
+        assert_eq!(h.element().unwrap().property::<u64>("drop"), 23, "{mode}");
+        assert_contiguous(&buffers, true);
+
+        // After the stall, repeats take the late buffer's length but stay silent
+        for buf in &buffers[after_stall..] {
+            assert!(buf.flags().contains(gst::BufferFlags::GAP), "{mode}");
+            assert_eq!(buf.size(), audio.samples(duration), "{mode}");
+            assert_eq!(buf.duration(), Some(duration), "{mode}");
+            assert!(filled_with(buf, 0), "{mode}");
+        }
+    }
+}
+
+#[test]
+fn video_frame_without_duration() {
+    // Frames without a duration last one frame from caps
+    let duration = gst::ClockTime::from_mseconds(40);
+    let video = TestVideo::for_duration(duration);
+    let mut h = livesync_harness(&video.caps(), false, 1.0);
+    let buffers = push_and_pull_repeats(&mut h, without_duration(video.frame(0)), 3);
+
+    assert_eq!(buffers[0].duration(), Some(duration), "{buffers:?}");
+    assert_contiguous(&buffers, true);
+    assert_repeats_last(&buffers, duration);
+}
+
+#[test]
+fn video_frame_without_duration_or_framerate() {
+    // Frames without a duration or framerate last the default duration
+    let video = TestVideo::for_framerate(0, 1);
+    let mut h = livesync_harness(&video.caps(), false, 1.0);
+    let original = without_duration(video_buffer(gst::ClockTime::ZERO));
+    let buffers = push_and_pull_repeats(&mut h, original, 3);
+
+    assert_eq!(buffers[0].duration(), Some(DEFAULT_DURATION), "{buffers:?}");
+    assert_contiguous(&buffers, true);
+    assert_repeats_last(&buffers, DEFAULT_DURATION);
+}
+
+#[test]
+fn audio_buffer_without_duration() {
+    // Audio without a duration lasts as long as its samples
+    let audio = TestAudio::for_rate(48_000);
+    let mut h = livesync_harness(&audio.caps(), false, 1.0);
+    let duration = gst::ClockTime::from_mseconds(10);
+    let buffers = push_and_pull_repeats(&mut h, without_duration(audio.buffer(duration)), 3);
+
+    assert_eq!(buffers[0].duration(), Some(duration), "{buffers:?}");
+    assert_contiguous(&buffers, true);
+    assert_repeats_last(&buffers, duration);
 }
