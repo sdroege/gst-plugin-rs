@@ -29,6 +29,12 @@ const MINIMUM_DURATION: gst::ClockTime = gst::ClockTime::from_mseconds(8);
 const DEFAULT_DURATION: gst::ClockTime = gst::ClockTime::from_mseconds(100);
 const MAXIMUM_DURATION: gst::ClockTime = gst::ClockTime::from_seconds(10);
 
+// Output timestamps, especially repeats, should never be earlier than what an actual
+// upstream source would produce (e.g. videotestsrc). Due to that, livesync rounds up,
+// making frames start up to 1ns late. A buffer without a duration also gets one that's
+// rounded up, which can add another 1ns. That's the max shift we tolerate in tests.
+const MAX_TIMESTAMP_DELAY: gst::ClockTime = gst::ClockTime::from_nseconds(2);
+
 struct TestAudio {
     rate: u64,
 }
@@ -54,6 +60,13 @@ impl TestAudio {
 
     fn buffer(&self, duration: gst::ClockTime) -> gst::Buffer {
         audio_buffer(self.samples(duration), duration)
+    }
+
+    // Buffer n's pts with `samples` per buffer, rounded down like audiotestsrc does
+    fn pts(&self, n: u64, samples: usize) -> gst::ClockTime {
+        gst::ClockTime::SECOND
+            .mul_div_floor(n * samples as u64, self.rate)
+            .unwrap()
     }
 }
 
@@ -175,6 +188,10 @@ fn filled_with(buf: &gst::BufferRef, byte: u8) -> bool {
     buf.map_readable().unwrap().iter().all(|&b| b == byte)
 }
 
+fn repeats_duration(buffers: &[gst::Buffer]) -> gst::ClockTime {
+    buffers[1..].iter().map(|buf| buf.duration().unwrap()).sum()
+}
+
 #[track_caller]
 fn assert_buf(
     buf: &gst::BufferRef,
@@ -228,6 +245,21 @@ fn assert_contiguous(buffers: &[gst::Buffer], is_forward: bool) {
             earlier.pts().unwrap() + earlier.duration().unwrap(),
             later.pts().unwrap(),
             "{earlier:?} and {later:?} don't line up"
+        );
+    }
+}
+
+#[track_caller]
+fn assert_timestamps(
+    buffers: &[gst::Buffer],
+    expected_pts: impl Fn(u64) -> gst::ClockTime,
+    mode: &str,
+) {
+    for (n, buf) in buffers.iter().enumerate() {
+        let expected = expected_pts(n as u64);
+        assert!(
+            (expected..=expected + MAX_TIMESTAMP_DELAY).contains(&buf.pts().unwrap()),
+            "{mode}: {buf:?} should start at {expected}"
         );
     }
 }
@@ -400,11 +432,9 @@ fn segment_change_single_segment() {
 }
 
 fn segment_change(single_segment: bool, segment_flags: gst::SegmentFlags) {
-    const RATE: i32 = 44_100;
     const BUF_DURATION_MS: u64 = 20;
     const BUF_DURATION: gst::ClockTime = gst::ClockTime::from_mseconds(BUF_DURATION_MS);
     const LATENCY: gst::ClockTime = BUF_DURATION;
-    const BUF_BPF: usize = BUF_DURATION_MS as usize * RATE as usize / 1_000;
     const LAST_BUFFER_START: gst::ClockTime = gst::ClockTime::from_mseconds(4 * BUF_DURATION_MS);
     const SECOND_SEG_START: gst::ClockTime = gst::ClockTime::from_mseconds(BUF_DURATION_MS / 4);
     const SECOND_SEG_STOP: gst::ClockTime =
@@ -439,16 +469,13 @@ fn segment_change(single_segment: bool, segment_flags: gst::SegmentFlags) {
 
     pipe.set_state(gst::State::Playing).unwrap();
 
-    let caps = gst::Caps::builder("audio/x-raw")
-        .field("format", "S8")
-        .field("channels", 1)
-        .field("rate", RATE)
-        .field("layout", "interleaved")
-        .build();
-
+    // With 48 kHz clipping SECOND_SEG_START removes whole samples,
+    // otherwise we'd hit the scenario from repeat_drift_audio_clipped()
+    let audio = TestAudio::for_rate(48_000);
+    let caps = audio.caps().parse::<gst::Caps>().unwrap();
     src.set_caps(Some(&caps));
 
-    let mut buf1 = gst::Buffer::from_slice([1; BUF_BPF]);
+    let mut buf1 = gst::Buffer::from_slice(vec![1; audio.samples(BUF_DURATION)]);
     {
         let buf = buf1.make_mut();
         buf.set_pts(gst::ClockTime::ZERO);
@@ -512,7 +539,7 @@ fn segment_change(single_segment: bool, segment_flags: gst::SegmentFlags) {
             if count == 2 {
                 // Push another segment and another buffer with a different byte sentinel
 
-                let mut buf2 = gst::Buffer::from_slice([2; BUF_BPF]);
+                let mut buf2 = gst::Buffer::from_slice(vec![2; audio.samples(BUF_DURATION)]);
                 {
                     let buf = buf2.make_mut();
                     buf.set_pts(gst::ClockTime::ZERO);
@@ -616,6 +643,243 @@ fn segment_change(single_segment: bool, segment_flags: gst::SegmentFlags) {
 
     seg_evt_seqnum.expect("second event must be sent at this point");
     pipe.set_state(gst::State::Null).unwrap();
+}
+
+#[test]
+fn repeat_drift_video_30fps() {
+    init();
+
+    // 30 frames at 30 fps
+    let video = TestVideo::for_framerate(30, 1);
+    repeat_drift(
+        &video.caps(),
+        video.frame(0),
+        30,
+        gst::ClockTime::from_seconds(1),
+    );
+}
+
+#[test]
+fn repeat_drift_video_29_97fps() {
+    init();
+
+    // 30 frames at 29.97 fps
+    let video = TestVideo::for_framerate(30_000, 1001);
+    repeat_drift(
+        &video.caps(),
+        video.frame(0),
+        30,
+        gst::ClockTime::from_mseconds(1001),
+    );
+}
+
+#[test]
+fn repeat_drift_audio() {
+    init();
+
+    // 30 * 1600 samples at 48 kHz
+    let audio = TestAudio::for_rate(48_000);
+    let original = audio_buffer(1600, gst::ClockTime::SECOND / 30);
+    repeat_drift(&audio.caps(), original, 30, gst::ClockTime::from_seconds(1));
+}
+
+#[test]
+fn repeat_drift_audio_clipped() {
+    init();
+
+    // Edge case of clipping a 20ms buffer with 882 samples inside to 15ms,
+    // which equals cutting off 220.5 samples, and that we can't really do
+    // so we end up removing 220 instead. We're then left with a 15ms buffer
+    // that has an extra half sample which over time accumulates a drift if we
+    // timestamp repeated buffers based on the duration instead of sample count.
+    let audio = TestAudio::for_rate(44_100);
+    let original = audio_buffer(662, gst::ClockTime::from_mseconds(15));
+    repeat_drift(
+        &audio.caps(),
+        original,
+        441,
+        gst::ClockTime::from_mseconds(6620),
+    );
+}
+
+/// Makes sure repeated buffers' timestamps don't drift over time,
+/// for example with video at 30fps with its 0.0(3)s buffer durations
+fn repeat_drift(caps: &str, original: gst::Buffer, repeats: usize, expected: gst::ClockTime) {
+    for (single_segment, rate) in [(false, 1.0), (true, 1.0), (false, -1.0), (true, -1.0)] {
+        let mut h = livesync_harness(caps, single_segment, rate);
+        let original = if rate > 0.0 {
+            original.clone()
+        } else {
+            let duration = original.duration().unwrap();
+            with_pts(original.clone(), REVERSE_STOP - duration)
+        };
+        let buffers = push_and_pull_repeats(&mut h, original, repeats);
+
+        assert_contiguous(&buffers, single_segment || rate > 0.0);
+        assert_eq!(
+            repeats_duration(&buffers),
+            expected,
+            "single-segment {single_segment}, rate {rate}"
+        );
+    }
+}
+
+/// Makes sure repeated buffers start where videotestsrc would've placed them,
+/// or at most MAX_TIMESTAMP_DELAY later due to expected rounding differences
+#[test]
+fn repeat_video_timing() {
+    let video = TestVideo::for_framerate(30, 1);
+
+    // Upstream (e.g. videotestsrc) rounds each frame's pts down on its own already,
+    // so at 30fps the durations are 33,333,333, 33,333,333, 33,333,334.
+
+    // The source sends frame 1 with its duration and then stops, so livesync repeats frame 1
+    // in place of frames 2, 3 and 4. Each repeat must start where upstream would have put
+    // that frame, never earlier, otherwise e.g. videorate will just drop those.
+    // At this position, a repeat timestamp rounded down would put frame 3's repeat
+    // at 99,999,999, 1ns before upstream's 100,000,000.
+    let mut h = livesync_harness(&video.caps(), false, 1.0);
+    let buffers = push_and_pull_repeats(&mut h, video.frame(1), 3);
+    assert_timestamps(&buffers, |k| video.pts(1 + k), "frame 1");
+
+    // The source sends frame 2 without a duration and then stops, so livesync has to guess
+    // how long it lasts before repeating it in place of frames 3, 4 and 5.
+    // At 30fps the usual guess is 33,333,333, which is only right at some positions:
+    //   frame 0: 0 + 33,333,333 = 33,333,333, exactly upstream's frame 1
+    //   frame 1: 33,333,333 + 33,333,333 = 66,666,666, exactly upstream's frame 2
+    //   frame 2: 66,666,666 + 33,333,333 = 99,999,999, 1ns before upstream's frame 3
+    // That's why livesync rounds the guessed duration up to 33,333,334, the same way
+    // it rounds up repeats, so they always start no earlier than real buffers would.
+    let mut h = livesync_harness(&video.caps(), false, 1.0);
+    let buffers = push_and_pull_repeats(&mut h, without_duration(video.frame(2)), 3);
+    assert_timestamps(&buffers, |k| video.pts(2 + k), "frame 2 without a duration");
+}
+
+#[test]
+fn repeat_audio_timing() {
+    // 1024 samples at 48kHz last 21,333,333.33ns, following the same
+    // pattern as 30fps video, so this mirrors repeat_video_timing()
+    let audio = TestAudio::for_rate(48_000);
+    let samples = 1024;
+
+    let mut h = livesync_harness(&audio.caps(), false, 1.0);
+    let start = audio.pts(1, samples);
+    let end = audio.pts(2, samples);
+    let buffer = with_pts(audio_buffer(samples, end - start), start);
+    let buffers = push_and_pull_repeats(&mut h, buffer, 3);
+    assert_timestamps(&buffers, |k| audio.pts(1 + k, samples), "buffer 1");
+
+    let mut h = livesync_harness(&audio.caps(), false, 1.0);
+    let start = audio.pts(2, samples);
+    let end = audio.pts(3, samples);
+    let buffer = with_pts(audio_buffer(samples, end - start), start);
+    let buffers = push_and_pull_repeats(&mut h, without_duration(buffer), 3);
+    assert_timestamps(
+        &buffers,
+        |k| audio.pts(2 + k, samples),
+        "buffer 2 without a duration",
+    );
+}
+
+#[test]
+fn repeat_video_timing_after_late_buffers() {
+    // Accepting a new late frame without any framerate changes etc.
+    // shouldn't mess up our output timing, in particular we need to be sure
+    // we don't add any rounding errors when switching.
+    let video = TestVideo::for_framerate(30, 1);
+
+    for single_segment in [false, true] {
+        let mode = format!("single-segment {single_segment}");
+        let mut h = livesync_harness(&video.caps(), single_segment, 1.0);
+        h.element()
+            .unwrap()
+            .set_property("late-threshold", LATE_THRESHOLD.nseconds());
+
+        // Source stalls after frame 0 and livesync repeats it for a second
+        let mut buffers = push_and_pull_repeats(&mut h, video.frame(0), 30);
+
+        // Every 8th frame arrives late, each more than late-threshold (200ms) after the last,
+        // so its contents go out with the next repeat's timing
+        for n in (8..=80).step_by(8) {
+            let takeover = buffers.len();
+            h.push(video.frame(n)).unwrap();
+            buffers.extend((0..8).map(|_| crank_pull(&mut h)));
+
+            assert_eq!(
+                buffers[takeover].offset(),
+                n,
+                "{mode}: late frame not output"
+            );
+        }
+
+        assert_timestamps(&buffers, |k| video.pts(k), &mode);
+    }
+}
+
+#[test]
+fn repeat_audio_timing_after_late_buffers() {
+    // Late buffers arriving with varying sample counts can't cause
+    // any timestamp drift in livesync's silence output
+    init();
+
+    let audio = TestAudio::for_rate(48_000);
+
+    // Simulates timestamps output by audiotestsrc
+    let position = |sample: u64| {
+        gst::ClockTime::SECOND
+            .mul_div_floor(sample, audio.rate)
+            .unwrap()
+    };
+
+    // Source buffers alternate between 1024 and 1000 samples
+    // so that every late accepted buffer causes a change in output buffer size
+    let mut offset = 0;
+    let source: Vec<_> = (0..=110)
+        .map(|i| {
+            let samples = if i % 2 == 0 { 1024 } else { 1000 };
+            let pts = position(offset);
+            offset += samples as u64;
+            with_pts(audio_buffer(samples, position(offset) - pts), pts)
+        })
+        .collect();
+
+    for single_segment in [false, true] {
+        let mode = format!("single-segment {single_segment}");
+        let mut h = livesync_harness(&audio.caps(), single_segment, 1.0);
+        h.element()
+            .unwrap()
+            .set_property("late-threshold", LATE_THRESHOLD.nseconds());
+
+        // Source stalls after buffer 0 and livesync repeats it for a second
+        let mut buffers = push_and_pull_repeats(&mut h, source[0].clone(), 47);
+
+        // Each buffer is ~21ms, so every 11th buffer gets accepted as late,
+        // because it's more than late-threshold (200ms) after the last accepted one,
+        // and livesync should then use its size for any silence repeats
+        for late in source.iter().skip(11).step_by(11) {
+            let takeover = buffers.len();
+            h.push(late.clone()).unwrap();
+            buffers.extend((0..11).map(|_| crank_pull(&mut h)));
+
+            assert_eq!(
+                buffers[takeover].size(),
+                late.size(),
+                "{mode}: late buffer not output"
+            );
+        }
+
+        // No rounding errors etc. accumulating after output size changes
+        let mut samples = 0;
+        let starts: Vec<_> = buffers
+            .iter()
+            .map(|buf| {
+                let start = position(samples);
+                samples += buf.size() as u64;
+                start
+            })
+            .collect();
+        assert_timestamps(&buffers, |k| starts[k as usize], &mode);
+    }
 }
 
 #[test]
@@ -724,6 +988,29 @@ fn repeat_audio_outside_duration_limits() {
 }
 
 #[test]
+fn audio_buffer_duration_within_one_sample() {
+    // Clipping can keep a partial sample, e.g. clipping a buffer to 10.05ms
+    // can still make it keep 483 samples (=10.0625ms). livesync shouldn't adjust
+    // the initial buffer unless it's more than 1 sample off, but repeats
+    // should be more precise to avoid accumulating drift.
+    let audio = TestAudio::for_rate(48_000);
+    let mut h = livesync_harness(&audio.caps(), false, 1.0);
+    let duration = gst::ClockTime::from_useconds(10_050);
+    let buffers = push_and_pull_repeats(&mut h, audio_buffer(483, duration), 3);
+
+    // Original buffer is left as is...
+    assert_eq!(buffers[0].duration(), Some(duration), "{buffers:?}");
+
+    // ...while repeats are retimestamped to avoid drift...
+    assert_repeats_last(&buffers, gst::ClockTime::from_nseconds(10_062_500));
+
+    // ...and everything keeps the same amount of samples
+    for buf in &buffers {
+        assert_eq!(buf.size(), 483, "{buf:?}");
+    }
+}
+
+#[test]
 fn audio_buffer_duration_more_than_one_sample_off() {
     // 480 samples last 10ms, so a 20ms duration is surely more than 1 sample off
     // and livesync should correct the output duration
@@ -742,6 +1029,33 @@ fn audio_buffer_duration_more_than_one_sample_off() {
 }
 
 #[test]
+fn repeat_reverse_video() {
+    // Repeats line up in reverse when they last longer or shorter than the frame
+    for duration in [MINIMUM_DURATION / 2, MAXIMUM_DURATION * 2] {
+        let video = TestVideo::for_duration(duration);
+        let mut h = livesync_harness(&video.caps(), false, -1.0);
+        let original = with_pts(video.frame(0), REVERSE_STOP - duration);
+        let buffers = push_and_pull_repeats(&mut h, original, 2);
+
+        assert_contiguous(&buffers, false);
+    }
+}
+
+#[test]
+fn repeat_reverse_audio() {
+    // Repeats line up in reverse when they last longer or shorter than the buffer
+    let audio = TestAudio::for_rate(48_000);
+
+    for duration in [MINIMUM_DURATION / 2, MAXIMUM_DURATION * 2] {
+        let mut h = livesync_harness(&audio.caps(), false, -1.0);
+        let original = with_pts(audio.buffer(duration), REVERSE_STOP - duration);
+        let buffers = push_and_pull_repeats(&mut h, original, 2);
+
+        assert_contiguous(&buffers, false);
+    }
+}
+
+#[test]
 fn repeat_single_segment_rate_video() {
     // Video repeats last one frame from caps whatever the rate
     let duration = gst::ClockTime::from_mseconds(40);
@@ -752,6 +1066,57 @@ fn repeat_single_segment_rate_video() {
         let buffers = push_and_pull_repeats(&mut h, video.frame(0), 3);
 
         assert_repeats_last(&buffers, duration);
+    }
+}
+
+#[test]
+fn repeat_single_segment_rate_audio() {
+    // Repeats last as long as the buffer at the segment rate and hold exactly that many samples
+    let audio = TestAudio::for_rate(48_000);
+
+    for (rate, repeat_duration) in [
+        (2.0, gst::ClockTime::from_mseconds(10)),
+        (0.5, gst::ClockTime::from_mseconds(40)),
+        (-2.0, gst::ClockTime::from_mseconds(10)),
+        (-0.5, gst::ClockTime::from_mseconds(40)),
+    ] {
+        let mut h = livesync_harness(&audio.caps(), true, rate);
+        let duration = gst::ClockTime::from_mseconds(20);
+        let buffers = push_and_pull_repeats(&mut h, audio.buffer(duration), 3);
+
+        assert_repeats_last(&buffers, repeat_duration);
+        // FIXME: Skip the original buffer since livesync doesn't resample yet
+        for buf in &buffers[1..] {
+            assert_eq!(buf.size(), audio.samples(repeat_duration), "rate {rate}");
+        }
+    }
+}
+
+#[test]
+fn repeat_single_segment_rate_audio_limits() {
+    // Checks whether duration limits take the rate into account
+    let audio = TestAudio::for_rate(48_000);
+
+    for (rate, duration, repeat_duration) in [
+        // Below the minimum before the rate but within limits after it
+        (0.5, MINIMUM_DURATION * 3 / 4, MINIMUM_DURATION * 3 / 2),
+        // Within limits before the rate but below the minimum after it
+        (2.0, MINIMUM_DURATION * 3 / 2, DEFAULT_DURATION),
+        // Above the maximum before the rate but within limits after it
+        (2.0, MAXIMUM_DURATION * 3 / 2, MAXIMUM_DURATION * 3 / 4),
+        // Within limits before the rate but above the maximum after it
+        (0.5, MAXIMUM_DURATION * 3 / 4, DEFAULT_DURATION),
+    ] {
+        let mut h = livesync_harness(&audio.caps(), true, rate);
+        let buffers = push_and_pull_repeats(&mut h, audio.buffer(duration), 3);
+
+        for buf in &buffers[1..] {
+            assert_eq!(
+                buf.size(),
+                audio.samples(repeat_duration),
+                "{duration} at rate {rate}"
+            );
+        }
     }
 }
 
