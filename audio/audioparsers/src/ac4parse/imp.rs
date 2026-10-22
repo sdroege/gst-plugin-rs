@@ -408,6 +408,7 @@ impl ElementImpl for Ac4Parse {
                 )
                 .field("bitstream-version", gst::List::new([1, 2]))
                 .field("alignment", "frame")
+                .field("stream-format", "syncframe")
                 .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
@@ -624,6 +625,7 @@ impl BaseParseImpl for Ac4Parse {
 
             let caps = gst::Caps::builder("audio/x-ac4")
                 .field("alignment", "frame")
+                .field("stream-format", "syncframe")
                 .field("rate", frame_info.rate as i32)
                 .field(
                     "framerate",
