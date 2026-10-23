@@ -302,13 +302,19 @@ fn prepare_expected_medias(
         // handle rtcp attribute, if any
         if let Some(rtcp_attr_res) = media.get_first_attribute_typed::<Rtcp>() {
             let rtcp_attr = rtcp_attr_res.with_context(media_level_ctx)?;
+            // If the address part is absent, RTCP goes to the
+            // connection address of the media
+            let rtcp_connection_address = rtcp_attr
+                .connection_address
+                .as_deref()
+                .unwrap_or(connection_address);
             maybe_add_outbound_rtcp_sink(
                 pipeline,
                 outbound_rtcp_tee,
                 &inbound_src,
                 session_id,
                 &mut has_rtcp_sink,
-                &rtcp_attr.connection_address,
+                rtcp_connection_address,
                 rtcp_attr.port,
             )?;
         }
@@ -364,13 +370,19 @@ fn prepare_expected_medias(
                 }
                 SsrcAttribute::Rtcp => {
                     let rtcp_attr = ssrc_attr.get_typed::<Rtcp>().with_context(ssrc_level_ctx)?;
+                    // If the address part is absent, RTCP goes to the
+                    // connection address of the media
+                    let rtcp_connection_address = rtcp_attr
+                        .connection_address
+                        .as_deref()
+                        .unwrap_or(connection_address);
                     maybe_add_outbound_rtcp_sink(
                         pipeline,
                         outbound_rtcp_tee,
                         &inbound_src,
                         session_id,
                         &mut has_rtcp_sink,
-                        &rtcp_attr.connection_address,
+                        rtcp_connection_address,
                         rtcp_attr.port,
                     )?;
                 }
