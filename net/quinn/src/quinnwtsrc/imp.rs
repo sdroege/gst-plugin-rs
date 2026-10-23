@@ -263,6 +263,14 @@ impl ObjectImpl for QuinnWebTransportSrc {
                     .readwrite()
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecEnum::builder_with_default(
+                    "congestion-control",
+                    DEFAULT_CONGESTION_CONTROL,
+                )
+                .nick("Congestion control algorithm")
+                .blurb("QUIC congestion control algorithm to use")
+                .mutable_ready()
+                .build(),
             ]
         });
 
@@ -313,6 +321,11 @@ impl ObjectImpl for QuinnWebTransportSrc {
                 settings.is_live = value.get::<bool>().expect("type checked upstream");
                 self.obj().set_live(settings.is_live);
             }
+            "congestion-control" => {
+                settings.transport_config.congestion_control = value
+                    .get::<QuinnQuicCongestionControl>()
+                    .expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -351,6 +364,7 @@ impl ObjectImpl for QuinnWebTransportSrc {
             "address" => settings.address.to_value(),
             "port" => (settings.port as u32).to_value(),
             "is-live" => settings.is_live.to_value(),
+            "congestion-control" => settings.transport_config.congestion_control.to_value(),
             _ => unimplemented!(),
         }
     }

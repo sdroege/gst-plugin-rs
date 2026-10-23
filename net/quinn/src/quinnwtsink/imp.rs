@@ -283,6 +283,14 @@ impl ObjectImpl for QuinnWebTransportSink {
                     .nick("Server URL")
                     .blurb("URL of the HTTP/3 server to connect to.")
                     .build(),
+                glib::ParamSpecEnum::builder_with_default(
+                    "congestion-control",
+                    DEFAULT_CONGESTION_CONTROL,
+                )
+                .nick("Congestion control algorithm")
+                .blurb("QUIC congestion control algorithm to use")
+                .mutable_ready()
+                .build(),
             ]
         });
 
@@ -358,6 +366,11 @@ impl ObjectImpl for QuinnWebTransportSink {
             "url" => {
                 settings.url = value.get::<String>().expect("type checked upstream");
             }
+            "congestion-control" => {
+                settings.transport_config.congestion_control = value
+                    .get::<QuinnQuicCongestionControl>()
+                    .expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -411,6 +424,7 @@ impl ObjectImpl for QuinnWebTransportSink {
             "drop-buffer-for-datagram" => settings.drop_buffer_for_datagram.to_value(),
             "role" => settings.role.to_value(),
             "url" => settings.url.to_value(),
+            "congestion-control" => settings.transport_config.congestion_control.to_value(),
             _ => unimplemented!(),
         }
     }

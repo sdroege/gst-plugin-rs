@@ -9007,6 +9007,18 @@
                         "type": "guint",
                         "writable": true
                     },
+                    "congestion-control": {
+                        "blurb": "QUIC congestion control algorithm to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "cubic (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstQuinnQuicCongestionControl",
+                        "writable": true
+                    },
                     "datagram-receive-buffer-size": {
                         "blurb": "Maximum number of incoming application datagram bytes to buffer",
                         "conditionally-available": false,
@@ -9378,6 +9390,18 @@
                         "mutable": "null",
                         "readable": true,
                         "type": "gchararray",
+                        "writable": true
+                    },
+                    "congestion-control": {
+                        "blurb": "QUIC congestion control algorithm to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "cubic (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstQuinnQuicCongestionControl",
                         "writable": true
                     },
                     "datagram-receive-buffer-size": {
@@ -9790,6 +9814,18 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "congestion-control": {
+                        "blurb": "QUIC congestion control algorithm to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "cubic (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstQuinnQuicCongestionControl",
+                        "writable": true
+                    },
                     "datagram-receive-buffer-size": {
                         "blurb": "Maximum number of incoming application datagram bytes to buffer",
                         "conditionally-available": false,
@@ -10058,6 +10094,18 @@
                         "type": "gchararray",
                         "writable": true
                     },
+                    "congestion-control": {
+                        "blurb": "QUIC congestion control algorithm to use",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "cubic (0)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstQuinnQuicCongestionControl",
+                        "writable": true
+                    },
                     "is-live": {
                         "blurb": "Act like a live source",
                         "conditionally-available": false,
@@ -10191,6 +10239,26 @@
         "filename": "gstquinn",
         "license": "MPL",
         "other-types": {
+            "GstQuinnQuicCongestionControl": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Cubic: Cubic congestion control (quinn default)",
+                        "name": "cubic",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Newreno: New Reno congestion control (RFC 9002)",
+                        "name": "new-reno",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Bbr: BBR congestion control (experimental)",
+                        "name": "bbr",
+                        "value": "2"
+                    }
+                ]
+            },
             "GstQuinnQuicRole": {
                 "kind": "enum",
                 "values": [

@@ -38,6 +38,8 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         use gst::prelude::*;
 
         common::QuinnQuicRole::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+        common::QuinnQuicCongestionControl::static_type()
+            .mark_as_plugin_api(gst::PluginAPIFlags::empty());
     }
     quinnquicdemux::register(plugin)?;
     quinnquicmux::register(plugin)?;

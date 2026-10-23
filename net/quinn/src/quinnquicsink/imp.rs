@@ -299,6 +299,14 @@ impl ObjectImpl for QuinnQuicSink {
                     .blurb("Maximum number of bytes to transmit to a peer without acknowledgment")
                     .readwrite()
                     .build(),
+                glib::ParamSpecEnum::builder_with_default(
+                    "congestion-control",
+                    DEFAULT_CONGESTION_CONTROL,
+                )
+                .nick("Congestion control algorithm")
+                .blurb("QUIC congestion control algorithm to use")
+                .mutable_ready()
+                .build(),
             ]
         });
 
@@ -398,6 +406,11 @@ impl ObjectImpl for QuinnQuicSink {
                 settings.transport_config.send_window =
                     value.get::<u64>().expect("type checked upstream");
             }
+            "congestion-control" => {
+                settings.transport_config.congestion_control = value
+                    .get::<QuinnQuicCongestionControl>()
+                    .expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -464,6 +477,7 @@ impl ObjectImpl for QuinnQuicSink {
                 u64::from(settings.transport_config.max_concurrent_uni_streams).to_value()
             }
             "send-window" => settings.transport_config.send_window.to_value(),
+            "congestion-control" => settings.transport_config.congestion_control.to_value(),
             _ => unimplemented!(),
         }
     }

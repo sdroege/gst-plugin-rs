@@ -28,6 +28,8 @@ pub(crate) static DEFAULT_DROP_BUFFER_FOR_DATAGRAM: bool = false;
 pub(crate) static DEFAULT_MAX_CONCURRENT_BI_STREAMS: VarInt = VarInt::from_u32(1);
 pub(crate) static DEFAULT_MAX_CONCURRENT_UNI_STREAMS: VarInt = VarInt::from_u32(32);
 pub(crate) static DEFAULT_USE_DATAGRAM: bool = false;
+pub(crate) static DEFAULT_CONGESTION_CONTROL: QuinnQuicCongestionControl =
+    QuinnQuicCongestionControl::Cubic;
 
 /*
  * For QUIC transport parameters
@@ -51,6 +53,26 @@ pub enum QuinnQuicRole {
 
     #[enum_value(name = "Client: Act as QUIC client.", nick = "client")]
     Client,
+}
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
+#[repr(u32)]
+#[enum_type(name = "GstQuinnQuicCongestionControl")]
+pub enum QuinnQuicCongestionControl {
+    #[enum_value(
+        name = "Cubic: Cubic congestion control (quinn default)",
+        nick = "cubic"
+    )]
+    Cubic,
+
+    #[enum_value(
+        name = "Newreno: New Reno congestion control (RFC 9002)",
+        nick = "new-reno"
+    )]
+    NewReno,
+
+    #[enum_value(name = "Bbr: BBR congestion control (experimental)", nick = "bbr")]
+    Bbr,
 }
 
 #[derive(Clone, Debug)]
@@ -81,6 +103,7 @@ pub struct QuinnQuicTransportConfig {
     pub send_window: u64,
     pub stream_receive_window: VarInt,
     pub receive_window: VarInt,
+    pub congestion_control: QuinnQuicCongestionControl,
 }
 
 impl Default for QuinnQuicTransportConfig {
@@ -104,6 +127,7 @@ impl Default for QuinnQuicTransportConfig {
             send_window: (8 * STREAM_RWND).into(),
             stream_receive_window: STREAM_RWND.into(),
             receive_window: VarInt::MAX,
+            congestion_control: DEFAULT_CONGESTION_CONTROL,
         }
     }
 }

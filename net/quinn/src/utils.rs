@@ -17,6 +17,7 @@ use quinn::{
     ClientConfig, Endpoint, EndpointConfig, MtuDiscoveryConfig, ServerConfig, TokioRuntime,
     TransportConfig, crypto::rustls::QuicClientConfig, crypto::rustls::QuicServerConfig,
 };
+use quinn_proto::congestion::{BbrConfig, NewRenoConfig};
 use quinn_proto::{ConnectionStats, FrameStats, UdpStats};
 use std::error::Error;
 use std::net::SocketAddr;
@@ -232,6 +233,17 @@ fn create_transport_config(
     transport_config
         .max_concurrent_uni_streams(ep_config.transport_config.max_concurrent_uni_streams);
     transport_config.mtu_discovery_config(Some(mtu_config));
+
+    match ep_config.transport_config.congestion_control {
+        // Quinn defaults to Cubic, nothing to do
+        QuinnQuicCongestionControl::Cubic => {}
+        QuinnQuicCongestionControl::NewReno => {
+            transport_config.congestion_controller_factory(Arc::new(NewRenoConfig::default()));
+        }
+        QuinnQuicCongestionControl::Bbr => {
+            transport_config.congestion_controller_factory(Arc::new(BbrConfig::default()));
+        }
+    }
 
     transport_config
 }
