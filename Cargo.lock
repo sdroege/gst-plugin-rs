@@ -11375,9 +11375,9 @@ dependencies = [
 
 [[package]]
 name = "sdp-types"
-version = "0.2.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46d46be065d0565cf5c6703b6ba9f92b0de85b20a4c83f87e110bc0a1040b1bc"
+checksum = "f71a591db992f0ae4b7175a09214bdc337d073293d9514009313596a5fdcb46e"
 dependencies = [
  "bstr",
  "fallible-iterator",
