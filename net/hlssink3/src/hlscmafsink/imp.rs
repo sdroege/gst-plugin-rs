@@ -660,7 +660,7 @@ impl HlsCmafSink {
             })?;
 
             let map = first.map_readable().unwrap();
-            stream.write(&map).map_err(|_| {
+            stream.write_all(&map).map_err(|_| {
                 gst::error!(
                     CAT,
                     imp = self,
@@ -829,7 +829,7 @@ impl HlsCmafSink {
             }
 
             for segment in &state.fragment_buffers {
-                stream.write(segment).map_err(|_| {
+                stream.write_all(segment).map_err(|_| {
                     gst::error!(CAT, imp = self, "Couldn't write segment to output stream",);
                     gst::FlowError::Error
                 })?;
@@ -838,7 +838,7 @@ impl HlsCmafSink {
             for buffer in buffer_list.iter() {
                 let map = buffer.map_readable().unwrap();
 
-                stream.write(&map).map_err(|_| {
+                stream.write_all(&map).map_err(|_| {
                     gst::error!(CAT, imp = self, "Couldn't write segment to output stream",);
                     gst::FlowError::Error
                 })?;
