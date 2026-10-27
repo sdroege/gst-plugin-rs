@@ -304,6 +304,8 @@ pub struct VideoEncoder {
     pub transceiver: gst_webrtc::WebRTCRTPTransceiver,
     /// name of the sink pad feeding this encoder
     stream_name: String,
+    /// Maximum bitrate that the receiver's offer allows
+    max_bitrate: Option<i32>,
 }
 
 struct SessionInner {
@@ -1164,6 +1166,7 @@ impl VideoEncoder {
             mitigation_mode: WebRTCSinkMitigationMode::NONE,
             transceiver,
             stream_name,
+            max_bitrate: None,
         })
     }
 
@@ -1244,6 +1247,8 @@ impl VideoEncoder {
         bitrate: i32,
         enabled_mitigation_modes: WebRTCSinkMitigationMode,
     ) -> Result<(), WebRTCSinkError> {
+        let bitrate = self.max_bitrate.map_or(bitrate, |max| bitrate.min(max));
+
         match self.factory_name.as_str() {
             "vp8enc" | "vp9enc" => self.element.set_property("target-bitrate", bitrate),
             "av1enc" => self
@@ -1519,6 +1524,10 @@ impl SessionInner {
                 transceiver,
                 stream_name.to_string(),
             ) {
+                enc.max_bitrate = codec
+                    .max_bitrate(caps.structure(0).unwrap())
+                    .and_then(|bitrate| bitrate.try_into().ok());
+
                 match self.cc_info.heuristic {
                     WebRTCSinkCongestionControl::Disabled => {
                         // If congestion control is disabled, we simply use the highest
@@ -2823,10 +2832,7 @@ impl BaseWebRTCSink {
                 codec.set_pt(payload);
                 for (user_caps, codecs_and_caps) in ordered_codecs_and_caps.iter_mut() {
                     if codec.caps.is_subset(user_caps) {
-                        if encoding_name == "H264" && s.get("level-asymmetry-allowed") == Ok("1") {
-                            s.remove_field("profile-level-id");
-                        }
-
+                        codec.accept_lower_than_offered(s);
                         codecs_and_caps.push((codec, caps));
                         break;
                     }
@@ -2869,12 +2875,7 @@ impl BaseWebRTCSink {
                 .await
                 .map(|mut s| {
                     let mut codec = codec.clone();
-                    let encoding_name = s.get::<String>("encoding-name").unwrap();
-
-                    if encoding_name == "H264" && s.get("level-asymmetry-allowed") == Ok("1") {
-                        s.remove_field("profile-level-id");
-                    }
-
+                    codec.unpin_discovered(&mut s);
                     codec.set_output_filter([s].into_iter().collect());
                     codec
                 })
