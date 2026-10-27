@@ -804,6 +804,37 @@ impl Codec {
         }
     }
 
+    /// Some fields of an offer are a maximum, not an exact value. Changes
+    /// them in the offer's caps so that streams below the maximum match too.
+    pub fn accept_lower_than_offered(&self, s: &mut gst::StructureRef) {
+        match self.name.as_str() {
+            "H264" if s.get("level-asymmetry-allowed") == Ok("1") => {
+                s.remove_field("profile-level-id");
+            }
+            "H265" => h265_allow_lower_level_and_tier(s),
+            _ => (),
+        }
+    }
+
+    pub fn unpin_discovered(&self, s: &mut gst::StructureRef) {
+        match self.name.as_str() {
+            "H264" if s.get("level-asymmetry-allowed") == Ok("1") => {
+                s.remove_field("profile-level-id");
+            }
+            // The encoder may change its level and tier with the bitrate
+            "H265" => s.remove_fields(["level-id", "tier-flag"]),
+            _ => (),
+        }
+    }
+
+    /// The maximum bitrate in bit/s that the offer's caps allow, if any
+    pub fn max_bitrate(&self, s: &gst::StructureRef) -> Option<u32> {
+        match self.name.as_str() {
+            "H265" => h265_max_bitrate(s),
+            _ => None,
+        }
+    }
+
     pub fn webrtc_negotiated_caps(
         &self,
         caps: &gst::Caps,
@@ -897,6 +928,8 @@ impl Codec {
         }
         pay_s.set("ssrc", ssrc);
 
+        self.accept_lower_than_offered(&mut pay_s);
+
         (
             gst::Caps::builder_full().structure(enc_s).build(),
             gst::Caps::builder_full().structure(pay_s).build(),
@@ -973,6 +1006,67 @@ static H264_LEVELS: LazyLock<Vec<String>> = LazyLock::new(|| {
 
     res
 });
+
+/// Maximum bitrates of an H.265 level, from Table A.8 for the Main profile
+struct H265Level {
+    /// As in RTP caps: 30 times the level, e.g. 120 for level 4
+    level_id: u32,
+    main_tier_kbps: u32,
+    /// Levels below 4 have no high tier
+    high_tier_kbps: Option<u32>,
+}
+
+#[rustfmt::skip]
+const H265_LEVELS: [H265Level; 13] = [
+    H265Level { level_id:  30, main_tier_kbps:     128, high_tier_kbps: None },
+    H265Level { level_id:  60, main_tier_kbps:   1_500, high_tier_kbps: None },
+    H265Level { level_id:  63, main_tier_kbps:   3_000, high_tier_kbps: None },
+    H265Level { level_id:  90, main_tier_kbps:   6_000, high_tier_kbps: None },
+    H265Level { level_id:  93, main_tier_kbps:  10_000, high_tier_kbps: None },
+    H265Level { level_id: 120, main_tier_kbps:  12_000, high_tier_kbps: Some(30_000) },
+    H265Level { level_id: 123, main_tier_kbps:  20_000, high_tier_kbps: Some(50_000) },
+    H265Level { level_id: 150, main_tier_kbps:  25_000, high_tier_kbps: Some(100_000) },
+    H265Level { level_id: 153, main_tier_kbps:  40_000, high_tier_kbps: Some(160_000) },
+    H265Level { level_id: 156, main_tier_kbps:  60_000, high_tier_kbps: Some(240_000) },
+    H265Level { level_id: 180, main_tier_kbps:  60_000, high_tier_kbps: Some(240_000) },
+    H265Level { level_id: 183, main_tier_kbps: 120_000, high_tier_kbps: Some(480_000) },
+    H265Level { level_id: 186, main_tier_kbps: 240_000, high_tier_kbps: Some(800_000) },
+];
+
+fn h265_field(s: &gst::StructureRef, name: &str) -> Option<u32> {
+    s.get::<&str>(name).ok()?.parse().ok()
+}
+
+fn h265_allow_lower_level_and_tier(s: &mut gst::StructureRef) {
+    if let Some(level_id) = h265_field(s, "level-id") {
+        let lower = H265_LEVELS
+            .iter()
+            .map(|level| level.level_id)
+            .filter(|&id| id < level_id);
+        let levels = lower.chain([level_id]).rev().map(|id| id.to_string());
+        s.set("level-id", gst::List::new(levels));
+    }
+
+    if let Some(tier_flag) = h265_field(s, "tier-flag") {
+        let tiers = (0..=tier_flag.min(1)).rev().map(|t| t.to_string());
+        s.set("tier-flag", gst::List::new(tiers));
+    }
+}
+
+fn h265_max_bitrate(s: &gst::StructureRef) -> Option<u32> {
+    let level_id = h265_field(s, "level-id")?;
+    let high_tier = h265_field(s, "tier-flag") == Some(1);
+    let level = H265_LEVELS
+        .iter()
+        .rev()
+        .find(|level| level.level_id <= level_id)?;
+    let kbps = match level.high_tier_kbps {
+        Some(high) if high_tier => high,
+        _ => level.main_tier_kbps,
+    };
+
+    Some(1000 * kbps)
+}
 
 #[derive(Debug, Clone)]
 pub struct Codecs(Vec<Codec>);
@@ -1520,6 +1614,64 @@ impl MetaSerializer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn h265_rtp(fields: &str) -> gst::Caps {
+        gst::init().unwrap();
+        format!("application/x-rtp, encoding-name=(string)H265{fields}")
+            .parse()
+            .unwrap()
+    }
+
+    fn h265_offer(fields: &str) -> gst::Caps {
+        let mut caps = h265_rtp(fields);
+        h265_allow_lower_level_and_tier(caps.make_mut().structure_mut(0).unwrap());
+        caps
+    }
+
+    #[test]
+    fn h265_lower_level_and_tier_negotiate() {
+        // Level 5.1, high tier
+        let offer = h265_offer(", level-id=(string)153, tier-flag=(string)1");
+
+        for stream in [
+            ", level-id=(string)153, tier-flag=(string)1",
+            ", level-id=(string)120, tier-flag=(string)0",
+            ", level-id=(string)120, tier-flag=(string)1",
+            ", level-id=(string)93, tier-flag=(string)0",
+        ] {
+            assert!(h265_rtp(stream).can_intersect(&offer), "{stream}");
+        }
+    }
+
+    #[test]
+    fn h265_higher_level_or_tier_do_not_negotiate() {
+        // Level 4, main tier
+        let offer = h265_offer(", level-id=(string)120, tier-flag=(string)0");
+
+        for stream in [
+            ", level-id=(string)123, tier-flag=(string)0",
+            ", level-id=(string)120, tier-flag=(string)1",
+        ] {
+            assert!(!h265_rtp(stream).can_intersect(&offer), "{stream}");
+        }
+    }
+
+    #[test]
+    fn h265_max_bitrate_of_level_and_tier() {
+        let max_bitrate = |fields| h265_max_bitrate(h265_rtp(fields).structure(0).unwrap());
+
+        assert_eq!(max_bitrate(", level-id=(string)120"), Some(12_000_000));
+        assert_eq!(
+            max_bitrate(", level-id=(string)120, tier-flag=(string)1"),
+            Some(30_000_000)
+        );
+        // No high tier below level 4
+        assert_eq!(
+            max_bitrate(", level-id=(string)93, tier-flag=(string)1"),
+            Some(10_000_000)
+        );
+        assert_eq!(max_bitrate(", tier-flag=(string)1"), None);
+    }
 
     #[test]
     fn test_deserialize_array() -> Result<(), String> {
