@@ -3601,7 +3601,7 @@ async fn udp_rtp_task(
     receive_mtu: u32,
     sender_addr: Option<SocketAddr>,
 ) {
-    let t = Duration::from_secs(timeout.into());
+    let t = Duration::from_nanos(timeout.nseconds());
     let sender_addr = match sender_addr {
         Some(addr) => addr,
         // Server didn't give us a Transport header or its Transport header didn't specify the
@@ -3610,11 +3610,11 @@ async fn udp_rtp_task(
         None => {
             let ret = match time::timeout(t, socket.peek_sender()).await {
                 Ok(Ok(addr)) => Ok(addr),
-                Ok(Err(_elapsed)) => Err(format!(
+                Err(_elapsed) => Err(format!(
                     "No data after {} seconds, exiting",
                     timeout.seconds()
                 )),
-                Err(err) => Err(format!("UDP socket was closed: {err:?}")),
+                Ok(Err(err)) => Err(format!("UDP socket was closed: {err:?}")),
             };
             match ret {
                 Ok(addr) => addr,
@@ -3683,10 +3683,10 @@ async fn udp_rtp_task(
                     break format!("UDP buffer push failed: {err:?}");
                 }
             }
-            Ok(Err(_elapsed)) => {
+            Err(_elapsed) => {
                 break format!("No data after {} seconds, exiting", timeout.seconds());
             }
-            Err(err) => break format!("UDP socket was closed: {err:?}"),
+            Ok(Err(err)) => break format!("UDP socket was closed: {err:?}"),
         };
     };
     gst::element_error!(
