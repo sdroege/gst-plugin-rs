@@ -439,3 +439,109 @@ fn test_hlscmafsink_video_iframe_playlist_single_keyframe() -> Result<(), ()> {
 fn test_hlscmafsink_video_iframe_playlist_multiple_keyframes() -> Result<(), ()> {
     test_hlscmafsink_video_iframe_playlist(true)
 }
+
+#[test]
+fn test_hlscmafsink_video_fragments() -> Result<(), ()> {
+    init();
+
+    let pipeline = gst::Pipeline::with_name("video_pipeline");
+
+    let video_src = gst::ElementFactory::make("videotestsrc")
+        .property("num-buffers", 250i32)
+        .property_from_str("pattern", "ball")
+        .build()
+        .unwrap();
+
+    let caps = gst::Caps::builder("video/x-raw")
+        .field("width", 320)
+        .field("height", 240)
+        .field("format", "I420")
+        .field("framerate", gst::Fraction::new(25, 1))
+        .build();
+    let capsfilter = gst::ElementFactory::make("capsfilter")
+        .property("caps", caps)
+        .build()
+        .expect("Must be able to instantiate capsfilter");
+    let x264enc = gst::ElementFactory::make("x264enc")
+        .property("key-int-max", 48u32)
+        .property_from_str("speed-preset", "ultrafast")
+        .property_from_str("tune", "zerolatency")
+        .build()
+        .expect("Must be able to instantiate x264enc");
+    let h264parse = gst::ElementFactory::make("h264parse").build().unwrap();
+
+    let hlscmafsink = gst::ElementFactory::make("hlscmafsink")
+        .name("test_hlscmafsink")
+        .property("target-duration", 2u32)
+        .build()
+        .expect("Must be able to instantiate hlscmafsink");
+
+    let playlist_content = Arc::new(Mutex::new(String::from("")));
+    hlscmafsink.connect("get-playlist-stream", false, {
+        let playlist_content = playlist_content.clone();
+        move |_| {
+            let playlist = MemoryPlaylistFile {
+                handler: Arc::clone(&playlist_content),
+            };
+
+            playlist.clear_content();
+            let output = gio::WriteOutputStream::new(playlist);
+            Some(output.to_value())
+        }
+    });
+
+    let data = HlsData::new();
+
+    let init_data = data.downgrade();
+    hlscmafsink.connect("get-init-stream", false, move |_args| {
+        let data: HlsData = init_data.upgrade().unwrap();
+        Some(
+            gio::WriteOutputStream::new(data)
+                .upcast::<gio::OutputStream>()
+                .to_value(),
+        )
+    });
+
+    let fragment_data = data.downgrade();
+    hlscmafsink.connect("get-fragment-stream", false, move |_args| {
+        let data: HlsData = fragment_data.upgrade().unwrap();
+        Some(
+            gio::WriteOutputStream::new(data)
+                .upcast::<gio::OutputStream>()
+                .to_value(),
+        )
+    });
+
+    pipeline
+        .add_many([&video_src, &capsfilter, &x264enc, &h264parse, &hlscmafsink])
+        .unwrap();
+    gst::Element::link_many([&video_src, &capsfilter, &x264enc, &h264parse, &hlscmafsink]).unwrap();
+
+    pipeline.set_state(gst::State::Playing).unwrap();
+
+    let mut eos = false;
+    let bus = pipeline.bus().unwrap();
+    while let Some(msg) = bus.timed_pop(gst::ClockTime::NONE) {
+        use gst::MessageView;
+        match msg.view() {
+            MessageView::Eos(..) => {
+                eos = true;
+                break;
+            }
+            MessageView::Error(err) => panic!("{err}"),
+            _ => (),
+        }
+    }
+
+    pipeline.set_state(gst::State::Null).unwrap();
+    assert!(eos);
+
+    let data = data.data();
+    assert!(!data.is_empty());
+
+    let ret = validate_fragmented_mp4(&data);
+    eprintln!("Fragmented MP4 size: {}, result: {ret:?}", data.len());
+    assert!(ret.is_ok());
+
+    Ok(())
+}

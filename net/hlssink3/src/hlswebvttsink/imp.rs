@@ -514,7 +514,7 @@ impl HlsWebvttSink {
 
         for buffer in data.buffers.iter() {
             let map = buffer.map_readable().unwrap();
-            stream.write(&map).map_err(|_| {
+            stream.write_all(&map).map_err(|_| {
                 gst::error!(CAT, imp = self, "Couldn't write segment to output stream",);
                 gst::FlowError::Error
             })?;
