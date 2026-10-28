@@ -180,6 +180,9 @@ struct SendSession {
     rtp_send_srcpad: Option<gst::Pad>,
 
     rtcp_send_srcpad: Option<gst::Pad>,
+
+    // EOS waiting for the pending BYE to be sent by the RTCP task
+    pending_eos: Mutex<Option<gst::Event>>,
 }
 
 impl SendSession {
@@ -209,10 +212,11 @@ impl SendSession {
             rtp_send_sinkpad: None,
             rtp_send_srcpad: None,
             rtcp_send_srcpad: None,
+            pending_eos: Mutex::new(None),
         }
     }
 
-    fn start_rtcp_task(&self, state: Arc<Mutex<State>>) {
+    fn start_rtcp_task(&self, state: Arc<Mutex<State>>, element: &super::RtpSend) {
         let mut rtcp_task = self.rtcp_task.lock().unwrap();
 
         if rtcp_task.is_some() {
@@ -223,17 +227,25 @@ impl SendSession {
         // when the plugin is statically linked.
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
         let session_id = self.internal_session.id;
+        let element = element.downgrade();
         rtpbin2::get_or_init_runtime()
             .expect("initialized in change_state()")
             .spawn(async move {
-                let future = Abortable::new(Self::rtcp_task(state, session_id), abort_registration);
+                let future = Abortable::new(
+                    Self::rtcp_task(state, session_id, element),
+                    abort_registration,
+                );
                 future.await
             });
 
         rtcp_task.replace(RtcpTask { abort_handle });
     }
 
-    async fn rtcp_task(state: Arc<Mutex<State>>, session_id: usize) {
+    async fn rtcp_task(
+        state: Arc<Mutex<State>>,
+        session_id: usize,
+        element: glib::WeakRef<super::RtpSend>,
+    ) {
         let sent_required_events = Arc::new(AtomicBool::new(false));
         let mut stream = RtcpSendStream::new(state.clone(), session_id);
         // we use a semaphore instead of mutex for ordering
@@ -289,6 +301,39 @@ impl SendSession {
                         }
                         drop(acquired);
                     });
+            }
+
+            // forward a delayed EOS after the BYE was pushed
+            let eos = {
+                let state = state.lock().unwrap();
+                state.session_by_id(session_id).and_then(|session| {
+                    let inner = session.internal_session.inner.lock().unwrap();
+                    if inner.session.has_pending_bye() {
+                        None
+                    } else {
+                        let rtp_srcpad = session.rtp_send_srcpad.clone();
+                        let rtcp_srcpad = session.rtcp_send_srcpad.clone();
+                        session
+                            .pending_eos
+                            .lock()
+                            .unwrap()
+                            .take()
+                            .map(|eos| (rtp_srcpad, rtcp_srcpad, eos))
+                    }
+                })
+            };
+            if let Some((rtp_srcpad, rtcp_srcpad, eos)) = eos {
+                // the spawn_blocking push above holds the semaphore until it
+                // completes, so acquiring it here waits for the BYE to actually
+                // be pushed first
+                let _permit = sem.clone().acquire_owned().await;
+                if let Some(element) = element.upgrade() {
+                    element.call_async(move |_element| {
+                        for pad in [rtp_srcpad, rtcp_srcpad].into_iter().flatten() {
+                            pad.push_event(eos.clone());
+                        }
+                    });
+                }
             }
         }
     }
@@ -493,20 +538,21 @@ impl RtpSend {
             gst::EventView::Eos(_eos) => {
                 let now = Instant::now();
                 let state = self.state.lock().unwrap();
+                let mut delay_eos = false;
                 if let Some(session) = state.session_by_id(id) {
-                    let mut session = session.internal_session.inner.lock().unwrap();
-                    let ssrcs = session.session.ssrcs().collect::<Vec<_>>();
+                    let mut inner = session.internal_session.inner.lock().unwrap();
+                    let ssrcs = inner.session.ssrcs().collect::<Vec<_>>();
                     // We want to bye all relevant ssrc's here.
                     // Relevant means they will not be used by something else which means that any
                     // local send ssrc that is not being used for Sr/Rr reports (internal_ssrc) can
                     // have the Bye state applied.
                     let mut all_local = true;
-                    let internal_ssrc = session.session.internal_ssrc();
+                    let internal_ssrc = inner.session.internal_ssrc();
                     for ssrc in ssrcs {
-                        let Some(local_send) = session.session.mut_local_send_source_by_ssrc(ssrc)
+                        let Some(local_send) = inner.session.mut_local_send_source_by_ssrc(ssrc)
                         else {
                             if let Some(local_recv) =
-                                session.session.local_receive_source_by_ssrc(ssrc)
+                                inner.session.local_receive_source_by_ssrc(ssrc)
                                 && local_recv.state() != SourceState::Bye
                                 && Some(ssrc) != internal_ssrc
                             {
@@ -521,12 +567,32 @@ impl RtpSend {
                     if all_local {
                         // if there are no non-local send ssrc's, then we can Bye the entire
                         // session.
-                        session.session.schedule_bye("End of Stream", now);
+                        inner.session.schedule_bye("End of Stream", now);
                     }
-                    if let Some(waker) = session.rtcp_waker.take() {
+                    if let Some(waker) = inner.rtcp_waker.take() {
                         waker.wake();
                     }
-                    drop(session);
+                    // delay the EOS until the BYE was sent. If there is no pending BYE (e.g.
+                    // repeated EOS after a flush) or no RTCP pad then forward now
+                    delay_eos =
+                        inner.session.has_pending_bye() && session.rtcp_send_srcpad.is_some();
+                    if delay_eos {
+                        *session.pending_eos.lock().unwrap() = Some(event.clone());
+                    }
+                    drop(inner);
+                }
+                drop(state);
+                if delay_eos {
+                    true
+                } else {
+                    gst::Pad::event_default(pad, Some(&*self.obj()), event)
+                }
+            }
+            gst::EventView::FlushStop(_fs) => {
+                // a flush invalidates a delayed EOS
+                let state = self.state.lock().unwrap();
+                if let Some(session) = state.session_by_id(id) {
+                    session.pending_eos.lock().unwrap().take();
                 }
                 drop(state);
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
@@ -851,7 +917,7 @@ impl ElementImpl for RtpSend {
                     let segment = gst::event::Segment::new(&segment);
 
                     session.rtcp_send_srcpad = Some(srcpad.clone());
-                    session.start_rtcp_task(state_clone);
+                    session.start_rtcp_task(state_clone, &self.obj());
                     Some((srcpad, None, id, vec![stream_start, caps, segment]))
                 };
 
@@ -995,7 +1061,7 @@ impl ElementImpl for RtpSend {
                 }
                 for session in state.sessions.iter_mut() {
                     if session.rtcp_send_srcpad.is_some() {
-                        session.start_rtcp_task(state_clone.clone());
+                        session.start_rtcp_task(state_clone.clone(), &self.obj());
                     }
                 }
             }

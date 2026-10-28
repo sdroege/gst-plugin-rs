@@ -12,10 +12,11 @@ use std::sync::{
     atomic::{AtomicU16, AtomicUsize, Ordering},
     mpsc,
 };
+use std::time::{Duration, Instant};
 
 use gst::{Caps, prelude::*};
 use gst_check::Harness;
-use rtcp_types::{RtcpPacketWriter, RtcpPacketWriterExt};
+use rtcp_types::{Compound, Packet, RtcpPacketWriter, RtcpPacketWriterExt};
 use rtp_types::*;
 
 static ELEMENT_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -994,6 +995,106 @@ fn push_muxed_rtcp_with_colliding_ssrc() {
         source_stats.get::<u64>("sr-ntptime").unwrap(),
         (TEST_DEFAULT_SSRC as u64) << 32
     );
+
+    elem.set_state(gst::State::Null).unwrap();
+}
+
+// On EOS the BYE has to be sent (at its scheduled RTCP time) before the EOS
+// event is forwarded downstream
+#[test]
+fn send_eos_forwarded_after_bye() {
+    init();
+
+    #[derive(Debug)]
+    enum RtcpItem {
+        Data,
+        Bye,
+        Eos,
+    }
+
+    let id = next_element_counter();
+
+    let clock = gst::SystemClock::obtain();
+    let elem = gst::ElementFactory::make("rtpsend")
+        .property("rtp-id", id.to_string())
+        // keep the wait for the next scheduled RTCP packet short
+        .property("min-rtcp-interval", 1u32)
+        .build()
+        .unwrap();
+    elem.set_property_from_str("rtp-profile", "avpf");
+    elem.set_clock(Some(&clock)).unwrap();
+    elem.set_state(gst::State::Playing).unwrap();
+
+    let sinkpad = elem.request_pad_simple("rtp_sink_0").unwrap();
+    let rtcp_srcpad = elem.request_pad_simple("rtcp_src_0").unwrap();
+
+    // link the RTP src pad to a dummy sink so that chaining works
+    let rtp_srcpad = elem.static_pad("rtp_src_0").unwrap();
+    let rtp_peer = gst::Pad::builder(gst::PadDirection::Sink)
+        .chain_function(|_pad, _parent, _buffer| Ok(gst::FlowSuccess::Ok))
+        .event_function(|_pad, _parent, _event| true)
+        .build();
+    rtp_peer.set_active(true).unwrap();
+    rtp_srcpad.link(&rtp_peer).unwrap();
+
+    sinkpad.send_event(gst::event::StreamStart::new("test"));
+    let caps = Caps::builder("application/x-rtp")
+        .field("media", "audio")
+        .field("payload", TEST_PT as i32)
+        .field("clock-rate", TEST_CLOCK_RATE as i32)
+        .field("encoding-name", "custom-test")
+        .build();
+    sinkpad.send_event(gst::event::Caps::new(&caps));
+    let segment = gst::FormattedSegment::<gst::ClockTime>::new();
+    sinkpad.send_event(gst::event::Segment::new(&segment));
+
+    let (sender, recv) = mpsc::sync_channel(100);
+    let event_sender = sender.clone();
+    let rtcp_peer = gst::Pad::builder(gst::PadDirection::Sink)
+        .chain_function(move |_pad, _parent, buffer| {
+            let mapped = buffer.map_readable().unwrap();
+            let has_bye = Compound::parse(mapped.as_slice())
+                .unwrap()
+                .into_iter()
+                .any(|packet| matches!(packet, Ok(Packet::Bye(_))));
+            let _ = sender.send(if has_bye {
+                RtcpItem::Bye
+            } else {
+                RtcpItem::Data
+            });
+            Ok(gst::FlowSuccess::Ok)
+        })
+        .event_function(move |_pad, _parent, event| {
+            if event.type_() == gst::EventType::Eos {
+                let _ = event_sender.send(RtcpItem::Eos);
+            }
+            true
+        })
+        .build();
+    rtcp_peer.set_active(true).unwrap();
+    rtcp_srcpad.link(&rtcp_peer).unwrap();
+
+    for packet in PACKETS_TEST_1 {
+        sinkpad.chain(packet.generate_buffer(None)).unwrap();
+    }
+
+    sinkpad.send_event(gst::event::Eos::new());
+
+    // the EOS on the RTCP pad must be preceded by a BYE packet
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let mut saw_bye = false;
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let item = recv
+            .recv_timeout(remaining)
+            .expect("timed out waiting for BYE/EOS on the RTCP pad");
+        match item {
+            RtcpItem::Bye => saw_bye = true,
+            RtcpItem::Data => (),
+            RtcpItem::Eos => break,
+        }
+    }
+    assert!(saw_bye);
 
     elem.set_state(gst::State::Null).unwrap();
 }
