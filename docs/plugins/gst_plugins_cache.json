@@ -19315,6 +19315,18 @@
                         "type": "gint",
                         "writable": true
                     },
+                    "reuse": {
+                        "blurb": "Allow port reuse",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
                     "socket": {
                         "blurb": "Socket to use for UDP sending. (None == allocate)",
                         "conditionally-available": false,

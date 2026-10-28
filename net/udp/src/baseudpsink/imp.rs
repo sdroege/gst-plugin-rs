@@ -64,6 +64,7 @@ struct Settings {
     buffer_size: u32,
     bind_address: Option<IpAddr>,
     bind_port: u16,
+    reuse: bool,
 
     clients: Arc<IndexMap<Client, ClientEntry>>,
     // true if clients were updated by the application since
@@ -95,6 +96,7 @@ impl Default for Settings {
             buffer_size: 0,
             bind_address: None,
             bind_port: 0,
+            reuse: true,
 
             clients: Arc::new(IndexMap::new()),
             // Need to sync clients when we start
@@ -635,6 +637,12 @@ impl ObjectImpl for BaseUdpSink {
                     .default_value(Settings::default().bind_port as u32)
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("reuse")
+                    .nick("Reuse")
+                    .blurb("Allow port reuse")
+                    .default_value(Settings::default().reuse)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -814,6 +822,17 @@ impl ObjectImpl for BaseUdpSink {
                 );
                 settings.bind_port = bind_port;
             }
+            "reuse" => {
+                let mut settings = self.settings.lock().unwrap();
+                let reuse = value.get::<bool>().expect("type checked upstream");
+                gst::info!(
+                    CAT,
+                    imp = self,
+                    "Changing reuse from {:?} to {reuse:?}",
+                    settings.reuse,
+                );
+                settings.reuse = reuse;
+            }
             _ => unimplemented!(),
         }
     }
@@ -899,6 +918,10 @@ impl ObjectImpl for BaseUdpSink {
             "bind-port" => {
                 let settings = self.settings.lock().unwrap();
                 (settings.bind_port as u32).to_value()
+            }
+            "reuse" => {
+                let settings = self.settings.lock().unwrap();
+                settings.reuse.to_value()
             }
             _ => unimplemented!(),
         }
@@ -1006,6 +1029,7 @@ impl BaseSinkImpl for BaseUdpSink {
                     settings.loop_,
                     settings.qos_dscp,
                     settings.buffer_size,
+                    settings.reuse,
                     bind_saddr,
                 )
                 .map_err(|err| {
@@ -1033,6 +1057,7 @@ impl BaseSinkImpl for BaseUdpSink {
                     settings.loop_,
                     settings.qos_dscp,
                     settings.buffer_size,
+                    settings.reuse,
                     bind_saddr,
                 )
                 .map_err(|err| {
@@ -1056,6 +1081,7 @@ impl BaseSinkImpl for BaseUdpSink {
                     settings.loop_,
                     settings.qos_dscp,
                     settings.buffer_size,
+                    settings.reuse,
                     bind_saddr,
                 );
 

@@ -1599,6 +1599,7 @@ impl UdpSendSocket {
         multicast_loop: bool,
         qos_dscp: i32,
         buffer_size: u32,
+        allow_reuse: bool,
         bind_saddr: SocketAddr,
     ) -> Result<Self, anyhow::Error> {
         use anyhow::Context as _;
@@ -1690,26 +1691,28 @@ impl UdpSendSocket {
             }
         }
 
-        if bind_saddr.port() == 0 && !bind_saddr.ip().is_multicast() {
-            gst::warning!(
-                CAT,
-                obj = element.as_ref(),
-                "Disabling port reuse for dynamically allocated port to avoid potential conflicts"
-            );
-        } else {
-            socket
-                .set_reuse_address(true)
-                .context("Failed to set SO_REUSEADDR")?;
-            #[cfg(not(any(
-                windows,
-                target_os = "solaris",
-                target_os = "illumos",
-                target_os = "cygwin"
-            )))]
-            {
+        if allow_reuse {
+            if bind_saddr.port() == 0 && !bind_saddr.ip().is_multicast() {
+                gst::warning!(
+                    CAT,
+                    obj = element.as_ref(),
+                    "Disabling port reuse for dynamically allocated port to avoid potential conflicts"
+                );
+            } else {
                 socket
-                    .set_reuse_port(true)
-                    .context("Failed to set SO_REUSEPORT")?;
+                    .set_reuse_address(true)
+                    .context("Failed to set SO_REUSEADDR")?;
+                #[cfg(not(any(
+                    windows,
+                    target_os = "solaris",
+                    target_os = "illumos",
+                    target_os = "cygwin"
+                )))]
+                {
+                    socket
+                        .set_reuse_port(true)
+                        .context("Failed to set SO_REUSEPORT")?;
+                }
             }
         }
 
