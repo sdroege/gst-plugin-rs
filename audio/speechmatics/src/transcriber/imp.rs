@@ -942,6 +942,12 @@ impl Transcriber {
 
                 let _lock = self.sinkpad.stream_lock();
 
+                if let Some(mut ws_sink) = self.ws_sink.borrow_mut().take() {
+                    RUNTIME.block_on(async {
+                        let _ = ws_sink.close().await;
+                    });
+                }
+
                 gst::Pad::event_default(pad, Some(&*self.obj()), event)
             }
             gst::EventView::Segment(e) => {
@@ -1882,15 +1888,16 @@ impl Transcriber {
         if take_stream_lock {
             gst::log!(CAT, "Taking stream lock");
             let _lock = self.sinkpad.stream_lock();
+
+            gst::log!(CAT, imp = self, "closing websocket sink");
+
+            if let Some(mut ws_sink) = self.ws_sink.borrow_mut().take() {
+                RUNTIME.block_on(async {
+                    let _ = ws_sink.close().await;
+                });
+            }
         }
 
-        gst::log!(CAT, imp = self, "closing websocket sink");
-
-        if let Some(mut ws_sink) = self.ws_sink.borrow_mut().take() {
-            RUNTIME.block_on(async {
-                let _ = ws_sink.close().await;
-            });
-        }
 
         let mut state = self.state.lock().unwrap();
 
