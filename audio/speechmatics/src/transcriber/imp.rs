@@ -1133,6 +1133,8 @@ impl Transcriber {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::trace!(CAT, imp = self, "Handling {:?}", buffer);
 
+        let upstream_is_live = self.upstream_is_live();
+
         let now = self.obj().current_running_time();
         let desynchronized = self.settings.lock().unwrap().latency_ms == u32::MAX;
 
@@ -1141,6 +1143,7 @@ impl Transcriber {
 
             if buffer.flags().contains(gst::BufferFlags::DISCONT)
                 && state.first_buffer_pts.is_some()
+                && upstream_is_live != Some(true)
             {
                 gst::info!(CAT, imp = self, "DISCONT buffer, draining!");
                 state = match self.drain(state) {
@@ -1897,7 +1900,6 @@ impl Transcriber {
                 });
             }
         }
-
 
         let mut state = self.state.lock().unwrap();
 
