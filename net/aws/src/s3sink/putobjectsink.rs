@@ -447,6 +447,11 @@ impl S3PutObjectSink {
                 .put_object()
                 .set_body(body)
                 .set_bucket(bucket)
+                .set_cache_control(settings.cache_control.clone())
+                .set_content_disposition(settings.content_disposition.clone())
+                .set_content_encoding(settings.content_encoding.clone())
+                .set_content_type(settings.content_type.clone())
+                .set_content_language(settings.content_language.clone())
                 .set_key(key)
                 .set_metadata(metadata),
         ))
