@@ -902,6 +902,9 @@ fn wait_eos(pipeline: &Pipeline) {
 }
 
 fn stop_pipeline(pipeline: Pipeline) {
+    pipeline.clock.set_time(gst::ClockTime::MAX);
+    drain_clock(&pipeline);
+
     pipeline.pipeline.set_state(gst::State::Null).unwrap();
 
     let switch = pipeline.by_name("switch").unwrap();
