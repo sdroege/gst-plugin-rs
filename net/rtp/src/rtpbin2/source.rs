@@ -866,9 +866,16 @@ impl RemoteSendSource {
 
     /// The total number of packets lost over the lifetime of this source
     pub fn packets_lost(&self) -> i64 {
-        let expected =
-            self.ext_seqnum.current().unwrap_or(0) - self.initial_seqnum.unwrap_or(0) + 1;
-        expected as i64 - self.recv_packets as i64
+        // No packet information yet, e.g. because no RTP packet was received
+        // so far or the source is still in probation. Nothing could have been
+        // lost.
+        let (Some(ext_seqnum), Some(initial_seqnum)) =
+            (self.ext_seqnum.current(), self.initial_seqnum)
+        else {
+            return 0;
+        };
+        let expected = ext_seqnum as i64 - initial_seqnum as i64 + 1;
+        expected - self.recv_packets as i64
     }
 
     #[cfg(test)]
