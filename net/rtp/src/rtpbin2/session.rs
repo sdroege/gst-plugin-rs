@@ -1269,6 +1269,20 @@ impl Session {
         timed_out_ssrcs
     }
 
+    /// Whether any local source has a BYE scheduled that was not sent yet
+    pub fn has_pending_bye(&self) -> bool {
+        let unsent_bye = |state: SourceState, bye_sent_time: Option<Instant>| {
+            state == SourceState::Bye && bye_sent_time.is_none()
+        };
+        self.local_senders
+            .values()
+            .any(|source| unsent_bye(source.state(), source.bye_sent_time()))
+            || self
+                .local_receivers
+                .values()
+                .any(|source| unsent_bye(source.state(), source.bye_sent_time()))
+    }
+
     /// Produce a RTCP packet (or `None` if it is too early to send a RTCP packet).  After this call returns,
     /// the next time to send a RTCP packet can be retrieved from `poll_rtcp_send_timeout`
     // TODO: return RtcpPacketBuilder thing
@@ -2705,6 +2719,61 @@ pub(crate) mod tests {
             unreachable!();
         };
         assert_eq!(bye_ssrc, ssrc);
+    }
+
+    // A scheduled BYE must not be sent before the next scheduled RTCP time
+    // (RFC 3550 6.3.6/6.3.7), but has to be part of the next sent packet
+    #[test]
+    fn scheduled_bye_sent_with_next_rtcp_packet() {
+        let mut session = Session::new("cname");
+        session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
+
+        let now = Instant::now();
+        let ntp_now = SystemTime::now();
+        let ssrc = 0x11223344;
+
+        let rtp_data = generate_rtp_packet(ssrc, 100, 0, 4);
+        let packet = RtpPacket::parse(&rtp_data).unwrap();
+        assert_eq!(
+            session.handle_send(&packet, now, now),
+            SendReply::NewSsrc(ssrc, TEST_PT)
+        );
+
+        // Send the first (scheduled) RTCP packet.
+        let (rtcp_data, now, ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        assert!(matches!(rtcp_data, RtcpSendReply::Data(_)));
+
+        let source = session.mut_local_send_source_by_ssrc(ssrc).unwrap();
+        source.mark_bye("End of Stream");
+        assert!(session.has_pending_bye());
+
+        // The BYE is only due at a future (dithered) time and must not be sent early
+        assert!(session.poll_rtcp_send(now, ntp_now).is_none());
+        assert!(session.has_pending_bye());
+
+        // At the next scheduled time the BYE is sent
+        let (rtcp_data, now, ntp_now) = next_rtcp_packet(&mut session, now, ntp_now);
+        let RtcpSendReply::Data(rtcp_data) = rtcp_data else {
+            panic!("expected RTCP data, got {rtcp_data:?}");
+        };
+
+        let rtcp = Compound::parse(&rtcp_data).unwrap();
+        let bye = rtcp
+            .into_iter()
+            .find_map(|packet| match packet {
+                Ok(Packet::Bye(bye)) => Some(bye),
+                _ => None,
+            })
+            .expect("compound packet contains a BYE");
+        assert_eq!(bye.ssrcs().next(), Some(ssrc));
+        assert_eq!(bye.reason(), Some(b"End of Stream".as_ref()));
+        assert!(!session.has_pending_bye());
+
+        // The bye-ssrc notification follows the packet
+        assert!(matches!(
+            session.poll_rtcp_send(now, ntp_now),
+            Some(RtcpSendReply::SsrcBye(bye_ssrc)) if bye_ssrc == ssrc
+        ));
     }
 
     #[test]
