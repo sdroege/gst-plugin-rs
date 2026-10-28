@@ -914,3 +914,109 @@ fn push_buffer_list_muxed_rtp_and_rtcp_packets() {
 
     elem.set_state(gst::State::Null).unwrap();
 }
+
+fn rtprecv_with_pt(pt: u8) -> (gst::Element, gst::Pad) {
+    let id = next_element_counter();
+
+    let clock = gst::SystemClock::obtain();
+    let elem = gst::ElementFactory::make("rtprecv")
+        .property("rtp-id", id.to_string())
+        .build()
+        .unwrap();
+    elem.set_clock(Some(&clock)).unwrap();
+    elem.set_state(gst::State::Playing).unwrap();
+    let sinkpad = elem.request_pad_simple("rtp_sink_0").unwrap();
+    let stream_start = gst::event::StreamStart::new("random");
+    sinkpad.send_event(stream_start);
+    let caps = Caps::builder("application/x-rtp")
+        .field("media", "audio")
+        .field("payload", pt as i32)
+        .field("clock-rate", TEST_CLOCK_RATE as i32)
+        .field("encoding-name", "custom-test")
+        .build();
+    sinkpad.send_event(gst::event::Caps::new(&caps));
+    let segment = gst::FormattedSegment::<gst::ClockTime>::new();
+    sinkpad.send_event(gst::event::Segment::new(&segment));
+
+    (elem, sinkpad)
+}
+
+// an SR for an unknown sender ssrc whose bytes 8-11, the NTP timestamp MSW,
+// are what the RTP header parser reads as the ssrc: they collide with a
+// source that is already known
+fn muxed_rtcp_sr_with_colliding_ssrc() -> gst::Buffer {
+    let sr = rtcp_types::SenderReport::builder(0xdeadbeef)
+        .ntp_timestamp((TEST_DEFAULT_SSRC as u64) << 32)
+        .rtp_timestamp(4)
+        .packet_count(1)
+        .octet_count(8);
+    let mut sr_buf = gst::Buffer::with_size(sr.calculate_size().unwrap()).unwrap();
+    {
+        let sr_buf_mut = sr_buf.get_mut().unwrap();
+        sr.write_into(sr_buf_mut.map_writable().unwrap().as_mut_slice())
+            .unwrap();
+    }
+    sr_buf
+}
+
+// muxed RTCP whose ssrc, as parsed from the RTP header position, collides with
+// a known source must be demuxed as RTCP instead of being handled as RTP
+#[test]
+fn push_muxed_rtcp_with_colliding_ssrc() {
+    init();
+
+    let (elem, sinkpad) = rtprecv_with_pt(TEST_PT);
+
+    // make the colliding ssrc a known source, the first packet is held in
+    // probation
+    sinkpad
+        .chain(
+            PacketInfo {
+                seq_no: 0,
+                rtp_ts: 0,
+                payload_len: 4,
+                ssrc: TEST_DEFAULT_SSRC,
+            }
+            .generate_buffer(Some(gst::ClockTime::from_mseconds(50))),
+        )
+        .unwrap();
+
+    sinkpad.chain(muxed_rtcp_sr_with_colliding_ssrc()).unwrap();
+
+    // the SR must have been handled as RTCP
+    let stats = elem.property::<gst::Structure>("stats");
+    let session_stats = stats.get::<gst::Structure>("0").unwrap();
+    let source_stats = session_stats
+        .get::<gst::Structure>(&0xdeadbeefu32.to_string())
+        .expect("SR sender registered as source");
+    assert_eq!(source_stats.get::<u32>("ssrc").unwrap(), 0xdeadbeef);
+    assert_eq!(
+        source_stats.get::<u64>("sr-ntptime").unwrap(),
+        (TEST_DEFAULT_SSRC as u64) << 32
+    );
+
+    elem.set_state(gst::State::Null).unwrap();
+}
+
+// muxed RTCP with a payload type that is known from the caps must not be
+// demuxed as RTCP
+#[test]
+fn push_muxed_rtcp_with_known_payload_type() {
+    init();
+
+    // payload type 72 is inside the RTCP mux range (RFC 5761) but configured
+    // for RTP
+    let (elem, sinkpad) = rtprecv_with_pt(72);
+
+    sinkpad.chain(muxed_rtcp_sr_with_colliding_ssrc()).unwrap();
+
+    let stats = elem.property::<gst::Structure>("stats");
+    let session_stats = stats.get::<gst::Structure>("0").unwrap();
+    assert!(
+        session_stats
+            .get::<gst::Structure>(&0xdeadbeefu32.to_string())
+            .is_err()
+    );
+
+    elem.set_state(gst::State::Null).unwrap();
+}
