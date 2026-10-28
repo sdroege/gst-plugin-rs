@@ -337,6 +337,10 @@ impl SinkState {
         running_time: Option<gst::ClockTime>,
         extra_time: gst::ClockTime,
     ) -> Option<gst::SingleShotClockId> {
+        if self.flushing {
+            return None;
+        }
+
         let running_time = running_time?;
         let clock = imp.obj().clock()?;
         let base_time = imp.obj().base_time()?;
@@ -672,6 +676,10 @@ impl FallbackSwitch {
 
         let mut buffer = {
             let pad_state = pad_imp.state.lock();
+            if pad_state.flushing {
+                return Err(gst::FlowError::Flushing);
+            }
+
             trace!(
                 CAT,
                 obj = pad,

@@ -11,6 +11,8 @@ use gst::debug;
 use gst::prelude::*;
 
 use std::sync::LazyLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 const LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(10);
@@ -504,6 +506,89 @@ fn test_buffer_with_incorrect_timestamp_pause_play() {
     push_eos(&pipeline);
     wait_eos(&pipeline);
 
+    stop_pipeline(pipeline);
+}
+
+#[test]
+fn test_push_during_flush() {
+    let pipeline = setup_pipeline(Some(true), None, Some(false));
+    let switch = pipeline.by_name("switch").unwrap();
+    let mainsink = switch.static_pad("sink_0").unwrap();
+    let fallbacksink = switch.static_pad("sink_1").unwrap();
+    let srcpad = fallbacksink.peer().unwrap();
+    let srcpad_clone = srcpad.clone();
+
+    switch.set_property("active-pad", &fallbacksink);
+    push_fallback_buffer(&pipeline, gst::ClockTime::ZERO);
+    advance_clock(&pipeline, LATENCY);
+    let buffer = pull_buffer(&pipeline);
+    assert_fallback_buffer!(buffer, Some(gst::ClockTime::ZERO));
+    switch.set_property("active-pad", &mainsink);
+
+    // Hold a buffer at the chain entry of the inactive pad, after its
+    // flushing check, then start the flush under it:
+    // 1. the buffer enters the probe
+    // 2. the flush starts
+    // 3. the probe releases the buffer into chain()
+    let entered = std::sync::Arc::new(AtomicBool::new(false));
+    let release = std::sync::Arc::new(AtomicBool::new(false));
+    let (probe_entered, probe_release) = (entered.clone(), release.clone());
+    let probe_id = fallbacksink
+        .add_probe(gst::PadProbeType::BUFFER, move |_, _| {
+            probe_entered.store(true, Ordering::SeqCst);
+            let deadline = Instant::now() + WAIT_DEADLINE;
+            while !probe_release.load(Ordering::SeqCst) && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            gst::PadProbeReturn::Ok
+        })
+        .unwrap();
+
+    // A future timestamp makes chain() wait if it does not refuse the
+    // buffer.
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut buffer = gst::Buffer::with_size(160 * 120 * 4).unwrap();
+        buffer.get_mut().unwrap().set_pts(gst::ClockTime::SECOND);
+        let _ = tx.send(srcpad.push(buffer));
+    });
+
+    let deadline = Instant::now() + WAIT_DEADLINE;
+    while !entered.load(Ordering::SeqCst) {
+        assert!(
+            Instant::now() < deadline,
+            "The buffer did not reach the probe: clock at {}, pending clock entries: {}",
+            pipeline.clock.time(),
+            pipeline.clock.peek_id_count(),
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+
+    assert!(fallbacksink.send_event(gst::event::FlushStart::new()));
+    release.store(true, Ordering::SeqCst);
+
+    // chain() must refuse the buffer instead of parking on a clock wait.
+    let result = rx
+        .recv_timeout(WAIT_DEADLINE)
+        .expect("The buffer push is still blocked: chain() parked on a clock wait");
+    assert_eq!(result, Err(gst::FlowError::Flushing));
+
+    fallbacksink.remove_probe(probe_id);
+    assert!(fallbacksink.send_event(gst::event::FlushStop::new(true)));
+
+    // The pad resumes after the flush. A flush removes the pad's stored
+    // segment, so upstream re-sends it before the next buffer.
+    switch.set_property("active-pad", &fallbacksink);
+    let segment = gst::FormattedSegment::<gst::ClockTime>::new();
+    assert!(srcpad_clone.push_event(gst::event::Segment::new(&segment)));
+    push_fallback_buffer(&pipeline, 1.seconds());
+    advance_clock(&pipeline, 1.seconds() + LATENCY);
+    let buffer = pull_buffer(&pipeline);
+    assert_fallback_buffer!(buffer, Some(gst::ClockTime::SECOND));
+
+    drop(mainsink);
+    drop(fallbacksink);
+    drop(switch);
     stop_pipeline(pipeline);
 }
 
