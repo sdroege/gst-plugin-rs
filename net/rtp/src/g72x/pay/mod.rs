@@ -10,11 +10,17 @@
 use gst::{glib, prelude::*};
 
 pub mod g722;
+pub mod g723;
 pub mod g726;
 
 glib::wrapper! {
     pub struct RtpG722Pay(ObjectSubclass<g722::RtpG722Pay>)
         @extends crate::baseaudiopay::RtpBaseAudioPay2, crate::basepay::RtpBasePay2, gst::Element, gst::Object;
+}
+
+glib::wrapper! {
+    pub struct RtpG723Pay(ObjectSubclass<g723::RtpG723Pay>)
+        @extends crate::basepay::RtpBasePay2, gst::Element, gst::Object;
 }
 
 glib::wrapper! {
@@ -28,6 +34,12 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         "rtpg722pay2",
         gst::Rank::PRIMARY,
         RtpG722Pay::static_type(),
+    )?;
+    gst::Element::register(
+        Some(plugin),
+        "rtpg723pay2",
+        gst::Rank::PRIMARY,
+        RtpG723Pay::static_type(),
     )?;
     gst::Element::register(
         Some(plugin),

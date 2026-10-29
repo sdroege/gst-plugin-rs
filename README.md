@@ -285,6 +285,8 @@ You will find the following plugins in this repository:
       - `rtpav1pay`: Payload AV1 as RTP packets.
       - `rtpg722depay2`: Depayload G.722 audio from RTP packets (RFC 3551).
       - `rtpg722pay2`: Payload G.722 audio into RTP packets (RFC 3551).
+      - `rtpg723depay2`: Depayload G.723 audio from RTP packets (RFC 3551).
+      - `rtpg723pay2`: Payload G.723 audio into RTP packets (RFC 3551).
       - `rtpg726depay2`: Depayload G.726 audio from RTP packets (RFC 3551).
       - `rtpg726pay2`: Payload G.726 audio into RTP packets (RFC 3551).
       - `rtpgccbwe`: RTP bandwidth estimator based on the Google Congestion Control algorithm.
