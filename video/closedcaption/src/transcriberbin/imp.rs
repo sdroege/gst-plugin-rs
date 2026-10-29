@@ -576,6 +576,11 @@ impl TranscriberBin {
             .property("ignore-notnegotiated", false)
             .build()?;
 
+        // errorignore's ignore-flushing property was added in GStreamer 1.30
+        if errorignore.has_property("ignore-flushing") {
+            errorignore.set_property("ignore-flushing", true);
+        }
+
         pad_state.transcription_bin.add_many([
             &aqueue_transcription,
             &errorignore,
