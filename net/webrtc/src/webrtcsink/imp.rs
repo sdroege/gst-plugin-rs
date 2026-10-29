@@ -785,6 +785,12 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property_from_str("error-resilient", "default");
                 enc.set_property("lag-in-frames", 0i32);
             }
+            "x265enc" => {
+                enc.set_property("bitrate", start_bitrate / 1000);
+                enc.set_property_from_str("tune", "zerolatency");
+                enc.set_property_from_str("speed-preset", "ultrafast");
+                enc.set_property("key-int-max", 2560i32);
+            }
             "x264enc" => {
                 enc.set_property("bitrate", start_bitrate / 1000);
                 enc.set_property_from_str("tune", "zerolatency");
@@ -1176,6 +1182,7 @@ impl VideoEncoder {
             "vp8enc"
                 | "vp9enc"
                 | "x264enc"
+                | "x265enc"
                 | "openh264enc"
                 | "nvh264enc"
                 | "nvh265enc"
@@ -1211,7 +1218,7 @@ impl VideoEncoder {
         let bitrate = match self.factory_name.as_str() {
             "vp8enc" | "vp9enc" => self.element.property::<i32>("target-bitrate"),
             "av1enc" => (self.element.property::<u32>("target-bitrate") * 1000) as i32,
-            "x264enc" | "nvh264enc" | "nvh265enc" | "vaapih264enc" | "vaapivp8enc"
+            "x264enc" | "x265enc" | "nvh264enc" | "nvh265enc" | "vaapih264enc" | "vaapivp8enc"
             | "vaapivp9enc" | "qsvh264enc" | "nvav1enc" | "vpuenc_h264" | "vpuenc_hevc"
             | "vavp8enc" | "vavp8lpenc" | "vavp9enc" | "vavp9lpenc" | "vah264enc"
             | "vah264lpenc" | "vah265enc" | "vah265lpenc" | "vaav1enc" | "vaav1lpenc" => {
@@ -1254,7 +1261,7 @@ impl VideoEncoder {
             "av1enc" => self
                 .element
                 .set_property("target-bitrate", (bitrate / 1000) as u32),
-            "x264enc" | "nvh264enc" | "nvh265enc" | "vaapih264enc" | "vaapivp8enc"
+            "x264enc" | "x265enc" | "nvh264enc" | "nvh265enc" | "vaapih264enc" | "vaapivp8enc"
             | "vaapivp9enc" | "qsvh264enc" | "nvav1enc" | "vpuenc_h264" | "vpuenc_hevc"
             | "vavp8enc" | "vavp8lpenc" | "vavp9enc" | "vavp9lpenc" | "vah264enc"
             | "vah264lpenc" | "vah265enc" | "vah265lpenc" | "vaav1enc" | "vaav1lpenc" => {
