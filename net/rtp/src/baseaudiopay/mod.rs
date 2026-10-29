@@ -23,8 +23,18 @@ pub trait RtpBaseAudioPay2Ext: IsA<RtpBaseAudioPay2> + 'static {
     /// Sets the number of bytes per frame.
     ///
     /// Should always be called together with `RtpBasePay2Ext::set_src_caps()`.
-    fn set_bpf(&self, bpf: usize) {
-        self.upcast_ref::<RtpBaseAudioPay2>().imp().set_bpf(bpf)
+    fn set_bpf(&self, bytes_per_frame: usize) {
+        self.upcast_ref::<RtpBaseAudioPay2>()
+            .imp()
+            .set_bpf(bytes_per_frame)
+    }
+    /// Sets the number of bits per frame.
+    ///
+    /// Should always be called together with `RtpBasePay2Ext::set_src_caps()`.
+    fn set_bits_per_frame(&self, bits_per_frame: usize) {
+        self.upcast_ref::<RtpBaseAudioPay2>()
+            .imp()
+            .set_bits_per_frame(bits_per_frame)
     }
 }
 

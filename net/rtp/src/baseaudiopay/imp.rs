@@ -51,8 +51,8 @@ struct QueuedBuffer {
 struct State {
     /// Currently configured clock rate.
     clock_rate: Option<u32>,
-    /// Number of bytes per frame.
-    bpf: Option<usize>,
+    /// Number of bits per frame.
+    bits_per_frame: Option<usize>,
 
     /// Desired "packet time", i.e. packet duration, from the caps, if set.
     ptime: Option<gst::ClockTime>,
@@ -279,13 +279,15 @@ impl crate::basepay::RtpBasePay2Impl for RtpBaseAudioPay2 {
         let settings = self.settings.lock().unwrap().clone();
         let mut state = self.state.borrow_mut();
 
-        let Some(bpf) = state.bpf else {
+        let Some(bits_per_frame) = state.bits_per_frame else {
             return Err(gst::FlowError::NotNegotiated);
         };
         let Some(clock_rate) = state.clock_rate else {
             return Err(gst::FlowError::NotNegotiated);
         };
-        let num_samples = buffer.size() / bpf;
+        let num_samples = (buffer.size() as u64)
+            .mul_div_ceil(8, bits_per_frame as u64)
+            .unwrap() as usize;
 
         let discont = state.audio_discont.process_input(
             &settings.audio_discont,
@@ -344,7 +346,7 @@ impl RtpBaseAudioPay2 {
         settings: &Settings,
         state: &State,
         clock_rate: u32,
-        bpf: usize,
+        bits_per_frame: usize,
     ) -> (usize, usize, usize) {
         let min_pframes = settings
             .min_ptime
@@ -384,15 +386,23 @@ impl RtpBaseAudioPay2 {
             pframes_multiple,
         );
 
-        let psize_multiple = pframes_multiple as usize * bpf;
+        let psize_multiple = pframes_multiple
+            .mul_div_ceil(bits_per_frame as u32, 8)
+            .unwrap() as usize;
 
         let mut max_packet_size = self.obj().max_payload_size() as usize;
         max_packet_size -= max_packet_size % psize_multiple;
         if let Some(max_pframes) = max_pframes {
-            max_packet_size = cmp::min(max_pframes as usize * bpf, max_packet_size)
+            max_packet_size = cmp::min(
+                max_pframes.mul_div_ceil(bits_per_frame as u32, 8).unwrap() as usize,
+                max_packet_size,
+            )
         }
         let mut min_packet_size = cmp::min(
-            cmp::max(min_pframes as usize * bpf, psize_multiple),
+            cmp::max(
+                min_pframes.mul_div_ceil(bits_per_frame as u32, 8).unwrap() as usize,
+                psize_multiple,
+            ),
             max_packet_size,
         );
 
@@ -402,7 +412,7 @@ impl RtpBaseAudioPay2 {
                 .mul_div_ceil(clock_rate as u64, gst::ClockTime::SECOND.nseconds())
                 .unwrap() as u32;
 
-            let psize = pframes as usize * bpf;
+            let psize = pframes.mul_div_ceil(bits_per_frame as u32, 8).unwrap() as usize;
             min_packet_size = cmp::max(min_packet_size, psize);
             max_packet_size = cmp::min(max_packet_size, psize);
         }
@@ -420,10 +430,10 @@ impl RtpBaseAudioPay2 {
         let Some(clock_rate) = state.clock_rate else {
             return Ok(gst::FlowSuccess::Ok);
         };
-        let bpf = state.bpf.unwrap();
+        let bits_per_frame = state.bits_per_frame.unwrap();
 
         let (min_packet_size, max_packet_size, psize_multiple) =
-            self.calculate_packet_sizes(settings, state, clock_rate, bpf);
+            self.calculate_packet_sizes(settings, state, clock_rate, bits_per_frame);
 
         gst::trace!(
             CAT,
@@ -439,11 +449,13 @@ impl RtpBaseAudioPay2 {
                 packet_size
             };
 
+            let num_samples = (packet_size as u32)
+                .mul_div_ceil(8, bits_per_frame as u32)
+                .unwrap();
             gst::trace!(
                 CAT,
                 imp = self,
-                "Creating packet of size {packet_size} ({} frames), marker {}",
-                packet_size / bpf,
+                "Creating packet of size {packet_size} ({num_samples} frames), marker {}",
                 state.audio_discont.next_output_offset().is_none(),
             );
 
@@ -500,7 +512,7 @@ impl RtpBaseAudioPay2 {
                 }
             }
             state.queued_bytes -= packet_size;
-            state.audio_discont.process_output(packet_size / bpf);
+            state.audio_discont.process_output(num_samples as usize);
         }
 
         gst::trace!(
@@ -508,7 +520,9 @@ impl RtpBaseAudioPay2 {
             imp = self,
             "Currently {} bytes / {} frames queued",
             state.queued_bytes,
-            state.queued_bytes / bpf
+            (state.queued_bytes as u32)
+                .mul_div_ceil(8, bits_per_frame as u32)
+                .unwrap()
         );
 
         Ok(gst::FlowSuccess::Ok)
@@ -518,8 +532,13 @@ impl RtpBaseAudioPay2 {
 /// Wrapper functions for public API.
 #[allow(dead_code)]
 impl RtpBaseAudioPay2 {
-    pub(super) fn set_bpf(&self, bpf: usize) {
+    pub(super) fn set_bits_per_frame(&self, bits_per_frame: usize) {
         let mut state = self.state.borrow_mut();
-        state.bpf = Some(bpf);
+        state.bits_per_frame = Some(bits_per_frame);
+    }
+
+    pub(super) fn set_bpf(&self, bytes_per_frame: usize) {
+        let mut state = self.state.borrow_mut();
+        state.bits_per_frame = Some(bytes_per_frame * 8);
     }
 }
