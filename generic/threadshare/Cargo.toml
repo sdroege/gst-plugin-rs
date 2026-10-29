@@ -21,6 +21,7 @@ gst = { workspace = true, features = ["v1_18"] }
 gst-audio = { workspace = true, features = ["v1_18"] }
 gst-net = { workspace = true, features = ["v1_18"] }
 gst-rtp = { workspace = true, features = ["v1_18"] }
+gst-plugin-webrtcbin2 = { workspace = true, optional = true }
 num-traits = "0.2"
 pin-project-lite = "0.2.0"
 polling = "3.1.0"
@@ -47,7 +48,6 @@ async-tungstenite = { version = "0.35", features = ["tokio-runtime", "tokio-rust
 clap = { version = "4", features = ["derive"] }
 ctrlc = "3.5"
 gst-plugin-rtp.workspace = true
-gst-plugin-webrtcbin2.workspace = true
 itertools = "0.15"
 # TLS provider selection
 rustls.workspace = true
@@ -96,6 +96,7 @@ path = "examples/inter/simple.rs"
 [[example]]
 name = "ts-webrtcbin2-sendrecv"
 path = "examples/webrtcbin2/sendrecv.rs"
+required-features = ["webrtcbin2-plugin"]
 
 [[test]]
 name = "ts-inter"
@@ -135,6 +136,7 @@ capi = []
 tuning = []
 doc = ["gst/v1_18"]
 v1_30 = ["gst/v1_30"]
+webrtcbin2-plugin = ["dep:gst-plugin-webrtcbin2"]
 
 [package.metadata.capi]
 min_version = "0.9.21"
