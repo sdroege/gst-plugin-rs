@@ -62,3 +62,47 @@ fn test_g722() {
 
     run_test_pipeline(Source::Bin(src), pay, depay, expected_pay, expected_depay);
 }
+
+#[test]
+fn test_g726() {
+    init();
+
+    let src = "audiotestsrc num-buffers=100 samplesperbuffer=2048 ! audio/x-raw,rate=8000,channels=1 ! avenc_g726";
+    let pay = "rtpg726pay2";
+    let depay = "rtpg726depay2";
+
+    let mut expected_pay = Vec::with_capacity(100);
+    for i in 0..100 {
+        expected_pay.push(vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(i * 256))
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER
+                } else {
+                    gst::BufferFlags::empty()
+                })
+                .pt(96)
+                .rtp_time(((i * 2048) & 0xffff_ffff) as u32)
+                .marker_bit(i == 0)
+                .size(1036)
+                .build(),
+        ]);
+    }
+
+    let mut expected_depay = Vec::with_capacity(100);
+    for i in 0..100 {
+        expected_depay.push(vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(i * 256))
+                .size(1024)
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC
+                } else {
+                    gst::BufferFlags::empty()
+                })
+                .build(),
+        ]);
+    }
+
+    run_test_pipeline(Source::Bin(src), pay, depay, expected_pay, expected_depay);
+}

@@ -9,6 +9,7 @@
 
 pub mod depay;
 pub mod pay;
+pub mod utils;
 
 #[cfg(test)]
 mod tests;
