@@ -283,6 +283,8 @@ You will find the following plugins in this repository:
       - `rtpamrpay2`: Payload an AMR audio stream into RTP packets (RFC 3267).
       - `rtpav1depay`: Depayload AV1 from RTP packets.
       - `rtpav1pay`: Payload AV1 as RTP packets.
+      - `rtpg722depay2`: Depayload G.722 audio from RTP packets (RFC 3551).
+      - `rtpg722pay2`: Payload G.722 audio into RTP packets (RFC 3551).
       - `rtpgccbwe`: RTP bandwidth estimator based on the Google Congestion Control algorithm.
       - `rtph261depay2`: Depayload an H.261 video stream from RTP packets (RFC 4587).
       - `rtph261pay2`: Payload an H.261 video stream into RTP packets (RFC 4587).
