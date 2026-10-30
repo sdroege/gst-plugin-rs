@@ -1663,7 +1663,7 @@ impl BaseUdpSink {
         for buffer in buffers {
             let length = self.prepare_buffer(state, buffer, bytes_to_serve)?;
 
-            for (client, entry) in &mut state.clients {
+            'client: for (client, entry) in &mut state.clients {
                 let dups = if send_duplicates { entry.add_count } else { 1 };
                 let addr = SocketAddr::new(client.host.addr, client.port);
 
@@ -1730,12 +1730,13 @@ impl BaseUdpSink {
                                     continue 'dup;
                                 }
                                 _ => {
-                                    gst::element_imp_error!(
+                                    gst::element_imp_warning!(
                                         self,
                                         gst::ResourceError::Write,
+                                        ("Failed to send data to {addr:?}"),
                                         ["Failed to send data via sendmsg to {addr:?}: {err}"]
                                     );
-                                    return Err(gst::FlowError::Error);
+                                    continue 'client;
                                 }
                             },
                         };
@@ -1975,12 +1976,32 @@ impl BaseUdpSink {
                         continue 'batch;
                     }
                     _ => {
-                        gst::element_imp_error!(
+                        // sendmmsg() only returns -1 if the first message of the batch
+                        // failed, and each client's slots are contiguous
+                        let client_idx = state.msg_clients[start % family_total];
+                        let Some((client, _)) = state.clients.get_index(client_idx) else {
+                            unreachable!()
+                        };
+                        let addr = SocketAddr::new(client.host.addr, client.port);
+                        gst::element_imp_warning!(
                             self,
                             gst::ResourceError::Write,
-                            ["Failed to send data via sendmmsg over {family_str}: {err}"]
+                            ("Failed to send data to {addr:?}"),
+                            [
+                                "Failed to send data via sendmmsg over {family_str} to {addr:?}: {err}"
+                            ]
                         );
-                        return Err(gst::FlowError::Error);
+                        let mut skip = 1;
+                        while start + skip < total
+                            && state.msg_clients[(start + skip) % family_total] == client_idx
+                        {
+                            skip += 1;
+                        }
+                        start += skip;
+                        if start >= total {
+                            break 'batch;
+                        }
+                        continue 'batch;
                     }
                 }
             }
