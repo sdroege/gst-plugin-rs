@@ -43,7 +43,11 @@
  * leaves the multicast groups as destinations are added and removed, unless
  * disabled with the #GstBaseUdpSink2:auto-multicast property. The interface
  * used to join the group can be set with the #GstBaseUdpSink2:multicast-iface
- * property. The multicast TTL and loopback behaviour are controlled with the
+ * property. On Linux and Android the socket is also bound to this device
+ * via SO_BINDTODEVICE, so that all outgoing packets are sent via this
+ * interface. This only works with a single interface, with multiple
+ * interfaces the socket is not bound to a device. The multicast TTL and
+ * loopback behaviour are controlled with the
  * #GstBaseUdpSink2:ttl-mc and #GstBaseUdpSink2:loop properties, and the
  * unicast TTL with the #GstBaseUdpSink2:ttl property.
  *

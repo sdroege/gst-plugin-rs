@@ -1793,9 +1793,21 @@ impl UdpSendSocket {
 
         #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
         if let Some(multicast_iface) = multicast_iface {
-            socket
-                .bind_device(Some(multicast_iface.as_bytes()))
-                .with_context(|| "Failed to set SO_BINDTODEVICE")?;
+            // SO_BINDTODEVICE only supports a single device
+            if multicast_iface.contains(',') {
+                gst::warning!(
+                    CAT,
+                    obj = element.as_ref(),
+                    "Not binding the socket to a device via SO_BINDTODEVICE as multiple interfaces are set: {multicast_iface}"
+                );
+            } else if let Err(err) = socket.bind_device(Some(multicast_iface.as_bytes())) {
+                // Only warn if this fails e.g. due to missing CAP_NET_RAW
+                gst::warning!(
+                    CAT,
+                    obj = element.as_ref(),
+                    "Failed to set SO_BINDTODEVICE to {multicast_iface}: {err}"
+                );
+            }
         }
 
         socket

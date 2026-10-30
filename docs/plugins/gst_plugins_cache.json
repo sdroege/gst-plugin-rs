@@ -19290,7 +19290,7 @@
                         "writable": true
                     },
                     "multicast-iface": {
-                        "blurb": "The network interface on which to join the multicast group",
+                        "blurb": "The network interface on which to join the multicast group. This allows multiple interfaces separated by comma. (\"eth0,eth1\"). On Linux and Android the socket is also bound to the given device via SO_BINDTODEVICE, so that all outgoing packets are sent via this interface. SO_BINDTODEVICE only supports a single device, so with multiple interfaces the socket is not bound to a device",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
