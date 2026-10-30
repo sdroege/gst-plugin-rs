@@ -252,6 +252,7 @@ impl SendSession {
         // i.e. we should only allow a single pad push, but still allow other rtcp tasks to
         // continue operating
         let sem = Arc::new(tokio::sync::Semaphore::new(1));
+        let mut eos_forwarded = false;
         while let Some(reply) = stream.next().await {
             let send = {
                 let state = state.lock().unwrap();
@@ -272,7 +273,9 @@ impl SendSession {
                 }
             };
 
-            if let Some((rtcp_srcpad, data)) = send {
+            if let Some((rtcp_srcpad, data)) = send
+                && !eos_forwarded
+            {
                 let acquired = sem.clone().acquire_owned().await;
                 let sent_required_events = sent_required_events.clone();
                 rtpbin2::get_or_init_runtime()
@@ -327,6 +330,9 @@ impl SendSession {
                 // completes, so acquiring it here waits for the BYE to actually
                 // be pushed first
                 let _permit = sem.clone().acquire_owned().await;
+                // BYE is the last packet sent for the SSRCs (RFC 3550 6.2), so
+                // don't push any further RTCP data after the EOS
+                eos_forwarded = true;
                 if let Some(element) = element.upgrade() {
                     element.call_async(move |_element| {
                         for pad in [rtp_srcpad, rtcp_srcpad].into_iter().flatten() {
