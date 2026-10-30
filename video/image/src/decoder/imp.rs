@@ -377,7 +377,7 @@ impl Decoder {
             let color_info = if image.color().has_color() {
                 VideoColorimetry::try_from(ImageCicp(image.color_space()))
                     .inspect_err(|v| {
-                        gst::warning!(
+                        gst::info!(
                             CAT,
                             imp = self,
                             "Failed converting to VideoColorimetry: {v}"
