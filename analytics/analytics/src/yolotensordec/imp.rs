@@ -26,7 +26,9 @@ pub static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 });
 
 const YOLOV8_OUT: &glib::GStr = glib::gstr!("yolo-v8-out");
+const YOLOV8_OUT_NORMALIZED: &glib::GStr = glib::gstr!("yolo-v8-out-normalized");
 const YOLOV8OBB_OUT: &glib::GStr = glib::gstr!("yolo-v8-obb-out");
+const YOLOV8OBB_OUT_NORMALIZED: &glib::GStr = glib::gstr!("yolo-v8-obb-out-normalized");
 const YOLOX_OUT: &glib::GStr = glib::gstr!("yolox-out");
 const YOLO26_OUT: &glib::GStr = glib::gstr!("yolo-26-end2end-out");
 const YOLO26OBB_OUT: &glib::GStr = glib::gstr!("yolo-26-obb-end2end-out");
@@ -165,6 +167,7 @@ impl Settings {
 
 struct State {
     labels: Vec<glib::Quark>,
+    video_info: Option<gst_video::VideoInfo>,
 }
 
 #[derive(Default)]
@@ -249,9 +252,25 @@ impl BaseTransformImpl for YoloTensorDec {
                 Vec::new()
             });
 
-        *state = Some(State { labels });
+        *state = Some(State {
+            labels,
+            video_info: None,
+        });
 
         gst::info!(CAT, imp = self, "Started");
+
+        Ok(())
+    }
+
+    fn set_caps(&self, input: &gst::Caps, _output: &gst::Caps) -> Result<(), gst::LoggableError> {
+        let mut state_guard = self.state.lock().unwrap();
+        let Some(state) = &mut *state_guard else {
+            return Err(gst::loggable_error!(CAT, "Wrong State"));
+        };
+
+        let in_info = gst_video::VideoInfo::from_caps(input)
+            .map_err(|_| gst::loggable_error!(CAT, "Failed to parse input caps"))?;
+        state.video_info = Some(in_info);
 
         Ok(())
     }
@@ -272,12 +291,23 @@ impl BaseTransformImpl for YoloTensorDec {
             return Err(gst::FlowError::Flushing);
         };
 
-        let Some(meta) = find_yolo_tensor_meta(buffer, self.obj().type_()) else {
+        let Some((meta, name, order, normalized)) =
+            find_yolo_tensor_meta(buffer, self.obj().type_())
+        else {
             gst::trace!(CAT, imp = self, "No Yolo tensor meta found");
             return Ok(gst::FlowSuccess::Ok);
         };
 
-        let tensor = &meta.as_slice()[0];
+        // The meta may hold multiple tensors, re-fetch the validated one.
+        let tensor = meta
+            .typed_tensor(
+                glib::Quark::from_static_str(name),
+                gst_analytics::TensorDataType::Float32,
+                order,
+                &[1, usize::MAX, usize::MAX],
+            )
+            // Validated in find_yolo_tensor_meta above.
+            .unwrap();
         let Ok(map) = tensor.data().map_readable() else {
             return Err(gst::FlowError::Error);
         };
@@ -346,6 +376,18 @@ impl BaseTransformImpl for YoloTensorDec {
 
         let settings = self.settings.lock().unwrap();
 
+        // Video size to scale normalized candidate boxes to pixels.
+        let (img_w, img_h) = match tensor_format {
+            YoloTensorFormat::V8 | YoloTensorFormat::V8O => {
+                let Some(video_info) = &state.video_info else {
+                    gst::error!(CAT, imp = self, "No video info set");
+                    return Err(gst::FlowError::Error);
+                };
+                (video_info.width() as f32, video_info.height() as f32)
+            }
+            _ => (0.0, 0.0),
+        };
+
         // Non-maximum suppression (NMS) filter conceptually based on the one in
         // https://github.com/tracel-ai/models/blob/main/yolox-burn/src/model/boxes.rs
 
@@ -371,6 +413,11 @@ impl BaseTransformImpl for YoloTensorDec {
                     if max_confidence < settings.class_confidence_threshold {
                         continue;
                     }
+                    let Some((x, y, width, height)) =
+                        scaled_bb(x, y, width, height, normalized, img_w, img_h)
+                    else {
+                        continue;
+                    };
 
                     candidate_boxes.push(BoundingBox::from_center_extents(
                         x,
@@ -473,6 +520,11 @@ impl BaseTransformImpl for YoloTensorDec {
                     if max_confidence < settings.class_confidence_threshold {
                         continue;
                     }
+                    let Some((x, y, width, height)) =
+                        scaled_bb(x, y, width, height, normalized, img_w, img_h)
+                    else {
+                        continue;
+                    };
 
                     gst::trace!(
                         CAT,
@@ -650,46 +702,92 @@ impl YoloTensorDec {
     }
 }
 
+// Scale normalized candidate boxes to pixels. `None` for empty, NaN or
+// fully outside-the-frame boxes.
+pub(super) fn scaled_bb(
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    normalized: bool,
+    img_w: f32,
+    img_h: f32,
+) -> Option<(f32, f32, f32, f32)> {
+    let (x, y, w, h) = if normalized {
+        (x * img_w, y * img_h, w * img_w, h * img_h)
+    } else {
+        (x, y, w, h)
+    };
+    // Negated so that NaN is rejected too.
+    if !(w > 0.0
+        && h > 0.0
+        && x + w / 2.0 > 0.0
+        && x - w / 2.0 < img_w
+        && y + h / 2.0 > 0.0
+        && y - h / 2.0 < img_h)
+    {
+        return None;
+    }
+    Some((x, y, w, h))
+}
+
 fn find_yolo_tensor_meta(
     buffer: &gst::BufferRef,
     type_: glib::Type,
-) -> Option<gst::MetaRef<'_, gst_analytics::TensorMeta>> {
+) -> Option<(
+    gst::MetaRef<'_, gst_analytics::TensorMeta>,
+    &'static glib::GStr,
+    gst_analytics::TensorDimOrder,
+    bool,
+)> {
+    let format = tensor_format_from_type(type_);
+    let (model, order, normalized_model) = match format {
+        YoloTensorFormat::V8 => (
+            YOLOV8_OUT,
+            gst_analytics::TensorDimOrder::ColMajor,
+            Some(YOLOV8_OUT_NORMALIZED),
+        ),
+        YoloTensorFormat::X => (YOLOX_OUT, gst_analytics::TensorDimOrder::RowMajor, None),
+        YoloTensorFormat::Y26 => (YOLO26_OUT, gst_analytics::TensorDimOrder::RowMajor, None),
+        YoloTensorFormat::V8O => (
+            YOLOV8OBB_OUT,
+            gst_analytics::TensorDimOrder::ColMajor,
+            Some(YOLOV8OBB_OUT_NORMALIZED),
+        ),
+        YoloTensorFormat::Y26O => (YOLO26OBB_OUT, gst_analytics::TensorDimOrder::RowMajor, None),
+    };
+
+    // YoloV8: at least 5 fields (4 bounding box + 1 class) in dims[1].
+    // YoloX: at least 6 fields (4 bounding box + 1 box conf + 1 class) in dims[2].
+    // Yolo26: exactly 6 fields (4 bounding box + 1 score + 1 class) in dims[2].
+    // YoloV8Obb: at least 6 fields (5 bounding box + 1 class) in dims[1].
+    // Yolo26Obb: exactly 7 fields (4 oriented bounding box + 1 score + 1 class + 1 rotation) in dims[2].
+    let dims_ok = |tensor: &gst_analytics::Tensor| match format {
+        YoloTensorFormat::V8 => tensor.dims()[1] >= 5,
+        YoloTensorFormat::X => tensor.dims()[2] >= 6,
+        YoloTensorFormat::Y26 => tensor.dims()[2] == 6,
+        YoloTensorFormat::V8O => tensor.dims()[1] >= 6,
+        YoloTensorFormat::Y26O => tensor.dims()[2] == 7,
+    };
+
     buffer
         .iter_meta::<gst_analytics::TensorMeta>()
-        .find(|meta| {
-            let format = tensor_format_from_type(type_);
-            let (model, order) = match format {
-                YoloTensorFormat::V8 => (YOLOV8_OUT, gst_analytics::TensorDimOrder::ColMajor),
-                YoloTensorFormat::X => (YOLOX_OUT, gst_analytics::TensorDimOrder::RowMajor),
-                YoloTensorFormat::Y26 => (YOLO26_OUT, gst_analytics::TensorDimOrder::RowMajor),
-                YoloTensorFormat::V8O => (YOLOV8OBB_OUT, gst_analytics::TensorDimOrder::ColMajor),
-                YoloTensorFormat::Y26O => (YOLO26OBB_OUT, gst_analytics::TensorDimOrder::RowMajor),
+        .find_map(|meta| {
+            let find_tensor = |name: &'static glib::GStr| {
+                meta.typed_tensor(
+                    glib::Quark::from_static_str(name),
+                    gst_analytics::TensorDataType::Float32,
+                    order,
+                    &[1, usize::MAX, usize::MAX],
+                )
+                .filter(|tensor| tensor.dims().len() == 3 && dims_ok(tensor))
             };
 
-            let Some(tensor) = meta.typed_tensor(
-                glib::Quark::from_static_str(model),
-                gst_analytics::TensorDataType::Float32,
-                order,
-                &[1, usize::MAX, usize::MAX],
-            ) else {
-                return false;
-            };
-
-            if tensor.dims().len() != 3 {
-                return false;
-            }
-
-            // YoloV8: at least 5 fields (4 bounding box + 1 class) in dims[1].
-            // YoloX: at least 6 fields (4 bounding box + 1 box conf + 1 class) in dims[2].
-            // Yolo26: exactly 6 fields (4 bounding box + 1 score + 1 class) in dims[2].
-            // YoloV8Obb: at least 6 fields (5 bounding box + 1 class) in dims[1].
-            // Yolo26Obb: exactly 7 fields (4 oriented bounding box + 1 score + 1 class + 1 rotation) in dims[2].
-            match format {
-                YoloTensorFormat::V8 => tensor.dims()[1] >= 5,
-                YoloTensorFormat::X => tensor.dims()[2] >= 6,
-                YoloTensorFormat::Y26 => tensor.dims()[2] == 6,
-                YoloTensorFormat::V8O => tensor.dims()[1] >= 6,
-                YoloTensorFormat::Y26O => tensor.dims()[2] == 7,
+            if find_tensor(model).is_some() {
+                Some((meta.clone(), model, order, false))
+            } else {
+                normalized_model
+                    .and_then(|name| find_tensor(name).map(|_| (meta.clone(), name, order, true)))
             }
         })
 }
@@ -750,19 +848,34 @@ impl ElementImpl for YoloV8TensorDec {
                     gst::Structure::builder("tensorgroups")
                         .field(
                             YOLOV8_OUT,
-                            gst::UniqueList::new([gst::Caps::builder("tensor/strided")
-                                .field("tensor-id", YOLOV8_OUT)
-                                .field(
-                                    "dims",
-                                    gst::Array::from_values([
-                                        1i32.to_send_value(),
-                                        gst::IntRange::<i32>::new(5, i32::MAX).to_send_value(),
-                                        gst::IntRange::<i32>::new(0, i32::MAX).to_send_value(),
-                                    ]),
-                                )
-                                .field("dims-order", "col-major")
-                                .field("type", "float32")
-                                .build()]),
+                            gst::UniqueList::new([
+                                gst::Caps::builder("tensor/strided")
+                                    .field("tensor-id", YOLOV8_OUT)
+                                    .field(
+                                        "dims",
+                                        gst::Array::from_values([
+                                            1i32.to_send_value(),
+                                            gst::IntRange::<i32>::new(5, i32::MAX).to_send_value(),
+                                            gst::IntRange::<i32>::new(0, i32::MAX).to_send_value(),
+                                        ]),
+                                    )
+                                    .field("dims-order", "col-major")
+                                    .field("type", "float32")
+                                    .build(),
+                                gst::Caps::builder("tensor/strided")
+                                    .field("tensor-id", YOLOV8_OUT_NORMALIZED)
+                                    .field(
+                                        "dims",
+                                        gst::Array::from_values([
+                                            1i32.to_send_value(),
+                                            gst::IntRange::<i32>::new(5, i32::MAX).to_send_value(),
+                                            gst::IntRange::<i32>::new(0, i32::MAX).to_send_value(),
+                                        ]),
+                                    )
+                                    .field("dims-order", "col-major")
+                                    .field("type", "float32")
+                                    .build(),
+                            ]),
                         )
                         .build(),
                 )
@@ -1117,19 +1230,34 @@ impl ElementImpl for YoloV8ObbTensorDec {
                     gst::Structure::builder("tensorgroups")
                         .field(
                             YOLOV8OBB_OUT,
-                            gst::UniqueList::new([gst::Caps::builder("tensor/strided")
-                                .field("tensor-id", YOLOV8OBB_OUT)
-                                .field(
-                                    "dims",
-                                    gst::Array::from_values([
-                                        1i32.to_send_value(),
-                                        gst::IntRange::<i32>::new(6, i32::MAX).to_send_value(),
-                                        gst::IntRange::<i32>::new(0, i32::MAX).to_send_value(),
-                                    ]),
-                                )
-                                .field("dims-order", "col-major")
-                                .field("type", "float32")
-                                .build()]),
+                            gst::UniqueList::new([
+                                gst::Caps::builder("tensor/strided")
+                                    .field("tensor-id", YOLOV8OBB_OUT)
+                                    .field(
+                                        "dims",
+                                        gst::Array::from_values([
+                                            1i32.to_send_value(),
+                                            gst::IntRange::<i32>::new(6, i32::MAX).to_send_value(),
+                                            gst::IntRange::<i32>::new(0, i32::MAX).to_send_value(),
+                                        ]),
+                                    )
+                                    .field("dims-order", "col-major")
+                                    .field("type", "float32")
+                                    .build(),
+                                gst::Caps::builder("tensor/strided")
+                                    .field("tensor-id", YOLOV8OBB_OUT_NORMALIZED)
+                                    .field(
+                                        "dims",
+                                        gst::Array::from_values([
+                                            1i32.to_send_value(),
+                                            gst::IntRange::<i32>::new(6, i32::MAX).to_send_value(),
+                                            gst::IntRange::<i32>::new(0, i32::MAX).to_send_value(),
+                                        ]),
+                                    )
+                                    .field("dims-order", "col-major")
+                                    .field("type", "float32")
+                                    .build(),
+                            ]),
                         )
                         .build(),
                 )

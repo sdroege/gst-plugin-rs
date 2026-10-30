@@ -21,6 +21,8 @@ use super::util::{BoundingBox, iou, sigmoid};
 
 const YOLOV8SEG_OUT_GROUP: &glib::GStr = glib::gstr!("yolo-v8-segmentation-out");
 const YOLOV8SEG_DETECTIONS_OUT: &glib::GStr = glib::gstr!("yolo-v8-segmentation-out-detections");
+const YOLOV8SEG_DETECTIONS_OUT_NORMALIZED: &glib::GStr =
+    glib::gstr!("yolo-v8-segmentation-out-detections-normalized");
 const YOLOV8SEG_PROTOS_OUT: &glib::GStr = glib::gstr!("yolo-v8-segmentation-out-protos");
 
 const YOLO26SEG_OUT_GROUP: &glib::GStr = glib::gstr!("yolo-26-segmentation-end2end-out");
@@ -64,6 +66,7 @@ struct YoloSegTensors<'a> {
     meta: gst::MetaRef<'a, gst_analytics::TensorMeta>,
     detections_info: &'a YoloTensorInfo<'static>,
     protos_info: &'a YoloTensorInfo<'static>,
+    normalized: bool,
 }
 
 impl<'a> YoloSegTensors<'a> {
@@ -75,6 +78,7 @@ impl<'a> YoloSegTensors<'a> {
                 self.detections_info.dim_order,
                 &[1, usize::MAX, usize::MAX],
             )
+            // Validated in find_yolo_seg_tensors.
             .unwrap()
     }
     fn protos(&'a self) -> &'a gst_analytics::Tensor {
@@ -85,6 +89,7 @@ impl<'a> YoloSegTensors<'a> {
                 self.protos_info.dim_order,
                 &[1, usize::MAX, usize::MAX, usize::MAX],
             )
+            // Validated in find_yolo_seg_tensors.
             .unwrap()
     }
 }
@@ -99,6 +104,11 @@ const YOLOV8SEG_TENSORS_INFO: &(YoloTensorInfo, YoloTensorInfo) = &(
         dim_order: gst_analytics::TensorDimOrder::ColMajor,
     },
 );
+
+const YOLOV8SEG_DETECTIONS_OUT_NORM_INFO: YoloTensorInfo<'static> = YoloTensorInfo {
+    name: YOLOV8SEG_DETECTIONS_OUT_NORMALIZED,
+    dim_order: gst_analytics::TensorDimOrder::ColMajor,
+};
 
 const YOLO26SEG_TENSORS_INFO: &(YoloTensorInfo, YoloTensorInfo) = &(
     YoloTensorInfo {
@@ -376,6 +386,18 @@ impl BaseTransformImpl for YoloSegTensorDec {
 
         let settings = self.settings.lock().unwrap();
 
+        // Video size to scale normalized detection boxes to pixels.
+        let (img_w, img_h) = match tensor_format {
+            YoloSegTensorGroupFormat::YV8SEG => {
+                let Some(video_info) = &state.video_info else {
+                    gst::error!(CAT, imp = self, "No video info set");
+                    return Err(gst::FlowError::Error);
+                };
+                (video_info.width() as f32, video_info.height() as f32)
+            }
+            _ => (0.0, 0.0),
+        };
+
         let Ok(detections_map) = detections.data().map_readable() else {
             return Err(gst::FlowError::Error);
         };
@@ -418,6 +440,17 @@ impl BaseTransformImpl for YoloSegTensorDec {
                     if max_confidence < settings.s.class_confidence_threshold {
                         continue;
                     }
+                    let Some((x, y, width, height)) = super::imp::scaled_bb(
+                        x,
+                        y,
+                        width,
+                        height,
+                        tensors.normalized,
+                        img_w,
+                        img_h,
+                    ) else {
+                        continue;
+                    };
 
                     // Collect mask weights - the c'th entry from each row
                     let mask_weights = all_mask_weights
@@ -798,7 +831,7 @@ fn find_yolo_seg_tensors(
     buffer: &gst::BufferRef,
     format: YoloSegTensorGroupFormat,
 ) -> Option<YoloSegTensors<'_>> {
-    let (detections_info, protos_info) = match format {
+    let (base_detections_info, protos_info) = match format {
         YoloSegTensorGroupFormat::YV8SEG => &YOLOV8SEG_TENSORS_INFO,
         YoloSegTensorGroupFormat::Y26SEG => &YOLO26SEG_TENSORS_INFO,
     };
@@ -806,12 +839,24 @@ fn find_yolo_seg_tensors(
     buffer
         .iter_meta::<gst_analytics::TensorMeta>()
         .find_map(|meta| {
-            let detections = meta.typed_tensor(
-                glib::Quark::from_static_str(detections_info.name),
-                gst_analytics::TensorDataType::Float32,
-                detections_info.dim_order,
-                &[1, usize::MAX, usize::MAX],
-            )?;
+            let find_detections = |info: &YoloTensorInfo<'static>| {
+                meta.typed_tensor(
+                    glib::Quark::from_static_str(info.name),
+                    gst_analytics::TensorDataType::Float32,
+                    info.dim_order,
+                    &[1, usize::MAX, usize::MAX],
+                )
+            };
+
+            let mut detections_info = base_detections_info;
+            let mut detections = find_detections(detections_info);
+            let mut normalized = false;
+            if detections.is_none() && matches!(format, YoloSegTensorGroupFormat::YV8SEG) {
+                detections_info = &YOLOV8SEG_DETECTIONS_OUT_NORM_INFO;
+                detections = find_detections(detections_info);
+                normalized = detections.is_some();
+            }
+            let detections = detections?;
             if detections.dims().len() != 3 {
                 return None;
             }
@@ -868,6 +913,7 @@ fn find_yolo_seg_tensors(
                 meta: meta.clone(),
                 detections_info,
                 protos_info,
+                normalized,
             })
         })
 }
@@ -946,6 +992,23 @@ impl ElementImpl for YoloV8SegTensorDec {
                                     .field(
                                         "dims-order",
                                         YOLOV8SEG_TENSORS_INFO.0.dim_order_to_static_str(),
+                                    )
+                                    .field("type", "float32")
+                                    .build(),
+                                gst::Caps::builder("tensor/strided")
+                                    .field("tensor-id", YOLOV8SEG_DETECTIONS_OUT_NORMALIZED)
+                                    .field(
+                                        "dims",
+                                        gst::Array::from_values([
+                                            1i32.to_send_value(),
+                                            gst::IntRange::<i32>::new(5, i32::MAX).to_send_value(),
+                                            gst::IntRange::<i32>::new(1, i32::MAX).to_send_value(),
+                                        ]),
+                                    )
+                                    .field(
+                                        "dims-order",
+                                        YOLOV8SEG_DETECTIONS_OUT_NORM_INFO
+                                            .dim_order_to_static_str(),
                                     )
                                     .field("type", "float32")
                                     .build(),
