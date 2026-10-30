@@ -31,6 +31,8 @@ mod combiner;
 mod splitter;
 
 #[cfg(feature = "v1_28")]
+mod classifiertensordec;
+#[cfg(feature = "v1_28")]
 mod tensordecodebin;
 #[cfg(feature = "v1_28")]
 mod yolotensordec;
@@ -68,6 +70,9 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         combiner::register(plugin)?;
         splitter::register(plugin)?;
     }
+
+    #[cfg(feature = "v1_28")]
+    classifiertensordec::register(plugin)?;
 
     #[cfg(feature = "v1_28")]
     yolotensordec::register(plugin)?;

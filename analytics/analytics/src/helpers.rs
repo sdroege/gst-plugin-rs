@@ -59,3 +59,69 @@ pub(crate) fn bbox_iou_i32(a: (i32, i32, i32, i32), b: (i32, i32, i32, i32)) -> 
         },
     )
 }
+
+/// Read one label per line, stopping at the first empty line.
+pub(crate) fn load_labels(path: &str) -> Result<Vec<glib::Quark>, String> {
+    let contents = std::fs::read_to_string(path)
+        .map_err(|err| format!("Could not load labels file {path}: {err}"))?;
+
+    if contents.is_empty() {
+        return Err(format!("Labels file {path} is empty"));
+    }
+
+    let labels: Vec<_> = contents
+        .lines()
+        .take_while(|line| !line.is_empty())
+        .map(glib::Quark::from_str)
+        .collect();
+
+    if labels.is_empty() {
+        return Err(format!("Labels file {path} does not contain any labels"));
+    }
+
+    Ok(labels)
+}
+
+#[cfg(test)]
+pub(crate) mod test_util {
+    use std::io::Write;
+
+    pub(crate) fn labels_file(contents: &str) -> tempfile::NamedTempFile {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(contents.as_bytes()).unwrap();
+        file
+    }
+
+    pub(crate) fn path(file: &tempfile::NamedTempFile) -> &str {
+        file.path().to_str().unwrap()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::test_util::{labels_file, path};
+    use super::*;
+
+    #[test]
+    fn labels_stop_at_first_empty_line() {
+        let file = labels_file("cat\ndog\n\nbird\n");
+        let labels = load_labels(path(&file)).unwrap();
+        let names: Vec<_> = labels.iter().map(|q| q.as_str()).collect();
+        assert_eq!(names, ["cat", "dog"]);
+    }
+
+    #[test]
+    fn empty_labels_files_are_rejected() {
+        assert!(load_labels(path(&labels_file(""))).is_err());
+        assert!(load_labels(path(&labels_file("\ncat\n"))).is_err());
+        assert!(load_labels("/nonexistent/labels.txt").is_err());
+    }
+
+    #[test]
+    fn labels_with_crlf_are_handled() {
+        let file = labels_file("cat\r\ndog\r\n\r\nbird\r\n");
+        let labels = load_labels(path(&file)).unwrap();
+        let names: Vec<_> = labels.iter().map(|q| q.as_str()).collect();
+        assert_eq!(names, ["cat", "dog"]);
+    }
+}

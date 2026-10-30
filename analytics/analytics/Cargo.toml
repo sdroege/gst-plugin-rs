@@ -27,6 +27,7 @@ geo = { version = "0.33", default-features = false, optional = true }
 
 [dev-dependencies]
 gst-check.workspace = true
+tempfile = "3"
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true

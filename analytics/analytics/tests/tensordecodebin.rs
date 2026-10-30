@@ -408,7 +408,7 @@ fn test_classification_generic_out() {
         )],
     );
 
-    assert_eq!(select_single_decoder(caps), "classifiertensordecoder");
+    assert_eq!(select_single_decoder(caps), "classifiertensordec");
 }
 
 #[test]
@@ -425,7 +425,7 @@ fn test_classification_generic_softmaxed_out() {
         )],
     );
 
-    assert_eq!(select_single_decoder(caps), "classifiertensordecoder");
+    assert_eq!(select_single_decoder(caps), "classifiertensordec");
 }
 
 #[test]

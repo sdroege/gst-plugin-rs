@@ -4987,6 +4987,7 @@ dependencies = [
  "gstreamer-video",
  "itertools 0.15.0",
  "smol_str",
+ "tempfile",
  "xmltree",
 ]
 
