@@ -63,6 +63,10 @@ required-features = ["v1_28"]
 name = "bytetracker"
 required-features = ["v1_30"]
 
+[[test]]
+name = "yolotensordec"
+required-features = ["v1_28"]
+
 [package.metadata.capi]
 min_version = "0.9.21"
 
