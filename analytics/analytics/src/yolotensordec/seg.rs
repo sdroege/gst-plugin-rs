@@ -49,8 +49,8 @@ const DEFAULT_SCALE_MODE: ScaleMode = ScaleMode::BilinearUpscale;
 
 #[derive(Clone, Copy, Debug)]
 enum YoloSegTensorGroupFormat {
-    YV8SEG, // Col-major, [1, 4+C, N]
-    Y26SEG, // Row-major, [1, N, 6], NMS done by the model
+    YV8SEG, // Col-major, [1, 4 + C + num_masks, N]
+    Y26SEG, // Row-major, [1, N, 6 + num_masks], NMS done by the model
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -356,7 +356,7 @@ impl BaseTransformImpl for YoloSegTensorDec {
                 (detections.dims()[2], detections.dims()[1])
             }
             YoloSegTensorGroupFormat::Y26SEG => {
-                // Yolo26: dims[1] = num_candidates, dims[2] = 6 (fixed)
+                // Yolo26: dims[1] = num_candidates, dims[2] = 6 + num_masks
                 (detections.dims()[1], detections.dims()[2])
             }
         };
@@ -388,6 +388,10 @@ impl BaseTransformImpl for YoloSegTensorDec {
         let Ok(protos_data) = protos_map.as_slice_of::<f32>() else {
             return Err(gst::FlowError::Error);
         };
+
+        // The tensor buffer may be larger than the tensor itself, so only use
+        // the elements that belong to this tensor.
+        let detections_data = &detections_data[..num_candidates * num_fields];
 
         // Non-maximum suppression (NMS) filter conceptually based on the one in
         // https://github.com/tracel-ai/models/blob/main/yolox-burn/src/model/boxes.rs
@@ -808,23 +812,57 @@ fn find_yolo_seg_tensors(
                 detections_info.dim_order,
                 &[1, usize::MAX, usize::MAX],
             )?;
-            if detections.dims()[1] < 6 && detections.dims().len() != 3 {
+            if detections.dims().len() != 3 {
                 return None;
             }
 
-            if let Some(protos) = meta.typed_tensor(
+            let Some(protos) = meta.typed_tensor(
                 glib::Quark::from_static_str(protos_info.name),
                 gst_analytics::TensorDataType::Float32,
                 protos_info.dim_order,
                 &[1, usize::MAX, usize::MAX, usize::MAX],
-            ) {
-                if protos.dims().len() != 4 {
-                    return None;
-                }
-            } else {
-                gst::warning![CAT, "found valid detections tensor, but no protos tensor"];
+            ) else {
+                gst::warning!(CAT, "Ignoring segmentation because found detections tensor without protos tensor");
                 return None;
             };
+            if protos.dims().len() != 4 {
+                return None;
+            }
+
+            match format {
+                YoloSegTensorGroupFormat::YV8SEG => {
+                    // Need 4 box + 1 class + num_masks fields in the detections
+                    // tensor, otherwise there are no classes to decode from.
+                    if detections.dims()[1] < 4 + 1 + protos.dims()[1] {
+                        gst::warning!(
+                            CAT,
+                            "Ignoring segmentation because detections don't match protos: dims[1] is {} < {}",
+                            detections.dims()[1],
+                            4 + 1 + protos.dims()[1]
+                        );
+                        return None;
+                    }
+                    // A tensor without candidates would make the per-candidate
+                    // decoding panic.
+                    if detections.dims()[2] == 0 {
+                        gst::warning!(CAT, "Ignoring segmentation because detections don't match protos: dims[2] is 0");
+                        return None;
+                    }
+                }
+                YoloSegTensorGroupFormat::Y26SEG => {
+                    // The Yolo26 end2end layout has a fixed set of 4 box + 1 score +
+                    // 1 class fields followed by exactly one mask weight per proto.
+                    if detections.dims()[2] != 6 + protos.dims()[1] {
+                        gst::warning!(
+                            CAT,
+                            "Ignoring segmentation because detections don't match protos: dims[2] is {} != {}",
+                            detections.dims()[2],
+                            6 + protos.dims()[1]
+                        );
+                        return None;
+                    }
+                }
+            }
 
             Some(YoloSegTensors {
                 meta: meta.clone(),
