@@ -185,8 +185,7 @@ fn validate_moof(moof: &Moof) -> Result<(i32, u32), ValidationError> {
     assert!(data_offset.is_some());
 
     // First trun entry will be key frame when chunking on key frames.
-    let trun_entries: Vec<mp4_atom::TrunEntry> = traf.trun.first().unwrap().entries.clone();
-    let trun_entry = trun_entries.first().unwrap();
+    let trun_entry = traf.trun.first().unwrap().samples.get(0).unwrap();
     assert!(trun_entry.size.is_some());
 
     Ok((data_offset.unwrap(), trun_entry.size.unwrap()))

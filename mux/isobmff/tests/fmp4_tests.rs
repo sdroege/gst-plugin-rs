@@ -4379,10 +4379,10 @@ fn check_frag_file_structure(
                 if expected_config.is_audio {
                     // This offset and count is a bit arbitrary, since its codec specific
                     assert!(trun.data_offset.is_some_and(|offset| offset >= 112));
-                    assert!(trun.entries.len() >= 3);
+                    assert!(trun.samples.len() >= 3);
                 } else {
                     assert_eq!(trun.data_offset, Some(184));
-                    assert_eq!(trun.entries.len(), 10);
+                    assert_eq!(trun.samples.len(), 10);
                 }
                 // TODO: this could check the entries.
             }

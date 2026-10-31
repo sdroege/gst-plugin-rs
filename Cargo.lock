@@ -3022,7 +3022,7 @@ dependencies = [
  "futures-util",
  "hxdmp",
  "iso8601",
- "mp4-atom",
+ "mp4-atom 0.15.0",
  "num-traits",
  "oxideav-subtitle",
  "quick-xml 0.42.0",
@@ -4996,7 +4996,7 @@ dependencies = [
  "gstreamer-gl-x11",
  "gstreamer-video",
  "gtk4",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5041,7 +5041,7 @@ dependencies = [
  "gstreamer-pbutils",
  "gstreamer-video",
  "m3u8-rs",
- "mp4-atom",
+ "mp4-atom 0.17.0",
  "sprintf",
 ]
 
@@ -5115,7 +5115,7 @@ dependencies = [
  "gstreamer-tag",
  "gstreamer-video",
  "m3u8-rs",
- "mp4-atom",
+ "mp4-atom 0.17.0",
  "num-integer",
  "quick-xml 0.42.0",
  "serde",
@@ -5541,7 +5541,7 @@ dependencies = [
  "socket2 0.6.5",
  "thiserror 2.0.20",
  "waker-fn",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8063,6 +8063,19 @@ name = "mp4-atom"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3d7433df407a636db7047600422af07145adf6ee25e0622745b0131516dbc3c"
+dependencies = [
+ "derive_more",
+ "num",
+ "pastey 0.2.3",
+ "thiserror 1.0.69",
+ "tracing",
+]
+
+[[package]]
+name = "mp4-atom"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "718b5227fa90c52ed2e72d4d553560130d9e128acb6217d9fe0ea57312ee7063"
 dependencies = [
  "derive_more",
  "num",

@@ -162,8 +162,10 @@ fn check_minf_sanity(minf: &mp4_atom::Minf, expected_config: &ExpectedConfigurat
 
 fn check_dinf_sanity(dinf: &mp4_atom::Dinf) {
     let dref = &dinf.dref;
-    assert_eq!(dref.urls.len(), 1);
-    let url = &dref.urls[0];
+    assert_eq!(dref.entries.len(), 1);
+    let mp4_atom::DrefEntry::Url(url) = &dref.entries[0] else {
+        panic!("Expected a url entry in dref");
+    };
     assert!(url.location.is_empty());
 }
 
@@ -387,7 +389,7 @@ fn check_stsd_sanity(stsd: &mp4_atom::Stsd, expected_config: &ExpectedConfigurat
             mp4_atom::Codec::S16l(_s16l) => {
                 todo!("Unsupported codec type: s16l");
             }
-            mp4_atom::Codec::Unknown(four_cc) => {
+            mp4_atom::Codec::Unknown(four_cc, _) => {
                 todo!("Unsupported codec type: {:?}", four_cc);
             }
             &_ => {
