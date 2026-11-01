@@ -676,7 +676,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
 
             // Check lengths and line/pixel offsets
 
-            if payload.len() < length || length % pgroup_size != 0 {
+            if payload.len() < length {
                 gst::warning!(
                     CAT,
                     imp = self,
@@ -685,8 +685,26 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
                     payload.len(),
                 );
 
+                // The following chunks can't be located anymore, so drop the
+                // rest of this packet
+                break;
+            }
+
+            if length % pgroup_size != 0 {
+                gst::warning!(
+                    CAT,
+                    imp = self,
+                    "Bad chunk header: specifies {length} bytes which is not a \
+                    multiple of the pixel group size {pgroup_size}",
+                );
+
+                // The following chunks are still at the offset the header
+                // declares, so skip this chunk and continue with the next one
+                payload = &payload[length..];
                 continue;
             }
+
+            let (chunk_data, remainder) = payload.split_at(length);
 
             if x + x_inc > width.next_multiple_of(x_inc)
                 || y + y_inc > height.next_multiple_of(y_inc)
@@ -701,10 +719,9 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
                     and pgroup size {pgroup_size}, x_inc {x_inc}, y_inc {y_inc}",
                 );
 
+                payload = remainder;
                 continue;
             }
-
-            let (chunk_data, remainder) = payload.split_at(length);
 
             match format {
                 // Formats where we can just memcpy pixels directly from source to dest
