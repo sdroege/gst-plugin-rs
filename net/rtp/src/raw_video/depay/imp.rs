@@ -445,12 +445,19 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
 
         // TODO handle grayscale 16 TI specific attributes DEF STAN 00-082 § B.6.2
 
-        let video_info = VideoInfo::builder(fmt, width, height)
+        let Ok(video_info) = VideoInfo::builder(fmt, width, height)
             .colorimetry_if_some(colorimetry.as_ref())
             .fps_if_some(framerate)
             .chroma_site_if_some(chroma_site)
             .build()
-            .unwrap();
+        else {
+            gst::error!(
+                CAT,
+                imp = self,
+                "Unsupported resolution {width}x{height} for {fmt}"
+            );
+            return false;
+        };
 
         let output_caps = video_info.to_caps().unwrap();
 
