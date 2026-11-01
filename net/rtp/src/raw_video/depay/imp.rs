@@ -468,6 +468,8 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
             return false;
         }
 
+        let _ = state.output_frame.take();
+
         let pgroup = PixelGroup::from_video_info(&video_info).unwrap();
         gst::info!(CAT, imp = self, "{pgroup:?} for {video_info:?}");
         state.pgroup = Some(pgroup);
