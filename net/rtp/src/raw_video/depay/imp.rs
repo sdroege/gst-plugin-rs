@@ -646,7 +646,17 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
                     imp = self,
                     "skipping chunk {i}: {length} bytes @ out of range line nb {line_nb}"
                 );
-                let (_, remainder) = payload.split_at(length);
+                let Some((_, remainder)) = payload.split_at_checked(length) else {
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Chunk {i} declares {length} bytes but only {} remain",
+                        payload.len(),
+                    );
+                    // The remaining chunk headers would be parsed from a
+                    // wrong offset, so drop the rest of this packet
+                    break;
+                };
                 payload = remainder;
                 continue;
             };
@@ -721,7 +731,7 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpRawVideoDepay {
                     let byte_offset = x * pstride;
                     let pixels = &mut line[byte_offset..][..length];
 
-                    pixels.copy_from_slice(chunk_data);
+                    pixels.copy_from_slice(&chunk_data[..length]);
                 }
 
                 // Uyvy: packed YUV 4:2:2
