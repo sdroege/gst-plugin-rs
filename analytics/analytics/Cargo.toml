@@ -46,6 +46,10 @@ required-features = ["v1_28"]
 name = "analyticssplitter"
 required-features = ["v1_28"]
 
+[[test]]
+name = "tensordecodebin"
+required-features = ["v1_28"]
+
 [package.metadata.capi]
 min_version = "0.9.21"
 

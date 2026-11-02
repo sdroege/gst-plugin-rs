@@ -31,6 +31,8 @@ mod combiner;
 mod splitter;
 
 #[cfg(feature = "v1_28")]
+mod tensordecodebin;
+#[cfg(feature = "v1_28")]
 mod yolotensordec;
 #[cfg(feature = "v1_30")]
 mod zerodcetensordec;
@@ -66,6 +68,9 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
     #[cfg(feature = "v1_28")]
     yolotensordec::register(plugin)?;
+
+    #[cfg(feature = "v1_28")]
+    tensordecodebin::register(plugin)?;
 
     #[cfg(feature = "v1_30")]
     zerodcetensordec::register(plugin)?;
