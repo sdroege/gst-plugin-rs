@@ -11704,6 +11704,35 @@
                 },
                 "rank": "none"
             },
+            "tensordecodebin2": {
+                "author": "Daniel Morin <daniel.morin@collabora.com>",
+                "description": "Tensor Decode Bin",
+                "hierarchy": [
+                    "GstTensorDecodeBin2",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Tensordecoder/Bin",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "none"
+            },
             "yolo26obbtensordec": {
                 "author": "Jan Schmidt <jan@centricular.com>",
                 "description": "Decodes tensors from a YoloV10-obb, Yolo11-obb, Yolo12-obb and Yolo26-obb model from the end2end (one-to-one) head",
