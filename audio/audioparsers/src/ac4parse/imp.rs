@@ -28,11 +28,20 @@ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 const MIN_AC4_FRAME_SIZE: usize = 8;
 const AC4_SYNCWORD_NO_CRC: u16 = 0xAC40;
 const AC4_SYNCWORD_WITH_CRC: u16 = 0xAC41;
+const AC4_FRAME_SIZE_ESCAPE: u16 = 0xFFFF;
+const AC4_MAX_FRAME_SIZE: usize = 0xFFFFFF;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Alignment {
     None,
     Frame,
+}
+
+// AC-4 stream-format, as in the caps
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StreamFormat {
+    Raw,
+    SyncFrame,
 }
 
 // Frame rate information for AC-4 streams - based on ETSI TS 103 190-1
@@ -200,6 +209,9 @@ struct State {
     bitstream_version: Option<u32>,
     sequence_counter_prev: Option<u16>,
     alignment: Alignment,
+    input_stream_format: StreamFormat,
+    add_sync_header: bool,
+    sent_output_is_syncframe: Option<bool>,
 }
 
 impl Default for State {
@@ -211,11 +223,21 @@ impl Default for State {
             bitstream_version: None,
             sequence_counter_prev: None,
             alignment: Alignment::None,
+            input_stream_format: StreamFormat::SyncFrame,
+            add_sync_header: false,
+            sent_output_is_syncframe: None,
         }
     }
 }
 
 impl Ac4Parse {
+    fn min_frame_size(stream_format: StreamFormat) -> u32 {
+        match stream_format {
+            StreamFormat::Raw => 1,
+            StreamFormat::SyncFrame => MIN_AC4_FRAME_SIZE as u32,
+        }
+    }
+
     fn find_syncword(data: &[u8]) -> Option<(usize, bool)> {
         if data.len() < 2 {
             return None;
@@ -282,19 +304,18 @@ impl Ac4Parse {
 
     /// Parse AC-4 Table of Contents to extract frame information
     /// Based on ETSI TS 103 190-1 - Annex G
+    ///
+    /// `header_skip_bits` is the size, in bits, of what precedes the
+    /// `ac4_toc()` itself: 0 for a raw `raw_ac4_frame()`
     fn parse_toc(
         &self,
         data: &[u8],
-        extended_frame_size: bool,
+        header_skip_bits: u32,
         state: &mut State,
     ) -> std::io::Result<FrameInfo> {
         let mut reader = BitReader::endian(Cursor::new(data), BigEndian);
 
-        if extended_frame_size {
-            reader.skip(56)?; // syncword (16) + frame_size_indicator (16) + frame_size (24)
-        } else {
-            reader.skip(32)?; // syncword (16) + frame_size (16)
-        }
+        reader.skip(header_skip_bits)?;
 
         let mut bitstream_version: u32 = reader.read::<2, u32>()?; // bitstream_version
         if bitstream_version == 3 {
@@ -415,7 +436,7 @@ impl ElementImpl for Ac4Parse {
                 )
                 .field("bitstream-version", gst::List::new([1, 2]))
                 .field("alignment", "frame")
-                .field("stream-format", "syncframe")
+                .field("stream-format", gst::List::new(["raw", "syncframe"]))
                 .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
@@ -425,6 +446,10 @@ impl ElementImpl for Ac4Parse {
             )
             .unwrap();
 
+            // stream-format is optional, without it the input is assumed to
+            // be syncframe. Without the markers we have no way of distinguishing
+            // corrupted data from raw, this why stream-format should be explicitly
+            // signal.
             let sink_caps = gst::Caps::builder_full()
                 .structure(gst::Structure::new_empty("audio/x-ac4"))
                 .structure(gst::Structure::new_empty("audio/ac4"))
@@ -475,121 +500,138 @@ impl BaseParseImpl for Ac4Parse {
             gst::FlowError::Error
         })?;
 
-        // Check minimum size
-        if map.size() < MIN_AC4_FRAME_SIZE {
+        let stream_format = self.state.lock().unwrap().input_stream_format;
+
+        // A raw frame can't be resynced on, so drop the whole buffer
+        // instead of skipping a single byte
+        let error_skip = match stream_format {
+            StreamFormat::Raw => map.size() as u32,
+            StreamFormat::SyncFrame => 1,
+        };
+
+        // Check minimum size, raw frames are validated by parse_toc()
+        if stream_format == StreamFormat::SyncFrame && map.size() < MIN_AC4_FRAME_SIZE {
             gst::trace!(CAT, imp = self, "Buffer too small: {} bytes", map.size());
-            return Ok((gst::FlowSuccess::Ok, 1));
+            return Ok((gst::FlowSuccess::Ok, error_skip));
         }
 
-        // Find syncword
-        let has_crc = match Self::find_syncword(&map) {
-            Some((0, has_crc)) => {
-                // Syncword at start
+        let (framesize, toc_header_skip_bits) = match stream_format {
+            StreamFormat::Raw => (map.size(), 0),
+            StreamFormat::SyncFrame => {
+                // Find syncword
+                let has_crc = match Self::find_syncword(&map) {
+                    Some((0, has_crc)) => {
+                        // Syncword at start
+                        gst::log!(
+                            CAT,
+                            imp = self,
+                            "AC4 syncword found at offset 0 (CRC: {})",
+                            has_crc
+                        );
+                        has_crc
+                    }
+                    Some((offset, has_crc)) => {
+                        // Syncword found but not at start, ignoring
+                        gst::log!(
+                            CAT,
+                            imp = self,
+                            "AC4 syncword found at offset {} (CRC: {}), skipping",
+                            offset,
+                            has_crc
+                        );
+                        return Ok((gst::FlowSuccess::Ok, offset as u32));
+                    }
+                    None => {
+                        // No syncword found - skip all but last 3 bytes
+                        // as syncword might span buffer boundaries
+                        let skip = map.size().saturating_sub(3);
+                        gst::log!(
+                            CAT,
+                            imp = self,
+                            "No AC4 syncword found, skipping {} bytes",
+                            skip
+                        );
+                        return Ok((gst::FlowSuccess::Ok, skip as u32));
+                    }
+                };
+
+                // Get frame size
+                let (framesize, extended_frame_size) = match Self::get_framesize(&map, has_crc) {
+                    Ok(result) => result,
+                    Err(_) => {
+                        gst::error!(CAT, imp = self, "Failed to parse frame size");
+                        return Ok((gst::FlowSuccess::Ok, 1));
+                    }
+                };
+
+                if framesize == 0 {
+                    gst::error!(CAT, imp = self, "Invalid frame size: 0");
+                    return Ok((gst::FlowSuccess::Ok, 1));
+                }
+
                 gst::log!(
                     CAT,
                     imp = self,
-                    "AC4 syncword found at offset 0 (CRC: {})",
-                    has_crc
+                    "AC4 frame: size={}, has_crc={}, extended={}",
+                    framesize,
+                    has_crc,
+                    extended_frame_size
                 );
-                has_crc
-            }
-            Some((offset, has_crc)) => {
-                // Syncword found but not at start - skip to it
-                gst::log!(
-                    CAT,
-                    imp = self,
-                    "AC4 syncword found at offset {} (CRC: {}), skipping",
-                    offset,
-                    has_crc
-                );
-                return Ok((gst::FlowSuccess::Ok, offset as u32));
-            }
-            None => {
-                // No syncword found - skip all but last 3 bytes
-                // (syncword might span buffer boundaries)
-                let skip = map.size().saturating_sub(3);
-                gst::log!(
-                    CAT,
-                    imp = self,
-                    "No AC4 syncword found, skipping {} bytes",
-                    skip
-                );
-                return Ok((gst::FlowSuccess::Ok, skip as u32));
+
+                // Need more data
+                if framesize > map.size() {
+                    gst::trace!(
+                        CAT,
+                        imp = self,
+                        "Need more data: have {}, need {}",
+                        map.size(),
+                        framesize
+                    );
+                    drop(map);
+                    // Set BaseParse to accumulate at least this much data
+                    self.obj().set_min_frame_size(framesize as u32);
+                    return Ok((gst::FlowSuccess::Ok, 0));
+                }
+
+                // Sync validation - verify next frame has a valid syncword when resyncing
+                if self.obj().lost_sync() && !self.obj().is_draining() {
+                    gst::debug!(
+                        CAT,
+                        imp = self,
+                        "Resyncing; checking for next frame syncword"
+                    );
+
+                    if framesize + 2 > map.size() {
+                        gst::warning!(CAT, imp = self, "Not enough data to check next syncword");
+                        drop(map);
+                        self.obj()
+                            .set_min_frame_size((framesize + MIN_AC4_FRAME_SIZE) as u32);
+                        return Ok((gst::FlowSuccess::Ok, 0));
+                    }
+
+                    // Check if next syncword is valid
+                    let next_word = u16::from_be_bytes([map[framesize], map[framesize + 1]]);
+                    if next_word != AC4_SYNCWORD_NO_CRC && next_word != AC4_SYNCWORD_WITH_CRC {
+                        gst::debug!(
+                            CAT,
+                            imp = self,
+                            "0x{:04x} not valid AC-4 syncword, skipping",
+                            next_word
+                        );
+                        return Ok((gst::FlowSuccess::Ok, 2));
+                    }
+
+                    gst::debug!(CAT, imp = self, "Valid syncword found, ending resync");
+                }
+
+                let header_skip_bits = if extended_frame_size { 56 } else { 32 };
+                (framesize, header_skip_bits)
             }
         };
-
-        // Get frame size
-        let (framesize, extended_frame_size) = match Self::get_framesize(&map, has_crc) {
-            Ok(result) => result,
-            Err(_) => {
-                gst::error!(CAT, imp = self, "Failed to parse frame size");
-                return Ok((gst::FlowSuccess::Ok, 1));
-            }
-        };
-
-        if framesize == 0 {
-            gst::error!(CAT, imp = self, "Invalid frame size: 0");
-            return Ok((gst::FlowSuccess::Ok, 1));
-        }
-
-        gst::log!(
-            CAT,
-            imp = self,
-            "AC4 frame: size={}, has_crc={}, extended={}",
-            framesize,
-            has_crc,
-            extended_frame_size
-        );
-
-        // Need more data? BaseParse will accumulate
-        if framesize > map.size() {
-            gst::trace!(
-                CAT,
-                imp = self,
-                "Need more data: have {}, need {}",
-                map.size(),
-                framesize
-            );
-            drop(map);
-            // Tell BaseParse to accumulate at least this much data before calling us again
-            self.obj().set_min_frame_size(framesize as u32);
-            return Ok((gst::FlowSuccess::Ok, 0));
-        }
-
-        // Sync validation - verify next frame has a valid syncword when resyncing
-        if self.obj().lost_sync() && !self.obj().is_draining() {
-            gst::debug!(
-                CAT,
-                imp = self,
-                "Resyncing; checking for next frame syncword"
-            );
-
-            if framesize + 2 > map.size() {
-                gst::warning!(CAT, imp = self, "Not enough data to check next syncword");
-                drop(map);
-                self.obj()
-                    .set_min_frame_size((framesize + MIN_AC4_FRAME_SIZE) as u32);
-                return Ok((gst::FlowSuccess::Ok, 0));
-            }
-
-            // Check if next syncword is valid
-            let next_word = u16::from_be_bytes([map[framesize], map[framesize + 1]]);
-            if next_word != AC4_SYNCWORD_NO_CRC && next_word != AC4_SYNCWORD_WITH_CRC {
-                gst::debug!(
-                    CAT,
-                    imp = self,
-                    "0x{:04x} not valid AC-4 syncword, skipping",
-                    next_word
-                );
-                return Ok((gst::FlowSuccess::Ok, 2));
-            }
-
-            gst::debug!(CAT, imp = self, "Valid syncword found, ending resync");
-        }
 
         // Parse TOC to extract frame information
         let mut state = self.state.lock().unwrap();
-        let frame_info = match self.parse_toc(&map, extended_frame_size, &mut state) {
+        let frame_info = match self.parse_toc(&map, toc_header_skip_bits, &mut state) {
             Ok(info) => {
                 gst::log!(
                     CAT,
@@ -606,7 +648,7 @@ impl BaseParseImpl for Ac4Parse {
             Err(e) => {
                 gst::error!(CAT, imp = self, "Failed to parse TOC: {}", e);
                 drop(state);
-                return Ok((gst::FlowSuccess::Ok, 1));
+                return Ok((gst::FlowSuccess::Ok, error_skip));
             }
         };
 
@@ -617,22 +659,27 @@ impl BaseParseImpl for Ac4Parse {
             state.alignment = Alignment::Frame;
         }
 
-        // Set caps on first frame, when sample rate or frame rate changes, or on source change
+        let add_sync_header = state.add_sync_header;
+        let output_is_syncframe = stream_format == StreamFormat::SyncFrame || add_sync_header;
+
+        // Set caps on first frame, when sample rate or frame rate changes, on
+        // source change, or when the output stream-format changes
         let caps_changed = state.sample_rate != Some(frame_info.rate)
             || state.frame_rate_numerator != Some(frame_info.framerate_numerator)
             || state.frame_rate_denominator != Some(frame_info.framerate_denominator)
             || state.bitstream_version != Some(frame_info.bitstream_version)
-            || frame_info.source_change;
+            || frame_info.source_change
+            || state.sent_output_is_syncframe != Some(output_is_syncframe);
 
         if caps_changed {
             state.sample_rate = Some(frame_info.rate);
             state.frame_rate_numerator = Some(frame_info.framerate_numerator);
             state.frame_rate_denominator = Some(frame_info.framerate_denominator);
             state.bitstream_version = Some(frame_info.bitstream_version);
+            state.sent_output_is_syncframe = Some(output_is_syncframe);
 
             let caps = gst::Caps::builder("audio/x-ac4")
                 .field("alignment", "frame")
-                .field("stream-format", "syncframe")
                 .field("rate", frame_info.rate as i32)
                 .field(
                     "framerate",
@@ -642,6 +689,14 @@ impl BaseParseImpl for Ac4Parse {
                     ),
                 )
                 .field("bitstream-version", frame_info.bitstream_version as i32)
+                .field(
+                    "stream-format",
+                    if output_is_syncframe {
+                        "syncframe"
+                    } else {
+                        "raw"
+                    },
+                )
                 .build();
 
             gst::debug!(CAT, imp = self, "Setting caps: {}", caps);
@@ -673,33 +728,95 @@ impl BaseParseImpl for Ac4Parse {
         let output = frame.buffer_mut().unwrap();
         output.set_duration(duration);
 
+        if add_sync_header {
+            if framesize > AC4_MAX_FRAME_SIZE {
+                gst::element_imp_error!(
+                    self,
+                    gst::StreamError::Format,
+                    ["frame too large for a sync frame: {framesize}"]
+                );
+                return Err(gst::FlowError::Error);
+            }
+
+            // Use the 16-bit frame_size unless it doesn't fit, in which case
+            // escape to the 24-bit one
+            let mut header = Vec::with_capacity(7);
+            header.extend_from_slice(&AC4_SYNCWORD_NO_CRC.to_be_bytes());
+            if framesize < AC4_FRAME_SIZE_ESCAPE as usize {
+                header.extend_from_slice(&(framesize as u16).to_be_bytes());
+            } else {
+                header.extend_from_slice(&AC4_FRAME_SIZE_ESCAPE.to_be_bytes());
+                header.extend_from_slice(&(framesize as u32).to_be_bytes()[1..]);
+            }
+            let header_mem = gst::Memory::from_mut_slice(header);
+
+            let mut out_buffer = frame.buffer().unwrap().to_owned();
+            out_buffer.make_mut().prepend_memory(header_mem);
+            frame.set_output_buffer(out_buffer);
+        }
+
         // Finish frame - BaseParse will push it downstream
         self.obj().finish_frame(frame, framesize as u32)?;
 
         // Reset min frame size for next frame
-        self.obj().set_min_frame_size(MIN_AC4_FRAME_SIZE as u32);
+        self.obj()
+            .set_min_frame_size(Self::min_frame_size(stream_format));
 
         Ok((gst::FlowSuccess::Ok, 0))
     }
 
-    fn sink_caps(&self, filter: Option<&gst::Caps>) -> gst::Caps {
-        let template_caps = self.obj().sink_pad().pad_template_caps();
+    fn set_sink_caps(&self, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
+        gst::debug!(CAT, imp = self, "Sink caps: {caps}");
 
-        // Query downstream (SRC!!) peer pads
-        let peer_caps = self.obj().src_pad().peer_query_caps(filter);
+        // Raw input, one raw_ac4_frame() per buffer without sync header, has
+        // to be signalled. Otherwise sync frames are expected.
+        let s = caps
+            .structure(0)
+            .ok_or_else(|| gst::loggable_error!(CAT, "Empty sink caps"))?;
+        let input_stream_format = match s.get_optional::<&str>("stream-format") {
+            Ok(Some("raw")) => StreamFormat::Raw,
+            Ok(Some("syncframe")) | Ok(None) => StreamFormat::SyncFrame,
+            Ok(Some(other)) => {
+                return Err(gst::loggable_error!(
+                    CAT,
+                    "Unsupported stream-format {other}"
+                ));
+            }
+            Err(err) => {
+                return Err(gst::loggable_error!(CAT, "Invalid stream-format: {err}"));
+            }
+        };
 
-        gst::debug!(CAT, imp = self, "Peer caps: {peer_caps}");
+        let mut add_sync_header = false;
+        if input_stream_format == StreamFormat::Raw {
+            let peer_caps = self.obj().src_pad().peer_query_caps(None);
+            let output_caps = |stream_format: &str| {
+                let mut caps = self.obj().src_pad().pad_template_caps();
+                for s in caps.make_mut().iter_mut() {
+                    s.set("stream-format", stream_format);
+                }
+                caps
+            };
 
-        let mut negotiated_caps =
-            peer_caps.intersect_with_mode(&template_caps, gst::CapsIntersectMode::First);
-
-        if let Some(f) = filter {
-            negotiated_caps =
-                f.intersect_with_mode(&negotiated_caps, gst::CapsIntersectMode::First);
+            if !output_caps("raw").can_intersect(&peer_caps)
+                && output_caps("syncframe").can_intersect(&peer_caps)
+            {
+                gst::debug!(
+                    CAT,
+                    imp = self,
+                    "Downstream requires sync frames, converting from raw to syncframe"
+                );
+                add_sync_header = true;
+            }
         }
 
-        gst::debug!(CAT, imp = self, "Negotiated caps: {negotiated_caps}");
+        self.obj()
+            .set_min_frame_size(Self::min_frame_size(input_stream_format));
 
-        negotiated_caps
+        let mut state = self.state.lock().unwrap();
+        state.input_stream_format = input_stream_format;
+        state.add_sync_header = add_sync_header;
+
+        Ok(())
     }
 }
