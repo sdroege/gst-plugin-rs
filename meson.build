@@ -740,6 +740,36 @@ endif
 # get cmdline for rust
 extra_env += {'RUSTC': ' '.join(rustc.cmd_array())}
 
+if meson.is_cross_build()
+  # Forward the cross toolchain to cargo build scripts (cc, pkg-config and
+  # bindgen crates), which do not know anything about the Meson machine
+  # files. The cc crate reads the TARGET_* variants only when building for
+  # the target, so this does not affect host build scripts.
+  cpp_found = add_languages('cpp', required: false, native: false)
+  extra_env += {
+    'TARGET_CC': ' '.join(cc.cmd_array()),
+    'TARGET_CFLAGS': ' '.join(get_option('c_args')),
+  }
+  if cpp_found
+    cpp = meson.get_compiler('cpp')
+    extra_env += {
+      'TARGET_CXX': ' '.join(cpp.cmd_array()),
+      'TARGET_CXXFLAGS': ' '.join(get_option('cpp_args')),
+    }
+  endif
+  sys_root = meson.get_external_property('sys_root', '')
+  if sys_root != ''
+    # Consumed by cargo_wrapper.py, which knows the Rust target triple and
+    # turns these into the triple-suffixed variables understood by the
+    # pkg-config and bindgen crates.
+    extra_env += {'MESON_CROSS_SYSROOT': sys_root}
+  endif
+  pkg_config_libdir = meson.get_external_property('pkg_config_libdir', '')
+  if pkg_config_libdir != ''
+    extra_env += {'MESON_CROSS_PKG_CONFIG_LIBDIR': pkg_config_libdir}
+  endif
+endif
+
 # openssl-sys on Windows only supports vcpkg, not pkg-config
 if deps_cache.has_key('openssl') and host_system == 'windows'
   openssl = deps_cache.get('openssl')
