@@ -376,3 +376,178 @@ fn test_g726() {
 
     run_test_pipeline(Source::Bin(src), pay, depay, expected_pay, expected_depay);
 }
+
+#[test]
+fn test_g729() {
+    init();
+
+    let caps = gst::Caps::builder("audio/G729")
+        .field("channels", 1)
+        .field("rate", 8000i32)
+        .build();
+
+    // splits 4 frame inputs into individual frames for payloading
+    let pay = "rtpg729pay2";
+    let depay = "rtpg729depay2";
+
+    let mut buffers = Vec::with_capacity(100);
+    for i in 0..10 {
+        let frame = i % 10;
+        let size = match frame {
+            0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 => 10,
+            4 => 2,
+            _ => unreachable!(),
+        };
+
+        let mut buffer = gst::Buffer::from_mut_slice(vec![frame; size]);
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(gst::ClockTime::from_mseconds(i as u64 * 10));
+        }
+        buffers.push(buffer);
+    }
+
+    let mut expected_pay = Vec::with_capacity(100);
+    for i in 0..10 {
+        let frame = i % 10;
+        let size = match frame {
+            0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 => 10,
+            4 => 2,
+            _ => unreachable!(),
+        };
+        expected_pay.push(vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(i * 10))
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER
+                } else {
+                    gst::BufferFlags::empty()
+                })
+                .pt(18)
+                .rtp_time(((i * 80) & 0xffff_ffff) as u32)
+                .marker_bit(i == 0)
+                .size(12 + size)
+                .build(),
+        ]);
+    }
+
+    let mut expected_depay = Vec::with_capacity(100);
+    for i in 0..10 {
+        let frame = i % 10;
+        let size = match frame {
+            0 | 1 | 2 | 3 | 5 | 6 | 7 | 8 | 9 => 10,
+            4 => 2,
+            _ => unreachable!(),
+        };
+        expected_depay.push(vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(i * 10))
+                .size(size)
+                .flags(if i == 0 {
+                    gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC
+                } else {
+                    gst::BufferFlags::empty()
+                })
+                .build(),
+        ]);
+    }
+
+    run_test_pipeline(
+        Source::Buffers(caps, buffers),
+        pay,
+        depay,
+        expected_pay,
+        expected_depay,
+    );
+}
+
+#[test]
+fn test_g729_cn_with_max_ptime() {
+    init();
+
+    let caps = gst::Caps::builder("audio/G729")
+        .field("channels", 1)
+        .field("rate", 8000i32)
+        .build();
+
+    // max-ptime is clamped to a single 10-byte frame (max_packet_size = 10).
+    // A single input buffer of 20 voice bytes + 2 CN bytes (22 bytes total)
+    // must be split into [10][10][2] to match the C payloader reference.
+    //
+    // REPRO: prior to the fix, the CN drain path desynced `queued_bytes` from
+    // the queued buffer list and panicked on an empty queue (front().unwrap()),
+    // aborting the process. This test reproduces that bug.
+    let pay = "rtpg729pay2 max-ptime=10000000";
+    let depay = "rtpg729depay2";
+
+    // 2 frames of voice (20 bytes) followed by one CN frame (2 bytes).
+    let data: Vec<u8> = std::iter::repeat_n(0u8, 20).chain([0xEE, 0xEE]).collect();
+    let mut buffer = gst::Buffer::from_mut_slice(data);
+    {
+        let buffer = buffer.get_mut().unwrap();
+        buffer.set_pts(gst::ClockTime::ZERO);
+    }
+
+    let buffers = vec![buffer];
+
+    // Expected output matches the C reference: 10 + 10 voice bytes, then 2 CN.
+    let expected_pay = vec![
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::ZERO)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
+                .pt(18)
+                .rtp_time(0)
+                .marker_bit(true)
+                .size(12 + 10)
+                .build(),
+        ],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(10))
+                .pt(18)
+                .rtp_time(80)
+                .size(12 + 10)
+                .build(),
+        ],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(20))
+                .pt(18)
+                .rtp_time(160)
+                .size(12 + 2)
+                .build(),
+        ],
+    ];
+
+    // The depayer emits one buffer per RTP packet: 10 + 10 voice, then 2 CN.
+    let expected_depay = vec![
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(10)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC)
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(10))
+                .size(10)
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(20))
+                .size(2)
+                .build(),
+        ],
+    ];
+
+    run_test_pipeline(
+        Source::Buffers(caps, buffers),
+        pay,
+        depay,
+        expected_pay,
+        expected_depay,
+    );
+}

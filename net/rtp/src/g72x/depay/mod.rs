@@ -12,6 +12,7 @@ use gst::{glib, prelude::*};
 pub mod g722;
 pub mod g723;
 pub mod g726;
+pub mod g729;
 
 glib::wrapper! {
     pub struct RtpG722Depay(ObjectSubclass<g722::RtpG722Depay>)
@@ -25,6 +26,11 @@ glib::wrapper! {
 
 glib::wrapper! {
     pub struct RtpG726Depay(ObjectSubclass<g726::RtpG726Depay>)
+        @extends crate::basedepay::RtpBaseDepay2, gst::Element, gst::Object;
+}
+
+glib::wrapper! {
+    pub struct RtpG729Depay(ObjectSubclass<g729::RtpG729Depay>)
         @extends crate::basedepay::RtpBaseDepay2, gst::Element, gst::Object;
 }
 
@@ -46,5 +52,11 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         "rtpg726depay2",
         gst::Rank::PRIMARY,
         RtpG726Depay::static_type(),
+    )?;
+    gst::Element::register(
+        Some(plugin),
+        "rtpg729depay2",
+        gst::Rank::PRIMARY,
+        RtpG729Depay::static_type(),
     )
 }
