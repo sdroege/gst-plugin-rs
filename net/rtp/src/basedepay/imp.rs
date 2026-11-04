@@ -424,7 +424,7 @@ impl RtpBaseDepay2 {
                             break;
                         }
 
-                        let len = extensions_data[1];
+                        let len = extensions_data[0];
                         extensions_data = &extensions_data[1..];
 
                         (id, len as usize)
