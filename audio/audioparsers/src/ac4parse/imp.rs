@@ -350,6 +350,13 @@ impl Ac4Parse {
             &FRAME_RATE_TABLE_48KHZ[frame_rate_index as usize]
         };
 
+        if frame_rate.numerator == 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("reserved frame_rate_index {frame_rate_index} for {rate} Hz"),
+            ));
+        }
+
         gst::log!(CAT, imp = self, "Parsed sample rate: {rate}");
         gst::log!(
             CAT,
