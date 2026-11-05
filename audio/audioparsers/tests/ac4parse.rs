@@ -81,3 +81,24 @@ fn test_parse_ac4_2ch() {
         bitstream_version
     );
 }
+
+#[test]
+fn test_parse_ac4_reserved_frame_rate() {
+    init();
+
+    let mut h = gst_check::Harness::new("ac4parse");
+    h.play();
+    h.set_src_caps(gst::Caps::builder("audio/x-ac4").build());
+
+    // Invalid syncframes with reserved/invalid frame_rate index for the fs_index = 0
+    let bad_frame = [0xAC, 0x40, 0x00, 0x08, 0, 0, 0, 0, 0, 0, 0, 0];
+    let mut data = Vec::new();
+    data.extend_from_slice(&bad_frame);
+    data.extend_from_slice(&bad_frame);
+    data.extend_from_slice(include_bytes!("sample_2ch.ac4"));
+    h.push(gst::Buffer::from_slice(data)).unwrap();
+
+    // First output is the first frame of the sample
+    let out_buffer = h.pull().unwrap();
+    assert_eq!(out_buffer.size(), 432);
+}
