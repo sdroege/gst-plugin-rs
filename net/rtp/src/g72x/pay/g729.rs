@@ -32,11 +32,11 @@ use crate::{
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 audiotestsrc wave=ticks ! audio/x-raw,rate=8000,channels=1 ! avenc_g729 ! rtpg729pay2 ! udpsink host=127.0.0.1 port=5004
+ * gst-launch-1.0 audiotestsrc wave=ticks ! audio/x-raw,rate=8000,channels=1 ! avenc_g729 ! rtpg729pay2 ! udpsink2 host=127.0.0.1 port=5004
  * ]| This will generate an G.729 audio test signal and payload it as RTP and send it out
  * as UDP to localhost port 5004.
  *
- * Since: plugins-rs-0.13.0
+ * Since: plugins-rs-0.16.0
  */
 
 #[derive(Clone)]

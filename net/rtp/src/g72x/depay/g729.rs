@@ -24,11 +24,11 @@ use crate::basedepay::RtpBaseDepay2Ext;
  * ## Example pipeline
  *
  * |[
- * gst-launch-1.0 udpsrc caps='application/x-rtp, media=audio, clock-rate=8000, payload=18' ! rtpjitterbuffer latency=50 ! rtpg729depay2 ! avenc_g729 ! audioconvert ! audioresample ! autoaudiosink
+ * gst-launch-1.0 udpsrc2 caps='application/x-rtp, media=audio, clock-rate=8000, payload=18' ! rtpjitterbuffer latency=50 ! rtpg729depay2 ! avenc_g729 ! audioconvert ! audioresample ! autoaudiosink
  * ]| This will depayload an incoming RTP G729 audio stream. You can use the #rtpg729pay2 and
  * avenc_g729 elements to create such an RTP stream.
  *
- * Since: plugins-rs-0.13.0
+ * Since: plugins-rs-0.19.0
  */
 
 #[derive(Default)]
