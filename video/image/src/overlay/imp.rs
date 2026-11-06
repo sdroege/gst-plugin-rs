@@ -1,13 +1,10 @@
 // SPDX-CopyrightText: 2026 Amyspark <amy@centricular.com>
 // SPDX-License-Identifier: MPL-2.0
-// Based on onvifmetadataoverlay, hsvdetectorm and gdkpixbufoverlay
+// Based on onvifmetadataoverlay, hsvdetectorm, gdkpixbufoverlay and overlaycompositor
 
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst_base::prelude::*;
-use gst_video::prelude::*;
-use gst_video::subclass::prelude::*;
 
 use image::{DynamicImage, ImageReader, Limits};
 
@@ -25,6 +22,9 @@ pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 
 #[derive(Default)]
 struct State {
+    segment: gst::FormattedSegment<gst::ClockTime>,
+    video_info: Option<gst_video::VideoInfo>,
+    upstream_caps: Option<gst::Caps>,
     composition: Option<gst_video::VideoOverlayComposition>,
     location: Option<String>,
     image: Option<gst::Buffer>,
@@ -41,6 +41,7 @@ pub enum PositioningMode {
     PixelsAbsolute = 1,
 }
 
+#[derive(Clone)]
 struct Settings {
     location: Option<String>,
     offset_x: i32,
@@ -75,19 +76,241 @@ impl Default for Settings {
     }
 }
 
-#[derive(Default)]
 pub struct ImageRsOverlay {
+    srcpad: gst::Pad,
+    sinkpad: gst::Pad,
     state: Mutex<State>,
     settings: Mutex<Settings>,
 }
 
 impl ImageRsOverlay {
+    fn query_caps(&self, pad: &gst::Pad, filter: Option<&gst::CapsRef>) -> gst::Caps {
+        let caps = if pad.direction() == gst::PadDirection::Sink {
+            self.srcpad.peer_query_caps(Some(&pad.pad_template_caps()))
+        } else {
+            self.sinkpad.peer_query_caps(Some(&pad.pad_template_caps()))
+        };
+
+        let mut result = caps.clone();
+        for (structure, features) in caps.iter_with_features() {
+            if features.is_any() {
+                continue;
+            }
+
+            let mut features = features.to_owned();
+            if pad.direction() == gst::PadDirection::Sink {
+                features.remove(gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION);
+            } else {
+                features.add(gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION);
+            }
+
+            result
+                .make_mut()
+                .append_structure_full(structure.to_owned(), Some(features));
+        }
+
+        if let Some(filter) = filter {
+            filter.intersect_with_mode(&result, gst::CapsIntersectMode::First)
+        } else {
+            result
+        }
+    }
+
+    fn sink_chain(
+        &self,
+        pad: &gst::Pad,
+        mut buffer: gst::Buffer,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst::trace!(CAT, obj = pad, "Handling buffer {buffer:?}");
+
+        if self.srcpad.check_reconfigure() {
+            self.negotiate()?;
+        }
+
+        let stream_time = self
+            .state
+            .lock()
+            .unwrap()
+            .segment
+            .to_stream_time(buffer.pts());
+
+        if let Some(stream_time) = stream_time
+            && let Err(e) = self.obj().sync_values(stream_time)
+        {
+            gst::log!(CAT, imp = self, "{e}");
+        }
+
+        let mut state = self.state.lock().unwrap();
+
+        if self.settings.lock().unwrap().location.is_some() {
+            // now properties have been sync'ed; maybe need to update composition
+            if state.update_composition && self.load_image(&mut state).is_ok() {
+                self.update_composition(&mut state);
+            }
+
+            if let Some(composition) = &state.composition {
+                let buffer = buffer.make_mut();
+                if state.allow_attaching {
+                    gst_video::VideoOverlayCompositionMeta::add(buffer, composition);
+                } else {
+                    let mut frame = gst_video::VideoFrameRef::from_buffer_ref_writable(
+                        buffer,
+                        state.video_info.as_ref().unwrap(),
+                    )
+                    .unwrap();
+
+                    if composition.blend(&mut frame).is_err() {
+                        gst::error!(CAT, obj = pad, "Failed to blend composition");
+                    }
+                }
+            }
+        }
+
+        drop(state);
+
+        self.srcpad.push(buffer)
+    }
+
+    fn sink_event(&self, pad: &gst::Pad, event: gst::Event) -> bool {
+        use gst::EventView;
+
+        gst::log!(CAT, obj = pad, "Handling event {event:?}");
+        match event.view() {
+            EventView::Caps(c) => match gst_video::VideoInfo::from_caps(c.caps()) {
+                Ok(video_info) => {
+                    {
+                        let mut state = self.state.lock().unwrap();
+                        state.upstream_caps = Some(c.caps_owned());
+                        state.video_info = Some(video_info);
+                        state.update_composition = true;
+                        self.srcpad.check_reconfigure();
+                    }
+                    match self.negotiate() {
+                        Ok(_) => true,
+                        Err(_) => {
+                            self.srcpad.mark_reconfigure();
+                            true
+                        }
+                    }
+                }
+                Err(_) => {
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Element hasn't received valid video caps at negotiation time"
+                    );
+                    false
+                }
+            },
+            EventView::Segment(s) => {
+                match s.segment().clone().downcast::<gst::ClockTime>() {
+                    Err(segment) => {
+                        gst::element_imp_error!(
+                            self,
+                            gst::StreamError::Format,
+                            ["Only Time segments supported, got {:?}", segment.format(),]
+                        );
+                        return false;
+                    }
+                    Ok(segment) => {
+                        self.state.lock().unwrap().segment = segment;
+                    }
+                };
+                gst::Pad::event_default(pad, Some(&*self.obj()), event)
+            }
+            _ => gst::Pad::event_default(pad, Some(&*self.obj()), event),
+        }
+    }
+
+    fn query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
+        use gst::QueryViewMut;
+
+        match query.view_mut() {
+            QueryViewMut::Caps(q) => {
+                q.set_result(&self.query_caps(pad, q.filter()));
+                true
+            }
+            QueryViewMut::Allocation(q) => {
+                let result = self.srcpad.peer_query(q);
+                if result
+                    && q.find_allocation_meta::<gst_video::VideoOverlayCompositionMeta>()
+                        .is_none()
+                {
+                    q.add_allocation_meta::<gst_video::VideoOverlayCompositionMeta>(None);
+                }
+                result
+            }
+            _ => gst::Pad::query_default(pad, Some(&*self.obj()), query),
+        }
+    }
+
+    fn negotiate(&self) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let mut caps = match self.state.lock().unwrap().upstream_caps.clone() {
+            Some(v) => v,
+            None => return Err(gst::FlowError::NotNegotiated),
+        };
+
+        let mut downstream_accepts_meta = false;
+
+        let upstream_has_meta = caps
+            .features(0)
+            .map(|f| f.contains(gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION))
+            .unwrap_or(false);
+
+        if !upstream_has_meta {
+            let mut caps_clone = caps.clone();
+            let overlay_caps = caps_clone.make_mut();
+
+            if let Some(features) = overlay_caps.features_mut(0) {
+                features.add(gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION);
+                let peercaps = self.srcpad.peer_query_caps(Some(&caps_clone));
+                downstream_accepts_meta = !peercaps.is_empty();
+                if downstream_accepts_meta {
+                    caps = caps_clone;
+                }
+            }
+        }
+
+        gst::debug!(
+            CAT,
+            imp = self,
+            "upstream has meta: {}, downstream accepts meta: {}",
+            upstream_has_meta,
+            downstream_accepts_meta
+        );
+
+        if !self.srcpad.push_event(gst::event::Caps::new(&caps)) {
+            gst::info!(CAT, imp = self, "Failed to push caps event");
+        }
+
+        if upstream_has_meta || downstream_accepts_meta {
+            let mut query = gst::query::Allocation::new(Some(&caps), false);
+
+            if !self.srcpad.peer_query(&mut query)
+                && self.srcpad.pad_flags().contains(gst::PadFlags::FLUSHING)
+            {
+                return Err(gst::FlowError::NotNegotiated);
+            }
+
+            let allow_attaching = query
+                .find_allocation_meta::<gst_video::VideoOverlayCompositionMeta>()
+                .is_some();
+
+            gst::debug!(CAT, imp = self, "attach meta: {}", allow_attaching);
+
+            self.state.lock().unwrap().allow_attaching = allow_attaching;
+        } else {
+            self.state.lock().unwrap().allow_attaching = false;
+        }
+        Ok(gst::FlowSuccess::Ok)
+    }
+
     fn update_composition(&self, state: &mut State) {
         if !state.update_composition {
             return;
         }
 
-        let in_info = self.obj().input_video_info().unwrap();
+        let in_info = state.video_info.as_ref().unwrap();
         let video_width = i64::from(in_info.width());
         let video_height = i64::from(in_info.height());
 
@@ -193,26 +416,28 @@ impl ImageRsOverlay {
         gst::debug!(CAT, imp = self, "Composition updated");
     }
 
-    fn load_image(&self, state: &mut State) -> Result<(), gst::ErrorMessage> {
+    fn load_image(&self, state: &mut State) -> Result<gst::FlowSuccess, gst::FlowError> {
         let settings = self.settings.lock().unwrap();
 
         if state.location.as_ref() == settings.location.as_ref() {
             gst::trace!(CAT, imp = self, "No need to update");
-            return Ok(());
+            return Ok(gst::FlowSuccess::Ok);
         }
         state.location = None;
         state.image = None;
 
         let Some(location) = settings.location.clone() else {
             gst::debug!(CAT, imp = self, "No location set");
-            return Ok(());
+            return Ok(gst::FlowSuccess::Ok);
         };
 
         let mut reader = ImageReader::open(&location).map_err(|v| {
-            gst::error_msg!(
+            gst::element_imp_error!(
+                self,
                 gst::ResourceError::OpenRead,
-                ["Could not load overlay image: {}", v]
-            )
+                ["Could not load overlay image: {v}"]
+            );
+            gst::FlowError::Error
         })?;
 
         if settings.max_alloc != 0 {
@@ -224,10 +449,12 @@ impl ImageRsOverlay {
         drop(settings);
 
         let mut argb_image = match reader.decode().map_err(|v| {
-            gst::error_msg!(
+            gst::element_imp_error!(
+                self,
                 gst::StreamError::Decode,
-                ["Could not decode overlay image container: {}", v]
-            )
+                ["Could not decode overlay image container: {v}"]
+            );
+            gst::FlowError::Error
         })? {
             DynamicImage::ImageRgba8(v) => v,
             v => v.to_rgba8(),
@@ -268,7 +495,7 @@ impl ImageRsOverlay {
 
         gst::info!(CAT, imp = self, "Updated pixbuf, {width} x {height}");
 
-        Ok(())
+        Ok(gst::FlowSuccess::Ok)
     }
 }
 
@@ -276,7 +503,52 @@ impl ImageRsOverlay {
 impl ObjectSubclass for ImageRsOverlay {
     const NAME: &'static str = "GstImageRsOverlay";
     type Type = super::Overlay;
-    type ParentType = gst_video::VideoFilter;
+    type ParentType = gst::Element;
+
+    fn with_class(klass: &Self::Class) -> Self {
+        let templ = klass.pad_template("sink").unwrap();
+        let sinkpad = gst::Pad::builder_from_template(&templ)
+            .chain_function(|pad, parent, buffer| {
+                ImageRsOverlay::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |overlay| overlay.sink_chain(pad, buffer),
+                )
+            })
+            .event_function(|pad, parent, event| {
+                ImageRsOverlay::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |overlay| overlay.sink_event(pad, event),
+                )
+            })
+            .query_function(|pad, parent, event| {
+                ImageRsOverlay::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |overlay| overlay.query(pad, event),
+                )
+            })
+            .build();
+
+        let templ = klass.pad_template("src").unwrap();
+        let srcpad = gst::Pad::builder_from_template(&templ)
+            .query_function(|pad, parent, event| {
+                ImageRsOverlay::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |overlay| overlay.query(pad, event),
+                )
+            })
+            .build();
+
+        Self {
+            srcpad,
+            sinkpad,
+            state: Mutex::new(State::default()),
+            settings: Mutex::new(Settings::default()),
+        }
+    }
 }
 
 impl ObjectImpl for ImageRsOverlay {
@@ -402,8 +674,12 @@ impl ObjectImpl for ImageRsOverlay {
         let mut settings = self.settings.lock().unwrap();
         match pspec.name() {
             "location" => {
-                let value = value.get().expect("type checked upstream");
-                settings.location = Some(value);
+                let value: String = value.get().expect("type checked upstream");
+                if value.is_empty() {
+                    settings.location = None;
+                } else {
+                    settings.location = Some(value);
+                }
                 state.update_composition = true;
             }
             "offset-x" => {
@@ -463,6 +739,14 @@ impl ObjectImpl for ImageRsOverlay {
             _ => unimplemented!(),
         }
     }
+
+    fn constructed(&self) {
+        self.parent_constructed();
+
+        let obj = self.obj();
+        obj.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
+    }
 }
 
 impl GstObjectImpl for ImageRsOverlay {}
@@ -510,219 +794,22 @@ impl ElementImpl for ImageRsOverlay {
 
         PAD_TEMPLATES.as_ref()
     }
-}
 
-impl BaseTransformImpl for ImageRsOverlay {
-    /// GstBaseTransform expects, for in-place transforms like
-    /// the one required by this plugin, that a transform_frame_ip
-    /// function is provided AND that a transform function is
-    /// NOT provided.
-    ///
-    /// See gst_base_transform_init and default_generate_output
-    const MODE: gst_base::subclass::BaseTransformMode =
-        gst_base::subclass::BaseTransformMode::AlwaysInPlace;
-
-    // See https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/merge_requests/3024#note_3522645
-    // for the properties below
-    /// Disable verbatim forwarding when caps do not change
-    const PASSTHROUGH_ON_SAME_CAPS: bool = false;
-    /// transform_ip's buffer on passthrough is read-only, so
-    /// it breaks enabling overlay at runtime e.g. with tests
-    const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
-
-    fn start(&self) -> Result<(), gst::ErrorMessage> {
-        let is_location_empty = self.settings.lock().unwrap().location.is_none();
-
-        let old_is_passthrough = self.obj().is_passthrough();
-
-        if !is_location_empty {
-            self.obj().set_passthrough(false);
-        } else {
-            gst::info!(CAT, imp = self, "no image location set, doing nothing");
-            self.obj().set_passthrough(true);
-        }
-
-        if old_is_passthrough != self.obj().is_passthrough() {
-            gst::debug!(
-                CAT,
-                imp = self,
-                "Passthrough: {}",
-                self.obj().is_passthrough()
-            );
-        }
-
-        Ok(())
-    }
-
-    fn stop(&self) -> Result<(), gst::ErrorMessage> {
-        let mut state = self.state.lock().unwrap();
-        state.composition = None;
-        state.image = None;
-        gst::debug!(CAT, imp = self, "Image removed");
-        Ok(())
-    }
-
-    fn before_transform(&self, inbuf: &gst::BufferRef) {
-        let stream_time = self
-            .obj()
-            .segment()
-            .downcast::<gst::ClockTime>()
-            .ok()
-            .and_then(|v| v.to_stream_time(inbuf.pts()));
-        if let Some(stream_time) = stream_time
-            && let Err(e) = self.obj().sync_values(stream_time)
-        {
-            gst::log!(CAT, imp = self, "{e}");
-        }
-
-        // now properties have been sync'ed; maybe need to update composition
-        {
-            let mut state = self.state.lock().unwrap();
-            if let Err(err) = self.load_image(&mut state) {
-                self.post_error_message(err);
-                return;
-            }
-            if state.update_composition {
-                self.update_composition(&mut state);
-                // determine passthrough mode so the buffer is writable if needed
-                // when passed into _transform_ip
-                self.obj().set_passthrough(state.composition.is_none());
-            }
-        };
-        gst::debug!(
-            CAT,
-            imp = self,
-            "Passthrough: {}",
-            self.obj().is_passthrough()
-        );
-    }
-
-    fn transform_caps(
+    fn change_state(
         &self,
-        direction: gst::PadDirection,
-        caps: &gst::Caps,
-        filter: Option<&gst::Caps>,
-    ) -> Option<gst::Caps> {
-        gst::debug!(
-            CAT,
-            imp = self,
-            "transforming caps {} in direction {:?} with filter {:?}",
-            caps,
-            direction,
-            filter
-        );
-        let tmp = if direction == gst::PadDirection::Sink {
-            let mut tmp: gst::Caps =
-                caps.iter_with_features()
-                    .fold(gst::Caps::new_empty(), |mut tmp, (s, f)| {
-                        let s = s.to_owned();
-                        let mut f = f.to_owned();
+        transition: gst::StateChange,
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
+        gst::trace!(CAT, imp = self, "Changing state {:?}", transition);
 
-                        if !f.is_any()
-                            && !f.contains(
-                                gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION,
-                            )
-                        {
-                            f.add(gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION);
-                        }
-
-                        let c = gst::Caps::builder_full()
-                            .structure_with_features(s, f)
-                            .build();
-                        tmp.get_mut().unwrap().append(c);
-                        tmp
-                    });
-            let mut caps = caps.copy();
-            caps.get_mut().unwrap().filter_map_in_place(|f, _| {
-                if f.is_any()
-                    || f.contains(gst::CAPS_FEATURE_MEMORY_SYSTEM_MEMORY)
-                    || f.contains(gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION)
-                {
-                    gst::CapsFilterMapAction::Keep
-                } else {
-                    gst::CapsFilterMapAction::Remove
-                }
-            });
-            tmp.merge(caps);
-            tmp
-        } else {
-            let tmp = caps
-                .iter_with_features()
-                .fold(gst::Caps::new_empty(), |mut tmp, (s, f)| {
-                    let s = s.to_owned();
-                    let mut f = f.to_owned();
-
-                    f.remove(gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION);
-
-                    let c = gst::Caps::builder_full()
-                        .structure_with_features(s, f)
-                        .build();
-                    tmp.get_mut().unwrap().append(c);
-                    tmp
-                });
-            let mut caps = caps.copy();
-            caps.get_mut().unwrap().filter_map_in_place(|f, _| {
-                if f.is_any()
-                    || f.contains(gst::CAPS_FEATURE_MEMORY_SYSTEM_MEMORY)
-                    || f.contains(gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION)
-                {
-                    gst::CapsFilterMapAction::Keep
-                } else {
-                    gst::CapsFilterMapAction::Remove
-                }
-            });
-            caps.merge(tmp);
-            caps
-        };
-
-        gst::debug!(CAT, imp = self, "filter {filter:?}, expanded caps {tmp}");
-
-        let res = if let Some(filter) = filter {
-            filter.intersect_with_mode(&tmp, gst::CapsIntersectMode::First)
-        } else {
-            tmp
-        };
-
-        gst::debug!(CAT, imp = self, "returning caps: {res}");
-
-        Some(res)
-    }
-
-    fn set_caps(&self, incaps: &gst::Caps, outcaps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        let res = self.parent_set_caps(incaps, outcaps);
-        if res.is_ok() {
-            let mut state = self.state.lock().unwrap();
-            state.allow_attaching = outcaps.features(0).is_none_or(|features| {
-                features.contains(gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION)
-            });
-        }
-        res
-    }
-}
-
-impl VideoFilterImpl for ImageRsOverlay {
-    fn transform_frame_ip(
-        &self,
-        frame: &mut gst_video::VideoFrameRef<&mut gst::BufferRef>,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        use gst_video::video_frame::IsVideoFrame;
-
-        let state = self.state.lock().unwrap();
-        if let Some(v) = &state.composition {
-            if state.allow_attaching {
-                // FIXME upstream: frame.buffer() returns a IMMUTABLE
-                // reference, not respecting the T parameter of VideoFrameRef.
-                // This makes it impossible to use from VideoFilterImpl.
-                // https://gitlab.freedesktop.org/gstreamer/gstreamer-rs/-/issues/549
-                let buffer = unsafe { gst::BufferRef::from_mut_ptr(frame.as_raw().buffer) };
-                gst_video::VideoOverlayCompositionMeta::add(buffer, v);
-            } else {
-                v.blend(frame).map_err(|v| {
-                    gst::error!(CAT, imp = self, "Blending failed: {v}");
-                    gst::FlowError::Error
-                })?
+        match transition {
+            gst::StateChange::ReadyToPaused | gst::StateChange::PausedToReady => {
+                let mut state = self.state.lock().unwrap();
+                *state = State::default();
+                state.update_composition = true;
             }
+            _ => (),
         }
-        Ok(gst::FlowSuccess::Ok)
+
+        self.parent_change_state(transition)
     }
 }

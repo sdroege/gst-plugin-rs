@@ -7297,8 +7297,6 @@
                 "description": "Renders images decoded with image-rs over raw video frames",
                 "hierarchy": [
                     "GstImageRsOverlay",
-                    "GstVideoFilter",
-                    "GstBaseTransform",
                     "GstElement",
                     "GstObject",
                     "GInitiallyUnowned",

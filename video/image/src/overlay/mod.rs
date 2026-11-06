@@ -28,7 +28,7 @@ use gst::prelude::*;
 mod imp;
 
 glib::wrapper! {
-    pub struct Overlay(ObjectSubclass<imp::ImageRsOverlay>) @extends gst_video::VideoFilter, gst_base::BaseTransform, gst::Element, gst::Object;
+    pub struct Overlay(ObjectSubclass<imp::ImageRsOverlay>) @extends gst::Element, gst::Object;
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
