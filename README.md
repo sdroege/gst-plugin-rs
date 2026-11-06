@@ -66,6 +66,7 @@ You will find the following plugins in this repository:
       - `classifiertensordec`: Tensor decoder for image classification tensors.
       - `crafttensordec`: Tensor decoder for CRAFT text detection models
       - `ctctexttensordec`: CTC text recognition tensor decoder
+      - `facemeshtensordec`: Tensor decoder for MediaPipe FaceMesh V1/V2 facial landmarks models
       - `handdetectiontensordec`: Tensor decoder for hand detection tensors.
       - `handlandmarktensordec`: Tensor decoder for hand landmark tensors with keypoint visibility metadata attachment.
       - `onvifmeta2relationmeta`: Convert ONVIF metadata to relation metas
