@@ -33,6 +33,8 @@ fn init() {
 }
 
 const WAIT_DEADLINE: Duration = Duration::from_secs(30);
+const MAX_CLOCK_STEP: gst::ClockTime = gst::ClockTime::from_mseconds(100);
+const CLOCK_STEP_GRACE: Duration = Duration::from_millis(100);
 
 macro_rules! assert_fallback_buffer {
     ($buffer:expr) => {
@@ -202,6 +204,7 @@ fn pull_buffer(pipeline: &Pipeline) -> gst::Buffer {
         .unwrap();
 
     let deadline = Instant::now() + WAIT_DEADLINE;
+    let mut idle_since = Instant::now();
 
     loop {
         if let Some(sample) = sink.try_pull_sample(5.mseconds()) {
@@ -218,7 +221,21 @@ fn pull_buffer(pipeline: &Pipeline) -> gst::Buffer {
             );
         }
 
-        drain_clock(pipeline);
+        if drain_clock(pipeline) > 0 {
+            idle_since = Instant::now();
+        }
+
+        if idle_since.elapsed() >= CLOCK_STEP_GRACE {
+            let now = pipeline.clock.time();
+            if let Some(next) = pipeline.clock.next_entry_time()
+                && next > now
+                && next <= now.saturating_add(MAX_CLOCK_STEP)
+            {
+                pipeline.clock.set_time(next);
+                drain_clock(pipeline);
+            }
+            idle_since = Instant::now();
+        }
     }
 }
 
