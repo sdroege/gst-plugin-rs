@@ -2595,7 +2595,7 @@ pub(crate) mod tests {
     // (RFC 3550 6.3.6/6.3.7), but has to be part of the next sent packet
     #[test]
     fn scheduled_bye_sent_with_next_rtcp_packet() {
-        let mut session = Session::new("cname");
+        let mut session = Session::new();
         session.set_pt_clock_rate(TEST_PT, TEST_CLOCK_RATE);
 
         let now = Instant::now();
@@ -2605,7 +2605,7 @@ pub(crate) mod tests {
         let rtp_data = generate_rtp_packet(ssrc, 100, 0, 4);
         let packet = RtpPacket::parse(&rtp_data).unwrap();
         assert_eq!(
-            session.handle_send(&packet, now, now),
+            session.handle_send(&packet, now),
             SendReply::NewSsrc(ssrc, TEST_PT)
         );
 
