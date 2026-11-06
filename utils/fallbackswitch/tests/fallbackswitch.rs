@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 
 const LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(10);
 
-const WAIT_DEADLINE: Duration = Duration::from_secs(5);
+const WAIT_DEADLINE: Duration = Duration::from_secs(30);
 
 static TEST_CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(

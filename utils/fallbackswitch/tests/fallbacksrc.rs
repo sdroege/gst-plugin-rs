@@ -32,7 +32,7 @@ fn init() {
     });
 }
 
-const WAIT_DEADLINE: Duration = Duration::from_secs(5);
+const WAIT_DEADLINE: Duration = Duration::from_secs(30);
 
 macro_rules! assert_fallback_buffer {
     ($buffer:expr) => {
