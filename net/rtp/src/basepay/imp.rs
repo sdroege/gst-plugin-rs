@@ -1385,6 +1385,9 @@ impl RtpBasePay2 {
             let mut ssrc_collision = self.ssrc_collision.lock().unwrap();
             *ssrc_collision = Some(new_ssrc);
         }
+
+        // Apply the new SSRC on the next buffer by renegotiating the caps
+        self.src_pad.mark_reconfigure();
     }
 
     fn src_event_default(&self, event: gst::Event) -> Result<gst::FlowSuccess, gst::FlowError> {
