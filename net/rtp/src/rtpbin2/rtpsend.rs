@@ -466,7 +466,7 @@ impl RtpSend {
         for ssrc in ssrc_collision {
             // XXX: Another option is to have us rewrite ssrc's instead of asking upstream to do
             // so.
-            sinkpad.send_event(
+            sinkpad.push_event(
                 gst::event::CustomUpstream::builder(
                     gst::Structure::builder("GstRTPCollision")
                         .field("ssrc", ssrc)

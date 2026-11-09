@@ -2007,7 +2007,7 @@ impl RtpRecv {
                     if let Some(pad) = rtp_send_sinkpad.as_ref() {
                         // XXX: Another option is to have us rewrite ssrc's instead of asking
                         // upstream to do so.
-                        pad.send_event(
+                        pad.push_event(
                             gst::event::CustomUpstream::builder(
                                 gst::Structure::builder("GstRTPCollision")
                                     .field("ssrc", ssrc)
