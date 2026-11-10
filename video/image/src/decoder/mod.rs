@@ -12,7 +12,7 @@ use gst::prelude::*;
  * ## Example launch line
  *
  * ```bash
- * gst-launch-1.0 filesrc location=$PATH ! typefind ! imagersdec ! imagefreeze ! video/x-raw,framerate=30/1 ! videoconvert ! autovideosink
+ * gst-launch-1.0 filesrc location=/path/to/image ! typefind ! imagersdec ! imagefreeze ! video/x-raw,framerate=30/1 ! videoconvert ! autovideosink
  * ```
  *
  * Since: 0.16
