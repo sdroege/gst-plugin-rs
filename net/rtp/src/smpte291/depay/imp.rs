@@ -29,7 +29,9 @@ use gst::{glib, subclass::prelude::*};
 
 use std::sync::LazyLock;
 
-use crate::basedepay::{Packet, RtpBaseDepay2Ext, RtpBaseDepay2Impl};
+use crate::basedepay::{
+    Packet, PacketToBufferRelation, RtpBaseDepay2Ext, RtpBaseDepay2Impl, TimestampOffset,
+};
 
 #[derive(Default)]
 pub struct RtpSmpte291Depay;
@@ -209,7 +211,16 @@ impl RtpBaseDepay2Impl for RtpSmpte291Depay {
                 }
 
                 had_packet = true;
-                self.obj().queue_buffer(ext_seqnum.into(), buffer)?;
+                // All ANC packets in this RTP packet share its timestamp.
+                self.obj().queue_buffer(
+                    PacketToBufferRelation::SeqnumsWithOffset {
+                        seqnums: ext_seqnum..=ext_seqnum,
+                        timestamp_offset: TimestampOffset::Pts(gst::Signed::Positive(
+                            gst::ClockTime::ZERO,
+                        )),
+                    },
+                    buffer,
+                )?;
             }
 
             Ok(())
