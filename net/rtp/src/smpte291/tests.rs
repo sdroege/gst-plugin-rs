@@ -152,7 +152,7 @@ fn test_smpte291_multiple_anc_packets_per_frame() {
         .build();
 
     // Two CEA708 CC ANC packets (as in test_smpte291).
-    // They are concatenated below into a single buffer.
+    // They are concatenated below into one buffer per frame.
     let packets: [&[u8]; 2] = [
         &[
             0x00, 0x02, 0x40, 0x02, 0x61, 0x80, 0x64, 0x96, 0x59, 0x69, 0x92, 0x64, 0xf9, 0x0e,
@@ -176,41 +176,68 @@ fn test_smpte291_multiple_anc_packets_per_frame() {
         ],
     ];
 
-    let mut buffer = gst::Buffer::from_slice(packets.concat());
-    {
-        let buffer = buffer.get_mut().unwrap();
-        buffer.set_pts(gst::ClockTime::ZERO);
-    }
-    let buffers = vec![buffer];
+    let buffers = [gst::ClockTime::ZERO, gst::ClockTime::from_mseconds(40)]
+        .into_iter()
+        .map(|pts| {
+            let mut buffer = gst::Buffer::from_slice(packets.concat());
+            buffer.get_mut().unwrap().set_pts(pts);
+            buffer
+        })
+        .collect();
 
     let pay = "rtpsmpte291pay";
     let depay = "rtpsmpte291depay";
 
     // Both ANC packets in one RTP packet, marker bit set (last packet of frame).
-    let expected_pay = vec![vec![
-        ExpectedPacket::builder()
-            .pts(gst::ClockTime::ZERO)
-            .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
-            .pt(96)
-            .rtp_time(0)
-            .marker_bit(true)
-            .size(228)
-            .build(),
-    ]];
+    let expected_pay = vec![
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::ZERO)
+                .flags(gst::BufferFlags::DISCONT | gst::BufferFlags::MARKER)
+                .pt(96)
+                .rtp_time(0)
+                .marker_bit(true)
+                .size(228)
+                .build(),
+        ],
+        vec![
+            ExpectedPacket::builder()
+                .pts(gst::ClockTime::from_mseconds(40))
+                .flags(gst::BufferFlags::MARKER)
+                .pt(96)
+                .rtp_time(3600)
+                .marker_bit(true)
+                .size(228)
+                .build(),
+        ],
+    ];
 
-    // One output sample carrying both packets; MARKER only on the last.
-    let expected_depay = vec![vec![
-        ExpectedBuffer::builder()
-            .pts(gst::ClockTime::ZERO)
-            .size(100)
-            .flags(gst::BufferFlags::DISCONT)
-            .build(),
-        // Subsequent buffers in a list carry no PTS of their own.
-        ExpectedBuffer::builder()
-            .size(100)
-            .flags(gst::BufferFlags::MARKER)
-            .build(),
-    ]];
+    // Both packets share their frame's PTS; MARKER only on the last.
+    let expected_depay = vec![
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(100)
+                .flags(gst::BufferFlags::DISCONT)
+                .build(),
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::ZERO)
+                .size(100)
+                .flags(gst::BufferFlags::MARKER)
+                .build(),
+        ],
+        vec![
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(40))
+                .size(100)
+                .build(),
+            ExpectedBuffer::builder()
+                .pts(gst::ClockTime::from_mseconds(40))
+                .size(100)
+                .flags(gst::BufferFlags::MARKER)
+                .build(),
+        ],
+    ];
 
     run_test_pipeline_and_validate_data(
         Source::Buffers(caps, buffers),
