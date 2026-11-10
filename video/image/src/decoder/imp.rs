@@ -70,7 +70,7 @@ impl Decoder {
 
         if state.packetized
             || settings.max_size == 0
-            || (state.total_size + buffer.size()) as u64 <= settings.max_size
+            || state.total_size as u64 + buffer.size() as u64 <= settings.max_size
         {
             gst::log!(CAT, imp = self, "Writing buffer size {}", buffer.size());
             state.total_size += buffer.size();
