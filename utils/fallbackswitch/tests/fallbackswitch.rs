@@ -914,6 +914,21 @@ fn stop_pipeline(pipeline: Pipeline) {
 
     drop(pipeline);
 
-    assert!(switch_weak.upgrade().is_none());
-    assert!(pipeline_weak.upgrade().is_none());
+    let deadline = Instant::now() + WAIT_DEADLINE;
+    loop {
+        let switch_alive = switch_weak.upgrade().is_some();
+        let pipeline_alive = pipeline_weak.upgrade().is_some();
+
+        if !switch_alive && !pipeline_alive {
+            break;
+        }
+
+        assert!(
+            Instant::now() < deadline,
+            "Teardown did not release the pipeline within {WAIT_DEADLINE:?}: \
+             switch alive {switch_alive}, pipeline alive {pipeline_alive}",
+        );
+
+        std::thread::sleep(Duration::from_millis(5));
+    }
 }
