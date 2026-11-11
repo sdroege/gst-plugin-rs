@@ -224,6 +224,31 @@ fn pull_buffer(pipeline: &Pipeline) -> gst::Buffer {
 
 fn stop_pipeline(pipeline: Pipeline) {
     pipeline.pipeline.set_state(gst::State::Null).unwrap();
+
+    let source = pipeline.by_name("source").unwrap();
+    let source_weak = source.downgrade();
+    drop(source);
+    let pipeline_weak = pipeline.downgrade();
+
+    drop(pipeline);
+
+    let deadline = Instant::now() + WAIT_DEADLINE;
+    loop {
+        let source_alive = source_weak.upgrade().is_some();
+        let pipeline_alive = pipeline_weak.upgrade().is_some();
+
+        if !source_alive && !pipeline_alive {
+            break;
+        }
+
+        assert!(
+            Instant::now() < deadline,
+            "Teardown did not release the pipeline within {WAIT_DEADLINE:?}: \
+             source alive {source_alive}, pipeline alive {pipeline_alive}",
+        );
+
+        std::thread::sleep(Duration::from_millis(5));
+    }
 }
 
 #[test]
