@@ -483,7 +483,7 @@ impl RtpVorbisDepay {
         let ident = config.ident();
 
         let channels = config.channels() as i32;
-        let rate = config.rate();
+        let rate = config.rate() as i32;
         let info = config.info();
 
         gst::debug!(
