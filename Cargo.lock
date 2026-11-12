@@ -265,7 +265,7 @@ dependencies = [
  "nom 7.1.3",
  "num-traits",
  "rusticata-macros 4.1.0",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "time",
 ]
 
@@ -411,23 +411,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1254ebf6529f3763c491acfb5ab6e960809e3c75a38584cc664f8c5667fb7107"
 
 [[package]]
-name = "audio-core"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f93ebbf82d06013f4c41fe71303feb980cddd78496d904d06be627972de51a24"
-
-[[package]]
-name = "audioadapter"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98e72b98fa467adcb7a88c5d1b8b686193185c81b9bf9c3fa3ac3524180cd55c"
-dependencies = [
- "audio-core",
- "libm",
- "num-traits",
-]
-
-[[package]]
 name = "audioadapter"
 version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -435,33 +418,12 @@ checksum = "d1292ef9edf681b7426ed089004b021a42896492f58bd0c909ad44e5faec9ac4"
 
 [[package]]
 name = "audioadapter-buffers"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6af89882334c4e501faa08992888593ada468f9e1ab211635c32f9ada7786e0"
-dependencies = [
- "audioadapter 2.0.1",
- "audioadapter-sample 2.0.0",
- "num-traits",
-]
-
-[[package]]
-name = "audioadapter-buffers"
 version = "5.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46289a81a3bfa26d0f8b2415f8ca9decde9a66308a150568af5c102381b3c8ce"
 dependencies = [
- "audioadapter 5.0.0",
- "audioadapter-sample 5.2.0",
- "num-traits",
-]
-
-[[package]]
-name = "audioadapter-sample"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e9a3d502fec0b21aa420febe0b110875cf8a7057c49e83a0cace1df6a73e03e"
-dependencies = [
- "audio-core",
+ "audioadapter",
+ "audioadapter-sample",
  "num-traits",
 ]
 
@@ -509,7 +471,7 @@ dependencies = [
  "num-traits",
  "pastey 0.1.1",
  "rayon",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "v_frame",
  "y4m",
 ]
@@ -1458,7 +1420,7 @@ dependencies = [
  "rand_distr 0.6.0",
  "serde",
  "spin 0.10.1",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -1487,7 +1449,7 @@ dependencies = [
  "serde",
  "serde_json",
  "spin 0.10.1",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "uuid",
 ]
 
@@ -1889,7 +1851,7 @@ checksum = "332ca05a88e143d80a245f9aa6c65b6e6383ee3e332017005647c27c6a62f902"
 dependencies = [
  "cea708-types",
  "log",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -1899,7 +1861,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5dfc9d3f5161702cf339e6337203ac26b64279383468247e45b36e221cb06cae"
 dependencies = [
  "log",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -1910,7 +1872,7 @@ checksum = "de28b1d549e7f8f53a746fb36ae4c10c776a8e004950b527be1669a58667ae0b"
 dependencies = [
  "log",
  "muldiv",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -2814,7 +2776,7 @@ dependencies = [
  "serde",
  "serde_json",
  "spin 0.10.1",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "toml",
  "tracing",
  "wasm-bindgen-futures",
@@ -3003,7 +2965,7 @@ dependencies = [
  "half",
  "num-traits",
  "serde",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -3265,7 +3227,7 @@ dependencies = [
  "serde",
  "serde_path_to_error",
  "serde_with",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tracing",
  "url",
 ]
@@ -3450,7 +3412,7 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "sha256",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tokio",
  "tokio-rustls 0.26.5",
  "tokio-stream",
@@ -3497,7 +3459,7 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "10d60334b3b2e7c9d91ef8150abfb6fa4c1c39ebbcf4a81c2e346aad939fee3e"
 dependencies = [
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -3636,7 +3598,7 @@ dependencies = [
  "core-foundation 0.10.1",
  "jni 0.21.1",
  "libc",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "wasm-bindgen",
  "web-sys",
  "windows-sys 0.59.0",
@@ -4657,7 +4619,7 @@ dependencies = [
  "num-traits",
  "rstar",
  "serde",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -4880,7 +4842,7 @@ dependencies = [
  "hashbrown 0.16.1",
  "log",
  "presser",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "windows 0.62.2",
 ]
 
@@ -5150,7 +5112,7 @@ dependencies = [
  "serde_json",
  "smallvec",
  "uuid",
- "winnow 1.0.5",
+ "winnow",
 ]
 
 [[package]]
@@ -5421,7 +5383,7 @@ dependencies = [
  "gstreamer-pbutils",
  "gstreamer-video",
  "m3u8-rs",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -5513,7 +5475,7 @@ dependencies = [
  "image",
  "image-compare",
  "image-extras",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -5648,7 +5610,7 @@ dependencies = [
  "libloading 0.9.0",
  "quick-xml 0.42.0",
  "smallvec",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -5739,7 +5701,7 @@ dependencies = [
  "rustls 0.23.45",
  "rustls-pki-types",
  "rustls-platform-verifier",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tokio",
  "url",
  "web-transport-quinn",
@@ -5839,7 +5801,7 @@ dependencies = [
  "sdp-types",
  "slab",
  "smallvec",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "time",
  "tokio",
  "tokio-util",
@@ -5877,7 +5839,7 @@ dependencies = [
  "sdp-types",
  "sha2 0.11.0",
  "socket2 0.6.5",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tokio",
  "tokio-rustls 0.26.5",
  "tokio-stream",
@@ -6037,7 +5999,7 @@ dependencies = [
  "slab",
  "smallvec",
  "socket2 0.6.5",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tokio",
  "waker-fn",
  "windows-sys 0.61.2",
@@ -6139,7 +6101,7 @@ dependencies = [
  "reqwest 0.13.5",
  "rustls 0.23.45",
  "tempfile",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "url",
 ]
 
@@ -6281,7 +6243,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tokio",
  "tokio-rustls 0.26.5",
  "tokio-stream",
@@ -6309,7 +6271,7 @@ dependencies = [
  "serde",
  "serde_json",
  "test-log",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tokio",
  "tokio-rustls 0.26.5",
  "tracing",
@@ -6348,7 +6310,7 @@ dependencies = [
  "sdp-types",
  "serde",
  "serde_json",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tokio",
  "tracing",
  "url",
@@ -6406,7 +6368,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "smallvec",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -6711,7 +6673,7 @@ dependencies = [
  "gstreamer-pbutils-sys",
  "gstreamer-video",
  "libc",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -6827,7 +6789,7 @@ dependencies = [
  "gstreamer",
  "gstreamer-app",
  "gstreamer-video",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -6867,7 +6829,7 @@ dependencies = [
  "gstreamer-video-sys",
  "libc",
  "serde",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -7175,7 +7137,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "855ed28e3e3903efe66ba98f24cbad71616bb0c9eb159aff0e0d170aec80d0d4"
 dependencies = [
  "byteorder",
- "rubato 5.0.1",
+ "rubato",
  "rustfft",
 ]
 
@@ -7713,7 +7675,7 @@ dependencies = [
  "image",
  "itertools 0.14.0",
  "rayon",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -7984,7 +7946,7 @@ dependencies = [
  "jni-sys 0.4.1",
  "log",
  "simd_cesu8",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "walkdir",
  "windows-link 0.2.1",
 ]
@@ -8221,7 +8183,7 @@ dependencies = [
  "librespot-core",
  "log",
  "tempfile",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tokio",
 ]
 
@@ -8271,7 +8233,7 @@ dependencies = [
  "sha1 0.10.7",
  "shannon",
  "sysinfo 0.36.1",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "time",
  "tokio",
  "tokio-stream",
@@ -8296,7 +8258,7 @@ dependencies = [
  "protobuf",
  "serde",
  "serde_json",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "uuid",
 ]
 
@@ -8310,7 +8272,7 @@ dependencies = [
  "oauth2",
  "open",
  "reqwest 0.12.28",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "url",
 ]
 
@@ -8332,7 +8294,7 @@ dependencies = [
  "rand_distr 0.5.1",
  "shell-words",
  "symphonia",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tokio",
  "zerocopy",
 ]
@@ -8460,7 +8422,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tokio",
  "url",
 ]
@@ -8534,7 +8496,7 @@ dependencies = [
  "parking_lot",
  "prost",
  "serde_json",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tokio",
  "tokio-util",
  "url",
@@ -8552,7 +8514,7 @@ dependencies = [
  "serde",
  "sha2 0.10.9",
  "signature 2.2.0",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -8563,7 +8525,7 @@ checksum = "b98e9f0971b7454a25a550f0bd4577f35b94570be32f8f8dc08d94f4cb2873fe"
 dependencies = [
  "enumflags2",
  "llama-cpp-sys-2",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tracing",
  "tracing-core",
 ]
@@ -8972,7 +8934,7 @@ dependencies = [
  "once_cell",
  "rustc-hash 1.1.0",
  "spirv",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "unicode-ident",
 ]
 
@@ -10412,7 +10374,7 @@ dependencies = [
  "rustc-hash 2.1.3",
  "rustls 0.23.45",
  "socket2 0.6.5",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tokio",
  "tracing",
  "web-time",
@@ -10437,7 +10399,7 @@ dependencies = [
  "rustls-pki-types",
  "rustls-platform-verifier",
  "slab",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tinyvec",
  "tracing",
  "web-time",
@@ -10627,7 +10589,7 @@ dependencies = [
  "rand 0.9.5",
  "rand_chacha 0.9.0",
  "simd_helpers",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "v_frame",
  "wasm-bindgen",
 ]
@@ -10746,7 +10708,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60dc65c0ff1a7ae1294b0c67b9f14baf70b644404010370171787bfac1038fc0"
 dependencies = [
  "libredox",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -10928,7 +10890,7 @@ dependencies = [
  "bindgen 0.72.1",
  "sans-io-time",
  "system-deps 7.0.8",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tracing",
 ]
 
@@ -10944,6 +10906,17 @@ dependencies = [
  "libc",
  "untrusted 0.9.0",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "ringbuf"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b58b631e416dd7d84549d7e6a50f767e111f9b03e30d04f40072f6618f386aaf"
+dependencies = [
+ "crossbeam-utils",
+ "portable-atomic",
+ "portable-atomic-util",
 ]
 
 [[package]]
@@ -11019,7 +10992,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c081c846edea632bb47332fada9d4ac2fdf54d84beaf547fc947b58489e5f619"
 dependencies = [
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -11042,23 +11015,7 @@ dependencies = [
  "time",
  "tinyvec",
  "url",
- "winnow 1.0.5",
-]
-
-[[package]]
-name = "rubato"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90173154a8a14e6adb109ea641743bc95ec81c093d94e70c6763565f7108ebeb"
-dependencies = [
- "audioadapter 2.0.1",
- "audioadapter-buffers 2.0.0",
- "num-complex",
- "num-integer",
- "num-traits",
- "realfft",
- "visibility",
- "windowfunctions",
+ "winnow",
 ]
 
 [[package]]
@@ -11067,10 +11024,12 @@ version = "5.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc1e951b9f5432ec1422f4dcfa5733fc501265902612edf5ef8bd8ecdd960930"
 dependencies = [
- "audioadapter 5.0.0",
- "audioadapter-buffers 5.2.0",
+ "audioadapter",
+ "audioadapter-buffers",
+ "num-complex",
  "num-integer",
  "num-traits",
+ "realfft",
  "visibility",
  "windowfunctions",
 ]
@@ -11432,7 +11391,7 @@ dependencies = [
  "bstr",
  "fallible-iterator",
  "hex",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -11940,19 +11899,19 @@ dependencies = [
 
 [[package]]
 name = "sofar"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "060ea9e290d57f909c19dfd5673a489cfedf4fdcf02eeae65a470a4923225be2"
+checksum = "3ba07a7507e4ff68a059effe66c2a4efffbb45092d4a6885ae1b989a41ef94cb"
 dependencies = [
  "arrayvec",
- "audioadapter-buffers 2.0.0",
  "bitflags 2.13.2",
  "log",
- "miniz_oxide 0.8.9",
+ "miniz_oxide 0.9.1",
  "realfft",
- "rubato 1.0.1",
- "thiserror 2.0.20",
- "winnow 0.7.15",
+ "ringbuf",
+ "rubato",
+ "thiserror 2.0.21",
+ "winnow",
 ]
 
 [[package]]
@@ -12008,7 +11967,7 @@ version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0e59842c3aac5c7901ea11bbb02e60e5d67263b43d4361dec9303cca8e764eb"
 dependencies = [
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -12420,11 +12379,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.20"
+version = "2.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec86235f5fcc2a73650310756d2ac5b138a5780bbbdfae3eeccec992c435ba4f"
+checksum = "09e52cb86a36cede5cb101bf8908837b3e4c6e5e59fe7fd85c23fb56200d189e"
 dependencies = [
- "thiserror-impl 2.0.20",
+ "thiserror-impl 2.0.21",
 ]
 
 [[package]]
@@ -12440,9 +12399,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.20"
+version = "2.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af"
+checksum = "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -12660,7 +12619,7 @@ dependencies = [
  "toml_datetime",
  "toml_parser",
  "toml_writer",
- "winnow 1.0.5",
+ "winnow",
 ]
 
 [[package]]
@@ -12681,7 +12640,7 @@ dependencies = [
  "indexmap 2.14.2",
  "toml_datetime",
  "toml_parser",
- "winnow 1.0.5",
+ "winnow",
 ]
 
 [[package]]
@@ -12690,7 +12649,7 @@ version = "1.1.3+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d38ac1cf9b95face32296c0a3ede1fdc270627c9d9c02a7274dd6d960dc4d56"
 dependencies = [
- "winnow 1.0.5",
+ "winnow",
 ]
 
 [[package]]
@@ -12845,7 +12804,7 @@ dependencies = [
  "bindgen 0.71.1",
  "cc",
  "paste",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tracel-llvm-bundler",
 ]
 
@@ -12869,7 +12828,7 @@ checksum = "050686193eb999b4bb3bc2acfa891a13da00f79734704c4b8b4ef1a10b368a3c"
 dependencies = [
  "crossbeam-channel",
  "symlink",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "time",
  "tracing-subscriber",
 ]
@@ -12941,7 +12900,7 @@ dependencies = [
  "nix 0.30.1",
  "os-id",
  "prost",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "thread_local",
  "tracing",
  "tracing-perfetto-sdk-schema",
@@ -13035,7 +12994,7 @@ dependencies = [
  "rustls 0.23.45",
  "rustls-pki-types",
  "sha1 0.10.7",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "utf-8",
 ]
 
@@ -13054,7 +13013,7 @@ dependencies = [
  "rustls 0.23.45",
  "rustls-pki-types",
  "sha1 0.10.7",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "url",
 ]
 
@@ -13073,7 +13032,7 @@ dependencies = [
  "rustls 0.23.45",
  "rustls-pki-types",
  "sha1 0.11.0",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "url",
 ]
 
@@ -13381,7 +13340,7 @@ version = "0.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "689743f6dc5c608197123319f088d73d3048a9e5d93682b95b8a347243975cb0"
 dependencies = [
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "vvdec-sys",
 ]
 
@@ -13580,7 +13539,7 @@ dependencies = [
  "bytes",
  "http 1.5.0",
  "sfv",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tokio",
  "url",
 ]
@@ -13598,7 +13557,7 @@ dependencies = [
  "quinn",
  "rustls 0.23.45",
  "rustls-native-certs 0.8.4",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tokio",
  "tracing",
  "url",
@@ -13712,7 +13671,7 @@ dependencies = [
  "raw-window-handle",
  "rustc-hash 1.1.0",
  "smallvec",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "wgpu-core-deps-apple",
  "wgpu-core-deps-emscripten",
  "wgpu-core-deps-windows-linux-android",
@@ -13791,7 +13750,7 @@ dependencies = [
  "raw-window-metal",
  "renderdoc-sys",
  "smallvec",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "wasm-bindgen",
  "wayland-sys",
  "web-sys",
@@ -14270,15 +14229,6 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "winnow"
-version = "0.7.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
-dependencies = [
- "memchr",
-]
-
-[[package]]
-name = "winnow"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c3b93199df0ab874cdf0c6a94f0a0dc3423fe41f1cafb62b8bd7b1deb277aef"
@@ -14325,7 +14275,7 @@ dependencies = [
  "oid-registry",
  "ring",
  "rusticata-macros 4.1.0",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "time",
 ]
 

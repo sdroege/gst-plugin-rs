@@ -14,7 +14,7 @@ use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
 use sofar::reader::{Filter, OpenOptions, Sofar};
-use sofar::render::Renderer;
+use sofar::render::{Renderer, RendererPlan};
 
 use std::sync::LazyLock;
 use std::sync::{Arc, Mutex};
@@ -794,11 +794,13 @@ impl BaseTransformImpl for Sofalizer {
             .open(settings.sofa_file_location.clone().unwrap_or_default())
             .map_err(|err| gst::loggable_error!(CAT, "Failed open sofa file: {}", err))?;
 
-        let renderer = Renderer::builder(sofa.filter_len())
+        let plan = RendererPlan::builder(sofa.filter_len())
             .with_sample_rate(rate)
             .with_partition_len(partition_len)
             .build()
-            .map_err(|err| gst::loggable_error!(CAT, "Failed to build Renderer: {}", err))?;
+            .map_err(|err| gst::loggable_error!(CAT, "Failed to build renderer plan: {}", err))?;
+
+        let renderer = Renderer::new(&plan);
 
         let channel_renderer = ChannelProcessor::Render(Box::new(ChannelRenderer {
             inner: renderer,
