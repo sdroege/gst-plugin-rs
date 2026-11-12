@@ -102,7 +102,8 @@ pub(crate) fn async_read<R: AsyncRead + Unpin + Send>(
 
                             return Ok((Some(msg), write_pos, read_pos));
                         }
-                        Err(rtsp_types::ParseError::Error) => {
+                        Err(rtsp_types::ParseError::Error)
+                        | Err(rtsp_types::ParseError::Invalid(_)) => {
                             if misparsed_bytes == 0 {
                                 gst::warning!(
                                     super::imp::CAT,
