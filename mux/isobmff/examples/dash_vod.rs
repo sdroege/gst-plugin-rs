@@ -180,7 +180,7 @@ fn main() -> Result<(), Error> {
                 // the same duration to a repeated segment.
                 let mut segments = vec![];
                 let mut write_segment = |start: gst::ClockTime, duration: u64, repeat: usize| {
-                    let mut s = dash_mpd::S {
+                    let mut s = dash_mpd_core::S {
                         t: Some(start.mseconds()),
                         d: duration,
                         ..Default::default()
@@ -220,15 +220,15 @@ fn main() -> Result<(), Error> {
                     write_segment(start.unwrap(), last_duration.unwrap(), num_segments - 1);
                 }
 
-                let segment_template = dash_mpd::SegmentTemplate {
+                let segment_template = dash_mpd_core::SegmentTemplate {
                     timescale: Some(1000),
                     initialization: Some("init.cmfi".to_string()),
                     media: Some("segment_$Number$.cmfv".to_string()),
-                    SegmentTimeline: Some(dash_mpd::SegmentTimeline { segments }),
+                    SegmentTimeline: Some(dash_mpd_core::SegmentTimeline { segments }),
                     ..Default::default()
                 };
 
-                let rep = dash_mpd::Representation {
+                let rep = dash_mpd_core::Representation {
                     id: Some("A".to_string()),
                     width: Some(1280),
                     height: Some(720),
@@ -237,7 +237,7 @@ fn main() -> Result<(), Error> {
                     ..Default::default()
                 };
 
-                let adapt = dash_mpd::AdaptationSet {
+                let adapt = dash_mpd_core::AdaptationSet {
                     contentType: Some("video".to_string()),
                     mimeType: Some("video/mp4".to_string()),
                     codecs: Some("avc1.4d0228".to_string()),
@@ -248,12 +248,12 @@ fn main() -> Result<(), Error> {
                     ..Default::default()
                 };
 
-                let period = dash_mpd::Period {
+                let period = dash_mpd_core::Period {
                     adaptations: vec![adapt],
                     ..Default::default()
                 };
 
-                let mpd = dash_mpd::MPD {
+                let mpd = dash_mpd_core::MPD {
                     mpdtype: Some("static".to_string()),
                     xmlns: Some("urn:mpeg:dash:schema:mpd:2011".to_string()),
                     schemaLocation: Some("urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd".to_string()),

@@ -3250,34 +3250,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "dash-mpd"
-version = "0.20.5"
+name = "dash-mpd-core"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "644360055f889ca6a0b1071dccc333b8b809469bdddba8452bbf7008badc2079"
+checksum = "a2f1873e58873fd9ba503adf0d4c8c7164a6d94ea984c927e5ae7529049218a4"
 dependencies = [
- "base64 0.23.1",
- "byteorder",
- "bytes",
  "chrono",
- "edit-distance",
- "futures-util",
- "hxdmp",
  "iso8601",
- "mp4-atom 0.15.0",
  "num-traits",
- "oxideav-subtitle",
  "quick-xml 0.42.0",
  "regex",
  "serde",
  "serde_path_to_error",
  "serde_with",
- "strip-ansi-escapes",
  "thiserror 2.0.20",
  "tracing",
  "url",
- "webm-iterable",
- "xattr",
- "xmlparser",
 ]
 
 [[package]]
@@ -3792,36 +3780,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ebml-iterable"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "152f8f4a13024011b26457b8b21040d9a9eb1222e693993ef037db391cd0c004"
-dependencies = [
- "bytes",
- "ebml-iterable-specification",
- "ebml-iterable-specification-derive",
- "futures",
-]
-
-[[package]]
-name = "ebml-iterable-specification"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f56467af159a98735d44231f53eaa505e919e6003266f103b99649a93f106784"
-
-[[package]]
-name = "ebml-iterable-specification-derive"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b066b81018300fdce40f71c4db355a102699324af96fad28f25ab1b5f87de066"
-dependencies = [
- "ebml-iterable-specification",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "ebur128"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3855,12 +3813,6 @@ checksum = "91cff35c70bba8a626e3185d8cd48cc11b5437e1a5bcd15b9b5fa3c64b6dfee7"
 dependencies = [
  "signature 1.6.4",
 ]
-
-[[package]]
-name = "edit-distance"
-version = "2.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "324d428080b707bac399325341bd61af5ded1b30f33b7c949792ca464733c2d5"
 
 [[package]]
 name = "either"
@@ -5246,7 +5198,7 @@ version = "0.16.0-alpha"
 dependencies = [
  "anyhow",
  "chrono",
- "dash-mpd",
+ "dash-mpd-core",
  "gio",
  "gst-plugin-version-helper",
  "gstreamer",
@@ -5487,7 +5439,7 @@ dependencies = [
  "gstreamer-pbutils",
  "gstreamer-video",
  "m3u8-rs",
- "mp4-atom 0.17.0",
+ "mp4-atom",
  "sprintf",
 ]
 
@@ -5588,7 +5540,7 @@ dependencies = [
  "anyhow",
  "bitstream-io",
  "chrono",
- "dash-mpd",
+ "dash-mpd-core",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-app",
@@ -5599,7 +5551,7 @@ dependencies = [
  "gstreamer-tag",
  "gstreamer-video",
  "m3u8-rs",
- "mp4-atom 0.17.0",
+ "mp4-atom",
  "num-integer",
  "quick-xml 0.42.0",
  "serde",
@@ -7299,12 +7251,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91f255a4535024abf7640cb288260811fc14794f62b063652ed349f9a6c2348e"
 
 [[package]]
-name = "hxdmp"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a17b27f28a7466846baca75f0a5244e546e44178eb7f1c07a3820f413e91c6b0"
-
-[[package]]
 name = "hybrid-array"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8922,19 +8868,6 @@ dependencies = [
 
 [[package]]
 name = "mp4-atom"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3d7433df407a636db7047600422af07145adf6ee25e0622745b0131516dbc3c"
-dependencies = [
- "derive_more",
- "num",
- "pastey 0.2.3",
- "thiserror 1.0.69",
- "tracing",
-]
-
-[[package]]
-name = "mp4-atom"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "718b5227fa90c52ed2e72d4d553560130d9e128acb6217d9fe0ea57312ee7063"
@@ -9702,36 +9635,6 @@ name = "outref"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a80800c0488c3a21695ea981a54918fbb37abf04f4d0720c453632255e2ff0e"
-
-[[package]]
-name = "oxideav-core"
-version = "0.1.36"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a78b502f679c580ceb7cc834d23f80821673b0a393a3083d54ef82668bb9c028"
-dependencies = [
- "bytemuck",
- "serde_json",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "oxideav-pixfmt"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7a6735155781b67b9b1fe2ca764b5ad5cc3d452853d6f4b72f7747bc781e8d0"
-dependencies = [
- "oxideav-core",
-]
-
-[[package]]
-name = "oxideav-subtitle"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88e41289024a95ea82051cd18af77885afd7be3c23a38255cb1edbe49872273a"
-dependencies = [
- "oxideav-core",
- "oxideav-pixfmt",
-]
 
 [[package]]
 name = "p256"
@@ -12135,15 +12038,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe895eb47f22e2ddd4dabc02bce419d2e643c8e3b585c78158b349195bc24d82"
 
 [[package]]
-name = "strip-ansi-escapes"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a8f8038e7e7969abb3f1b7c2a811225e9296da208539e0f79c5251d6cac0025"
-dependencies = [
- "vte",
-]
-
-[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12641,9 +12535,9 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tokio"
-version = "1.53.1"
+version = "1.54.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed"
+checksum = "b52fd3255258d26fac7264ab5a76b53c13367136dc011d3d6ad4f8ed070396a3"
 dependencies = [
  "bytes",
  "libc",
@@ -13484,15 +13378,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
 
 [[package]]
-name = "vte"
-version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "231fdcd7ef3037e8330d8e17e61011a2c244126acc0a982f4040ac3f9f0bc077"
-dependencies = [
- "memchr",
-]
-
-[[package]]
 name = "vvdec"
 version = "0.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13730,15 +13615,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a916df726e858e8e6cc21e852129f59e6277d3a01bb2254c0506dcf829fdd5d"
 dependencies = [
  "bytes",
-]
-
-[[package]]
-name = "webm-iterable"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b1f0c637f1c2b46d58a1b42b150135f8a31b024bfdcd56cc82febfbb20ba4c0"
-dependencies = [
- "ebml-iterable",
 ]
 
 [[package]]

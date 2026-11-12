@@ -16,7 +16,7 @@ gst-video.workspace = true
 gst-pbutils = { workspace = true, features = ["v1_20"] }
 chrono = "0.4"
 sprintf = "0.4"
-dash-mpd = { version = "0.20", default-features = false }
+dash-mpd-core = { version = "0.1", default-features = false, features = ["log"] }
 quick-xml = { version = "0.42", features = ["serialize"] }
 serde = "1"
 

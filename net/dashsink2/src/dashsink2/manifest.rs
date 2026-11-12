@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use chrono::Timelike;
-use dash_mpd::*;
+use dash_mpd_core::*;
 use serde::ser::Serialize;
 use std::time::Duration;
 

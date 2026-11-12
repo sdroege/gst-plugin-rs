@@ -29,7 +29,7 @@ gst-app = { workspace = true, features = ["v1_18"] }
 gst-check = { workspace = true, features = ["v1_18"] }
 gst-pbutils = { workspace = true, features = ["v1_20"] }
 chrono = "0.4.35"
-dash-mpd = { version = "0.20", default-features = false }
+dash-mpd-core = { version = "0.1", default-features = false, features = ["log"] }
 m3u8-rs = "6.0"
 mp4-atom = { version = "0.17", features = ["strict"] }
 quick-xml = { version = "0.42", features = ["serialize"] }
