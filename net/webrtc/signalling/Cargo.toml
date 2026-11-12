@@ -21,7 +21,6 @@ tracing-log = "0.2"
 futures = "0.3"
 uuid = { version = "1", features = ["v4"] }
 thiserror = "2"
-test-log = { version = "0.2", features = ["trace"], default-features = false }
 pin-project-lite = "0.2"
 gst-plugin-webrtc-protocol.workspace = true
 rustls.workspace = true

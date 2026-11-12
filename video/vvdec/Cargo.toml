@@ -10,7 +10,6 @@ description = "GStreamer VVdeC VVC/H.266 decoder plugin"
 
 [dependencies]
 gst.workspace = true
-gst-audio.workspace = true
 gst-video = { workspace = true, features = ["v1_26"] }
 vvdec = { version = "0.6" }
 
