@@ -5392,8 +5392,6 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tokio-rustls 0.26.5",
- "tokio-stream",
- "tokio-util",
  "url",
  "x509-parser",
 ]
@@ -10110,14 +10108,15 @@ dependencies = [
 
 [[package]]
 name = "rtsp-types"
-version = "0.1.3"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f47bf238c3da7994ef66a71724f385cb1ee25dcf04a156402d2727ad84dc1433"
+checksum = "033209952231eb086f69664a8adfe8758b2be3fa392109c03ff23c12fb0be5aa"
 dependencies = [
  "cookie-factory",
- "nom 7.1.3",
+ "time",
  "tinyvec",
  "url",
+ "winnow",
 ]
 
 [[package]]
@@ -13157,9 +13156,9 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "winnow"
-version = "1.0.4"
+version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
+checksum = "8c3b93199df0ab874cdf0c6a94f0a0dc3423fe41f1cafb62b8bd7b1deb277aef"
 dependencies = [
  "memchr",
 ]
