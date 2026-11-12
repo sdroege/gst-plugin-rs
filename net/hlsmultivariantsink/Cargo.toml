@@ -10,7 +10,6 @@ rust-version.workspace = true
 
 [dependencies]
 gst.workspace = true
-gst-app.workspace = true
 gio.workspace = true
 m3u8-rs = "6.0"
 chrono = "0.4"

@@ -15,11 +15,9 @@ path = "src/lib.rs"
 
 [dependencies]
 gst = { workspace = true, features = ["v1_24"] }
-gst-rtp = { workspace = true, features = ["v1_24"] }
 gst-base = { workspace = true, features = ["v1_24"] }
 gst-video = { workspace = true, features = ["v1_24"] }
 gst-analytics = { workspace = true }
-chrono = { version = "0.4.31", default-features = false }
 xmltree = "0.12"
 glib = { workspace = true, features = ["v2_62"] }
 byte-slice-cast = "1"

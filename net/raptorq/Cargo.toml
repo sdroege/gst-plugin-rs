@@ -10,7 +10,6 @@ rust-version.workspace = true
 
 [dependencies]
 gst.workspace = true
-gst-base.workspace = true
 gst-rtp.workspace = true
 raptorq = "2"
 

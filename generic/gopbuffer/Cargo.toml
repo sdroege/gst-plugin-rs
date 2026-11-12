@@ -9,9 +9,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-anyhow = "1"
 gst = { workspace = true, features = ["v1_18"] }
-gst-video = { workspace = true, features = ["v1_18"] }
 
 [lib]
 name = "gstgopbuffer"

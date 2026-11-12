@@ -4641,14 +4641,12 @@ name = "gst-plugin-analytics"
 version = "0.15.4"
 dependencies = [
  "byte-slice-cast",
- "chrono",
  "glib",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-analytics",
  "gstreamer-base",
  "gstreamer-check",
- "gstreamer-rtp",
  "gstreamer-video",
  "xmltree",
 ]
@@ -4692,7 +4690,6 @@ dependencies = [
  "aws-credential-types",
  "aws-sdk-polly",
  "aws-sdk-s3",
- "aws-sdk-sso",
  "aws-sdk-sts",
  "aws-sdk-transcribestreaming",
  "aws-sdk-translate",
@@ -4846,7 +4843,6 @@ name = "gst-plugin-deepgram"
 version = "0.15.4"
 dependencies = [
  "anyhow",
- "async-stream",
  "bytes",
  "deepgram",
  "futures",
@@ -4974,12 +4970,10 @@ dependencies = [
 name = "gst-plugin-gopbuffer"
 version = "0.15.4"
 dependencies = [
- "anyhow",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-app",
  "gstreamer-check",
- "gstreamer-video",
 ]
 
 [[package]]
@@ -5018,7 +5012,6 @@ dependencies = [
  "gst-plugin-isobmff",
  "gst-plugin-version-helper",
  "gstreamer",
- "gstreamer-app",
  "gstreamer-audio",
  "gstreamer-check",
  "gstreamer-pbutils",
@@ -5053,10 +5046,8 @@ dependencies = [
 name = "gst-plugin-hsv"
 version = "0.15.4"
 dependencies = [
- "byte-slice-cast",
  "gst-plugin-version-helper",
  "gstreamer",
- "gstreamer-audio",
  "gstreamer-base",
  "gstreamer-check",
  "gstreamer-video",
@@ -5273,7 +5264,6 @@ version = "0.15.4"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
- "gstreamer-base",
  "gstreamer-check",
  "gstreamer-rtp",
  "rand 0.10.3",
@@ -5331,7 +5321,6 @@ dependencies = [
  "atomic_refcell",
  "bitstream-io",
  "byte-slice-cast",
- "chrono",
  "clap",
  "env_logger",
  "futures",
@@ -5530,7 +5519,6 @@ dependencies = [
  "gstreamer-audio",
  "gstreamer-check",
  "gstreamer-net",
- "gstreamer-rtp",
  "libc",
  "num-traits",
  "pin-project-lite",
@@ -5568,7 +5556,6 @@ version = "0.15.4"
 dependencies = [
  "anyhow",
  "async-tungstenite",
- "atomic_refcell",
  "chrono",
  "etherparse",
  "futures",
@@ -5580,7 +5567,6 @@ dependencies = [
  "serde_json",
  "signal-hook",
  "tokio",
- "tokio-stream",
  "url",
  "walkdir",
 ]
@@ -5662,7 +5648,6 @@ version = "0.15.4"
 dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
- "gstreamer-audio",
  "gstreamer-check",
  "gstreamer-video",
  "vvdec",
@@ -5698,9 +5683,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
- "chrono",
  "clap",
- "ctrlc",
  "data-encoding",
  "fastrand",
  "futures",
@@ -5764,7 +5747,6 @@ dependencies = [
  "rustls-pki-types",
  "serde",
  "serde_json",
- "test-log",
  "thiserror 2.0.20",
  "tokio",
  "tokio-rustls 0.26.5",
@@ -11287,37 +11269,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "test-log"
-version = "0.2.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b9c218384242b5c89b68303ab6f6fc53a312d923f0c14dc6bb860c6aeee40f1"
-dependencies = [
- "test-log-macros",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "test-log-core"
-version = "0.2.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c26ef8b00e4d382e59f6a8ddb3cd790b3a5bb29f21a358a9a69ea2f29f13f27b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "test-log-macros"
-version = "0.2.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "944ad38adcbb71eaa682c56bceeb079e4ca82b4b3edc2a0fde5cb297b77dac8d"
-dependencies = [
- "syn 2.0.119",
- "test-log-core",
 ]
 
 [[package]]
