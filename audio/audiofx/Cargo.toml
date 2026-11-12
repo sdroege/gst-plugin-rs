@@ -16,7 +16,7 @@ anyhow = "1"
 byte-slice-cast = "1.0"
 num-traits = "0.2"
 ebur128 = "0.1"
-hrtf = "0.9"
+hrtf = "0.10"
 nnnoiseless = { version = "0.5", default-features = false }
 smallvec = "1"
 atomic_refcell = "0.1"

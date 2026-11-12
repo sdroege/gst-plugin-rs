@@ -13,7 +13,7 @@ gst = { workspace = true, features = ["v1_20"] }
 gst-base = { workspace = true, features = ["v1_20"] }
 gst-audio = { workspace = true, features = ["v1_16"] }
 byte-slice-cast = "1.2"
-hrtf = "0.9"
+hrtf = "0.10"
 rayon = "1.5"
 sofar = "0.3"
 

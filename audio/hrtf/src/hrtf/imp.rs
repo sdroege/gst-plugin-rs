@@ -94,10 +94,9 @@ impl Settings {
 }
 
 struct ChannelProcessor {
-    prev_left_samples: Vec<f32>,
-    prev_right_samples: Vec<f32>,
+    history: Vec<f32>,
     prev_sample_vector: Option<Vec3>,
-    prev_distance_gain: Option<f32>,
+    prev_gain: Option<f32>,
     indata_scratch: Box<[f32]>,
     outdata_scratch: Box<[(f32, f32)]>,
     processor: HrtfProcessor,
@@ -122,8 +121,7 @@ impl State {
 
     fn reset_processors(&mut self) {
         for cp in self.channel_processors.iter_mut() {
-            cp.prev_left_samples.fill(0.0);
-            cp.prev_right_samples.fill(0.0);
+            cp.history.clear();
         }
     }
 }
@@ -207,7 +205,7 @@ impl HrtfRender {
 
             let process_channel =
                 |(i, cp): (usize, &mut ChannelProcessor)| -> Result<(), gst::FlowError> {
-                    let new_distance_gain = settings.distance_gain(i)?;
+                    let new_gain = settings.distance_gain(i)?;
                     let new_sample_vector = settings.position(i)?;
 
                     // Deinterleave the current channel to the scratch buffer
@@ -222,15 +220,14 @@ impl HrtfRender {
                         source: &cp.indata_scratch,
                         output: &mut cp.outdata_scratch,
                         new_sample_vector,
-                        new_distance_gain,
+                        new_gain,
                         prev_sample_vector: cp.prev_sample_vector.unwrap_or(new_sample_vector),
-                        prev_distance_gain: cp.prev_distance_gain.unwrap_or(new_distance_gain),
-                        prev_left_samples: &mut cp.prev_left_samples,
-                        prev_right_samples: &mut cp.prev_right_samples,
+                        prev_gain: cp.prev_gain.unwrap_or(new_gain),
+                        history: &mut cp.history,
                     });
 
                     cp.prev_sample_vector = Some(new_sample_vector);
-                    cp.prev_distance_gain = Some(new_distance_gain);
+                    cp.prev_gain = Some(new_gain);
 
                     Ok(())
                 };
@@ -689,13 +686,12 @@ impl BaseTransformImpl for HrtfRender {
 
         let channel_processors = (0..ininfo.channels())
             .map(|_| ChannelProcessor {
-                prev_left_samples: vec![0.0; block_samples],
-                prev_right_samples: vec![0.0; block_samples],
+                history: Vec::new(),
                 prev_sample_vector: None,
-                prev_distance_gain: None,
+                prev_gain: None,
                 indata_scratch: vec![0.0; block_samples].into_boxed_slice(),
                 outdata_scratch: vec![(0.0, 0.0); block_samples].into_boxed_slice(),
-                processor: HrtfProcessor::new(sphere.to_owned(), steps, blklen),
+                processor: HrtfProcessor::new(sphere.to_owned(), block_samples),
             })
             .collect();
 
