@@ -12,11 +12,10 @@ rust-version.workspace = true
 gst = { workspace = true, features = ["v1_20"] }
 gst-base = { workspace = true, features = ["v1_20"] }
 gst-audio = { workspace = true, features = ["v1_20"] }
-anyhow = "1"
 byte-slice-cast = "1.0"
 num-traits = "0.2"
 ebur128 = "0.1"
-hrtf = "0.8"
+hrtf = "0.10"
 nnnoiseless = { version = "0.5", default-features = false }
 smallvec = "1"
 atomic_refcell = "0.1"
@@ -30,6 +29,7 @@ path = "src/lib.rs"
 [dev-dependencies]
 gst-check = { workspace = true, features = ["v1_18"] }
 gst-app.workspace = true
+anyhow = "1"
 
 [build-dependencies]
 gst-plugin-version-helper.workspace = true
