@@ -5832,7 +5832,7 @@ dependencies = [
  "hex",
  "itertools 0.15.0",
  "log",
- "lru 0.18.4",
+ "lru 0.19.0",
  "rand 0.10.3",
  "rtcp-types",
  "rtp-types",
@@ -5866,7 +5866,7 @@ dependencies = [
  "gstreamer-pbutils",
  "hex",
  "httparse",
- "lru 0.18.4",
+ "lru 0.19.0",
  "md-5",
  "mykey",
  "rand 0.10.3",
@@ -6120,7 +6120,7 @@ dependencies = [
  "indexmap 2.14.2",
  "itertools 0.15.0",
  "libc",
- "lru 0.18.4",
+ "lru 0.19.0",
  "mio",
  "socket2 0.6.5",
  "windows-sys 0.61.2",
@@ -8640,6 +8640,15 @@ name = "lru"
 version = "0.18.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff9840bcc50b71349309900da0ce7279aa336ae71d73250b07998932c7d97c25"
+dependencies = [
+ "hashbrown 0.17.1",
+]
+
+[[package]]
+name = "lru"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a9f71e3591c7ec44d3e563e87bf14ddc2bada8519dca046e5b0e560cd004e2d"
 dependencies = [
  "hashbrown 0.17.1",
 ]
