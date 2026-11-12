@@ -19,7 +19,10 @@ use std::str::FromStr;
 use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, LazyLock, Mutex, mpsc};
 use std::time::Duration;
-use std::{collections::HashSet, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 const DEFAULT_TS_LOCATION: &str = "segment%05d.ts";
 const DEFAULT_INIT_LOCATION: &str = "init%05d.mp4";
@@ -43,6 +46,43 @@ where
     }
 
     a == b
+}
+
+/* Media playlists, keyed by location, shared with the write streams. */
+type MediaPlaylists = Arc<Mutex<HashMap<String, Arc<Mutex<String>>>>>;
+
+fn dump_playlist_diagnostics(
+    multivariant_playlist_content: &Arc<Mutex<String>>,
+    playlist_content: &MediaPlaylists,
+) {
+    let (major, minor, micro, nano) = gst::version();
+    eprintln!("GStreamer version: {major}.{minor}.{micro}.{nano}");
+    eprintln!(
+        "multivariant playlist:\n{}",
+        multivariant_playlist_content.lock().unwrap()
+    );
+
+    let mut playlists: Vec<_> = playlist_content
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(location, content)| (location.clone(), content.clone()))
+        .collect();
+    playlists.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+    for (location, content) in playlists {
+        let content = content.lock().unwrap();
+        let total: f64 = content
+            .lines()
+            .filter_map(|line| line.strip_prefix("#EXTINF:"))
+            .filter_map(|line| line.split(',').next()?.parse::<f64>().ok())
+            .sum();
+        let segments = content
+            .lines()
+            .filter(|line| line.starts_with("#EXTINF:"))
+            .count();
+        eprintln!("playlist {location}: {segments} segments, EXTINF total {total:.3}s\n{content}");
+    }
 }
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
@@ -157,7 +197,6 @@ fn video_bin(
     };
     let queue = try_create_element!("queue")?;
 
-    videosrc.set_property("is-live", true);
     videosrc.set_property_from_str("pattern", "ball");
     videosrc.set_property("num-buffers", BUFFER_NB);
 
@@ -165,6 +204,13 @@ fn video_bin(
     capsfilter.set_property("caps", caps);
 
     x26xenc.set_property("bitrate", bitrate);
+
+    if h265 {
+        x26xenc.set_property("option-string", "pools=4:frame-threads=4");
+    } else {
+        x26xenc.set_property("threads", 4u32);
+    }
+
     if iframe_only {
         x26xenc.set_property("key-int-max", 1);
     } else if h265 {
@@ -214,7 +260,6 @@ fn audio_bin(bitrate: i32) -> Result<gst::Bin, ()> {
 
     let caps = gst::Caps::from_str("audio/x-raw,channels=2,rate=48000,format=S16LE").unwrap();
 
-    audiosrc.set_property("is-live", true);
     audiosrc.set_property("num-buffers", BUFFER_NB);
     capsfilter.set_property("caps", caps);
     aacenc.set_property("bitrate", bitrate);
@@ -266,7 +311,7 @@ fn setup_signals(
     hlssink: &gst::Element,
     hls_events_sender: SyncSender<HlsSinkEvent>,
     multivariant_playlist_content: Arc<Mutex<String>>,
-    playlist_content: Arc<Mutex<String>>,
+    playlist_content: MediaPlaylists,
     muxer_type: HlsMultivariantSinkMuxerType,
 ) {
     hlssink.connect("get-multivariant-playlist-stream", false, {
@@ -314,12 +359,15 @@ fn setup_signals(
             let location = args[1].get::<String>().expect("No location given");
 
             hls_events_sender
-                .try_send(HlsSinkEvent::GetPlaylistStream(location))
+                .try_send(HlsSinkEvent::GetPlaylistStream(location.clone()))
                 .expect("Send playlist event");
 
-            let playlist = MemoryPlaylistFile {
-                handler: Arc::clone(&playlist_content),
+            let handler = {
+                let mut playlists = playlist_content.lock().unwrap();
+                Arc::clone(playlists.entry(location).or_default())
             };
+
+            let playlist = MemoryPlaylistFile { handler };
 
             playlist.clear_content();
             let output = gio::WriteOutputStream::new(playlist);
@@ -381,7 +429,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant() -> Resu
 
     let (hls_events_sender, hls_events_receiver) = mpsc::sync_channel(100);
     let multivariant_playlist_content = Arc::new(Mutex::new(String::from("")));
-    let playlist_content = Arc::new(Mutex::new(String::from("")));
+    let playlist_content = Arc::new(Mutex::new(HashMap::new()));
 
     setup_signals(
         &hlsmultivariantsink,
@@ -530,7 +578,10 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant() -> Resu
                 eos = true;
                 break;
             }
-            MessageView::Error(e) => gst::error!(CAT, "hlsmultivariantsink error: {}", e),
+            MessageView::Error(e) => {
+                gst::error!(CAT, "hlsmultivariantsink error: {}", e);
+                break;
+            }
             _ => (),
         }
     }
@@ -571,7 +622,11 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant() -> Resu
             GetFragmentStream("/tmp/hlssink/mid-audio/segment00000.m4s".to_string()),
         ]
     };
-    assert!(is_playlist_events_eq(&expected_events, &actual_events));
+
+    if !is_playlist_events_eq(&expected_events, &actual_events) {
+        dump_playlist_diagnostics(&multivariant_playlist_content, &playlist_content);
+        panic!("playlist events mismatch, diagnostics printed above");
+    }
 
     let contents = multivariant_playlist_content.lock().unwrap();
 
@@ -633,7 +688,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_rela
 
     let (hls_events_sender, hls_events_receiver) = mpsc::sync_channel(100);
     let multivariant_playlist_content = Arc::new(Mutex::new(String::from("")));
-    let playlist_content = Arc::new(Mutex::new(String::from("")));
+    let playlist_content = Arc::new(Mutex::new(HashMap::new()));
 
     setup_signals(
         &hlsmultivariantsink,
@@ -722,7 +777,10 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_rela
                 eos = true;
                 break;
             }
-            MessageView::Error(e) => gst::error!(CAT, "hlsmultivariantsink error: {}", e),
+            MessageView::Error(e) => {
+                gst::error!(CAT, "hlsmultivariantsink error: {}", e);
+                break;
+            }
             _ => (),
         }
     }
@@ -763,7 +821,11 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_rela
             GetFragmentStream("/tmp/hlssink/mid-audio/segment00000.m4s".to_string()),
         ]
     };
-    assert!(is_playlist_events_eq(&expected_events, &actual_events));
+
+    if !is_playlist_events_eq(&expected_events, &actual_events) {
+        dump_playlist_diagnostics(&multivariant_playlist_content, &playlist_content);
+        panic!("playlist events mismatch, diagnostics printed above");
+    }
 
     let contents = multivariant_playlist_content.lock().unwrap();
 
@@ -817,7 +879,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_single_video_variant() -> Result
 
     let (hls_events_sender, hls_events_receiver) = mpsc::sync_channel(100);
     let multivariant_playlist_content = Arc::new(Mutex::new(String::from("")));
-    let playlist_content = Arc::new(Mutex::new(String::from("")));
+    let playlist_content = Arc::new(Mutex::new(HashMap::new()));
 
     setup_signals(
         &hlsmultivariantsink,
@@ -918,7 +980,10 @@ fn hlsmultivariantsink_multiple_audio_rendition_single_video_variant() -> Result
                 eos = true;
                 break;
             }
-            MessageView::Error(e) => gst::error!(CAT, "hlsmultivariantsink error: {}", e),
+            MessageView::Error(e) => {
+                gst::error!(CAT, "hlsmultivariantsink error: {}", e);
+                break;
+            }
             _ => (),
         }
     }
@@ -951,7 +1016,11 @@ fn hlsmultivariantsink_multiple_audio_rendition_single_video_variant() -> Result
             GetFragmentStream("/tmp/hlssink/mid-audio/segment00000.m4s".to_string()),
         ]
     };
-    assert!(is_playlist_events_eq(&expected_events, &actual_events));
+
+    if !is_playlist_events_eq(&expected_events, &actual_events) {
+        dump_playlist_diagnostics(&multivariant_playlist_content, &playlist_content);
+        panic!("playlist events mismatch, diagnostics printed above");
+    }
 
     let contents = multivariant_playlist_content.lock().unwrap();
 
@@ -1001,7 +1070,7 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
 
     let (hls_events_sender, hls_events_receiver) = mpsc::sync_channel(100);
     let multivariant_playlist_content = Arc::new(Mutex::new(String::from("")));
-    let playlist_content = Arc::new(Mutex::new(String::from("")));
+    let playlist_content = Arc::new(Mutex::new(HashMap::new()));
 
     setup_signals(
         &hlsmultivariantsink,
@@ -1122,7 +1191,10 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
                 eos = true;
                 break;
             }
-            MessageView::Error(e) => gst::error!(CAT, "hlsmultivariantsink error: {}", e),
+            MessageView::Error(e) => {
+                gst::error!(CAT, "hlsmultivariantsink error: {}", e);
+                break;
+            }
             _ => (),
         }
     }
@@ -1160,7 +1232,11 @@ fn hlsmultivariantsink_single_audio_rendition_multiple_video_variant() -> Result
             GetFragmentStream("/tmp/hlssink/hi-audio/segment00000.m4s".to_string()),
         ]
     };
-    assert!(is_playlist_events_eq(&expected_events, &actual_events));
+
+    if !is_playlist_events_eq(&expected_events, &actual_events) {
+        dump_playlist_diagnostics(&multivariant_playlist_content, &playlist_content);
+        panic!("playlist events mismatch, diagnostics printed above");
+    }
 
     let contents = multivariant_playlist_content.lock().unwrap();
 
@@ -1209,7 +1285,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
 
     let (hls_events_sender, hls_events_receiver) = mpsc::sync_channel(100);
     let multivariant_playlist_content = Arc::new(Mutex::new(String::from("")));
-    let playlist_content = Arc::new(Mutex::new(String::from("")));
+    let playlist_content = Arc::new(Mutex::new(HashMap::new()));
 
     setup_signals(
         &hlsmultivariantsink,
@@ -1338,7 +1414,10 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
                 eos = true;
                 break;
             }
-            MessageView::Error(e) => gst::error!(CAT, "hlsmultivariantsink error: {}", e),
+            MessageView::Error(e) => {
+                gst::error!(CAT, "hlsmultivariantsink error: {}", e);
+                break;
+            }
             _ => (),
         }
     }
@@ -1374,7 +1453,10 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
             GetFragmentStream("/tmp/hlssink/low/segment00001.ts".to_string()),
         ]
     };
-    assert!(is_playlist_events_eq(&expected_events, &actual_events));
+    if !is_playlist_events_eq(&expected_events, &actual_events) {
+        dump_playlist_diagnostics(&multivariant_playlist_content, &playlist_content);
+        panic!("playlist events mismatch, diagnostics printed above");
+    }
 
     let contents = multivariant_playlist_content.lock().unwrap();
 
@@ -1423,7 +1505,7 @@ fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() ->
 
     let (hls_events_sender, hls_events_receiver) = mpsc::sync_channel(20);
     let multivariant_playlist_content = Arc::new(Mutex::new(String::from("")));
-    let playlist_content = Arc::new(Mutex::new(String::from("")));
+    let playlist_content = Arc::new(Mutex::new(HashMap::new()));
 
     setup_signals(
         &hlsmultivariantsink,
@@ -1550,7 +1632,10 @@ fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() ->
                 eos = true;
                 break;
             }
-            MessageView::Error(e) => gst::error!(CAT, "hlsmultivariantsink error: {}", e),
+            MessageView::Error(e) => {
+                gst::error!(CAT, "hlsmultivariantsink error: {}", e);
+                break;
+            }
             _ => (),
         }
     }
@@ -1581,7 +1666,10 @@ fn hlsmultivariantsink_multiple_video_variant_with_mpegts_audio_video_muxed() ->
             GetPlaylistStream("/tmp/hlssink/low-audio/audio-only.m3u8".to_string()),
         ]
     };
-    assert!(is_playlist_events_eq(&expected_events, &actual_events));
+    if !is_playlist_events_eq(&expected_events, &actual_events) {
+        dump_playlist_diagnostics(&multivariant_playlist_content, &playlist_content);
+        panic!("playlist events mismatch, diagnostics printed above");
+    }
 
     let contents = multivariant_playlist_content.lock().unwrap();
 
@@ -1637,7 +1725,7 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
 
     let (hls_events_sender, hls_events_receiver) = mpsc::sync_channel(100);
     let multivariant_playlist_content = Arc::new(Mutex::new(String::from("")));
-    let playlist_content = Arc::new(Mutex::new(String::from("")));
+    let playlist_content = Arc::new(Mutex::new(HashMap::new()));
 
     setup_signals(
         &hlsmultivariantsink,
@@ -1766,7 +1854,10 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
                 eos = true;
                 break;
             }
-            MessageView::Error(e) => gst::error!(CAT, "hlsmultivariantsink error: {}", e),
+            MessageView::Error(e) => {
+                gst::error!(CAT, "hlsmultivariantsink error: {}", e);
+                break;
+            }
             _ => (),
         }
     }
@@ -1802,7 +1893,10 @@ fn hlsmultivariantsink_multiple_audio_rendition_multiple_video_variant_with_mpeg
             GetFragmentStream("/tmp/hlssink/low/segment00001.ts".to_string()),
         ]
     };
-    assert!(is_playlist_events_eq(&expected_events, &actual_events));
+    if !is_playlist_events_eq(&expected_events, &actual_events) {
+        dump_playlist_diagnostics(&multivariant_playlist_content, &playlist_content);
+        panic!("playlist events mismatch, diagnostics printed above");
+    }
 
     let contents = multivariant_playlist_content.lock().unwrap();
 
