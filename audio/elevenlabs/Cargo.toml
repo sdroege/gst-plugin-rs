@@ -33,7 +33,7 @@ path = "src/lib.rs"
 gst-plugin-version-helper.workspace = true
 
 [features]
-default = ["rustls-aws-lc-rs", "signalsmith_stretch"]
+default = ["rustls-aws-lc-rs"]
 static = []
 capi = []
 doc = ["gst/v1_18"]
