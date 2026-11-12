@@ -985,7 +985,7 @@ fn apply_jinja_template(
             .map(|m| {
                 context!(
                     role => m.role.as_str(),
-                    content => m.content,
+                    content => m.content.as_str(),
                 )
             })
             .collect::<minijinja::Value>()
