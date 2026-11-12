@@ -8622,9 +8622,9 @@ dependencies = [
 
 [[package]]
 name = "lowpass-filter"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b0a6b6ea90cf19910e4173c3a187f5170bc2d44a5069711a49f3c563d864161"
+checksum = "fbc085392cfdc2871c92406bd61ac465a0eecbdf27aceed2eb46500c3034bdbd"
 
 [[package]]
 name = "lru"
