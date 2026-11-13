@@ -662,6 +662,7 @@ impl CustomSource {
         state.num_audio = 0;
         state.num_video = 0;
         state.received_collection = None;
+        state.should_post_collection = false;
         drop(state);
 
         for pad in pads.iter().filter(|s| s.is_exposed()) {
