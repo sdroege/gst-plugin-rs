@@ -315,7 +315,7 @@ impl Settings {
     fn set_xdg_cache(&mut self, xdg_cache: bool) {
         self.xdg_cache = xdg_cache;
         if xdg_cache {
-            let mut path = gst::glib::user_cache_dir();
+            let mut path = gst::glib::user_cache_dir().to_path_buf();
             path.push("gstreamer-dots");
             self.dot_dir = path.to_str().map(|s| s.to_string());
         }

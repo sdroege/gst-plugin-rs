@@ -162,7 +162,7 @@ struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        let mut file = glib::tmp_dir();
+        let mut file = glib::tmp_dir().to_path_buf();
         file.push("queue_levels.log");
 
         Self {

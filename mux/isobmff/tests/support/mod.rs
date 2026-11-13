@@ -285,7 +285,7 @@ fn check_stsd_sanity(stsd: &mp4_atom::Stsd, expected_config: &ExpectedConfigurat
                         .as_ref()
                         .is_some_and(|pasp| { pasp.h_spacing == 1 && pasp.v_spacing == 1 })
                 );
-                assert!(avc1.colr.as_ref().is_some_and(|colr| {
+                assert!(avc1.colr.iter().any(|colr| {
                     match colr {
                         mp4_atom::Colr::Nclx {
                             colour_primaries,
