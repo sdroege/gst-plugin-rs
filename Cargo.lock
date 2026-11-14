@@ -6153,6 +6153,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-typefind2"
+version = "0.16.0-alpha"
+dependencies = [
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-base",
+ "gstreamer-check",
+]
+
+[[package]]
 name = "gst-plugin-udp"
 version = "0.16.0-alpha"
 dependencies = [

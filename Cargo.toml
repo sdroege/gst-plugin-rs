@@ -30,6 +30,7 @@ members = [
     "generic/threadshare",
     "generic/inter",
     "generic/gopbuffer",
+    "generic/typefind2",
 
     "mux/flavors",
     "mux/isobmff",
@@ -112,6 +113,7 @@ default-members = [
     "generic/threadshare",
     "generic/inter",
     "generic/gopbuffer",
+    "generic/typefind2",
 
     "mux/isobmff",
 

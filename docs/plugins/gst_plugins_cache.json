@@ -27283,6 +27283,97 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "typefind2": {
+        "description": "Finds the media type of a stream",
+        "elements": {
+            "typefind2": {
+                "author": "Edward Hervey <edward@centricular.com>",
+                "description": "Finds the media type of a stream",
+                "hierarchy": [
+                    "GstRsTypeFind2",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Generic",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "caps": {
+                        "blurb": "NULL",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstCaps",
+                        "writable": false
+                    },
+                    "force-caps": {
+                        "blurb": "NULL",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstCaps",
+                        "writable": true
+                    },
+                    "minimum": {
+                        "blurb": "NULL",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1",
+                        "max": "100",
+                        "min": "1",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                },
+                "rank": "none",
+                "signals": {
+                    "have-type": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "guint"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "GstCaps"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    }
+                }
+            }
+        },
+        "filename": "gsttypefind2",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-typefind2",
+        "source": "gst-plugin-typefind2",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "uriplaylistbin": {
         "description": "GStreamer Playlist Playback Plugin",
         "elements": {

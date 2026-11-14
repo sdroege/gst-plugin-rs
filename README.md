@@ -193,6 +193,9 @@ You will find the following plugins in this repository:
       - `ts-udpsink`: Thread-sharing UDP sink.
       - `ts-udpsrc`: Receives data over the network via UDP.
 
+    - `typefind2`: Finds the media type of a stream.
+      - `typefind2`: Reimplementation of the core `typefind` element.
+
 
   * `mux`
 

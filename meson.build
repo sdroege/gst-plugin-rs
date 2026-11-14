@@ -103,6 +103,7 @@ plugins = {
     ],
   },
   'inter': {'library': 'libgstrsinter'},
+  'typefind2': {'library': 'libgsttypefind2'},
 
   'isobmff': {
     'library': 'libgstisobmff',
