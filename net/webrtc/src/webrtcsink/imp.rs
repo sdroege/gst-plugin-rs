@@ -140,7 +140,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 static BD_SEQ: AtomicU32 = AtomicU32::new(0);
 fn get_bdseq() -> u32 {
-    BD_SEQ.fetch_and(1, Ordering::SeqCst) + 1
+    BD_SEQ.fetch_add(1, Ordering::SeqCst) + 1
 }
 
 #[derive(Debug, Clone)]
