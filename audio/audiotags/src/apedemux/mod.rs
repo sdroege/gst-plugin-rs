@@ -25,3 +25,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         ApeTagDemux::static_type(),
     )
 }
+
+#[allow(clippy::module_inception)]
+#[cfg(test)]
+mod tests;
