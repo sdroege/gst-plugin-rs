@@ -40,6 +40,7 @@
  */
 use gst::{glib, prelude::*, subclass::prelude::*};
 
+use std::ops::Range;
 use std::sync::LazyLock;
 
 use crate::basepay::{RtpBasePay2Ext, RtpBasePay2Impl};
@@ -282,11 +283,12 @@ impl RtpH263PPay {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         // The two leading zero bytes of the picture start code are omitted and
         // represented by the P bit.
-        let mut chunks = data[2..].chunks(max_payload_size).peekable();
-        let mut p_bit = 0x04u8;
+        let chunks = data[2..].chunks(max_payload_size);
+        let num_chunks = chunks.len();
 
-        while let Some(chunk) = chunks.next() {
-            let last = chunks.peek().is_none();
+        for (index, chunk) in chunks.enumerate() {
+            let p_bit = if index == 0 { 0x04 } else { 0x00 };
+            let last = index + 1 == num_chunks;
 
             gst::trace!(
                 CAT,
@@ -304,8 +306,6 @@ impl RtpH263PPay {
                     .payload(&[p_bit, 0x00][..])
                     .payload(chunk),
             )?;
-
-            p_bit = 0x00;
         }
 
         Ok(gst::FlowSuccess::Ok)
@@ -324,82 +324,89 @@ impl RtpH263PPay {
         id: u64,
         max_payload_size: usize,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let mut chunks = segment_chunks(data, max_payload_size).peekable();
+        let packets = segment_packets(data, max_payload_size);
 
-        while let Some((packet_start, chunk)) = chunks.next() {
-            let last = chunks.peek().is_none();
+        for (packet_index, packet) in packets.iter().enumerate() {
+            let chunks = data[packet.clone()].chunks(max_payload_size);
+            let num_chunks = chunks.len();
+            let last_packet = packet_index + 1 == packets.len();
 
-            gst::trace!(
-                CAT,
-                imp = self,
-                "Queueing segment packet, P={}, {} bytes of payload, marker={}",
-                packet_start,
-                chunk.len(),
-                last
-            );
+            for (chunk_index, chunk) in chunks.enumerate() {
+                let p_bit = if chunk_index == 0 { 0x04 } else { 0x00 };
+                let last = last_packet && chunk_index + 1 == num_chunks;
 
-            self.obj().queue_packet(
-                id.into(),
-                rtp_types::RtpPacketBuilder::new()
-                    .marker_bit(last)
-                    .payload(&[if packet_start { 0x04 } else { 0x00 }, 0x00][..])
-                    .payload(chunk),
-            )?;
+                gst::trace!(
+                    CAT,
+                    imp = self,
+                    "Queueing segment packet, P={}, {} bytes of payload, marker={}",
+                    p_bit != 0,
+                    chunk.len(),
+                    last
+                );
+
+                self.obj().queue_packet(
+                    id.into(),
+                    rtp_types::RtpPacketBuilder::new()
+                        .marker_bit(last)
+                        .payload(&[p_bit, 0x00][..])
+                        .payload(chunk),
+                )?;
+            }
         }
 
         Ok(gst::FlowSuccess::Ok)
     }
 }
 
-/// Split a picture into the payload chunks of its segment packets.
+/// Group the segments of a picture into packets.
 ///
-/// Each packet starts at a segment start code, omitting its two leading zero
-/// bytes, and holds as many following complete segments as fit into
-/// `max_payload_size`; a segment larger than that is continued in the
-/// following chunks. Sequence-ending segments (EOS/EOSBS) always get a packet
-/// of their own (RFC 4629 section 6.1.3).
+/// A packet starts at a segment start code, omitting its two leading zero
+/// bytes (represented by the P bit), and holds as many following complete
+/// segments as fit into `max_payload_size`. Sequence-ending segments
+/// (EOS/EOSBS) always get a packet of their own (RFC 4629 section 6.1.3).
 ///
-/// Yields `(starts_packet, chunk)`.
-fn segment_chunks<'a>(
-    data: &'a [u8],
-    max_payload_size: usize,
-) -> impl Iterator<Item = (bool, &'a [u8])> + 'a {
+/// The returned ranges start after the omitted start code bytes.
+fn segment_packets(data: &[u8], max_payload_size: usize) -> Vec<Range<usize>> {
     let mut offsets = segment_offsets(data);
     offsets.push(data.len());
 
     // One segment per pair of consecutive start codes, the last segment
     // ending at the end of the picture.
-    let mut segments = offsets
-        .windows(2)
-        .map(|w| w[0]..w[1])
-        .collect::<Vec<_>>()
-        .into_iter()
-        .peekable();
+    let mut packets = Vec::new();
+    let mut packet: Option<Range<usize>> = None;
+    let mut packet_sequence_end = false;
 
-    // Greedily add following complete segments while they fit.
-    let packets = std::iter::from_fn(move || {
-        let first = segments.next()?;
-        let start = first.start + 2;
-        let mut end = first.end;
-        let sequence_end = is_sequence_end(data, first.start);
+    for offsets in offsets.windows(2) {
+        let [start, end] = [offsets[0], offsets[1]];
+        let segment = start + 2..end;
+        let sequence_end = is_sequence_end(data, start);
 
-        while let Some(next) = segments.next_if(|next| {
-            !sequence_end
-                && !is_sequence_end(data, next.start)
-                && end - start + next.len() <= max_payload_size
-        }) {
-            end = next.end;
+        match packet.take() {
+            // A merged segment keeps its start code: the packet grows to
+            // `end - current.start` bytes, not by `segment.len()`.
+            Some(mut current)
+                if !packet_sequence_end
+                    && !sequence_end
+                    && end - current.start <= max_payload_size =>
+            {
+                current.end = end;
+                packet = Some(current);
+            }
+            previous => {
+                if let Some(previous) = previous {
+                    packets.push(previous);
+                }
+                packet = Some(segment);
+                packet_sequence_end = sequence_end;
+            }
         }
+    }
 
-        Some(start..end)
-    });
+    if let Some(packet) = packet {
+        packets.push(packet);
+    }
 
-    packets.flat_map(move |packet| {
-        data[packet]
-            .chunks(max_payload_size)
-            .enumerate()
-            .map(|(index, chunk)| (index == 0, chunk))
-    })
+    packets
 }
 
 #[cfg(test)]
@@ -415,65 +422,76 @@ mod tests {
     }
 
     #[test]
-    fn segment_chunks_single_segment() {
+    fn segment_packets_single_segment() {
         let data = segment(0x80, 6);
 
-        assert_eq!(
-            segment_chunks(&data, 100).collect::<Vec<_>>(),
-            vec![(true, &data[2..])]
-        );
+        assert_eq!(segment_packets(&data, 100), vec![2..6]);
     }
 
     #[test]
-    fn segment_chunks_packs_fitting_segments() {
+    fn segment_packets_packs_fitting_segments() {
         let mut data = segment(0x80, 4);
         data.extend(segment(0x81, 4));
 
-        assert_eq!(
-            segment_chunks(&data, 100).collect::<Vec<_>>(),
-            vec![(true, &data[2..])]
-        );
+        assert_eq!(segment_packets(&data, 100), vec![2..8]);
     }
 
     #[test]
-    fn segment_chunks_continues_oversized_segment() {
-        // 8 bytes after the omitted start code bytes, 3 per chunk.
+    fn segment_packets_splits_segments_that_do_not_fit() {
+        let mut data = segment(0x80, 6);
+        data.extend(segment(0x81, 6));
+
+        assert_eq!(segment_packets(&data, 5), vec![2..6, 8..12]);
+    }
+
+    #[test]
+    fn segment_packets_counts_the_retained_start_code() {
+        // The first segment contributes 1 byte (its two leading zero bytes
+        // are omitted), the second its full 5 bytes: 6 bytes do not fit 5.
+        let mut data = segment(0x80, 3);
+        data.extend(segment(0x81, 5));
+
+        assert_eq!(segment_packets(&data, 5), vec![2..3, 5..8]);
+    }
+
+    #[test]
+    fn segment_packets_merges_at_the_mtu_boundary() {
+        let mut data = segment(0x80, 3);
+        data.extend(segment(0x81, 5));
+
+        assert_eq!(segment_packets(&data, 6), vec![2..8]);
+    }
+
+    #[test]
+    fn segment_packets_keeps_oversized_segment_whole() {
+        // Chunking to the MTU happens when the packet is emitted.
         let data = segment(0x80, 10);
 
-        assert_eq!(
-            segment_chunks(&data, 3).collect::<Vec<_>>(),
-            vec![
-                (true, &data[2..5]),
-                (false, &data[5..8]),
-                (false, &data[8..10]),
-            ]
-        );
+        assert_eq!(segment_packets(&data, 3), vec![2..10]);
     }
 
     #[test]
-    fn segment_chunks_isolates_sequence_end() {
+    fn segment_packets_isolates_sequence_end() {
         let mut data = segment(0x80, 4);
         data.extend(segment(0xFC, 4)); // EOS
         data.extend(segment(0x81, 4));
 
-        assert_eq!(
-            segment_chunks(&data, 100).collect::<Vec<_>>(),
-            vec![
-                (true, &data[2..4]),
-                (true, &data[6..8]),
-                (true, &data[10..12]),
-            ]
-        );
+        assert_eq!(segment_packets(&data, 100), vec![2..4, 6..8, 10..12]);
     }
 
     #[test]
-    fn segment_chunks_isolates_consecutive_sequence_ends() {
+    fn segment_packets_isolates_trailing_sequence_end() {
+        let mut data = segment(0x80, 4);
+        data.extend(segment(0xF8, 4)); // EOSBS
+
+        assert_eq!(segment_packets(&data, 100), vec![2..4, 6..8]);
+    }
+
+    #[test]
+    fn segment_packets_isolates_consecutive_sequence_ends() {
         let mut data = segment(0xFC, 4); // EOS
         data.extend(segment(0xFD, 4)); // EOS
 
-        assert_eq!(
-            segment_chunks(&data, 100).collect::<Vec<_>>(),
-            vec![(true, &data[2..4]), (true, &data[6..8])]
-        );
+        assert_eq!(segment_packets(&data, 100), vec![2..4, 6..8]);
     }
 }
