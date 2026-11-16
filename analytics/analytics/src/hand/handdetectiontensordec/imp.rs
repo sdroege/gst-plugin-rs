@@ -474,6 +474,7 @@ impl ElementImpl for HandDetectionTensorDec {
                         )
                         .build(),
                 )
+                .any_features()
                 .build();
 
             let sink_pad_template = gst::PadTemplate::new(
@@ -488,7 +489,7 @@ impl ElementImpl for HandDetectionTensorDec {
                 "src",
                 gst::PadDirection::Src,
                 gst::PadPresence::Always,
-                &gst_video::VideoCapsBuilder::new().build(),
+                &gst_video::VideoCapsBuilder::new().any_features().build(),
             )
             .unwrap();
 
