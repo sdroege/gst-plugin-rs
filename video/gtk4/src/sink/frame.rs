@@ -762,6 +762,14 @@ impl Frame {
                 let vmeta_offsets = vmeta.offset();
                 let vmeta_strides = vmeta.stride();
 
+                // The video meta of a tiled format stores the tile counts
+                // in the stride. A dmabuf needs the stride in bytes.
+                let tiled_finfo = info
+                    .to_video_info()
+                    .ok()
+                    .map(|info| info.format_info())
+                    .filter(|finfo| finfo.is_tiled());
+
                 for plane in 0..n_planes {
                     let Some((range, skip)) =
                         buffer.find_memory(vmeta_offsets[plane]..(vmeta_offsets[plane] + 1))
@@ -778,7 +786,15 @@ impl Frame {
                     let fd = mem.fd();
                     fds[plane] = fd;
                     offsets[plane] = mem.offset() + skip;
-                    strides[plane] = vmeta_strides[plane] as usize;
+                    strides[plane] = match &tiled_finfo {
+                        Some(finfo) => {
+                            let x_tiles = (vmeta_strides[plane]
+                                & gst_video::ffi::GST_VIDEO_TILE_X_TILES_MASK)
+                                as usize;
+                            x_tiles * finfo.tile_info(plane as u32).stride() as usize
+                        }
+                        None => vmeta_strides[plane] as usize,
+                    };
                 }
 
                 // All fds valid?
