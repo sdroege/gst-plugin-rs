@@ -11,6 +11,8 @@ use atomic_refcell::AtomicRefCell;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_rtp::prelude::*;
 
+use rtp_types::RtpExtensionsBlock;
+
 use smallvec::SmallVec;
 use std::sync::LazyLock;
 
@@ -356,10 +358,10 @@ impl RtpBasePay2 {
         seqnum.0
     }
 
-    pub(super) fn queue_packet(
+    pub(super) fn queue_packet<E: rtp_types::RtpExtensionsBlockWrite>(
         &self,
         packet_to_buffer_relation: PacketToBufferRelation,
-        mut packet: rtp_types::RtpPacketBuilder<&[u8], &[u8]>,
+        mut packet: rtp_types::RtpPacketBuilder<&[u8], E>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst::trace!(
             CAT,
@@ -669,18 +671,23 @@ impl RtpBasePay2 {
         let mut extension_data = SmallVec::<[u8; 256]>::with_capacity(extension_size);
         extension_data.resize(extension_size, 0);
 
-        let mut packet = packet;
-
-        if !extension_data.is_empty() && extension_pattern != 0 {
-            packet = packet.extension(extension_pattern, extension_data.as_slice());
-        }
-
         // Queue up packet and timestamp all others without timestamp that are before it.
         // FIXME: Use more optimal packet writing API once available
         // https://github.com/ystreet/rtp-types/issues/4
         // https://github.com/ystreet/rtp-types/issues/5
         // TODO: Maybe use an MTU-sized buffer pool?
-        let packet_buffer = packet.write_vec().map_err(|err| {
+        //
+        // The extension area is set last, because `.extension()` changes the builder's extension
+        // type parameter and so must be the final field set before serializing.
+        let packet_buffer = if !extension_data.is_empty() && extension_pattern != 0 {
+            let block =
+                rtp_types::extension::ExtensionBlock::parse(extension_pattern, &extension_data)
+                    .expect("a raw extension block always parses");
+            packet.extension(block).write_vec()
+        } else {
+            packet.write_vec()
+        }
+        .map_err(|err| {
             gst::error!(CAT, imp = self, "Can't write packet: {err}");
             gst::FlowError::Error
         })?;

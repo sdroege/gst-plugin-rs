@@ -78,10 +78,10 @@ pub trait RtpBasePay2Ext: IsA<RtpBasePay2> + 'static {
     ///     careful to handle discontinuities of any sort correctly. Also, the subclass needs to
     ///     provide an explicit timestamp (either by setting no offset or by setting a PTS-based
     ///     offset) for the first packet ever and after every `drain()` or `flush()`.
-    fn queue_packet(
+    fn queue_packet<E: rtp_types::RtpExtensionsBlockWrite>(
         &self,
         packet_to_buffer_relation: PacketToBufferRelation,
-        packet: rtp_types::RtpPacketBuilder<&[u8], &[u8]>,
+        packet: rtp_types::RtpPacketBuilder<&[u8], E>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         self.upcast_ref::<RtpBasePay2>()
             .imp()

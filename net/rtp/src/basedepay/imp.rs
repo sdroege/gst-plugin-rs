@@ -11,6 +11,8 @@ use atomic_refcell::AtomicRefCell;
 use gst::{glib, prelude::*, subclass::prelude::*};
 use gst_rtp::prelude::*;
 
+use rtp_types::RtpExtensionsBlockWrite;
+
 use std::sync::LazyLock;
 
 use std::{
@@ -377,86 +379,83 @@ impl RtpBaseDepay2 {
             if !extensions.is_empty() && front.have_header_extensions {
                 let map = front.buffer.map_readable().unwrap();
                 let packet = rtp_types::RtpPacket::parse(&map).unwrap();
-                let (extension_pattern, mut extensions_data) = packet.extension().unwrap();
-
-                let extension_flags = match extension_pattern {
-                    0xBEDE => gst_rtp::RTPHeaderExtensionFlags::ONE_BYTE,
-                    x if x >> 4 == 0x100 => gst_rtp::RTPHeaderExtensionFlags::TWO_BYTE,
-                    _ => {
-                        gst::trace!(
-                            CAT,
-                            imp = self,
-                            "Unknown extension pattern {extension_pattern:04X}"
-                        );
-                        continue;
-                    }
+                let Some(Ok(extension)) =
+                    packet.extension::<rtp_types::extension::ExtensionBlock>()
+                else {
+                    gst::debug!(CAT, imp = self, "No header extension block found");
+                    continue;
                 };
 
-                while !extensions_data.is_empty() {
-                    let (id, len) = if extension_flags == gst_rtp::RTPHeaderExtensionFlags::ONE_BYTE
-                    {
-                        let b = extensions_data[0];
-                        extensions_data = &extensions_data[1..];
+                // The concrete types only parse their own header form, so the profile selects
+                // between them first.
+                let mut read_entries =
+                    |entries: &mut dyn Iterator<Item = (u8, &[u8])>,
+                     flags: gst_rtp::RTPHeaderExtensionFlags| {
+                        for (id, extension_data) in entries {
+                            gst::trace!(
+                                CAT,
+                                imp = self,
+                                "Handling RTP header extension with id {id} and length {}",
+                                extension_data.len()
+                            );
 
-                        let id = b >> 4;
-                        let len = (b & 0x0f) + 1;
+                            let Some(extension) = extensions.get(&id) else {
+                                continue;
+                            };
 
-                        // Padding
-                        if id == 0 {
-                            continue;
+                            if !extension.read(flags, extension_data, buffer) {
+                                gst::warning!(
+                                    CAT,
+                                    imp = self,
+                                    "Failed reading RTP header extension with id {id} and length {}",
+                                    extension_data.len()
+                                );
+                                continue;
+                            }
+
+                            extension_wants_caps_update |=
+                                extension.wants_update_non_rtp_src_caps();
                         }
-                        if id == 15 {
-                            // Special ID
-                            break;
-                        }
-
-                        (id, len as usize)
-                    } else {
-                        let id = extensions_data[0];
-                        extensions_data = &extensions_data[1..];
-
-                        // Padding
-                        if id == 0 {
-                            continue;
-                        }
-
-                        if extensions_data.is_empty() {
-                            break;
-                        }
-
-                        let len = extensions_data[0];
-                        extensions_data = &extensions_data[1..];
-
-                        (id, len as usize)
                     };
 
-                    if extensions_data.len() < len {
-                        break;
+                match extension.extension_id() {
+                    0xBEDE => {
+                        let extension =
+                            match extension.try_as::<rtp_types::RtpSingleByteExtension>() {
+                                Ok(extension) => extension,
+                                Err(e) => {
+                                    gst::debug!(
+                                        CAT,
+                                        imp = self,
+                                        "Malformed one-byte header extension block: {e}"
+                                    );
+                                    continue;
+                                }
+                            };
+
+                        let mut entries = extension.iter();
+                        read_entries(&mut entries, gst_rtp::RTPHeaderExtensionFlags::ONE_BYTE);
                     }
+                    id if (id & 0xFFF0) == 0x1000 => {
+                        let extension = match extension.try_as::<rtp_types::RtpTwoByteExtension>() {
+                            Ok(extension) => extension,
+                            Err(e) => {
+                                gst::debug!(
+                                    CAT,
+                                    imp = self,
+                                    "Malformed two-byte header extension block: {e}"
+                                );
+                                continue;
+                            }
+                        };
 
-                    gst::trace!(
-                        CAT,
-                        imp = self,
-                        "Handling RTP header extension with id {id} and length {len}"
-                    );
-
-                    let (extension_data, remainder) = extensions_data.split_at(len);
-                    extensions_data = remainder;
-
-                    let Some(extension) = extensions.get(&id) else {
-                        continue;
-                    };
-
-                    if !extension.read(extension_flags, extension_data, buffer) {
-                        gst::warning!(
-                            CAT,
-                            imp = self,
-                            "Failed reading RTP header extension with id {id} and length {len}"
-                        );
+                        let mut entries = extension.iter();
+                        read_entries(&mut entries, gst_rtp::RTPHeaderExtensionFlags::TWO_BYTE);
+                    }
+                    id => {
+                        gst::trace!(CAT, imp = self, "Unknown extension pattern {id:04X}");
                         continue;
                     }
-
-                    extension_wants_caps_update |= extension.wants_update_non_rtp_src_caps();
                 }
             }
 

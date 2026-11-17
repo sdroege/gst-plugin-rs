@@ -10035,12 +10035,12 @@ dependencies = [
 
 [[package]]
 name = "rtp-types"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bb90df8268abfe08452ef2dae9e867a54edfdaa71b3127ef47d8b031f77ac73"
+checksum = "e5ffbfeed1d3071995d8285ba0608483f3d4a52dba5653d3f9f5c1c519a14eac"
 dependencies = [
  "smallvec",
- "thiserror 1.0.69",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
