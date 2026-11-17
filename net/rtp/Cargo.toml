@@ -28,7 +28,7 @@ hex = "0.4.3"
 log = "0.4"
 lru.workspace = true
 rand = "0.10"
-rtp-types = { version = "0.1" }
+rtp-types = "0.2"
 rtcp-types = { version = "0.3" }
 sdp-types.workspace = true
 slab = "0.4.9"
