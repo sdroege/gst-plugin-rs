@@ -24,10 +24,21 @@ use librice::stream::Credentials;
 use librice::stream::Stream;
 use tokio::task::JoinHandle;
 
+use sdp_types::AddrType;
+use sdp_types::Connection;
 use sdp_types::Direction;
 use sdp_types::Fingerprint;
 use sdp_types::HashFunc;
+use sdp_types::IceOptions;
+use sdp_types::IcePwd;
+use sdp_types::IceUfrag;
 use sdp_types::MediaType;
+use sdp_types::Mid;
+use sdp_types::NetType;
+use sdp_types::Origin;
+use sdp_types::Setup;
+use sdp_types::Time;
+use sdp_types::TransportProto;
 
 use crate::RUNTIME;
 use crate::transceiver::Transceiver;
@@ -38,10 +49,12 @@ use crate::webrtcsession::dtls::DtlsEvent;
 use crate::webrtcsession::dtls::DtlsPollRet;
 use crate::webrtcsession::dtls::KeyMaterial;
 use crate::webrtcsession::dtls::TlsImpl;
-use crate::webrtcsession::sdp::DtlsSetup;
-use crate::webrtcsession::sdp::MediaSpecifics;
-use crate::webrtcsession::sdp::WebRTCSdpMedia;
-use crate::webrtcsession::sdp::{WebRTCSdp, WebRTCSdpType};
+use crate::webrtcsession::sdp::WebRTCSdpType;
+use crate::webrtcsession::sdp::{
+    answer_media, answer_media_from_offer, answer_setup, intersect_setup, is_datachannel,
+    is_rejected_media, media_intersect, parse_webrtc_sdp, select_bundle_tag,
+};
+use sdp_types_gst::{Media, Session};
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -96,10 +109,10 @@ pub(crate) struct State {
     rtp_session: Option<gst::Object>,
 
     signaling_status: SignalingStatus,
-    pending_local_desc: Option<(WebRTCSdpType, WebRTCSdp)>,
-    pending_remote_desc: Option<(WebRTCSdpType, WebRTCSdp)>,
-    current_local_desc: Option<(WebRTCSdpType, WebRTCSdp)>,
-    current_remote_desc: Option<(WebRTCSdpType, WebRTCSdp)>,
+    pending_local_desc: Option<(WebRTCSdpType, Session)>,
+    pending_remote_desc: Option<(WebRTCSdpType, Session)>,
+    current_local_desc: Option<(WebRTCSdpType, Session)>,
+    current_remote_desc: Option<(WebRTCSdpType, Session)>,
 
     operations: Option<Operations>,
 
@@ -220,6 +233,26 @@ impl Ice {
     }
 }
 
+/// The stored descriptions don't contain the locally gathered ICE candidates,
+/// add them to a copy of the description for external consumption.
+fn sdp_with_local_candidates(sdp: &Session, ice: &Ice) -> String {
+    let mut sdp = sdp.clone();
+    for (i, media) in sdp.media_mut().iter_mut().enumerate() {
+        let Some(stream) = ice.stream_for_mline(i as u32) else {
+            continue;
+        };
+        for candidate in stream.local_candidates() {
+            let value = candidate.to_sdp_string();
+            let value = value.strip_prefix("a=candidate:").unwrap_or(&value);
+            match value.parse::<sdp_types::Candidate>() {
+                Ok(c) => media.candidates_mut().push(c),
+                Err(e) => gst::warning!(CAT, "Ignoring local candidate {value}: {e}"),
+            }
+        }
+    }
+    sdp.to_sdp_string()
+}
+
 #[derive(Debug)]
 enum TransceiverSearch {
     Mid,
@@ -242,23 +275,21 @@ impl State {
 
     fn transceiver_for_sdp_media(
         &self,
-        media: &WebRTCSdpMedia,
+        media: &Media,
         idx: usize,
     ) -> Option<(TransceiverSearch, Transceiver)> {
         let mut send_caps = None;
         for transceiver in self.transceivers.iter() {
             let trans_state = transceiver.imp().state();
             if media
-                .mid
-                .as_ref()
-                .is_some_and(|mid| trans_state.mid() == Some(mid))
+                .mid()
+                .is_some_and(|mid| trans_state.mid() == Some(mid.0.as_str()))
             {
                 return Some((TransceiverSearch::Mid, transceiver.clone()));
             }
             if media
-                .mid
-                .as_ref()
-                .is_some_and(|mid| trans_state.pending_mid() == Some(mid))
+                .mid()
+                .is_some_and(|mid| trans_state.pending_mid() == Some(mid.0.as_str()))
             {
                 return Some((TransceiverSearch::PendingMid, transceiver.clone()));
             }
@@ -271,7 +302,7 @@ impl State {
                 let Some(send_media) = rtp_caps_to_media(&caps) else {
                     continue;
                 };
-                if send_media.intersect(media).is_none() {
+                if media_intersect(&send_media, media).is_none() {
                     continue;
                 };
                 send_caps.get_or_insert(transceiver);
@@ -356,8 +387,8 @@ impl State {
                 gst::log!(CAT, "unassociated transceiver {transceiver:?}");
                 return true;
             };
-            assert!(mline < local_desc.media.len());
-            assert!(mline < remote_desc.media.len());
+            assert!(mline < local_desc.media().len());
+            assert!(mline < remote_desc.media().len());
             let local_dir = local_desc.rtp_direction_for_mline(mline);
             let remote_dir = remote_desc.rtp_direction_for_mline(mline);
             match local_type {
@@ -465,13 +496,13 @@ impl State {
                 .pending_remote_desc
                 .as_ref()
                 .or(self.current_remote_desc.as_ref())
-            && let Some(media) = sdp.media.get(transport_id as usize)
+            && let Some(media) = sdp.media().get(transport_id as usize)
             && sdp
-                .fingerprints
+                .fingerprints()
                 .iter()
                 .all(|sdp_fp| sdp_fp.hash_func == HashFunc::Sha256 && sdp_fp.fingerprint != fp)
             && media
-                .fingerprints
+                .fingerprints()
                 .iter()
                 .all(|sdp_fp| sdp_fp.hash_func == HashFunc::Sha256 && sdp_fp.fingerprint != fp)
         {
@@ -602,24 +633,29 @@ impl WebRTCSession {
     fn create_offer(&self, options: Option<gst::Structure>, promise: Option<gst::Promise>) {
         gst::info!(CAT, imp = self, "creating offer with options: {options:?}");
         let mut state = self.state.lock().unwrap();
-        let mut desc = WebRTCSdp {
-            typ: WebRTCSdpType::Offer,
-            id: (rand::random::<u64>() & 0x7fff_ffff_ffff_ffff).to_string(),
-            ice_lite: false,
-            ice_ufrag: None,
-            ice_pwd: None,
-            fingerprints: vec![],
-            setup: None,
-            direction: None,
-            group_bundle: vec![],
-            media: vec![],
-        };
+        let mut desc = Session::builder()
+            .origin(Origin {
+                username: Some("-".to_string()),
+                sess_id: (rand::random::<u64>() & 0x7fff_ffff_ffff_ffff).to_string(),
+                sess_version: 0,
+                nettype: NetType::In,
+                addrtype: AddrType::Ip4,
+                unicast_address: "0.0.0.0".to_string(),
+            })
+            .times(vec![Time {
+                start_time: 0,
+                stop_time: 0,
+                repeats: vec![],
+            }])
+            .ice_options(Some(IceOptions::new(["trickle"])))
+            .build();
 
         gst::debug!(CAT, imp = self, "transceivers: {:?}", state.transceivers);
 
         let mut idx = 0;
         let transport_idx = 0;
         let mut new_dtls = vec![];
+        let mut medias = vec![];
         for transceiver in state.transceivers.iter() {
             let Some(mut new_media) = transceiver.imp().generate_offer_media(idx) else {
                 gst::debug!(
@@ -629,6 +665,12 @@ impl WebRTCSession {
                 );
                 continue;
             };
+            new_media.set_proto(TransportProto::UdpTlsRtpSavpf);
+            new_media.set_connection(Some(Connection::from_ip_addr(
+                std::net::Ipv4Addr::UNSPECIFIED,
+            )));
+            let mid = idx.to_string();
+            new_media.set_mid(Some(Mid(mid.clone())));
             let dtls = if let Some(transport) = state
                 .transports
                 .iter()
@@ -636,41 +678,57 @@ impl WebRTCSession {
             {
                 &transport.dtls
             } else {
-                new_dtls.push((idx, TlsImpl::new()));
+                new_dtls.push((transport_idx, TlsImpl::new()));
                 new_dtls.last().map(|(_idx, dtls)| dtls).unwrap()
             };
+            // RFC 8843 section 7.1.3 and RFC 8829 section 5.2.1 put
+            // a=fingerprint only in the BUNDLE-tagged m-line. Firefox
+            // crashes on m-lines without one, so add it to every m-line.
+            new_media
+                .fingerprints_mut()
+                .push(Fingerprint::with_fingerprint(
+                    HashFunc::Sha256,
+                    dtls.local_fingerprint(),
+                ));
             if idx == transport_idx {
-                new_media.setup = dtls
-                    .is_client()
-                    .map(|client| {
-                        if client {
-                            DtlsSetup::Active
-                        } else {
-                            DtlsSetup::Passive
-                        }
-                    })
-                    .or(Some(DtlsSetup::ActPass));
-                new_media.ice_ufrag = Some(librice::random_string(8));
-                new_media.ice_pwd = Some(librice::random_string(32));
-            };
-            new_media.fingerprints.push(Fingerprint::with_fingerprint(
-                HashFunc::Sha256,
-                dtls.local_fingerprint(),
-            ));
-            let mid = idx.to_string();
-            new_media.mid = Some(mid.clone());
-            if desc.group_bundle.is_empty() {
-                new_media.bundle_only = false;
-                new_media.port = 9;
+                new_media.set_bundle_only(false);
+                new_media.set_port(9);
+                new_media.set_setup(
+                    dtls.is_client()
+                        .map(|client| {
+                            if client {
+                                Setup::Active
+                            } else {
+                                Setup::Passive
+                            }
+                        })
+                        .or(Some(Setup::ActPass)),
+                );
+                new_media.set_ice_ufrag(Some(IceUfrag(librice::random_string(8))));
+                new_media.set_ice_pwd(Some(IcePwd(librice::random_string(32))));
             } else {
-                new_media.bundle_only = true;
-                new_media.port = 0;
+                new_media.set_bundle_only(true);
+                new_media.set_port(0);
+                new_media.set_rtcp_mux(false);
+                new_media.set_rtcp_mux_only(false);
+                new_media.set_rtcp_rsize(false);
+                new_media.set_rtcp(None);
+                new_media.set_crypto(vec![]);
+                new_media.set_key_mgmt(vec![]);
+                new_media.set_other_attributes(vec![]);
+                new_media.set_ice_ufrag(None);
+                new_media.set_ice_pwd(None);
+                new_media.set_ice_options(None);
+                new_media.set_setup(None);
+                new_media.set_candidates(vec![]);
+                new_media.set_end_of_candidates(false);
             }
             gst::trace!(CAT, imp = self, "generated media: {new_media:?}");
-            desc.media.push(new_media);
-            desc.group_bundle.push(mid);
+            medias.push(new_media);
+            desc.add_bundle_tag(&mid);
             idx += 1;
         }
+        desc.set_media(medias);
         for (idx, dtls) in new_dtls {
             let ice = state.ice.as_mut().expect("No ICE");
             let stream = ice
@@ -706,117 +764,138 @@ impl WebRTCSession {
             });
             return;
         };
-        let mut desc = WebRTCSdp {
-            typ: WebRTCSdpType::Answer,
-            id: pending_remote.id.clone(),
-            ice_lite: false,
-            ice_ufrag: None,
-            ice_pwd: None,
-            fingerprints: vec![],
-            setup: None,
-            direction: None,
-            group_bundle: vec![],
-            media: vec![],
-        };
+        let mut desc = Session::builder()
+            .origin(Origin {
+                username: Some("-".to_string()),
+                sess_id: pending_remote.origin().sess_id.clone(),
+                sess_version: 0,
+                nettype: NetType::In,
+                addrtype: AddrType::Ip4,
+                unicast_address: "0.0.0.0".to_string(),
+            })
+            .times(vec![Time {
+                start_time: 0,
+                stop_time: 0,
+                repeats: vec![],
+            }])
+            .ice_options(Some(IceOptions::new(["trickle"])))
+            .build();
         let mut new_dtls = vec![];
-        let bundle_idx = pending_remote.bundle_idx();
-        for (idx, media) in pending_remote.media.iter().enumerate() {
-            let transport_idx = if media
-                .mid
-                .as_ref()
-                .is_some_and(|mid| pending_remote.group_bundle.contains(mid))
-            {
-                bundle_idx.unwrap()
-            } else {
-                idx
+        let mut medias = vec![];
+        let bundle_idx = select_bundle_tag(pending_remote);
+        let bundle_tags = pending_remote.bundle_tags();
+        let mut bundled_mids = vec![];
+        for (idx, media) in pending_remote.media().iter().enumerate() {
+            let in_offer_group =
+                bundle_idx.is_some() && media.mid().is_some_and(|mid| bundle_tags.contains(&mid.0));
+            let is_bundled = in_offer_group && !is_rejected_media(media);
+            let is_tagged = is_bundled && bundle_idx == Some(idx);
+            let is_rejected = is_rejected_media(media) || (media.bundle_only() && !is_bundled);
+            gst::trace!(
+                CAT,
+                "creating answer media for idx {idx} bundled {is_bundled} tagged {is_tagged} rejected {is_rejected} media: {media:?}"
+            );
+
+            if is_rejected {
+                // Reject the media line: zero port, no transport of its own
+                // and not part of the BUNDLE group (RFC 8843 section 7.3.3).
+                let new_media = Media::builder(media.media())
+                    .port(0)
+                    .proto(media.proto().clone())
+                    .formats(media.formats().to_vec())
+                    .fmt_raw(media.fmt_raw().map(str::to_owned))
+                    .mid(media.mid().cloned())
+                    .connection(Some(Connection::from_ip_addr(
+                        std::net::Ipv4Addr::UNSPECIFIED,
+                    )))
+                    .build();
+                medias.push(new_media);
+                continue;
+            }
+
+            let mut new_media = match state.transceiver_for_sdp_media(media, idx).and_then(
+                |(_search, transceiver)| transceiver.imp().generate_offer_media(idx as u32),
+            ) {
+                Some(local_media) => answer_media(media, local_media),
+                None => answer_media(media, answer_media_from_offer(media)),
             };
+            new_media.set_mid(media.mid().cloned());
+            new_media.set_candidates(vec![]);
+            new_media.set_end_of_candidates(false);
+            new_media.set_remote_candidates(vec![]);
+            new_media.set_ice_options(None);
+            new_media.set_proto(TransportProto::UdpTlsRtpSavpf);
+            new_media.set_connection(Some(Connection::from_ip_addr(
+                std::net::Ipv4Addr::UNSPECIFIED,
+            )));
+            new_media.set_bundle_only(false);
+
             let dtls = if let Some(transport) = state
                 .transports
                 .iter()
-                .find(|transport| transport.id == transport_idx as u32)
+                .find(|transport| transport.id == idx as u32)
             {
                 &transport.dtls
             } else {
                 new_dtls.push((idx, TlsImpl::new()));
                 new_dtls.last().map(|(_idx, dtls)| dtls).unwrap()
             };
-            gst::trace!(
-                CAT,
-                "creating answer media for idx {idx} transport {transport_idx} media: {media:?}"
-            );
-            if media.specifics.rtp().is_none() {
-                // TODO: data channel not supported yet.
-                gst::fixme!(CAT, "data channels are not currently supported");
-                let new_media = WebRTCSdpMedia {
-                    media: media.media,
-                    port: 0,
-                    ice_ufrag: None,
-                    ice_pwd: None,
-                    candidates: vec![],
-                    end_of_candidates: false,
-                    setup: None,
-                    mid: media.mid.clone(),
-                    bundle_only: false,
-                    fingerprints: vec![],
-                    specifics: media.specifics.clone(),
-                };
-                desc.media.push(new_media);
-                continue;
-            }
-            let new_specifics = match &media.specifics {
-                MediaSpecifics::Rtp(remote_rtp) => {
-                    if let Some(local_rtp) = state.transceiver_for_sdp_media(media, idx).and_then(
-                        |(_search, transceiver)| transceiver.imp().generate_offer_media(idx as u32),
-                    ) {
-                        MediaSpecifics::Rtp(crate::webrtcsession::sdp::RtpMedia::produce_answer_from_offer_and_source(remote_rtp, local_rtp.specifics.rtp().unwrap()))
-                    } else {
-                        let mut ret = remote_rtp.clone();
-                        ret.direction = Direction::RecvOnly;
-                        ret.rtcp_mux = true;
-                        ret.rtcp_mux_only = false;
-                        MediaSpecifics::Rtp(crate::webrtcsession::sdp::RtpMedia::produce_answer_from_offer_and_source(remote_rtp, &ret))
-                    }
-                }
-                MediaSpecifics::Datachannel(data) => MediaSpecifics::Datachannel(data.clone()),
-            };
-            let mut new_media = WebRTCSdpMedia {
-                media: media.media,
-                port: 9,
-                ice_ufrag: None,
-                ice_pwd: None,
-                candidates: vec![],
-                end_of_candidates: false,
-                setup: None,
-                mid: media.mid.clone(),
-                bundle_only: bundle_idx.is_none_or(|bundle_idx| bundle_idx != idx),
-                fingerprints: vec![],
-                specifics: new_specifics,
-            };
-            if idx == transport_idx {
-                new_media.ice_ufrag = Some(librice::random_string(4));
-                new_media.ice_pwd = Some(librice::random_string(32));
-                new_media.setup = dtls
-                    .is_client()
-                    .map(|client| {
-                        if client {
-                            DtlsSetup::Active
-                        } else {
-                            DtlsSetup::Passive
-                        }
-                    })
-                    .or(Some(DtlsSetup::answer_direction(media.setup)));
-            } else if bundle_idx.is_some() {
-                new_media.port = 0;
-            }
-            new_media.fingerprints.push(Fingerprint::with_fingerprint(
+            // Add a fingerprint to every m-line, see create_offer().
+            new_media.set_fingerprints(vec![Fingerprint::with_fingerprint(
                 HashFunc::Sha256,
                 dtls.local_fingerprint(),
-            ));
-            if let Some(mid) = media.mid.as_ref() {
-                desc.group_bundle.push(mid.clone());
+            )]);
+
+            if is_bundled && !is_tagged {
+                // Bundled media other than the tagged section only get a zero
+                // port and a=bundle-only (RFC 8843 section 7.1.3).
+                new_media.set_port(0);
+                new_media.set_bundle_only(true);
+                new_media.set_ice_ufrag(None);
+                new_media.set_ice_pwd(None);
+                new_media.set_setup(None);
+                new_media.set_rtcp_mux(false);
+                new_media.set_rtcp_mux_only(false);
+                new_media.set_rtcp_rsize(false);
+                new_media.set_rtcp(None);
+                new_media.set_crypto(vec![]);
+                new_media.set_key_mgmt(vec![]);
+                new_media.set_other_attributes(vec![]);
+                if let Some(mid) = media.mid() {
+                    bundled_mids.push(mid.0.clone());
+                }
+                medias.push(new_media);
+                continue;
             }
-            desc.media.push(new_media);
+
+            new_media.set_port(9);
+            new_media.set_ice_ufrag(Some(IceUfrag(librice::random_string(4))));
+            new_media.set_ice_pwd(Some(IcePwd(librice::random_string(32))));
+            new_media.set_setup(
+                dtls.is_client()
+                    .map(|client| {
+                        if client {
+                            Setup::Active
+                        } else {
+                            Setup::Passive
+                        }
+                    })
+                    .or(Some(answer_setup(media.setup()))),
+            );
+            medias.push(new_media);
         }
+        if let Some(bundle_idx) = bundle_idx
+            && let Some(mid) = pending_remote.media()[bundle_idx].mid()
+        {
+            // RFC 8843 section 7.3.4: the answerer BUNDLE-tag comes first.
+            desc.add_bundle_tag(&mid.0);
+            for tag in bundle_tags {
+                if tag != &mid.0 && bundled_mids.contains(tag) {
+                    desc.add_bundle_tag(tag);
+                }
+            }
+        }
+        desc.set_media(medias);
         for (idx, dtls) in new_dtls {
             let ice = state.ice.as_mut().expect("No ICE");
             let stream = ice
@@ -919,7 +998,7 @@ impl WebRTCSession {
             "Attempting to set {remote} {typ:?} SDP: {sdp}"
         );
 
-        let sdp = match WebRTCSdp::parse(typ, &sdp) {
+        let sdp = match parse_webrtc_sdp(&sdp) {
             Ok(sdp) => sdp,
             Err(e) => {
                 drop(state);
@@ -980,17 +1059,29 @@ impl WebRTCSession {
         }
         let stun_servers = state.stun_servers.clone();
         let turn_servers = state.turn_servers.clone();
-        let bundle_idx = sdp.bundle_idx();
-        for (i, media) in sdp.media.iter().enumerate() {
-            let transport_id = if media
-                .mid
-                .as_ref()
-                .is_some_and(|mid| sdp.group_bundle.contains(mid))
-            {
+        // As the answerer, select the offerer-tagged media line ourselves
+        // (RFC 8843 section 7.3.1). Otherwise the first BUNDLE-tag is the
+        // tagged line.
+        let bundle_idx = if is_remote && typ == WebRTCSdpType::Offer {
+            select_bundle_tag(&sdp)
+        } else {
+            sdp.bundle_idx()
+        };
+        let bundle_tags = sdp.bundle_tags();
+        for (i, media) in sdp.media().iter().enumerate() {
+            let in_group =
+                bundle_idx.is_some() && media.mid().is_some_and(|mid| bundle_tags.contains(&mid.0));
+            let is_bundled = in_group && !is_rejected_media(media);
+            let is_rejected = is_rejected_media(media) || (media.bundle_only() && !is_bundled);
+            if is_rejected {
+                continue;
+            }
+            let transport_id = if is_bundled {
                 bundle_idx.unwrap() as u32
             } else {
                 i as u32
             };
+            let provides_transport = !is_bundled || Some(i) == bundle_idx;
             let ice = state.ice.as_mut().expect("No ICE");
             let stream = ice
                 .mline_stream_id_map
@@ -1084,16 +1175,28 @@ impl WebRTCSession {
                     }
                 });
             }
+            let transport_media = &sdp.media()[transport_id as usize];
             let credentials = Credentials::new(
-                sdp.media[transport_id as usize].ice_ufrag.as_ref().unwrap(),
-                sdp.media[transport_id as usize].ice_pwd.as_ref().unwrap(),
+                transport_media.ice_ufrag().unwrap().0.as_str(),
+                transport_media.ice_pwd().unwrap().0.as_str(),
             );
             if is_remote {
                 stream.set_remote_credentials(&credentials);
-                for cand in media.candidates.iter() {
-                    stream.add_remote_candidate(cand);
+                if provides_transport {
+                    for cand in media.candidates().iter() {
+                        let Ok(cand) = Candidate::from_sdp_string(&format!("a=candidate:{cand}"))
+                        else {
+                            gst::warning!(
+                                CAT,
+                                imp = self,
+                                "Ignoring unparsable candidate: {cand:?}"
+                            );
+                            continue;
+                        };
+                        stream.add_remote_candidate(&cand);
+                    }
                 }
-            } else {
+            } else if provides_transport {
                 for stun in stun_servers.iter() {
                     let Ok(addr) = IpAddr::from_str(&stun.addr) else {
                         // TODO: wait for dns resolution to complete.
@@ -1164,98 +1267,89 @@ impl WebRTCSession {
         let mut pt_map = gst::Structure::builder("application/x-rtp-pt-map");
         let mut pending_transceivers = vec![];
         if new_signaling_status == SignalingStatus::Stable {
-            for (idx, media) in sdp.media.iter().enumerate() {
-                // skip rejected media
-                let transport_id = bundle_idx.unwrap_or(idx);
-                if bundle_idx.is_some() {
-                    if !sdp.group_bundle.contains(media.mid.as_ref().unwrap()) {
-                        continue;
-                    }
-                } else if media.port == 0 {
+            for (idx, media) in sdp.media().iter().enumerate() {
+                let in_group = bundle_idx.is_some()
+                    && media.mid().is_some_and(|mid| bundle_tags.contains(&mid.0));
+                let is_bundled = in_group && !is_rejected_media(media);
+                let is_rejected = is_rejected_media(media) || (media.bundle_only() && !is_bundled);
+                if is_rejected {
                     continue;
                 }
-                match &media.specifics {
-                    MediaSpecifics::Rtp(_) => {
-                        let trans = match state.transceiver_for_sdp_media(media, idx) {
-                            Some((_, transceiver)) => transceiver,
-                            None => {
-                                let transceiver = glib::Object::new::<Transceiver>();
-                                gst::trace!(
-                                    CAT,
-                                    imp = self,
-                                    "Constructing new recvonly transceiver {transceiver:?}"
-                                );
-                                let mut trans_state = transceiver.imp().state();
-                                trans_state.set_direction(Direction::RecvOnly);
-                                pending_transceivers.push(transceiver.clone());
-                                drop(trans_state);
-                                transceiver
-                            }
+                let transport_id = if is_bundled { bundle_idx.unwrap() } else { idx };
+                if is_datachannel(media) {
+                    // FIXME data channel
+                } else {
+                    let trans = match state.transceiver_for_sdp_media(media, idx) {
+                        Some((_, transceiver)) => transceiver,
+                        None => {
+                            let transceiver = glib::Object::new::<Transceiver>();
+                            gst::trace!(
+                                CAT,
+                                imp = self,
+                                "Constructing new recvonly transceiver {transceiver:?}"
+                            );
+                            let mut trans_state = transceiver.imp().state();
+                            trans_state.set_direction(Direction::RecvOnly);
+                            pending_transceivers.push(transceiver.clone());
+                            drop(trans_state);
+                            transceiver
+                        }
+                    };
+
+                    let local_sdp = state.current_local_desc.as_ref().unwrap().clone();
+                    let remote_sdp = state.current_remote_desc.as_ref().unwrap().clone();
+                    let local_media = &local_sdp.1.media()[idx];
+                    let remote_media = &remote_sdp.1.media()[idx];
+                    if idx == transport_id {
+                        let mut remote_fingerprints = remote_media.fingerprints().to_vec();
+                        remote_fingerprints.extend_from_slice(remote_sdp.1.fingerprints());
+
+                        let local_setup = local_media.setup().or(local_sdp.1.setup());
+                        let remote_setup = remote_media.setup().or(remote_sdp.1.setup());
+                        let Some(final_setup) = intersect_setup(local_setup, remote_setup) else {
+                            resolve_promise_with_error(promise, || {
+                                glib::Error::new(
+                                    WebRTCError::SyntaxError,
+                                    &format!(
+                                        "Cannot intersect DTLS setup values for media {idx}, local: {local_setup:?}, remote: {remote_setup:?}"
+                                    ),
+                                )
+                            });
+                            return;
                         };
 
-                        let local_sdp = state.current_local_desc.as_ref().unwrap().clone();
-                        let remote_sdp = state.current_remote_desc.as_ref().unwrap().clone();
-                        let local_media = &local_sdp.1.media[idx];
-                        let remote_media = &remote_sdp.1.media[idx];
-                        if idx == transport_id {
-                            let mut remote_fingerprints = remote_media.fingerprints.clone();
-                            remote_fingerprints.extend_from_slice(&remote_sdp.1.fingerprints);
-
-                            let local_setup = local_media.setup.or(local_sdp.1.setup);
-                            let remote_setup = remote_media.setup.or(remote_sdp.1.setup);
-                            let Some(final_setup) =
-                                DtlsSetup::intersect_with_remote(local_setup, remote_setup)
-                            else {
-                                resolve_promise_with_error(promise, || {
-                                    glib::Error::new(
-                                        WebRTCError::SyntaxError,
-                                        &format!(
-                                            "Cannot intersect DTLS setup values for media {idx}, local: {local_setup:?}, remote: {remote_setup:?}"
-                                        ),
-                                    )
-                                });
-                                return;
-                            };
-
-                            let Some(transport) = state
-                                .transports
-                                .iter_mut()
-                                .find(|transport| transport.id == transport_id as u32)
-                            else {
-                                // All previous code paths should have resulted in a transport
-                                unreachable!();
-                            };
-                            transport.dtls.set_client(final_setup == DtlsSetup::Active);
-                            transport.expected_remote_fingerprint = remote_fingerprints;
-                        }
-
-                        let mut trans_state = trans.imp().state();
-                        trans_state.update_from_sdp(&local_sdp.1, idx, &remote_sdp.1);
-
-                        let MediaSpecifics::Rtp(rtp) = &local_media.specifics else {
+                        let Some(transport) = state
+                            .transports
+                            .iter_mut()
+                            .find(|transport| transport.id == transport_id as u32)
+                        else {
+                            // All previous code paths should have resulted in a transport
                             unreachable!();
                         };
-                        for format in rtp.formats.iter() {
-                            let Some(rtpmap) = rtp.rtpmaps.get(format) else {
-                                continue;
-                            };
-                            let media_str = match media.media {
-                                MediaType::Audio => "audio",
-                                MediaType::Video => "video",
-                                MediaType::Application => "application",
-                                _ => unreachable!(),
-                            };
-                            let caps = gst::Caps::builder("application/x-rtp")
-                                .field("payload", *format as i32)
-                                .field("clock-rate", rtpmap.clock_rate as i32)
-                                .field("encoding-name", rtpmap.encoding_name.to_ascii_uppercase())
-                                .field("media", media_str)
-                                .build();
-                            pt_map = pt_map.field(format.to_string(), caps);
-                        }
+                        transport.dtls.set_client(final_setup == Setup::Active);
+                        transport.expected_remote_fingerprint = remote_fingerprints;
                     }
-                    MediaSpecifics::Datachannel(_) => {
-                        // FIXME data channel
+
+                    let mut trans_state = trans.imp().state();
+                    trans_state.update_from_sdp(&local_sdp.1, idx, &remote_sdp.1);
+
+                    for format in local_media.formats().iter() {
+                        let Some(rtpmap) = local_media.rtpmaps().get(format) else {
+                            continue;
+                        };
+                        let media_str = match media.media() {
+                            MediaType::Audio => "audio",
+                            MediaType::Video => "video",
+                            MediaType::Application => "application",
+                            _ => unreachable!(),
+                        };
+                        let caps = gst::Caps::builder("application/x-rtp")
+                            .field("payload", *format as i32)
+                            .field("clock-rate", rtpmap.clock_rate as i32)
+                            .field("encoding-name", rtpmap.encoding_name.to_ascii_uppercase())
+                            .field("media", media_str)
+                            .build();
+                        pt_map = pt_map.field(format.to_string(), caps);
                     }
                 }
             }
@@ -1673,20 +1767,9 @@ impl ObjectImpl for WebRTCSession {
                 state
                     .current_local_desc
                     .as_ref()
-                    .map(|(_typ, sdp)| {
-                        let Some(ice) = state.ice.as_ref() else {
-                            return sdp.to_sdp_string();
-                        };
-                        let mut sdp = sdp.clone();
-                        for (i, media) in sdp.media.iter_mut().enumerate() {
-                            let Some(stream) = ice.stream_for_mline(i as u32) else {
-                                continue;
-                            };
-                            for candidate in stream.local_candidates() {
-                                media.candidates.push(candidate);
-                            }
-                        }
-                        sdp.to_sdp_string()
+                    .map(|(_typ, sdp)| match state.ice.as_ref() {
+                        Some(ice) => sdp_with_local_candidates(sdp, ice),
+                        None => sdp.to_sdp_string(),
                     })
                     .to_value()
             }
@@ -1695,20 +1778,9 @@ impl ObjectImpl for WebRTCSession {
                 state
                     .current_remote_desc
                     .as_ref()
-                    .map(|(_typ, sdp)| {
-                        let Some(ice) = state.ice.as_ref() else {
-                            return sdp.to_sdp_string();
-                        };
-                        let mut sdp = sdp.clone();
-                        for (i, media) in sdp.media.iter_mut().enumerate() {
-                            let Some(stream) = ice.stream_for_mline(i as u32) else {
-                                continue;
-                            };
-                            for candidate in stream.local_candidates() {
-                                media.candidates.push(candidate);
-                            }
-                        }
-                        sdp.to_sdp_string()
+                    .map(|(_typ, sdp)| match state.ice.as_ref() {
+                        Some(ice) => sdp_with_local_candidates(sdp, ice),
+                        None => sdp.to_sdp_string(),
                     })
                     .to_value()
             }
@@ -1717,20 +1789,9 @@ impl ObjectImpl for WebRTCSession {
                 state
                     .pending_local_desc
                     .as_ref()
-                    .map(|(_typ, sdp)| {
-                        let Some(ice) = state.ice.as_ref() else {
-                            return sdp.to_sdp_string();
-                        };
-                        let mut sdp = sdp.clone();
-                        for (i, media) in sdp.media.iter_mut().enumerate() {
-                            let Some(stream) = ice.stream_for_mline(i as u32) else {
-                                continue;
-                            };
-                            for candidate in stream.local_candidates() {
-                                media.candidates.push(candidate);
-                            }
-                        }
-                        sdp.to_sdp_string()
+                    .map(|(_typ, sdp)| match state.ice.as_ref() {
+                        Some(ice) => sdp_with_local_candidates(sdp, ice),
+                        None => sdp.to_sdp_string(),
                     })
                     .to_value()
             }
@@ -1739,20 +1800,9 @@ impl ObjectImpl for WebRTCSession {
                 state
                     .pending_remote_desc
                     .as_ref()
-                    .map(|(_typ, sdp)| {
-                        let Some(ice) = state.ice.as_ref() else {
-                            return sdp.to_sdp_string();
-                        };
-                        let mut sdp = sdp.clone();
-                        for (i, media) in sdp.media.iter_mut().enumerate() {
-                            let Some(stream) = ice.stream_for_mline(i as u32) else {
-                                continue;
-                            };
-                            for candidate in stream.local_candidates() {
-                                media.candidates.push(candidate);
-                            }
-                        }
-                        sdp.to_sdp_string()
+                    .map(|(_typ, sdp)| match state.ice.as_ref() {
+                        Some(ice) => sdp_with_local_candidates(sdp, ice),
+                        None => sdp.to_sdp_string(),
                     })
                     .to_value()
             }
@@ -2099,7 +2149,6 @@ fn resolve_server_dns<T>(
 
 #[cfg(test)]
 mod tests {
-    use crate::webrtcsession::sdp::{DtlsSetup, MediaSpecifics, RtpMedia};
     use sdp_types::{MediaType, RtpMap};
 
     use super::*;
@@ -2183,46 +2232,63 @@ mod tests {
 
     #[derive(Debug, Clone)]
     struct ExpectedSdp {
-        typ: WebRTCSdpType,
-        media: Vec<ExpectedSdpMedia>,
+        media: Vec<ExpectedMedia>,
     }
 
     #[derive(Debug, Clone)]
-    struct ExpectedSdpMedia {
+    struct ExpectedMedia {
         media: MediaType,
         ice_ufrag: Option<bool>,
         ice_pwd: Option<bool>,
-        setup: Option<DtlsSetup>,
+        setup: Option<Setup>,
         mid: String,
         bundle_only: bool,
         fingerprints: usize,
-        rtp: Option<RtpMedia>,
+        rtp: Option<Media>,
+    }
+
+    fn expected_rtp_media(media: MediaType, pt: u8, encoding_name: &str, clock_rate: u32) -> Media {
+        let rtpmap = RtpMap::new(pt, encoding_name, clock_rate);
+        Media::builder(media)
+            .formats(vec![pt])
+            .rtcp_mux(true)
+            .rtcp_mux_only(true)
+            .rtpmaps(BTreeMap::from([(rtpmap.payload_type, rtpmap)]))
+            .build()
     }
 
     impl ExpectedSdp {
-        fn match_against(&self, sdp: &WebRTCSdp) {
-            assert_eq!(self.typ, sdp.typ);
-            assert_eq!(self.media.len(), sdp.media.len());
+        fn match_against(&self, sdp: &Session) {
+            assert_eq!(self.media.len(), sdp.media().len());
             for i in 0..self.media.len() {
                 let our_media = &self.media[i];
-                let their_media = &sdp.media[i];
-                assert_eq!(our_media.media, their_media.media);
+                let their_media = &sdp.media()[i];
+                assert_eq!(our_media.media, their_media.media());
                 assert!(
                     our_media
                         .ice_ufrag
-                        .is_none_or(|exists| exists == their_media.ice_ufrag.is_some())
+                        .is_none_or(|exists| exists == their_media.ice_ufrag().is_some())
                 );
                 assert!(
                     our_media
                         .ice_pwd
-                        .is_none_or(|exists| exists == their_media.ice_pwd.is_some())
+                        .is_none_or(|exists| exists == their_media.ice_pwd().is_some())
                 );
-                assert_eq!(our_media.setup, their_media.setup);
-                assert_eq!(Some(&our_media.mid), their_media.mid.as_ref());
-                assert_eq!(our_media.bundle_only, their_media.bundle_only);
-                assert_eq!(our_media.fingerprints, their_media.fingerprints.len());
-                if let Some(our_rtp) = our_media.rtp.clone() {
-                    assert_eq!(MediaSpecifics::Rtp(our_rtp), their_media.specifics);
+                assert_eq!(our_media.setup, their_media.setup().cloned());
+                assert_eq!(Some(&our_media.mid), their_media.mid().map(|mid| &mid.0));
+                assert_eq!(our_media.bundle_only, their_media.bundle_only());
+                assert_eq!(our_media.fingerprints, their_media.fingerprints().len());
+                if let Some(our_rtp) = our_media.rtp.as_ref() {
+                    assert_eq!(our_rtp.direction(), their_media.direction());
+                    assert_eq!(our_rtp.rtcp_mux(), their_media.rtcp_mux());
+                    assert_eq!(our_rtp.rtcp_mux_only(), their_media.rtcp_mux_only());
+                    assert_eq!(our_rtp.rtcp_rsize(), their_media.rtcp_rsize());
+                    assert_eq!(our_rtp.rtcp_fb(), their_media.rtcp_fb());
+                    assert_eq!(our_rtp.extmap(), their_media.extmap());
+                    assert_eq!(our_rtp.formats(), their_media.formats());
+                    assert_eq!(our_rtp.rtpmaps(), their_media.rtpmaps());
+                    assert_eq!(our_rtp.rtcp_fbs(), their_media.rtcp_fbs());
+                    assert_eq!(our_rtp.fmtps(), their_media.fmtps());
                 }
             }
         }
@@ -2280,28 +2346,14 @@ mod tests {
             })),
         );
         let offer = rx.recv().unwrap();
-        let sdp = WebRTCSdp::parse(WebRTCSdpType::Offer, &offer).unwrap();
-        let mut media0 = crate::webrtcsession::sdp::RtpMedia {
-            direction: Direction::SendRecv,
-            rtcp_mux: true,
-            rtcp_mux_only: true,
-            rtcp_rsize: false,
-            rtcp_fb: None,
-            extmap: Default::default(),
-            formats: vec![11],
-            rtpmaps: Default::default(),
-            rtcp_fbs: Default::default(),
-            fmtps: Default::default(),
-        };
-        let rtpmap = RtpMap::new(11, "L16", 44_100);
-        media0.rtpmaps.insert(rtpmap.payload_type, rtpmap);
+        let sdp = parse_webrtc_sdp(&offer).unwrap();
+        let media0 = expected_rtp_media(MediaType::Audio, 11, "L16", 44_100);
         let expected_offer = ExpectedSdp {
-            typ: WebRTCSdpType::Offer,
-            media: vec![ExpectedSdpMedia {
+            media: vec![ExpectedMedia {
                 media: MediaType::Audio,
                 ice_ufrag: Some(true),
                 ice_pwd: Some(true),
-                setup: Some(DtlsSetup::ActPass),
+                setup: Some(Setup::ActPass),
                 mid: String::from("0"),
                 bundle_only: false,
                 fingerprints: 1,
@@ -2311,9 +2363,8 @@ mod tests {
         expected_offer.match_against(&sdp);
         let answer = rx.recv().unwrap();
         let mut expected_answer = expected_offer.clone();
-        expected_answer.typ = WebRTCSdpType::Answer;
-        expected_answer.media[0].setup = Some(DtlsSetup::Active);
-        let sdp = WebRTCSdp::parse(WebRTCSdpType::Answer, &answer).unwrap();
+        expected_answer.media[0].setup = Some(Setup::Active);
+        let sdp = parse_webrtc_sdp(&answer).unwrap();
         expected_answer.match_against(&sdp);
     }
 
@@ -2368,28 +2419,14 @@ mod tests {
             })),
         );
         let offer = rx.recv().unwrap();
-        let sdp = WebRTCSdp::parse(WebRTCSdpType::Offer, &offer).unwrap();
-        let mut media0 = crate::webrtcsession::sdp::RtpMedia {
-            direction: Direction::SendRecv,
-            rtcp_mux: true,
-            rtcp_mux_only: true,
-            rtcp_rsize: false,
-            rtcp_fb: None,
-            extmap: Default::default(),
-            formats: vec![98],
-            rtpmaps: Default::default(),
-            rtcp_fbs: Default::default(),
-            fmtps: Default::default(),
-        };
-        let rtpmap = RtpMap::new(98, "SMPTE336M", 90_000);
-        media0.rtpmaps.insert(rtpmap.payload_type, rtpmap);
+        let sdp = parse_webrtc_sdp(&offer).unwrap();
+        let media0 = expected_rtp_media(MediaType::Application, 98, "SMPTE336M", 90_000);
         let expected_offer = ExpectedSdp {
-            typ: WebRTCSdpType::Offer,
-            media: vec![ExpectedSdpMedia {
+            media: vec![ExpectedMedia {
                 media: MediaType::Application,
                 ice_ufrag: Some(true),
                 ice_pwd: Some(true),
-                setup: Some(DtlsSetup::ActPass),
+                setup: Some(Setup::ActPass),
                 mid: String::from("0"),
                 bundle_only: false,
                 fingerprints: 1,
@@ -2399,9 +2436,8 @@ mod tests {
         expected_offer.match_against(&sdp);
         let answer = rx.recv().unwrap();
         let mut expected_answer = expected_offer.clone();
-        expected_answer.typ = WebRTCSdpType::Answer;
-        expected_answer.media[0].setup = Some(DtlsSetup::Active);
-        let sdp = WebRTCSdp::parse(WebRTCSdpType::Answer, &answer).unwrap();
+        expected_answer.media[0].setup = Some(Setup::Active);
+        let sdp = parse_webrtc_sdp(&answer).unwrap();
         expected_answer.match_against(&sdp);
     }
 
@@ -2464,49 +2500,25 @@ mod tests {
             })),
         );
         let offer = rx.recv().unwrap();
-        let sdp = WebRTCSdp::parse(WebRTCSdpType::Offer, &offer).unwrap();
-        let mut media0 = crate::webrtcsession::sdp::RtpMedia {
-            direction: Direction::SendRecv,
-            rtcp_mux: true,
-            rtcp_mux_only: true,
-            rtcp_rsize: false,
-            rtcp_fb: None,
-            extmap: Default::default(),
-            formats: vec![11],
-            rtpmaps: Default::default(),
-            rtcp_fbs: Default::default(),
-            fmtps: Default::default(),
-        };
-        let rtpmap = RtpMap::new(11, "L16", 44_100);
-        media0.rtpmaps.insert(rtpmap.payload_type, rtpmap);
-        let mut media1 = crate::webrtcsession::sdp::RtpMedia {
-            direction: Direction::SendRecv,
-            rtcp_mux: true,
-            rtcp_mux_only: true,
-            rtcp_rsize: false,
-            rtcp_fb: None,
-            extmap: Default::default(),
-            formats: vec![96],
-            rtpmaps: Default::default(),
-            rtcp_fbs: Default::default(),
-            fmtps: Default::default(),
-        };
-        let rtpmap = RtpMap::new(96, "VP8", 90_000);
-        media1.rtpmaps.insert(rtpmap.payload_type, rtpmap);
+        let sdp = parse_webrtc_sdp(&offer).unwrap();
+        let media0 = expected_rtp_media(MediaType::Audio, 11, "L16", 44_100);
+        let mut media1 = expected_rtp_media(MediaType::Video, 96, "VP8", 90_000);
+        media1.set_rtcp_mux(false);
+        media1.set_rtcp_mux_only(false);
+        media1.set_rtcp_rsize(false);
         let expected_offer = ExpectedSdp {
-            typ: WebRTCSdpType::Offer,
             media: vec![
-                ExpectedSdpMedia {
+                ExpectedMedia {
                     media: MediaType::Audio,
                     ice_ufrag: Some(true),
                     ice_pwd: Some(true),
-                    setup: Some(DtlsSetup::ActPass),
+                    setup: Some(Setup::ActPass),
                     mid: String::from("0"),
                     bundle_only: false,
                     fingerprints: 1,
                     rtp: Some(media0),
                 },
-                ExpectedSdpMedia {
+                ExpectedMedia {
                     media: MediaType::Video,
                     ice_ufrag: Some(false),
                     ice_pwd: Some(false),
@@ -2521,9 +2533,8 @@ mod tests {
         expected_offer.match_against(&sdp);
         let answer = rx.recv().unwrap();
         let mut expected_answer = expected_offer.clone();
-        expected_answer.typ = WebRTCSdpType::Answer;
-        expected_answer.media[0].setup = Some(DtlsSetup::Active);
-        let sdp = WebRTCSdp::parse(WebRTCSdpType::Answer, &answer).unwrap();
+        expected_answer.media[0].setup = Some(Setup::Active);
+        let sdp = parse_webrtc_sdp(&answer).unwrap();
         expected_answer.match_against(&sdp);
     }
 }

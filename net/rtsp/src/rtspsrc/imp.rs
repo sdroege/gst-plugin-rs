@@ -57,7 +57,6 @@ use gst_net::gio;
 
 use super::body::Body;
 use super::digest::*;
-use super::sdp;
 use super::transport::RtspTransportInfo;
 
 const DEFAULT_LOCATION: Option<Url> = None;
@@ -274,6 +273,64 @@ fn is_secure_rtp_profile(profile: &RtpProfile) -> bool {
     *profile == RtpProfile::SAvp || *profile == RtpProfile::SAvpF
 }
 
+fn parse_control_path(path: &str, base: &Url) -> Option<Url> {
+    match Url::parse(path) {
+        Ok(v) => Some(v),
+        Err(url::ParseError::RelativeUrlWithoutBase) => {
+            if path == "*" {
+                Some(base.clone())
+            } else {
+                base.join(path).ok()
+            }
+        }
+        Err(_) => None,
+    }
+}
+
+fn parse_connections(media: &sdp_types_gst::Media) -> (BTreeSet<RtspProtocol>, bool) {
+    let mut is_ipv4 = true;
+    let mut conn_protocols = BTreeSet::new();
+    for conn in media.connections() {
+        if conn.nettype != sdp_types::NetType::In {
+            continue;
+        }
+        // XXX: For now, assume that all connections use the same addrtype
+        match conn.addrtype {
+            sdp_types::AddrType::Ip4 => is_ipv4 = true,
+            sdp_types::AddrType::Ip6 => is_ipv4 = false,
+            _ => continue,
+        }
+        // Strip subnet mask, if any
+        let addr = if let Some((first, _)) = conn.connection_address.split_once('/') {
+            first
+        } else {
+            conn.connection_address.as_str()
+        };
+        let Ok(addr) = addr.parse::<IpAddr>() else {
+            continue;
+        };
+        // If this is an instance of gst-rtsp-server that only supports
+        // udp-multicast, it will put the multicast address in the media
+        // connections field.
+        if addr.is_multicast() {
+            conn_protocols.insert(RtspProtocol::UdpMulticast);
+        } else {
+            conn_protocols.insert(RtspProtocol::Tcp);
+            conn_protocols.insert(RtspProtocol::Udp);
+        }
+    }
+    (conn_protocols, is_ipv4)
+}
+
+fn parse_rtp_profile(media: &sdp_types_gst::Media) -> RtpProfile {
+    match media.proto() {
+        sdp_types::TransportProto::RtpSavp => RtpProfile::SAvp,
+        sdp_types::TransportProto::RtpSavpf => RtpProfile::SAvpF,
+        sdp_types::TransportProto::RtpAvpf => RtpProfile::AvpF,
+        _ => RtpProfile::Avp,
+    }
+}
+
 fn reply_with_promise(
     promise: gst::Promise,
     reply_name: &str,
@@ -389,7 +446,7 @@ enum Commands {
 struct RtspGstStream {
     stream: gst::Stream,
     media_idx: usize,
-    has_mikey: bool,
+    has_srtp_key: bool,
 }
 
 #[derive(Debug, Default)]
@@ -482,7 +539,7 @@ pub enum RtspError {
     #[error("RTSP header parse error")]
     HeaderParser(#[from] rtsp_types::headers::HeaderParseError),
     #[error("SDP parse error")]
-    SDPParser(#[from] sdp_types::ParserError),
+    SDPParser(#[from] sdp_types_gst::ParseError),
     #[error("Unexpected RTSP message: expected, received")]
     UnexpectedMessage(&'static str, Box<rtsp_types::Message<Body>>),
     #[error("Invalid RTSP message")]
@@ -2548,7 +2605,7 @@ struct RtspTaskState {
     version: Version,
     content_base_or_location: Option<String>,
     aggregate_control: Option<Url>,
-    sdp: Option<sdp_types::Session>,
+    sdp: Option<sdp_types_gst::Session>,
 
     stream:
         Pin<Box<dyn Stream<Item = Result<Message<Body>, super::tcp_message::ReadError>> + Send>>,
@@ -2837,9 +2894,14 @@ impl RtspTaskState {
             .or(rsp.header(&CONTENT_LOCATION))
             .map(|v| v.to_string());
 
-        gst::info!(CAT, "{}", std::str::from_utf8(rsp.body()).unwrap());
         // TODO: read range attribute from SDP for VOD use-cases
-        let sdp = sdp_types::Session::parse(rsp.body())?;
+        let body = std::str::from_utf8(rsp.body())
+            .map_err(|err| RtspError::Fatal(format!("SDP body is not UTF-8: {err}")))?;
+        gst::info!(CAT, "{body}");
+        let (sdp, skipped) = sdp_types_gst::Session::parse_skip_invalid(body)?;
+        for (mline, err) in skipped {
+            gst::warning!(CAT, "Ignoring invalid media line {mline}: {err:?}");
+        }
         gst::debug!(CAT, "{sdp:#?}");
 
         self.sdp.replace(sdp);
@@ -2931,51 +2993,51 @@ impl RtspTaskState {
 
     fn create_streams(&mut self) -> Vec<RtspGstStream> {
         let sdp = self.sdp.clone().expect("Must have SDP by now");
-        let mut b = gst::Structure::builder("application/x-rtp");
 
         // TODO: parse range for VOD
-        let skip_attrs = ["control", "range", "ssrc"];
-        for sdp_types::Attribute { attribute, value } in &sdp.attributes {
-            if skip_attrs.contains(&attribute.as_str()) {
-                continue;
-            }
-            b = b.field(format!("a-{attribute}"), value);
-        }
+        let session_attrs = sdp.session_caps_fields(&["control", "range", "ssrc"]);
         // TODO: parse global extmap
 
-        let structure = b.build();
         let mut streams: Vec<RtspGstStream> = Vec::new();
 
-        for (media_idx, m) in sdp.medias.iter().enumerate() {
-            let mut has_mikey = false;
+        for (media_idx, m) in sdp.media().iter().enumerate() {
             // RTP caps
-            let Ok(pt) = m.fmt.parse::<u8>() else {
-                gst::error!(CAT, "Could not parse pt: {}, ignoring media", m.fmt);
-                continue;
+            let pt = match m.formats()[..] {
+                [pt] => pt,
+                _ => {
+                    gst::error!(
+                        CAT,
+                        "Could not parse pt: {}, ignoring media",
+                        m.fmt_string()
+                    );
+                    continue;
+                }
             };
 
-            let mut s = structure.clone();
-            let media = m.media.to_ascii_lowercase();
-
-            s.set("media", &media);
-            s.set("payload", pt as i32);
-
-            if let Err(err) =
-                sdp::parse_media_attributes(&m.attributes, pt, &media, &mut s, &mut has_mikey)
-            {
-                gst::warning!(
-                    CAT,
-                    "Skipping media {} {}, no caps: {err:?}",
-                    m.media,
-                    m.fmt
-                );
+            let media = m.media().as_str();
+            let caps = match sdp_types_gst::media_to_caps(m) {
+                Ok(caps) => caps,
+                Err(err) => {
+                    gst::warning!(CAT, "Skipping media {media} {pt}, no caps: {err:?}");
+                    continue;
+                }
+            };
+            let Some(s0) = caps.structure(0) else {
                 continue;
+            };
+            let mut s = s0.to_owned();
+            for (field, value) in &session_attrs {
+                if !s.has_field(field) {
+                    s.set(field.as_str(), value.as_str());
+                }
             }
 
+            let has_srtp_key = s.has_field("srtp-key");
+
             streams.push(RtspGstStream {
-                stream: self.create_stream(s, media_idx, &media),
+                stream: self.create_stream(s, media_idx, media),
                 media_idx,
-                has_mikey,
+                has_srtp_key,
             });
         }
 
@@ -2991,10 +3053,10 @@ impl RtspTaskState {
             .unwrap_or_else(|| self.request_uri());
 
         self.aggregate_control = sdp
-            .get_first_attribute_value("control")
+            .attribute("control")
             // No attribute and no value have the same meaning for us
             .flatten()
-            .and_then(|v| sdp::parse_control_path(v, &base));
+            .and_then(|v| parse_control_path(v, &base));
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -3029,23 +3091,22 @@ impl RtspTaskState {
         let sdp = self.sdp.clone().expect("Must have SDP by now");
 
         for stream in &streams {
-            let m: &sdp_types::Media = sdp.medias.get(stream.media_idx).unwrap();
+            let m: &sdp_types_gst::Media = sdp.media().get(stream.media_idx).unwrap();
             let caps = stream.stream.caps().unwrap();
             let mut s = caps.structure(0).unwrap().to_owned();
 
             let media_control = m
-                .get_first_attribute_value("control")
+                .control()
                 // No attribute and no value have the same meaning for us
-                .flatten()
-                .and_then(|v| sdp::parse_control_path(v, &base));
+                .and_then(|v| parse_control_path(v, &base));
             let aggregate_control = self.aggregate_control.clone();
 
             let Some(control_url) = media_control.as_ref().or(aggregate_control.as_ref()) else {
                 gst::warning!(
                     CAT,
                     "No session control or media control for {} fmt {}, ignoring",
-                    m.media,
-                    m.fmt
+                    m.media(),
+                    m.fmt_string()
                 );
                 continue;
             };
@@ -3054,8 +3115,8 @@ impl RtspTaskState {
             let mut rtp_socket: Option<UdpSocket> = None;
             let mut rtcp_socket: Option<UdpSocket> = None;
             let mut transports = Vec::new();
-            let (conn_protocols, is_ipv4) = sdp::parse_connections(&m.connections);
-            let rtp_profile = sdp::parse_rtp_profile(m);
+            let (conn_protocols, is_ipv4) = parse_connections(m);
+            let rtp_profile = parse_rtp_profile(m);
 
             let protocols = if !conn_protocols.is_empty() {
                 let p = protocols.iter().cloned().collect::<BTreeSet<_>>();
@@ -3168,11 +3229,15 @@ impl RtspTaskState {
             }?;
 
             let conn_source = sdp
-                .connection
-                .as_ref()
-                .map(|c| c.connection_address.as_str())
+                .connection()
+                .and_then(|c| {
+                    c.try_address()
+                        .ok()
+                        .map(|a| a.ip.to_string())
+                        .or_else(|| Some(c.connection_address.clone()))
+                })
                 .filter(|c| !c.is_empty())
-                .unwrap_or_else(|| base.host_str().unwrap());
+                .or_else(|| base.host_str().map(str::to_owned));
 
             match &mut parsed_transport {
                 RtspTransportInfo::UdpMulticast { .. } => {}
@@ -3183,7 +3248,7 @@ impl RtspTaskState {
                     sockets,
                 } => {
                     if source.is_none() {
-                        *source = Some(conn_source.to_string());
+                        *source = conn_source.clone();
                     }
                     if let Some((rtp_port, rtcp_port)) = client_port {
                         // There is no reason for the server to reject the client ports WE
@@ -3228,8 +3293,8 @@ impl RtspTaskState {
             };
 
             if is_secure_rtp_profile(&rtp_profile) {
-                if !stream.has_mikey {
-                    return Err(RtspError::Fatal("No MiKey".to_string()));
+                if !stream.has_srtp_key {
+                    return Err(RtspError::Fatal("No SRTP key".to_string()));
                 }
 
                 s.set_name("application/x-srtp");
@@ -3241,8 +3306,8 @@ impl RtspTaskState {
             gst::debug!(
                 CAT,
                 "Caps for media {}: {caps}, secure: {}",
-                m.media,
-                stream.has_mikey
+                m.media(),
+                stream.has_srtp_key
             );
 
             setup_params.push(RtspSetupParams {

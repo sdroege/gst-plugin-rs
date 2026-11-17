@@ -18,6 +18,7 @@ futures = "0.3"
 # Check top-level meson.build rice-proto version req when bumping the librice version!
 librice = { version = "0.4.3", default-features = false, features = ["runtime-tokio"] }
 sdp-types.workspace = true
+sdp-types-gst.workspace = true
 tokio = { version = "1", features = ["net", "rt-multi-thread", "time", "sync"] }
 rand = "0.10"
 openssl = "0.10"

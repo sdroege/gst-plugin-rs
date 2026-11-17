@@ -10,16 +10,13 @@ use gst::glib::WeakRef;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
+use sdp_types::Connection;
 use sdp_types::Direction;
-use sdp_types::ExtMap;
-use sdp_types::Fmtp;
-use sdp_types::MediaType;
-use sdp_types::RtpMap;
+use sdp_types::Mid;
+use sdp_types::TransportProto;
 
 use crate::webrtcsend::WebRTCSendSinkPad;
-use crate::webrtcsession::sdp::MediaSpecifics;
-use crate::webrtcsession::sdp::WebRTCSdp;
-use crate::webrtcsession::sdp::WebRTCSdpMedia;
+use sdp_types_gst::{Media, Session};
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -88,17 +85,14 @@ impl State {
     pub fn set_codec_preferences(&mut self, prefs: Option<gst::Caps>) {
         self.codec_preferences = prefs;
     }
-    pub fn update_from_sdp(&mut self, local_sdp: &WebRTCSdp, idx: usize, remote_sdp: &WebRTCSdp) {
+    pub fn update_from_sdp(&mut self, local_sdp: &Session, idx: usize, remote_sdp: &Session) {
         self.mline = Some(idx);
-        self.mid = local_sdp.media[idx].mid.clone();
+        self.mid = local_sdp.media()[idx].mid().map(|mid| mid.0.clone());
         self.pending_mid.take();
 
-        let local_rtp = local_sdp.media[idx].specifics.rtp().unwrap();
-        let remote_rtp = remote_sdp.media[idx].specifics.rtp().unwrap();
-
-        let new_dir = local_rtp
-            .direction
-            .intersect_with_remote(remote_rtp.direction);
+        let new_dir = local_sdp.media()[idx]
+            .direction()
+            .intersect_with_remote(remote_sdp.media()[idx].direction());
 
         if self.current_direction != Some(new_dir) {
             gst::debug!(
@@ -139,7 +133,7 @@ impl Transceiver {
         self.state.lock().unwrap()
     }
 
-    pub fn generate_offer_media(&self, idx: u32) -> Option<WebRTCSdpMedia> {
+    pub fn generate_offer_media(&self, idx: u32) -> Option<Media> {
         let mut state = self.state();
         gst::trace!(
             CAT,
@@ -162,12 +156,13 @@ impl Transceiver {
                 })
                 .and_then(|caps| {
                     rtp_caps_to_media(&caps).map(|mut rtp| {
-                        rtp.mid = state.mid.clone().or(Some(
+                        let mid = state.mid.clone().or(Some(
                             state
                                 .pending_mid
                                 .get_or_insert_with(|| idx.to_string())
                                 .clone(),
                         ));
+                        rtp.set_mid(mid.map(Mid));
                         rtp
                     })
                 }),
@@ -184,12 +179,13 @@ impl Transceiver {
                 })
                 .and_then(|caps| {
                     rtp_caps_to_media(&caps).map(|mut rtp| {
-                        rtp.mid = state.mid.clone().or(Some(
+                        let mid = state.mid.clone().or(Some(
                             state
                                 .pending_mid
                                 .get_or_insert_with(|| idx.to_string())
                                 .clone(),
                         ));
+                        rtp.set_mid(mid.map(Mid));
                         rtp
                     })
                 }),
@@ -197,118 +193,15 @@ impl Transceiver {
     }
 }
 
-static IGNORED_RTP_CAPS_FIELDS: [&str; 7] = [
-    "media",
-    "timestamp-offset",
-    "seqnum-offset",
-    "encoding-name",
-    "encoding-params",
-    "ssrc",
-    "clock-rate",
-];
-
-pub(crate) fn rtp_caps_to_media(caps: &gst::Caps) -> Option<WebRTCSdpMedia> {
+pub(crate) fn rtp_caps_to_media(caps: &gst::Caps) -> Option<Media> {
     gst::trace!(CAT, "converting caps to media: {caps}");
-    let s = caps.structure(0)?;
-    if !s.has_name("application/x-rtp") {
-        return None;
-    }
-    let media_type = s.get::<String>("media").ok()?.parse::<MediaType>().ok()?;
-    let mut media = WebRTCSdpMedia::new_rtp(media_type);
-
-    for s in 0..caps.len() {
-        let s = caps.structure(s)?;
-        let media_type = s.get::<String>("media").ok()?.parse::<MediaType>().ok()?;
-        let payload = s.get::<i32>("payload").ok()?;
-        if media_type != media.media {
-            return None;
-        }
-        let MediaSpecifics::Rtp(rtp) = &mut media.specifics else {
-            unimplemented!();
-        };
-        if !(0..=127).contains(&payload) || rtp.formats.contains(&(payload as u8)) {
-            return None;
-        }
-        let payload = payload as u8;
-
-        let encoding_name = s.get::<String>("encoding-name").ok();
-        let encoding_params = s.get::<String>("encoding-params").ok();
-        //let ssrc = s.get::<u32>("ssrc").ok();
-        let clock_rate = s.get::<i32>("clock-rate").ok();
-        let mut fmtp = String::new();
-        for field in s.fields() {
-            if IGNORED_RTP_CAPS_FIELDS.contains(&field.as_str())
-                || field.starts_with("srtp-")
-                || field.starts_with("srtcp-")
-                || field.starts_with("rtcp-fb-")
-                || field.starts_with("ssrc-")
-                || field.starts_with("x-gst-rtsp-server-rtx-time")
-            {
-                continue;
-            } else if field.starts_with("extmap-") {
-                let id = field[6..].parse::<u8>().ok()?;
-                if [0, 15].contains(&id) {
-                    continue;
-                }
-                let val = s.value(field).unwrap();
-                if val.is_type(glib::Type::STRING) {
-                    rtp.extmap.insert(ExtMap::with_direction(
-                        id,
-                        Direction::SendRecv,
-                        val.get::<String>().ok()?,
-                    ));
-                } else if val.is_type(gst::Array::static_type()) {
-                    let arr = val.get::<gst::Array>().ok()?;
-                    if arr.len() != 3 {
-                        return None;
-                    }
-                    let direction = arr[0].get::<&str>().ok()?;
-                    let direction = if direction.is_empty() {
-                        Direction::SendRecv
-                    } else {
-                        direction.parse::<Direction>().ok()?
-                    };
-                    let name = arr[1].get::<String>().ok()?;
-                    let params = arr[2].get::<String>().ok()?;
-                    let params = if params.is_empty() {
-                        None
-                    } else {
-                        Some(params)
-                    };
-                    rtp.extmap.insert(
-                        ExtMap::builder(id, name)
-                            .direction(direction)
-                            .attributes_if_some(params)
-                            .build(),
-                    );
-                }
-            } else if field.starts_with("a-") || field.starts_with("x-") {
-                // TODO handle
-                continue;
-            } else if s.has_field_with_type(field, glib::Type::STRING) {
-                let val = s.get::<&str>(field).ok()?;
-                if !fmtp.is_empty() {
-                    fmtp.push(';');
-                }
-                fmtp.push_str(field);
-                fmtp.push('=');
-                fmtp.push_str(val);
-            }
-            // TODO: rid
-        }
-        rtp.formats.push(payload);
-        if let Ok(fmtp) = fmtp.parse::<Fmtp>() {
-            rtp.fmtps.insert(payload, fmtp);
-        }
-        if let Some(encoding_name) = encoding_name {
-            rtp.rtpmaps.insert(
-                payload,
-                RtpMap::builder(payload, encoding_name, clock_rate? as u32)
-                    .encoding_params_if_some(encoding_params)
-                    .build(),
-            );
-        }
-    }
+    let mut media = sdp_types_gst::caps_to_media(caps).ok()?;
+    media.set_proto(TransportProto::UdpTlsRtpSavpf);
+    media.set_rtcp_mux(true);
+    media.set_rtcp_mux_only(true);
+    media.set_connection(Some(Connection::from_ip_addr(
+        std::net::Ipv4Addr::UNSPECIFIED,
+    )));
     gst::trace!(CAT, "produced media {media:?}");
     Some(media)
 }

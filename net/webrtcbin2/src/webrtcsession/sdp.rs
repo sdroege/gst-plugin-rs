@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::BTreeMap;
-use std::ops::RangeInclusive;
+//! WebRTC-specific SDP parsing, validation and offer/answer negotiation
+//! helpers on top of the `sdp_types_gst` types.
+
+use std::fmt::Display;
 use std::str::FromStr;
 use std::sync::LazyLock;
-use std::{collections::BTreeSet, fmt::Display};
 
-use librice::candidate::{Candidate, ParseCandidateError};
-use sdp_types::{Direction, ExtMap, Fingerprint, Fmtp, MediaType, RtpMap, TransportProto};
+use sdp_types::{Direction, GroupSemantics, Setup};
+use sdp_types_gst::{Media, RtcpFb, Session};
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -57,1544 +58,332 @@ impl FromStr for WebRTCSdpType {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct WebRTCSdp {
-    pub typ: WebRTCSdpType,
-    pub id: String,
-    pub ice_lite: bool,
-    pub ice_ufrag: Option<String>,
-    pub ice_pwd: Option<String>,
-    pub fingerprints: Vec<Fingerprint>,
-    pub setup: Option<DtlsSetup>,
-    pub direction: Option<Direction>,
-    pub group_bundle: Vec<String>,
-    pub media: Vec<WebRTCSdpMedia>,
+#[derive(Debug, thiserror::Error)]
+pub enum ParseWebRTCSdpError {
+    #[error("Syntax error: {0}")]
+    Syntax(#[from] sdp_types_gst::ParseError),
+    #[error("Invalid '{}' attribute", .0)]
+    InvalidAttribute(String),
+    #[error("Invalid '{}' attribute in media {}", .1, .0)]
+    InvalidMediaAttribute(u32, String),
+    #[error("Media {} is missing required attribute '{}'", .0, .1)]
+    MissingRequiredMediaAttribute(u32, String),
+    #[error("Unsupported media with mline {}", .0)]
+    UnsupportedMedia(u32),
+    #[error("More than one a=group:BUNDLE attribute")]
+    MultipleBundleGroups,
 }
 
-static VALID_ICE_ALPHABET: &str =
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/";
+/// Datachannel media (`m=` line with a DTLS/SCTP transport protocol).
+pub fn is_datachannel(media: &Media) -> bool {
+    media.proto().is_sctp()
+}
 
-static VALID_SDP_TOKEN_ALPHABET: &str =
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&'*+-.^_`";
+/// Whether an answer rejects this media line: data channels are unsupported,
+/// and a zero port without `a=bundle-only` disables it (RFC 8843 section
+/// 7.5.3).
+pub fn is_rejected_media(media: &Media) -> bool {
+    is_datachannel(media) || (media.port() == 0 && !media.bundle_only())
+}
 
-impl WebRTCSdp {
-    pub fn parse(typ: WebRTCSdpType, session: &str) -> Result<Self, ParseWebRTCSdpError> {
-        let session = sdp_types::Session::parse(session.as_bytes())?;
-
-        let mut ice_ufrag = None;
-        let mut ice_pwd = None;
-        let mut ice_lite = false;
-        let mut fingerprints = vec![];
-        let mut setup = None;
-        let mut direction = None;
-        let mut bundle = vec![];
-        // TODO: bwtype and bandwidth
-        for attr in session.attributes.iter() {
-            match attr.attribute.as_str() {
-                "ice-ufrag" => {
-                    ice_ufrag = Some(parse_unique_attribute_with_value(
-                        None,
-                        "ice-ufrag",
-                        &attr.value,
-                        &ice_ufrag,
-                        |val| parse_ice_attribute(None, "ice-ufrag", val, 4..=256),
-                    )?)
-                }
-                "ice-pwd" => {
-                    ice_pwd = Some(parse_unique_attribute_with_value(
-                        None,
-                        "ice-pwd",
-                        &attr.value,
-                        &ice_pwd,
-                        |val| parse_ice_attribute(None, "ice-pwd", val, 22..=256),
-                    )?)
-                }
-                "ice-lite" => ice_lite = true,
-                "fingerprint" => fingerprints.push(
-                    attr.value
-                        .as_ref()
-                        .ok_or_else(|| {
-                            ParseWebRTCSdpError::InvalidAttribute("fingerprint".to_string())
-                        })?
-                        .parse::<Fingerprint>()?,
-                ),
-                "setup" => {
-                    setup = Some(parse_unique_attribute_with_value(
-                        None,
-                        "setup",
-                        &attr.value,
-                        &setup,
-                        parse_setup,
-                    )?)
-                }
-                "sendrecv" => {
-                    direction = Some(parse_unique_attribute_no_value(
-                        None,
-                        "sendrecv",
-                        &attr.value,
-                        &direction,
-                        Direction::SendRecv,
-                    )?)
-                }
-                "sendonly" => {
-                    direction = Some(parse_unique_attribute_no_value(
-                        None,
-                        "sendonly",
-                        &attr.value,
-                        &direction,
-                        Direction::SendOnly,
-                    )?)
-                }
-                "recvonly" => {
-                    direction = Some(parse_unique_attribute_no_value(
-                        None,
-                        "recvonly",
-                        &attr.value,
-                        &direction,
-                        Direction::RecvOnly,
-                    )?)
-                }
-                "inactive" => {
-                    direction = Some(parse_unique_attribute_no_value(
-                        None,
-                        "inactive",
-                        &attr.value,
-                        &direction,
-                        Direction::Inactive,
-                    )?)
-                }
-                "group" => {
-                    let Some(val) = attr.value.as_ref() else {
-                        continue;
-                    };
-                    if !val.starts_with("BUNDLE ") {
-                        continue;
-                    };
-                    if !bundle.is_empty() {
-                        return Err(ParseWebRTCSdpError::MultipleAttributes(
-                            "group:BUNDLE".to_string(),
-                        ));
-                    }
-                    let ids = val["BUNDLE ".len()..].split(" ");
-                    for id in ids {
-                        if !id.is_ascii() {
-                            return Err(ParseWebRTCSdpError::InvalidAttribute(
-                                "group:BUNDLE".to_string(),
-                            ));
-                        }
-                        bundle.push(id.to_string());
-                    }
-                }
-                // TODO: tls-id, identity, extmap, ice-options
-                key => gst::fixme!(CAT, "unknown session attribute {key}"),
-            }
-        }
-
-        let mut ret = Self {
-            typ,
-            id: session.origin.sess_id,
-            ice_lite,
-            ice_ufrag,
-            ice_pwd,
-            fingerprints,
-            setup,
-            direction,
-            group_bundle: bundle,
-            media: Vec::with_capacity(session.medias.len()),
+/// Select the offerer-tagged `m=` section for an answer (RFC 8843 section
+/// 7.3.1), skipping moved-out, rejected and zero-port sections. Returns `None`
+/// if no tag qualifies.
+pub fn select_bundle_tag(sdp: &Session) -> Option<usize> {
+    for tag in sdp.bundle_tags() {
+        let Some((idx, media)) = sdp
+            .media()
+            .iter()
+            .enumerate()
+            .find(|(_, media)| media.mid().is_some_and(|mid| mid.0 == *tag))
+        else {
+            continue;
         };
-
-        for (idx, media) in session.medias.iter().enumerate() {
-            let media = WebRTCSdpMedia::from_sdp_types(&ret, idx as u32, media)?;
-            if ret.bundle_idx().is_none_or(|bundle_idx| idx == bundle_idx) {
-                if media.ice_ufrag.is_none() && ret.ice_ufrag.is_none() {
-                    return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
-                        idx as u32,
-                        "ice-ufrag".to_string(),
-                    ));
-                }
-                if media.ice_pwd.is_none() && ret.ice_pwd.is_none() {
-                    return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
-                        idx as u32,
-                        "ice-pwd".to_string(),
-                    ));
-                }
-                if media.setup.is_none() && ret.setup.is_none() {
-                    return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
-                        idx as u32,
-                        "setup".to_string(),
-                    ));
-                }
-                if media.fingerprints.is_empty() && ret.fingerprints.is_empty() {
-                    return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
-                        idx as u32,
-                        "fingerprint".to_string(),
-                    ));
-                }
-            }
-            ret.media.push(media);
+        if is_rejected_media(media) || media.port() == 0 {
+            continue;
         }
+        return Some(idx);
+    }
 
-        for bundle_tag in ret.group_bundle.iter() {
-            if !ret
-                .media
-                .iter()
-                .any(|media| media.mid.as_ref().is_some_and(|mid| mid == bundle_tag))
-            {
-                return Err(ParseWebRTCSdpError::InvalidAttribute(
-                    "group:BUNDLE".to_string(),
+    None
+}
+
+/// Validation of the WebRTC-specific SDP constraints on top of the syntax
+/// checks of `Session::parse()`.
+pub fn validate_webrtc_sdp(sdp: &Session) -> Result<(), ParseWebRTCSdpError> {
+    // All bundled media are multiplexed onto a single transport, so a second
+    // BUNDLE group (allowed by RFC 8843 section 5) cannot be represented.
+    if sdp
+        .groups()
+        .iter()
+        .filter(|group| matches!(group.semantics, GroupSemantics::Bundle))
+        .count()
+        > 1
+    {
+        return Err(ParseWebRTCSdpError::MultipleBundleGroups);
+    }
+
+    let bundle = sdp.bundle_tags();
+    for bundle_tag in bundle {
+        if !bundle_tag.is_ascii() {
+            return Err(ParseWebRTCSdpError::InvalidAttribute(
+                "group:BUNDLE".to_string(),
+            ));
+        }
+    }
+
+    // RFC 8843 section 7.2.1: the offerer must not suggest a bundle-only
+    // "m=" section as the tagged section.
+    if let Some(first_tag) = bundle.first()
+        && let Some(first_media) = sdp
+            .media()
+            .iter()
+            .find(|media| media.mid().is_some_and(|mid| mid.0 == *first_tag))
+        && first_media.bundle_only()
+    {
+        return Err(ParseWebRTCSdpError::InvalidAttribute(
+            "group:BUNDLE".to_string(),
+        ));
+    }
+
+    let bundle_idx = sdp.bundle_idx();
+    for (idx, media) in sdp.media().iter().enumerate() {
+        let mline = idx as u32;
+
+        if media.bundle_only() {
+            let Some(mid) = media.mid() else {
+                return Err(ParseWebRTCSdpError::InvalidMediaAttribute(
+                    mline,
+                    "bundle-only".to_string(),
+                ));
+            };
+            // RFC 8843 section 6: bundle-only is only defined with a zero
+            // port.
+            if media.port() != 0 {
+                return Err(ParseWebRTCSdpError::InvalidMediaAttribute(
+                    mline,
+                    "bundle-only".to_string(),
+                ));
+            }
+            if !bundle.contains(&mid.0) {
+                gst::warning!(
+                    CAT,
+                    "bundle group {bundle:?} does not contain mid {} with a=bundle-only",
+                    mid.0
+                );
+                return Err(ParseWebRTCSdpError::InvalidMediaAttribute(
+                    mline,
+                    "mid".into(),
                 ));
             }
         }
 
-        Ok(ret)
-    }
-
-    pub fn to_sdp_string(&self) -> String {
-        let session = sdp_types::Session::builder(
-            sdp_types::Origin::builder_with_ip_addr(
-                self.id.clone(),
-                0,
-                std::net::Ipv4Addr::UNSPECIFIED,
-            )
-            .username("-")
-            .build(),
-            "-",
-        )
-        .attribute_with_value("ice-options", "trickle")
-        .medias(self.media.iter().map(|media| media.to_sdp_types()))
-        .attribute_from_str_if("ice-lite", self.ice_lite)
-        .attribute_with_value_if_some("ice-ufrag", self.ice_ufrag.clone())
-        .attribute_with_value_if_some("ice-pwd", self.ice_pwd.clone())
-        .attributes(self.fingerprints.clone())
-        .attribute_with_value_if(
-            "group",
-            self.group_bundle
-                .iter()
-                .fold("BUNDLE".to_string(), |mut value, bundle_tag| {
-                    value.push(' ');
-                    value.push_str(bundle_tag);
-
-                    value
-                }),
-            !self.group_bundle.is_empty(),
-        )
-        .build();
-
-        let mut ret = vec![];
-        session.write(&mut ret).unwrap();
-        String::from_utf8(ret).unwrap()
-    }
-
-    pub fn rtp_direction_for_mline(&self, mline: usize) -> Direction {
-        let MediaSpecifics::Rtp(rtp) = &self.media[mline].specifics else {
-            return self.direction.unwrap_or_default();
-        };
-        rtp.direction
-    }
-
-    pub fn bundle_idx(&self) -> Option<usize> {
-        if self.group_bundle.is_empty() {
-            None
-        } else {
-            self.media
-                .iter()
-                .position(|media| media.mid.as_ref() == Some(&self.group_bundle[0]))
-        }
-    }
-}
-
-static KNOWN_MEDIA_ATTRIBUTES: [&str; 9] = [
-    "fingerprint",
-    "ice-ufrag",
-    "ice-pwd",
-    "candidate",
-    "remote-candidates",
-    "end-of-candidates",
-    "setup",
-    "mid",
-    "bundle-only",
-];
-
-static KNOWN_RTP_MEDIA_ATTRIBUTES: [&str; 11] = [
-    "sendrecv",
-    "sendonly",
-    "recvonly",
-    "inactive",
-    "rtcp-mux",
-    "rtcp-mux-only",
-    "rtcp-rsize",
-    "rtcp",
-    "rtcp-fb",
-    "rtpmap",
-    "fmtp",
-];
-
-static KNOWN_SCTP_MEDIA_ATTRIBUTES: [&str; 1] = ["sctp-port"];
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WebRTCSdpMedia {
-    pub media: MediaType,
-    pub port: u16,
-    pub ice_ufrag: Option<String>,
-    pub ice_pwd: Option<String>,
-    pub candidates: Vec<Candidate>,
-    pub end_of_candidates: bool,
-    pub setup: Option<DtlsSetup>,
-    pub mid: Option<String>,
-    pub bundle_only: bool,
-    pub fingerprints: Vec<Fingerprint>,
-    pub specifics: MediaSpecifics,
-}
-
-impl WebRTCSdpMedia {
-    pub fn new_rtp(media: MediaType) -> Self {
-        Self {
-            media,
-            port: 9,
-            ice_ufrag: None,
-            ice_pwd: None,
-            candidates: vec![],
-            end_of_candidates: false,
-            setup: None,
-            mid: None,
-            bundle_only: false,
-            fingerprints: vec![],
-            specifics: MediaSpecifics::Rtp(RtpMedia {
-                direction: Direction::SendRecv,
-                rtcp_mux: true,
-                rtcp_mux_only: true,
-                rtcp_rsize: false,
-                rtcp_fb: None,
-                extmap: Default::default(),
-                formats: vec![],
-                rtpmaps: Default::default(),
-                rtcp_fbs: Default::default(),
-                fmtps: Default::default(),
-            }),
-        }
-    }
-
-    fn from_sdp_types(
-        session: &WebRTCSdp,
-        mline: u32,
-        media: &sdp_types::Media,
-    ) -> Result<Self, ParseWebRTCSdpError> {
-        let media_type = media.media.parse::<MediaType>()?;
-        let is_rtp = [MediaType::Audio, MediaType::Video, MediaType::Application]
-            .contains(&media_type)
-            && is_valid_rtp_profile(&media.proto);
-        let is_sctp = [MediaType::Application].contains(&media_type)
-            && is_valid_datachannel_profile(&media.proto);
-
-        let mut ice_ufrag = None;
-        let mut ice_pwd = None;
-        let mut candidates = vec![];
-        let mut end_of_candidates = false;
-        let mut setup = None;
-        let mut mid = None;
-        let mut bundle_only = None;
-        let mut fingerprints = vec![];
-        for attr in media.attributes.iter() {
-            match attr.attribute.as_str() {
-                "ice-ufrag" => {
-                    ice_ufrag = Some(parse_unique_attribute_with_value(
-                        Some(mline),
-                        "ice-ufrag",
-                        &attr.value,
-                        &ice_ufrag,
-                        |val| parse_ice_attribute(Some(mline), "ice-ufrag", val, 4..=256),
-                    )?)
-                }
-                "ice-pwd" => {
-                    ice_pwd = Some(parse_unique_attribute_with_value(
-                        Some(mline),
-                        "ice-pwd",
-                        &attr.value,
-                        &ice_pwd,
-                        |val| parse_ice_attribute(Some(mline), "ice-pwd", val, 22..=256),
-                    )?)
-                }
-                "candidate" => {
-                    let candidate = Candidate::from_sdp_string(&format!(
-                        "a=candidate:{}",
-                        attr.value.clone().ok_or(
-                            ParseWebRTCSdpError::InvalidCandidate(ParseCandidateError::Malformed,)
-                                .with_mline(Some(mline)),
-                        )?
-                    ))?;
-                    candidates.push(candidate);
-                }
-                // remote-candidate attributes are parsed but unused
-                "remote-candidates" => {
-                    let _candidate = Candidate::from_sdp_string(
-                        attr.value
-                            .clone()
-                            .ok_or(
-                                ParseWebRTCSdpError::InvalidCandidate(
-                                    ParseCandidateError::Malformed,
-                                )
-                                .with_mline(Some(mline)),
-                            )?
-                            .as_str(),
-                    )
-                    .map_err(|e| ParseWebRTCSdpError::InvalidMediaCandidate(mline, e))?;
-                }
-                "end-of-candidates" => {
-                    if attr.value.is_some() {
-                        return Err(ParseWebRTCSdpError::InvalidAttribute(
-                            "end-of_candidates".to_string(),
-                        )
-                        .with_mline(Some(mline)));
-                    } else {
-                        end_of_candidates = true
-                    }
-                }
-                "setup" => {
-                    setup = Some(parse_unique_attribute_with_value(
-                        None,
-                        "setup",
-                        &attr.value,
-                        &setup,
-                        parse_setup,
-                    )?)
-                }
-                "mid" => {
-                    mid = Some(parse_unique_attribute_with_value(
-                        Some(mline),
-                        "mid",
-                        &attr.value,
-                        &mid,
-                        |val| {
-                            if !val.chars().all(|c| VALID_SDP_TOKEN_ALPHABET.contains(c)) {
-                                Err(ParseWebRTCSdpError::InvalidAttribute("mid".to_string()))
-                            } else {
-                                Ok(val.to_string())
-                            }
-                        },
-                    )?);
-                }
-                "bundle-only" => {
-                    bundle_only = Some(parse_unique_attribute_no_value(
-                        Some(mline),
-                        "bundle-only",
-                        &attr.value,
-                        &bundle_only,
-                        true,
-                    )?)
-                }
-                "fingerprint" => fingerprints.push(
-                    attr.value
-                        .as_ref()
-                        .ok_or_else(|| {
-                            ParseWebRTCSdpError::InvalidAttribute("fingerprint".to_string())
-                        })?
-                        .parse::<Fingerprint>()?,
-                ),
-                key if !KNOWN_RTP_MEDIA_ATTRIBUTES.contains(&key)
-                    && !KNOWN_SCTP_MEDIA_ATTRIBUTES.contains(&key) =>
-                {
-                    gst::fixme!(CAT, "unknown media {mline} attribute {key}")
-                }
-                // TODO: ice-options,
-                _ => (),
+        if is_datachannel(media) {
+            if media.sctp_port().is_none() {
+                return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
+                    mline,
+                    "sctp-port".to_string(),
+                ));
             }
-        }
-
-        if bundle_only.is_some_and(|b| b) {
-            let Some(mid) = mid.as_ref() else {
-                return Err(
-                    ParseWebRTCSdpError::InvalidAttribute("bundle-only".to_string())
-                        .with_mline(Some(mline)),
-                );
-            };
-            if !session.group_bundle.contains(mid) {
-                gst::warning!(
-                    CAT,
-                    "bundle group {:?} does not contain mid {mid} with a=bundle-only",
-                    session.group_bundle
-                );
-                return Err(ParseWebRTCSdpError::InvalidAttribute("mid".to_string())
-                    .with_mline(Some(mline)));
-            }
-        }
-
-        let specifics = if is_rtp {
-            MediaSpecifics::Rtp(RtpMedia::parse(session, mline, media)?)
-        } else if is_sctp {
-            MediaSpecifics::Datachannel(DataChannelMedia::parse(mline, media)?)
-        } else {
+        } else if !media.proto().is_rtp() {
             return Err(ParseWebRTCSdpError::UnsupportedMedia(mline));
-        };
-
-        Ok(Self {
-            media: media_type,
-            port: media.port,
-            ice_ufrag,
-            ice_pwd,
-            candidates,
-            end_of_candidates,
-            setup,
-            mid,
-            bundle_only: bundle_only.unwrap_or(false),
-            fingerprints,
-            specifics,
-        })
-    }
-
-    fn to_sdp_types(&self) -> sdp_types::Media {
-        let fmt = if let MediaSpecifics::Rtp(rtp) = &self.specifics {
-            rtp.formats.iter().fold(String::new(), |mut s, pt| {
-                if !s.is_empty() {
-                    s.push(' ');
-                }
-                s.push_str(&pt.to_string());
-                s
-            })
-        } else {
-            String::new()
-        };
-        let proto = if self.specifics.rtp().is_some() {
-            TransportProto::UdpTlsRtpSavpf
-        } else {
-            TransportProto::UdpDtlsSctp
-        };
-        let mut builder = sdp_types::Media::builder(self.media, self.port, proto, fmt)
-            .connection(sdp_types::Connection::from_ip_addr(
-                std::net::Ipv4Addr::UNSPECIFIED,
-            ))
-            .attribute_with_value_if_some("ice-ufrag", self.ice_ufrag.clone())
-            .attribute_with_value_if_some("ice-pwd", self.ice_pwd.clone())
-            .attribute_with_value_if_some("setup", self.setup.map(|setup| setup.as_str()))
-            .attribute_with_value_if_some("mid", self.mid.clone())
-            .attribute_from_str_if("bundle-only", self.bundle_only)
-            .attributes(self.candidates.iter().map(|cand| {
-                let mut s = cand.to_sdp_string();
-                if s.starts_with("a=candidate:") {
-                    s = s[12..].to_string();
-                }
-                sdp_types::Attribute::with_value("candidate", s)
-            }))
-            .attribute_from_str_if("end-of-candidates", self.end_of_candidates)
-            .attributes(self.fingerprints.clone());
-
-        builder = match &self.specifics {
-            MediaSpecifics::Rtp(rtp) => {
-                builder = builder
-                    .attribute_from_str_if("rtcp-mux", rtp.rtcp_mux)
-                    .attribute_from_str_if("rtcp-mux-only", rtp.rtcp_mux_only)
-                    .attribute_from_str_if("rtcp-rsize", rtp.rtcp_rsize)
-                    .attribute_from_str(rtp.direction);
-
-                for (payload, fb) in rtp
-                    .rtcp_fbs
-                    .iter()
-                    .map(|(pt, fb)| (pt.to_string(), fb))
-                    .chain(rtp.rtcp_fb.iter().map(|fb| ("*".to_string(), fb)))
-                {
-                    builder = builder
-                        .attribute_with_value_if("rtcp-fb", format!("{payload} nack"), fb.nack)
-                        .attribute_with_value_if(
-                            "rtcp-fb",
-                            format!("{payload} nack pli"),
-                            fb.nack_pli,
-                        )
-                        .attribute_with_value_if(
-                            "rtcp-fb",
-                            format!("{payload} ccm fir"),
-                            fb.ccm_fir,
-                        )
-                        .attribute_with_value_if(
-                            "rtcp-fb",
-                            format!("{payload} transport-cc"),
-                            fb.transport_cc,
-                        );
-                }
-
-                builder
-                    .attributes(rtp.extmap.iter().cloned().map(|mut ext| {
-                        if let Some(Direction::SendRecv) = ext.direction {
-                            ext.direction = None;
-                        }
-                        ext
-                    }))
-                    .attributes(rtp.rtpmaps.values().cloned())
-                    .attributes(rtp.fmtps.values().cloned())
-            }
-            MediaSpecifics::Datachannel(channel) => {
-                builder.attribute_with_value("sctp-port", channel.sctp_port)
-            }
-        };
-
-        builder.build()
-    }
-
-    pub fn intersect(&self, other: &Self) -> Option<Self> {
-        if self.media != other.media {
-            return None;
-        }
-        gst::trace!(CAT, "attempting to intersect:");
-        gst::trace!(CAT, "                   ours: {self:?}");
-        gst::trace!(CAT, "                  other: {other:?}");
-        match (&self.specifics, &other.specifics) {
-            (MediaSpecifics::Rtp(rtp), MediaSpecifics::Rtp(other_rtp)) => {
-                let intersected = RtpMedia::produce_answer_from_offer_and_source(rtp, other_rtp);
-                gst::trace!(CAT, "                 result: {intersected:?}");
-                if intersected.formats.is_empty() {
-                    return None;
-                }
-                let mut ret = self.clone();
-                ret.specifics = MediaSpecifics::Rtp(intersected);
-                Some(ret)
-            }
-            (MediaSpecifics::Datachannel(_data), MediaSpecifics::Datachannel(_other_data)) => {
-                // FIXME
-                None
-            }
-            _ => None,
-        }
-    }
-}
-
-fn parse_ice_attribute(
-    mline: Option<u32>,
-    key: &str,
-    value: &str,
-    range: RangeInclusive<usize>,
-) -> Result<String, ParseWebRTCSdpError> {
-    if range.contains(&value.len()) && value.chars().all(|c| VALID_ICE_ALPHABET.contains(c)) {
-        Ok(value.to_string())
-    } else {
-        Err(ParseWebRTCSdpError::InvalidAttribute(key.to_string()).with_mline(mline))
-    }
-}
-
-fn parse_setup(setup: &str) -> Result<DtlsSetup, ParseWebRTCSdpError> {
-    DtlsSetup::from_str(setup)
-        .map_err(|_| ParseWebRTCSdpError::InvalidAttribute("setup".to_string()))
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum DtlsSetup {
-    Active,
-    Passive,
-    ActPass,
-    HoldConn,
-}
-
-impl DtlsSetup {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::Active => "active",
-            Self::Passive => "passive",
-            Self::ActPass => "actpass",
-            Self::HoldConn => "holdconn",
-        }
-    }
-
-    pub(crate) fn intersect_with_remote(this: Option<Self>, remote: Option<Self>) -> Option<Self> {
-        match (this, remote) {
-            (Some(Self::Active | Self::ActPass), Some(Self::Passive | Self::ActPass)) => {
-                Some(Self::Active)
-            }
-            (Some(Self::Passive | Self::ActPass), Some(Self::Active | Self::ActPass)) => {
-                Some(Self::Passive)
-            }
-            _ => None,
-        }
-    }
-
-    pub(crate) fn answer_direction(offer: Option<Self>) -> Self {
-        match offer {
-            Some(Self::Active) => Self::Passive,
-            _ => Self::Active,
-        }
-    }
-}
-
-impl FromStr for DtlsSetup {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "active" => Ok(Self::Active),
-            "passive" => Ok(Self::Passive),
-            "actpass" => Ok(Self::ActPass),
-            "holdconn" => Ok(Self::HoldConn),
-            _ => Err(()),
-        }
-    }
-}
-
-fn parse_unique_attribute_no_value<T>(
-    mline: Option<u32>,
-    key: &str,
-    value_str: &Option<String>,
-    existing: &Option<T>,
-    new_value: T,
-) -> Result<T, ParseWebRTCSdpError> {
-    if existing.is_some() {
-        Err(ParseWebRTCSdpError::MultipleAttributes(key.to_string()).with_mline(mline))
-    } else if value_str.is_some() {
-        Err(ParseWebRTCSdpError::InvalidAttribute(key.to_string()).with_mline(mline))
-    } else {
-        Ok(new_value)
-    }
-}
-
-fn parse_unique_attribute_with_value<T, F: FnOnce(&str) -> Result<T, ParseWebRTCSdpError>>(
-    mline: Option<u32>,
-    key: &str,
-    value_str: &Option<String>,
-    existing: &Option<T>,
-    check_value: F,
-) -> Result<T, ParseWebRTCSdpError> {
-    if existing.is_some() {
-        Err(ParseWebRTCSdpError::MultipleAttributes(key.to_string()).with_mline(mline))
-    } else if let Some(v) = value_str {
-        check_value(v.as_str())
-    } else {
-        Err(ParseWebRTCSdpError::InvalidAttribute(key.to_string()).with_mline(mline))
-    }
-}
-
-/*
-fn is_feedback_rtp_profile(profile: &str) -> bool {
-    static FEEDBACK_RTP_PROFILES: [&str; 4] = [
-        "RTP/AVPF",
-        "RTP/SAVPF",
-        "TCP/DTLS/RTP/SAVPF",
-        "UDP/TLS/RTP/SAVPF",
-    ];
-    FEEDBACK_RTP_PROFILES.contains(&profile)
-}
-*/
-fn is_valid_rtp_profile(profile: &str) -> bool {
-    static RTP_PROFILES: [&str; 8] = [
-        "RTP/AVP",
-        "RTP/AVPF",
-        "RTP/SAVP",
-        "RTP/SAVPF",
-        "TCP/DTLS/RTP/SAVP",
-        "TCP/DTLS/RTP/SAVPF",
-        "UDP/TLS/RTP/SAVP",
-        "UDP/TLS/RTP/SAVPF",
-    ];
-    RTP_PROFILES.contains(&profile)
-}
-
-fn is_valid_datachannel_profile(profile: &str) -> bool {
-    static DATACHANNEL_PROFILES: [&str; 3] = ["UDP/DTLS/SCTP", "TCP/DTLS/SCTP", "DTLS/SCTP"];
-    DATACHANNEL_PROFILES.contains(&profile)
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MediaSpecifics {
-    Rtp(RtpMedia),
-    Datachannel(DataChannelMedia),
-}
-
-impl MediaSpecifics {
-    pub fn rtp(&self) -> Option<&RtpMedia> {
-        if let Self::Rtp(rtp) = self {
-            Some(rtp)
-        } else {
-            None
-        }
-    }
-}
-
-fn parse_payload(s: &str) -> Option<u8> {
-    let pt = s.parse::<u8>().ok()?;
-    if pt > 127 {
-        return None;
-    }
-    Some(pt)
-}
-
-// Note: very different from the sdp_types version
-#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct RtcpFb {
-    pub nack: bool,
-    pub nack_pli: bool,
-    pub ccm_fir: bool,
-    pub transport_cc: bool,
-    pub other: Vec<String>,
-}
-
-impl std::ops::BitOr for RtcpFb {
-    type Output = RtcpFb;
-    fn bitor(self, rhs: Self) -> Self::Output {
-        let mut other = self.other;
-        for i in rhs.other {
-            if !other.contains(&i) {
-                other.push(i);
-            }
-        }
-        RtcpFb {
-            nack: self.nack | rhs.nack,
-            nack_pli: self.nack_pli | rhs.nack_pli,
-            ccm_fir: self.ccm_fir | rhs.ccm_fir,
-            transport_cc: self.transport_cc | rhs.transport_cc,
-            other,
-        }
-    }
-}
-
-impl std::ops::BitAnd for RtcpFb {
-    type Output = RtcpFb;
-    fn bitand(self, rhs: Self) -> Self::Output {
-        let mut other = self.other.clone();
-        for i in rhs.other {
-            if other.contains(&i) {
-                other.push(i);
-            }
-        }
-        RtcpFb {
-            nack: self.nack & rhs.nack,
-            nack_pli: self.nack_pli & rhs.nack_pli,
-            ccm_fir: self.ccm_fir & rhs.ccm_fir,
-            transport_cc: self.transport_cc & rhs.transport_cc,
-            other,
-        }
-    }
-}
-
-impl std::ops::BitAndAssign for RtcpFb {
-    fn bitand_assign(&mut self, rhs: Self) {
-        *self = self.clone() & rhs;
-    }
-}
-
-impl std::ops::BitOrAssign for RtcpFb {
-    fn bitor_assign(&mut self, rhs: Self) {
-        *self = self.clone() | rhs;
-    }
-}
-
-impl RtcpFb {
-    fn all_supported() -> Self {
-        // TODO: support more rtcp-fb options
-        Self {
-            nack: false,
-            nack_pli: false,
-            ccm_fir: false,
-            transport_cc: false,
-            other: vec![],
-        }
-    }
-
-    fn from_str(s: &str) -> Result<(Self, Option<u8>), ()> {
-        let mut s = s.split(" ");
-        let Some(pt_str) = s.next() else {
-            return Err(());
-        };
-        let payload = if pt_str == "*" {
-            None
-        } else {
-            Some(parse_payload(pt_str).ok_or(())?)
-        };
-        match s.next().ok_or(())? {
-            "nack" => match s.next() {
-                Some("pli") => match s.next() {
-                    None => Ok((
-                        RtcpFb {
-                            nack_pli: true,
-                            ..Default::default()
-                        },
-                        payload,
-                    )),
-                    Some(s) => {
-                        gst::fixme!(CAT, "Unknown rtcp-fb value nack {s:?}");
-                        Ok((
-                            RtcpFb {
-                                other: vec![format!("nack pli {s}")],
-                                ..Default::default()
-                            },
-                            payload,
-                        ))
-                    }
-                },
-                None => Ok((
-                    RtcpFb {
-                        nack: true,
-                        ..Default::default()
-                    },
-                    payload,
-                )),
-                Some(s) => {
-                    gst::fixme!(CAT, "Unknown rtcp-fb value nack {s:?}");
-                    Ok((
-                        RtcpFb {
-                            other: vec![format!("nack {s}")],
-                            ..Default::default()
-                        },
-                        payload,
-                    ))
-                }
-            },
-            "ccm" => match s.next() {
-                Some("fir") => match s.next() {
-                    None => Ok((
-                        RtcpFb {
-                            ccm_fir: true,
-                            ..Default::default()
-                        },
-                        payload,
-                    )),
-                    Some(s) => {
-                        gst::fixme!(CAT, "Unknown rtcp-fb value ccm fir {s:?}");
-                        Ok((
-                            RtcpFb {
-                                other: vec![format!("ccm fir {s}")],
-                                ..Default::default()
-                            },
-                            payload,
-                        ))
-                    }
-                },
-                s => {
-                    gst::fixme!(CAT, "Unknown rtcp-fb value ccm {s:?}");
-                    let s = s.map(|s| format!(" {s}")).unwrap_or_else(String::new);
-                    Ok((
-                        RtcpFb {
-                            other: vec![format!("ccm{s}")],
-                            ..Default::default()
-                        },
-                        payload,
-                    ))
-                }
-            },
-            "transport-cc" => match s.next() {
-                None => Ok((
-                    RtcpFb {
-                        transport_cc: true,
-                        ..Default::default()
-                    },
-                    payload,
-                )),
-                Some(s) => {
-                    gst::fixme!(CAT, "Unknown rtcp-fb value transport-cc {s:?}");
-                    Ok((
-                        RtcpFb {
-                            other: vec![format!("transport-cc {s}")],
-                            ..Default::default()
-                        },
-                        payload,
-                    ))
-                }
-            },
-            s => {
-                gst::fixme!(CAT, "Unknown rtcp-fb value {s:?}");
-                Ok((
-                    RtcpFb {
-                        other: vec![s.to_string()],
-                        ..Default::default()
-                    },
-                    payload,
-                ))
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RtpMedia {
-    pub direction: Direction,
-    pub rtcp_mux: bool,
-    pub rtcp_mux_only: bool,
-    pub rtcp_rsize: bool,
-    pub rtcp_fb: Option<RtcpFb>,
-    pub extmap: BTreeSet<ExtMap>,
-    pub formats: Vec<u8>,
-    pub rtpmaps: BTreeMap<u8, RtpMap>,
-    pub rtcp_fbs: BTreeMap<u8, RtcpFb>,
-    pub fmtps: BTreeMap<u8, Fmtp>,
-}
-
-impl RtpMedia {
-    fn parse(
-        session: &WebRTCSdp,
-        mline: u32,
-        media: &sdp_types::Media,
-    ) -> Result<Self, ParseWebRTCSdpError> {
-        let is_rtp = ["audio", "video", "application"].contains(&media.media.as_ref())
-            && is_valid_rtp_profile(&media.proto);
-        assert!(is_rtp);
-
-        let mut direction = None;
-        let mut rtcp_mux = None;
-        let mut rtcp_mux_only = None;
-        let mut rtcp_rsize = None;
-        let mut rtcp_fb_all = None;
-        let mut rtpmaps = BTreeMap::<u8, RtpMap>::new();
-        let extmap = BTreeSet::new();
-        let mut fmtps = BTreeMap::<u8, Fmtp>::new();
-        let mut rtcp_fbs = BTreeMap::<u8, RtcpFb>::new();
-        let formats = media.fmt.split(" ").try_fold(vec![], |mut fmts, item| {
-            parse_payload(item)
-                .ok_or(ParseWebRTCSdpError::UnsupportedMedia(mline))
-                .map(|fmt| {
-                    fmts.push(fmt);
-                    fmts
-                })
-        })?;
-        for attr in media.attributes.iter() {
-            match attr.attribute.as_str() {
-                "sendrecv" => {
-                    direction = Some(parse_unique_attribute_no_value(
-                        Some(mline),
-                        "sendrecv",
-                        &attr.value,
-                        &direction,
-                        Direction::SendRecv,
-                    )?)
-                }
-                "sendonly" => {
-                    direction = Some(parse_unique_attribute_no_value(
-                        Some(mline),
-                        "sendonly",
-                        &attr.value,
-                        &direction,
-                        Direction::SendOnly,
-                    )?)
-                }
-                "recvonly" => {
-                    direction = Some(parse_unique_attribute_no_value(
-                        Some(mline),
-                        "recvonly",
-                        &attr.value,
-                        &direction,
-                        Direction::RecvOnly,
-                    )?)
-                }
-                "inactive" => {
-                    direction = Some(parse_unique_attribute_no_value(
-                        Some(mline),
-                        "inactive",
-                        &attr.value,
-                        &direction,
-                        Direction::Inactive,
-                    )?)
-                }
-                "rtcp-mux" => {
-                    rtcp_mux = Some(parse_unique_attribute_no_value(
-                        Some(mline),
-                        "rtcp-mux",
-                        &attr.value,
-                        &rtcp_mux,
-                        true,
-                    )?)
-                }
-                "rtcp-mux-only" => {
-                    rtcp_mux_only = Some(parse_unique_attribute_no_value(
-                        Some(mline),
-                        "rtcp-mux-only",
-                        &attr.value,
-                        &rtcp_mux_only,
-                        true,
-                    )?)
-                }
-                "rtcp-rsize" => {
-                    rtcp_rsize = Some(parse_unique_attribute_no_value(
-                        Some(mline),
-                        "rtcp-rsize",
-                        &attr.value,
-                        &rtcp_rsize,
-                        true,
-                    )?)
-                }
-                "rtcp" => (), // ignored
-                "rtcp-fb" => {
-                    let Some(ref fb) = attr.value else {
-                        return Err(ParseWebRTCSdpError::InvalidAttribute("rtcp-fb".to_string()));
-                    };
-                    let (rtcp_fb, payload) = RtcpFb::from_str(fb).map_err(|_| {
-                        ParseWebRTCSdpError::InvalidAttribute("rtcp-fb".to_string())
-                    })?;
-                    if let Some(payload) = payload {
-                        if !formats.contains(&payload) {
-                            gst::fixme!(
-                                CAT,
-                                "rtcp-fb attribute uses a payload {payload} that does not exist in the m-line {mline}"
-                            );
-                            return Err(ParseWebRTCSdpError::InvalidAttribute(
-                                "rtcp-fb".to_string(),
-                            ));
-                        }
-                        rtcp_fbs
-                            .entry(payload)
-                            .and_modify(|fb| *fb |= rtcp_fb.clone())
-                            .or_insert(rtcp_fb);
-                    } else {
-                        *rtcp_fb_all.get_or_insert(rtcp_fb.clone()) |= rtcp_fb;
-                    }
-                }
-                "fmtp" => {
-                    let Some(ref fb) = attr.value else {
-                        return Err(ParseWebRTCSdpError::InvalidAttribute("fmtp".to_string()));
-                    };
-                    let fmtp = fb.parse::<Fmtp>()?;
-                    match fmtps.entry(fmtp.fmt) {
-                        std::collections::btree_map::Entry::Occupied(_occupied) => {
-                            return Err(ParseWebRTCSdpError::MultipleMediaAttributes(
-                                mline,
-                                "fmtp".to_string(),
-                            ));
-                        }
-                        std::collections::btree_map::Entry::Vacant(vacant) => {
-                            vacant.insert(fmtp);
-                        }
-                    }
-                }
-                "rtpmap" => {
-                    let Some(ref rtpmap) = attr.value else {
-                        return Err(ParseWebRTCSdpError::InvalidAttribute("rtpmap".to_string()));
-                    };
-                    let rtpmap = rtpmap.parse::<RtpMap>()?;
-                    match rtpmaps.entry(rtpmap.payload_type) {
-                        std::collections::btree_map::Entry::Vacant(vacant) => {
-                            vacant.insert(rtpmap);
-                        }
-                        std::collections::btree_map::Entry::Occupied(_occupied) => {
-                            return Err(ParseWebRTCSdpError::MultipleMediaAttributes(
-                                mline,
-                                "rtpmap".to_string(),
-                            ));
-                        }
-                    }
-                }
-                // TODO: ptime, maxptime, ssrc, extmap,
-                // msid, imageattr, rid, simulcast,
-                key if !KNOWN_MEDIA_ATTRIBUTES.contains(&key) => {
-                    gst::fixme!(CAT, "unknown media {mline} attribute {key}")
-                }
-                _ => (),
-            }
-        }
-
-        let rtcp_mux = rtcp_mux.unwrap_or(false);
-        let rtcp_mux_only = rtcp_mux_only.unwrap_or(false);
-
-        if rtcp_mux_only && !rtcp_mux {
+        } else if media.rtcp_mux_only() && !media.rtcp_mux() {
             return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
                 mline,
                 "rtcp-mux".to_string(),
             ));
         }
 
-        Ok(Self {
-            direction: direction
-                .or(session.direction)
-                .unwrap_or(Direction::SendRecv),
-            rtcp_mux,
-            rtcp_mux_only,
-            rtcp_rsize: rtcp_rsize.unwrap_or(false),
-            rtcp_fb: rtcp_fb_all,
-            formats,
-            rtpmaps,
-            rtcp_fbs,
-            fmtps,
-            extmap,
-        })
+        // A zero port without bundle-only rejects or disables the media line,
+        // so it has no transport.
+        if media.port() == 0 && !media.bundle_only() {
+            continue;
+        }
+
+        let is_bundled =
+            bundle_idx.is_some() && media.mid().is_some_and(|mid| bundle.contains(&mid.0));
+
+        // The tagged media line provides the transport for the whole BUNDLE
+        // group. Other media lines need their own.
+        if !is_bundled || Some(idx) == bundle_idx {
+            if media.ice_ufrag().is_none() && sdp.ice_ufrag().is_none() {
+                return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
+                    mline,
+                    "ice-ufrag".to_string(),
+                ));
+            }
+            if media.ice_pwd().is_none() && sdp.ice_pwd().is_none() {
+                return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
+                    mline,
+                    "ice-pwd".to_string(),
+                ));
+            }
+            if media.setup().is_none() && sdp.setup().is_none() {
+                return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
+                    mline,
+                    "setup".to_string(),
+                ));
+            }
+            if media.fingerprints().is_empty() && sdp.fingerprints().is_empty() {
+                return Err(ParseWebRTCSdpError::MissingRequiredMediaAttribute(
+                    mline,
+                    "fingerprint".to_string(),
+                ));
+            }
+        }
     }
 
-    pub fn produce_answer_from_offer_and_source(offer: &RtpMedia, answer: &RtpMedia) -> RtpMedia {
-        let mut ret = answer.clone();
-        ret.direction = answer.direction.intersect_with_remote(offer.direction);
-        ret.rtcp_mux &= offer.rtcp_mux;
-        ret.rtcp_mux_only &= offer.rtcp_mux_only;
-        ret.rtcp_rsize &= offer.rtcp_rsize;
-        let mut supported_formats = vec![];
-        for fmt in answer.formats.iter() {
-            if !offer.formats.contains(fmt) {
-                continue;
-            }
-            let offer_rtpmap = offer.rtpmaps.get(fmt);
-            let answer_rtpmap = answer.rtpmaps.get(fmt);
-            if offer_rtpmap.is_none() != answer_rtpmap.is_none()
-                && offer_rtpmap.is_some_and(|offer| {
-                    answer_rtpmap.is_some_and(|answer| {
-                        !offer
-                            .encoding_name
-                            .eq_ignore_ascii_case(&answer.encoding_name)
-                            || offer.clock_rate != answer.clock_rate
-                            || offer.encoding_params != answer.encoding_params
-                    })
+    Ok(())
+}
+
+/// Parse an SDP session and validate the WebRTC-specific constraints.
+pub fn parse_webrtc_sdp(session: &str) -> Result<Session, ParseWebRTCSdpError> {
+    let sdp = Session::parse(session)?;
+    validate_webrtc_sdp(&sdp)?;
+    Ok(sdp)
+}
+
+pub fn all_supported_fb() -> RtcpFb {
+    // TODO: support more rtcp-fb options
+    RtcpFb {
+        nack: false,
+        nack_pli: false,
+        ccm_fir: false,
+        transport_cc: false,
+        other: vec![],
+    }
+}
+
+/// Intersect the RTP parameters of an offer and an answer into the answer.
+///
+/// The answer is consumed and returned with the intersection applied.
+pub fn answer_media(offer: &Media, answer: Media) -> Media {
+    let mut ret = answer;
+    ret.set_direction(ret.direction().intersect_with_remote(offer.direction()));
+    ret.set_rtcp_mux(ret.rtcp_mux() && offer.rtcp_mux());
+    ret.set_rtcp_mux_only(ret.rtcp_mux_only() && offer.rtcp_mux_only());
+    ret.set_rtcp_rsize(ret.rtcp_rsize() && offer.rtcp_rsize());
+    let mut supported_formats = vec![];
+    for fmt in ret.formats().iter() {
+        if !offer.formats().contains(fmt) {
+            continue;
+        }
+        let offer_rtpmap = offer.rtpmaps().get(fmt);
+        let answer_rtpmap = ret.rtpmaps().get(fmt);
+        if offer_rtpmap.is_none() != answer_rtpmap.is_none()
+            && offer_rtpmap.is_some_and(|offer| {
+                answer_rtpmap.is_some_and(|answer| {
+                    !offer
+                        .encoding_name
+                        .eq_ignore_ascii_case(&answer.encoding_name)
+                        || offer.clock_rate != answer.clock_rate
+                        || offer.encoding_params != answer.encoding_params
                 })
-            {
-                gst::trace!(
-                    CAT,
-                    "offer rtpmap for format {fmt}: {offer_rtpmap:?}, does not match answer rtpmap {answer_rtpmap:?}"
-                );
-                continue;
-            }
-            // TODO: ignore red/rtx/ulpfec as they are not supported yet.
-            let is_supported_rtpmap = |name: &str| {
-                !name.eq_ignore_ascii_case("rtx")
-                    && !name.eq_ignore_ascii_case("red")
-                    && !name.eq_ignore_ascii_case("ulpfec")
-                    && !name.eq_ignore_ascii_case("telephone-event")
-            };
-            if let Some(rtpmap) = offer_rtpmap
-                && !is_supported_rtpmap(&rtpmap.encoding_name)
-            {
-                continue;
-            }
-            let offer_fmtp = offer.fmtps.get(fmt);
-            let answer_fmtp = answer.fmtps.get(fmt);
-            if offer_fmtp != answer_fmtp {
-                gst::fixme!(
-                    CAT,
-                    "offer fmtp for format {fmt}: {offer_fmtp:?}, does not match answer fmtp {answer_fmtp:?}"
-                );
-                // TODO: media-specific equivalence
-                //continue;
-            }
-            supported_formats.push(fmt);
-        }
-        ret.formats.retain(|fmt| supported_formats.contains(&fmt));
-        ret.rtpmaps
-            .retain(|fmt, _val| supported_formats.contains(&fmt));
-        ret.fmtps
-            .retain(|fmt, _val| supported_formats.contains(&fmt));
-        ret.rtcp_fbs.retain(|fmt, fb| {
-            *fb &= RtcpFb::all_supported();
-            supported_formats.contains(&fmt)
-        });
-        if let Some(rtcp_fb) = ret.rtcp_fb.as_mut() {
-            *rtcp_fb &= offer.rtcp_fb.clone().unwrap_or_default() & RtcpFb::all_supported();
-        }
-        if !ret.extmap.is_empty() {
-            todo!("extmaps are not supported yet");
-        }
-        ret
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DataChannelMedia {
-    pub sctp_port: u16,
-}
-
-impl DataChannelMedia {
-    fn parse(mline: u32, media: &sdp_types::Media) -> Result<Self, ParseWebRTCSdpError> {
-        let is_sctp = ["application"].contains(&media.media.as_ref())
-            && is_valid_datachannel_profile(&media.proto);
-
-        let mut sctp_port = None;
-        for attr in media.attributes.iter() {
-            match attr.attribute.as_str() {
-                "sctp-port" if is_sctp => {
-                    sctp_port = Some(
-                        parse_unique_attribute_with_value(
-                            Some(mline),
-                            "sctp-port",
-                            &attr.value,
-                            &sctp_port,
-                            |val| {
-                                val.parse::<u16>().map_err(|_| {
-                                    ParseWebRTCSdpError::InvalidAttribute("sctp-port".to_string())
-                                })
-                            },
-                        )
-                        .map_err(|e| e.with_mline(Some(mline)))?,
-                    )
-                }
-                // TODO: max-message-size
-                key if !KNOWN_MEDIA_ATTRIBUTES.contains(&key) => {
-                    gst::fixme!(CAT, "unknown media {mline} attribute {key}")
-                }
-                _ => (),
-            }
-        }
-
-        Ok(Self {
-            sctp_port: sctp_port.ok_or_else(|| {
-                ParseWebRTCSdpError::MissingRequiredMediaAttribute(mline, "sctp-proto".to_string())
-            })?,
-        })
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum ParseWebRTCSdpError {
-    #[error("Syntax error: {0}")]
-    Syntax(#[from] sdp_types::ParserError),
-    #[error("{}", .0)]
-    SdpTypesAttributeError(#[from] sdp_types::AttributeError),
-    #[error("{}", .0)]
-    SdpTypesParseEnumError(#[from] sdp_types::ParseEnumError),
-    #[error("Multiple '{}' attributes were discovered", .0)]
-    MultipleAttributes(String),
-    #[error("Invalid '{}' attribute", .0)]
-    InvalidAttribute(String),
-    #[error("Unsupported media with mline {}", .0)]
-    UnsupportedMedia(u32),
-    #[error("Failed to parse a candidate {:?}", .0)]
-    InvalidCandidate(ParseCandidateError),
-    #[error("Multiple '{}' attributes were discovered in media {}", .1, .0)]
-    MultipleMediaAttributes(u32, String),
-    #[error("Invalid '{}' attribute in media {}", .1, .0)]
-    InvalidMediaAttribute(u32, String),
-    #[error("Failed to parse media {} candidate '{:?}'", .0, .1)]
-    InvalidMediaCandidate(u32, ParseCandidateError),
-    #[error("Media {} is missing required attribute '{}'", .0, .1)]
-    MissingRequiredMediaAttribute(u32, String),
-}
-
-impl ParseWebRTCSdpError {
-    fn with_mline(self, mline: Option<u32>) -> Self {
-        if let Some(mline) = mline {
-            match self {
-                Self::InvalidAttribute(attr) => Self::InvalidMediaAttribute(mline, attr),
-                Self::MultipleAttributes(attr) => Self::MultipleMediaAttributes(mline, attr),
-                Self::InvalidCandidate(cand) => Self::InvalidMediaCandidate(mline, cand),
-                rest => rest,
-            }
-        } else {
-            self
-        }
-    }
-}
-
-impl From<ParseCandidateError> for ParseWebRTCSdpError {
-    fn from(value: ParseCandidateError) -> Self {
-        Self::InvalidCandidate(value)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::net::SocketAddr;
-
-    use super::*;
-
-    #[test]
-    fn test_direction_remote_intersection() {
-        let directions = [
-            Direction::SendRecv,
-            Direction::SendOnly,
-            Direction::RecvOnly,
-            Direction::Inactive,
-        ];
-        for dir in directions {
-            assert_eq!(
-                Direction::Inactive.intersect_with_remote(dir),
-                Direction::Inactive
+            })
+        {
+            gst::trace!(
+                CAT,
+                "offer rtpmap for format {fmt}: {offer_rtpmap:?}, does not match answer rtpmap {answer_rtpmap:?}"
             );
-            assert_eq!(
-                dir.intersect_with_remote(Direction::Inactive),
-                Direction::Inactive
-            );
+            continue;
         }
-        assert_eq!(
-            Direction::SendOnly.intersect_with_remote(Direction::SendOnly),
-            Direction::Inactive
-        );
-        assert_eq!(
-            Direction::RecvOnly.intersect_with_remote(Direction::RecvOnly),
-            Direction::Inactive
-        );
-
-        assert_eq!(
-            Direction::SendRecv.intersect_with_remote(Direction::SendRecv),
-            Direction::SendRecv
-        );
-
-        assert_eq!(
-            Direction::SendRecv.intersect_with_remote(Direction::SendOnly),
-            Direction::RecvOnly
-        );
-        assert_eq!(
-            Direction::RecvOnly.intersect_with_remote(Direction::SendRecv),
-            Direction::RecvOnly
-        );
-
-        assert_eq!(
-            Direction::SendRecv.intersect_with_remote(Direction::RecvOnly),
-            Direction::SendOnly
-        );
-        assert_eq!(
-            Direction::SendOnly.intersect_with_remote(Direction::SendRecv),
-            Direction::SendOnly
-        );
-    }
-
-    static SESSION_HEADER: &str = "v=0\r\n\
-o=- 3498989708992231200 0 IN IP4 0.0.0.0\r\n\
-s=-\r\n\
-t=0 0\r\n\
-a=ice-options:trickle";
-
-    static MEDIA_AUDIO: &str = "m=audio 9 UDP/TLS/RTP/SAVPF 96\r\n\
-c=IN IP4 0.0.0.0\r\n\
-a=setup:actpass\r\n\
-a=ice-ufrag:W9PZs\r\n\
-a=ice-pwd:+N4wEaXW9bV9uo/o9OkVlgMudD+KTDgB\r\n\
-a=rtcp-mux\r\n\
-a=rtcp-rsize\r\n\
-a=sendrecv\r\n\
-a=rtpmap:96 OPUS/48000\r\n\
-a=rtcp-fb:96 transport-cc\r\n\
-a=ssrc:3384078950 msid:user3252793596@host-26022109 webrtctransceiver0\r\n\
-a=ssrc:3384078950 cname:user3252793596@host-26022109\r\n\
-a=mid:audio0\r\n\
-a=fingerprint:sha-256 9B:7B:AD:68:EC:00:86:1A:CD:09:01:E7:7E:C5:53:29:1F:91:D8:9E:41:72:5C:5D:D1:A1:38:B2:6C:35:22:58\r\n\
-a=rtcp-mux-only";
-
-    #[test]
-    fn test_parse_no_media() {
-        let sdp = WebRTCSdp::parse(WebRTCSdpType::Offer, SESSION_HEADER).unwrap();
-        eprintln!("{:?}", sdp);
-        assert_eq!(&sdp.id, "3498989708992231200");
-        assert!(sdp.media.is_empty());
-    }
-
-    #[test]
-    fn test_parse_audio() {
-        let sdp = WebRTCSdp::parse(
-            WebRTCSdpType::Offer,
-            &format!("{}\r\n{}", SESSION_HEADER, MEDIA_AUDIO),
-        )
-        .unwrap();
-        eprintln!("{:?}", sdp);
-        assert_eq!(&sdp.id, "3498989708992231200");
-        assert_eq!(sdp.media.len(), 1);
-        let media = &sdp.media[0];
-        assert_eq!(media.media, MediaType::Audio);
-        assert_eq!(media.ice_ufrag, Some(String::from("W9PZs")));
-        assert_eq!(
-            media.ice_pwd,
-            Some(String::from("+N4wEaXW9bV9uo/o9OkVlgMudD+KTDgB"))
-        );
-        assert!(media.candidates.is_empty());
-        assert!(!media.end_of_candidates);
-        assert_eq!(media.setup, Some(DtlsSetup::ActPass));
-        assert_eq!(media.mid, Some(String::from("audio0")));
-        assert!(!media.bundle_only);
-        assert_eq!(
-            media.fingerprints,
-            vec![Fingerprint {
-                hash_func: sdp_types::HashFunc::Sha256,
-                fingerprint: vec![
-                    0x9b, 0x7b, 0xad, 0x68, 0xec, 0x00, 0x86, 0x1a, 0xcd, 0x09, 0x01, 0xe7, 0x7e,
-                    0xc5, 0x53, 0x29, 0x1f, 0x91, 0xd8, 0x9e, 0x41, 0x72, 0x5c, 0x5d, 0xd1, 0xa1,
-                    0x38, 0xb2, 0x6c, 0x35, 0x22, 0x58
-                ],
-            }]
-        );
-        let MediaSpecifics::Rtp(rtp) = &media.specifics else {
-            unreachable!();
+        // TODO: ignore red/rtx/ulpfec as they are not supported yet.
+        let is_supported_rtpmap = |name: &str| {
+            !name.eq_ignore_ascii_case("rtx")
+                && !name.eq_ignore_ascii_case("red")
+                && !name.eq_ignore_ascii_case("ulpfec")
+                && !name.eq_ignore_ascii_case("telephone-event")
         };
-        assert_eq!(rtp.direction, Direction::SendRecv);
-        assert!(rtp.rtcp_mux);
-        assert!(rtp.rtcp_rsize);
-        assert!(rtp.rtcp_mux_only);
-        assert_eq!(rtp.rtcp_fb, None);
-        assert!(rtp.extmap.is_empty());
-        assert_eq!(rtp.formats, vec![96]);
-        assert_eq!(
-            rtp.rtpmaps,
-            BTreeMap::from_iter([(96, RtpMap::new(96, "OPUS", 48_000))]),
-        );
-        assert_eq!(
-            rtp.rtcp_fbs,
-            BTreeMap::from_iter([(
-                96,
-                RtcpFb {
-                    transport_cc: true,
-                    ..Default::default()
-                }
-            )])
-        );
-        assert!(rtp.fmtps.is_empty());
+        if let Some(rtpmap) = offer_rtpmap
+            && !is_supported_rtpmap(&rtpmap.encoding_name)
+        {
+            continue;
+        }
+        let offer_fmtp = offer.fmtps().get(fmt);
+        let answer_fmtp = ret.fmtps().get(fmt);
+        if offer_fmtp != answer_fmtp {
+            gst::fixme!(
+                CAT,
+                "offer fmtp for format {fmt}: {offer_fmtp:?}, does not match answer fmtp {answer_fmtp:?}"
+            );
+            // TODO: media-specific equivalence
+            //continue;
+        }
+        supported_formats.push(*fmt);
     }
-
-    #[test]
-    fn test_parse_short_ice_ufrag() {
-        assert!(matches!(
-            WebRTCSdp::parse(
-                WebRTCSdpType::Offer,
-                &format!(
-                    "{}\r\n\
-a=ice-ufrag:a\r\n",
-                    SESSION_HEADER
-                )
-            ),
-            Err(ParseWebRTCSdpError::InvalidAttribute(_))
-        ));
+    ret.formats_mut()
+        .retain(|fmt| supported_formats.contains(fmt));
+    ret.rtpmaps_mut()
+        .retain(|fmt, _val| supported_formats.contains(fmt));
+    ret.fmtps_mut()
+        .retain(|fmt, _val| supported_formats.contains(fmt));
+    ret.rtcp_fbs_mut().retain(|fmt, fb| {
+        *fb &= all_supported_fb();
+        supported_formats.contains(fmt)
+    });
+    if let Some(rtcp_fb) = ret.rtcp_fb_mut() {
+        *rtcp_fb &= offer.rtcp_fb().cloned().unwrap_or_default() & all_supported_fb();
     }
+    // webrtcbin2 does not implement RTP header extensions, so remove them
+    // from the answer (RFC 8285 section 7).
+    ret.extmap_mut().clear();
+    ret
+}
 
-    #[test]
-    fn test_parse_short_ice_pwd() {
-        assert!(matches!(
-            WebRTCSdp::parse(
-                WebRTCSdpType::Offer,
-                &format!(
-                    "{}\r\n\
-a=ice-pwd:a\r\n",
-                    SESSION_HEADER
-                )
-            ),
-            Err(ParseWebRTCSdpError::InvalidAttribute(_))
-        ));
+/// Create the answer media for an offer media line without a local
+/// transceiver. Remote-only attributes such as `a=ssrc`, `a=msid`, `a=rid`,
+/// `a=remote-candidates` or `a=crypto` are not copied.
+pub fn answer_media_from_offer(offer: &Media) -> Media {
+    Media::builder(offer.media())
+        .direction(Direction::RecvOnly)
+        .rtcp_mux(true)
+        .rtcp_mux_only(false)
+        .rtcp_rsize(false)
+        .formats(offer.formats().to_vec())
+        .rtpmaps(offer.rtpmaps().clone())
+        .fmtps(offer.fmtps().clone())
+        .rtcp_fb(offer.rtcp_fb().cloned())
+        .rtcp_fbs(offer.rtcp_fbs().clone())
+        .mid(offer.mid().cloned())
+        .build()
+}
+
+pub fn media_intersect(mine: &Media, other: &Media) -> Option<Media> {
+    if mine.media() != other.media() {
+        return None;
     }
-
-    #[test]
-    fn test_parse_candidate() {
-        let addr = SocketAddr::new([192, 168, 0, 1].into(), 50000);
-        let candidate = librice::candidate::Candidate::builder(
-            1,
-            librice::candidate::CandidateType::Host,
-            librice::candidate::TransportType::Udp,
-            "0",
-            addr.into(),
-        )
-        .priority(1000)
-        .base_address(addr.into())
-        .build();
-        let sdp = WebRTCSdp::parse(
-            WebRTCSdpType::Offer,
-            &format!(
-                "{}\r\n\
-{}\r\n\
-{}\r\n",
-                SESSION_HEADER,
-                MEDIA_AUDIO,
-                candidate.to_sdp_string()
-            ),
-        )
-        .unwrap();
-        assert_eq!(sdp.media[0].candidates[0], candidate);
+    gst::trace!(CAT, "attempting to intersect:");
+    gst::trace!(CAT, "                   ours: {mine:?}");
+    gst::trace!(CAT, "                  other: {other:?}");
+    if is_datachannel(mine) || is_datachannel(other) {
+        // FIXME data channel
+        return None;
     }
+    let intersected = answer_media(mine, other.clone());
+    gst::trace!(CAT, "                 result: {intersected:?}");
+    if intersected.formats().is_empty() {
+        return None;
+    }
+    Some(intersected)
+}
 
-    #[test]
-    fn test_write_candidate() {
-        let addr = SocketAddr::new([192, 168, 0, 1].into(), 50000);
-        let candidate = librice::candidate::Candidate::builder(
-            1,
-            librice::candidate::CandidateType::Host,
-            librice::candidate::TransportType::Udp,
-            "0",
-            addr.into(),
-        )
-        .priority(1000)
-        .base_address(addr.into())
-        .build();
+/// Intersect two DTLS setup roles, `None` when they cannot be combined.
+pub fn intersect_setup(this: Option<&Setup>, remote: Option<&Setup>) -> Option<Setup> {
+    match (this, remote) {
+        (Some(Setup::Active | Setup::ActPass), Some(Setup::Passive | Setup::ActPass)) => {
+            Some(Setup::Active)
+        }
+        (Some(Setup::Passive | Setup::ActPass), Some(Setup::Active | Setup::ActPass)) => {
+            Some(Setup::Passive)
+        }
+        _ => None,
+    }
+}
 
-        let mut sdp = WebRTCSdp::parse(
-            WebRTCSdpType::Offer,
-            &format!(
-                "{}\r\n\
-{}\r\n",
-                SESSION_HEADER, MEDIA_AUDIO,
-            ),
-        )
-        .unwrap();
-        sdp.media[0].candidates.push(candidate.clone());
-        let sdp_string = sdp.to_sdp_string();
-        println!("sdp {sdp_string}");
-        let sdp = WebRTCSdp::parse(WebRTCSdpType::Offer, &sdp_string).unwrap();
-        assert_eq!(sdp.media[0].candidates[0], candidate);
+/// The DTLS setup role to use in the answer to `offer`.
+pub fn answer_setup(offer: Option<&Setup>) -> Setup {
+    match offer {
+        Some(Setup::Active) => Setup::Passive,
+        _ => Setup::Active,
     }
 }

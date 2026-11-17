@@ -18,10 +18,10 @@ gst = { workspace = true, features = ["v1_22"] }
 gst-app = { workspace = true, features = ["v1_20"] }
 gst-base = { workspace = true, features = ["v1_20"] }
 gst-net = { workspace = true, features = ["v1_20"] }
-gst-pbutils = { workspace = true, features = ["v1_20"] }
 lru.workspace = true
 rtsp-types = "0.2"
 sdp-types.workspace = true
+sdp-types-gst.workspace = true
 socket2 = { version = "0.6", features = ["all"] }
 thiserror = "2"
 tokio = { version = "1.0", default-features = false, features = ["io-util", "macros", "net", "time", "rt-multi-thread", "sync"] }
@@ -37,7 +37,7 @@ hex = "0.4"
 httparse = "1.10"
 base64 = "0.23"
 bytes = "1"
-mykey = "2"
+tokio-util = "0.7"
 x509-parser = { version = "0.18", default-features = false, features = ["verify-aws", "validate"] }
 
 [dev-dependencies]
