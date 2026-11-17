@@ -61,12 +61,7 @@ impl Debug for FragmentedFrame {
         f.debug_struct("FragmentedFrame")
             .field(
                 "data",
-                &format_args!(
-                    "{} bytes {}..",
-                    self.data.len(),
-                    // FIXME: can drop the as_slice() here once https://gitlab.freedesktop.org/gstreamer/gstreamer-rs/-/merge_requests/1650/diffs is in
-                    self.data.as_slice().dump_range(..4)
-                ),
+                &format_args!("{} bytes {}..", self.data.len(), self.data.dump_range(..4)),
             )
             .field("seqnum", &self.seqnums)
             .field("ext_timestamp", &self.ext_timestamp)
