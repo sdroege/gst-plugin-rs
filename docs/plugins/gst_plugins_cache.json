@@ -19259,7 +19259,7 @@
                         "writable": true
                     },
                     "auto-multicast": {
-                        "blurb": "Automatically join/leave multicast groups",
+                        "blurb": "Automatically join/leave multicast groups, only one element sharing a socket should do this",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -19316,18 +19316,6 @@
                         "construct-only": false,
                         "controllable": false,
                         "default": "false",
-                        "mutable": "null",
-                        "readable": true,
-                        "type": "gboolean",
-                        "writable": true
-                    },
-                    "loop": {
-                        "blurb": "Loop back multicast packets",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "true",
                         "mutable": "null",
                         "readable": true,
                         "type": "gboolean",
@@ -19412,7 +19400,7 @@
                         "writable": true
                     },
                     "socket": {
-                        "blurb": "Socket to use for UDP reception. (None == allocate)",
+                        "blurb": "Socket to use for UDP reception, can be shared with a sending element. (None == allocate)",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -19502,7 +19490,7 @@
                 "kind": "object",
                 "properties": {
                     "auto-multicast": {
-                        "blurb": "Automatically join/leave multicast groups",
+                        "blurb": "Automatically join/leave multicast groups, only one element sharing a socket should do this",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -19594,7 +19582,7 @@
                         "writable": true
                     },
                     "loop": {
-                        "blurb": "Multicast loopback",
+                        "blurb": "Deliver multicast packets sent via the socket to local sockets",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -19644,7 +19632,7 @@
                         "writable": true
                     },
                     "socket": {
-                        "blurb": "Socket to use for UDP sending. (None == allocate)",
+                        "blurb": "Socket to use for UDP sending, can be shared with a receiving element. (None == allocate)",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,
@@ -19655,7 +19643,7 @@
                         "writable": true
                     },
                     "socket-v6": {
-                        "blurb": "Socket to use for UDPv6 sending. (None == allocate)",
+                        "blurb": "Socket to use for UDPv6 sending, can be shared with a receiving element. (None == allocate)",
                         "conditionally-available": false,
                         "construct": false,
                         "construct-only": false,

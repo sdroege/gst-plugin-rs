@@ -39,13 +39,23 @@
  *
  * Alternatively one can provide a custom socket to `udpsink2` with the
  * #GstBaseUdpSink2:socket property. In that case `udpsink2` will not allocate a
- * socket itself but use the provided one. A second socket for IPv6 can be
+ * socket itself but use the provided one. All send-side socket options are
+ * applied to it as well. A second socket for IPv6 can be
  * provided with the #GstBaseUdpSink2:socket-v6 property. The sockets
  * currently in use can be read back with the read-only #GstBaseUdpSink2:used-socket
  * and #GstBaseUdpSink2:used-socket-v6 properties. A provided socket is closed
  * when setting the element to READY by default. This behaviour can be
  * overridden with the #GstBaseUdpSink2:close-socket property, in which case
  * the application is responsible for closing the socket.
+ *
+ * The socket can also be shared with a receiving element such as `udpsrc2`,
+ * for example to send RTCP from the port it is received on. Each element
+ * sharing a socket applies only the socket options of its own role: send
+ * options are owned by `udpsink2`, receive options by `udpsrc2`. Multicast
+ * group membership is per socket, so only one of the elements sharing a
+ * socket should have #GstBaseUdpSink2:auto-multicast enabled, otherwise
+ * joins conflict and leaving the group when one element is torn down also
+ * interrupts reception in the other.
  *
  * The #GstBaseUdpSink2:buffer-size property is used to change the default
  * kernel send buffer size used for sending packets. The buffer size may be

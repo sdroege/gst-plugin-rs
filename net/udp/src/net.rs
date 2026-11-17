@@ -108,6 +108,450 @@ pub(crate) fn sockaddr_to_addr(storage: &libc::sockaddr_storage) -> SocketAddr {
     }
 }
 
+/// Clear `IP_MULTICAST_ALL` / `IPV6_MULTICAST_ALL` so that the socket only
+/// receives the multicast groups it joined itself, not every group joined
+/// elsewhere on the host on its port.
+fn clear_multicast_all(element: &gst::Element, socket: &socket2::SockRef<'_>, ipv4: bool) {
+    #[cfg(target_os = "linux")]
+    {
+        use anyhow::Context as _;
+
+        let res = if ipv4 {
+            socket
+                .set_multicast_all_v4(false)
+                .context("Failed to disable IP_MULTICAST_ALL")
+        } else {
+            socket
+                .set_multicast_all_v6(false)
+                .context("Failed to disable IPV6_MULTICAST_ALL")
+        };
+
+        if let Err(err) = res {
+            gst::warning!(CAT, obj = element, "{err:#}");
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = (element, socket, ipv4);
+}
+
+/// Enable control message for the local destination address of incoming
+/// packets (`IP_PKTINFO` / `IP_RECVDSTADDR` / `IPV6_RECVPKTINFO`), used to
+/// filter out traffic of other multicast groups arriving on the same port.
+/// Returns whether an additional control message should be expected.
+#[cfg(unix)]
+fn enable_dst_addr_reporting(
+    socket: &impl std::os::fd::AsFd,
+    ipv4: bool,
+) -> Result<bool, io::Error> {
+    use std::os::fd::AsRawFd;
+
+    let raw_fd = socket.as_fd().as_raw_fd();
+    let mut enabled = false;
+    let _ = (&raw_fd, &ipv4);
+
+    #[cfg(any(
+        target_os = "android",
+        target_os = "linux",
+        target_os = "solaris",
+        target_os = "illumos",
+        target_os = "nto",
+        target_os = "cygwin",
+        target_os = "netbsd",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "tvos",
+        target_os = "watchos",
+        target_os = "visionos",
+    ))]
+    if ipv4 {
+        use std::mem;
+
+        let v = 1u32;
+        unsafe {
+            if libc::setsockopt(
+                raw_fd,
+                libc::IPPROTO_IP,
+                libc::IP_PKTINFO,
+                &v as *const u32 as *const _,
+                mem::size_of_val(&v) as u32,
+            ) != 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+        }
+        enabled = true;
+    }
+
+    #[cfg(any(
+        target_os = "hurd",
+        target_os = "openbsd",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+    ))]
+    if ipv4 {
+        use std::mem;
+
+        let v = 1u32;
+        unsafe {
+            if libc::setsockopt(
+                raw_fd,
+                libc::IPPROTO_IP,
+                libc::IP_RECVDSTADDR,
+                &v as *const u32 as *const _,
+                mem::size_of_val(&v) as u32,
+            ) != 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+        }
+        enabled = true;
+    }
+
+    #[cfg(any(
+        target_os = "android",
+        target_os = "linux",
+        target_os = "solaris",
+        target_os = "illumos",
+        target_os = "nto",
+        target_os = "cygwin",
+        target_os = "netbsd",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "tvos",
+        target_os = "watchos",
+        target_os = "visionos",
+        target_os = "hurd",
+        target_os = "openbsd",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+    ))]
+    if !ipv4 {
+        use std::mem;
+
+        let v = 1u32;
+        unsafe {
+            if libc::setsockopt(
+                raw_fd,
+                libc::IPPROTO_IPV6,
+                libc::IPV6_RECVPKTINFO,
+                &v as *const u32 as *const _,
+                mem::size_of_val(&v) as u32,
+            ) != 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+        }
+        enabled = true;
+    }
+
+    Ok(enabled)
+}
+
+fn set_recv_buffer_size(
+    element: &gst::Element,
+    socket: &socket2::SockRef<'_>,
+    buffer_size: u32,
+) -> Result<(), anyhow::Error> {
+    use anyhow::Context as _;
+
+    #[cfg(any(target_os = "android", target_os = "linux"))]
+    {
+        let mut force = false;
+        if let Err(err) = socket.set_recv_buffer_size(buffer_size as usize) {
+            gst::warning!(
+                CAT,
+                obj = element,
+                "Failed to set receive buffer size of {buffer_size}: {err}"
+            );
+            force = true;
+        }
+
+        if let Ok(set_buffer_size) = socket.recv_buffer_size()
+            && set_buffer_size < buffer_size as usize
+        {
+            gst::warning!(
+                CAT,
+                obj = element,
+                "Tried to set {buffer_size} as buffer size but only got {set_buffer_size}"
+            );
+            force = true;
+        }
+
+        if force {
+            unsafe {
+                use std::{mem, os::fd::AsRawFd};
+
+                let raw_fd = socket.as_raw_fd();
+                if libc::setsockopt(
+                    raw_fd,
+                    libc::SOL_SOCKET,
+                    libc::SO_RCVBUFFORCE,
+                    &buffer_size as *const u32 as *const _,
+                    mem::size_of_val(&buffer_size) as u32,
+                ) != 0
+                {
+                    let err = io::Error::last_os_error();
+                    return Err(err).context("Failed to set receive buffer size");
+                }
+            }
+        }
+    }
+    #[cfg(not(any(target_os = "android", target_os = "linux")))]
+    {
+        socket
+            .set_recv_buffer_size(buffer_size as usize)
+            .context("Failed to set receive buffer size")?;
+    }
+
+    if let Ok(set_buffer_size) = socket.recv_buffer_size()
+        && set_buffer_size < buffer_size as usize
+    {
+        gst::warning!(
+            CAT,
+            obj = element,
+            "Tried to set {buffer_size} as buffer size but only got {set_buffer_size}"
+        );
+    }
+
+    Ok(())
+}
+
+fn set_send_buffer_size(
+    element: &gst::Element,
+    socket: &socket2::SockRef<'_>,
+    buffer_size: u32,
+) -> Result<(), anyhow::Error> {
+    use anyhow::Context as _;
+
+    #[cfg(any(target_os = "android", target_os = "linux"))]
+    {
+        let mut force = false;
+        if let Err(err) = socket.set_send_buffer_size(buffer_size as usize) {
+            gst::warning!(
+                CAT,
+                obj = element,
+                "Failed to set send buffer size of {buffer_size}: {err}"
+            );
+            force = true;
+        }
+
+        if let Ok(set_buffer_size) = socket.send_buffer_size()
+            && set_buffer_size < buffer_size as usize
+        {
+            gst::warning!(
+                CAT,
+                obj = element,
+                "Tried to set {buffer_size} as buffer size but only got {set_buffer_size}"
+            );
+            force = true;
+        }
+
+        if force {
+            unsafe {
+                use std::{mem, os::fd::AsRawFd};
+
+                let raw_fd = socket.as_raw_fd();
+                if libc::setsockopt(
+                    raw_fd,
+                    libc::SOL_SOCKET,
+                    libc::SO_SNDBUFFORCE,
+                    &buffer_size as *const u32 as *const _,
+                    mem::size_of_val(&buffer_size) as u32,
+                ) != 0
+                {
+                    let err = io::Error::last_os_error();
+                    return Err(err).context("Failed to set send buffer size");
+                }
+            }
+        }
+    }
+    #[cfg(not(any(target_os = "android", target_os = "linux")))]
+    {
+        socket
+            .set_send_buffer_size(buffer_size as usize)
+            .context("Failed to set send buffer size")?;
+    }
+
+    if let Ok(set_buffer_size) = socket.send_buffer_size()
+        && set_buffer_size < buffer_size as usize
+    {
+        gst::warning!(
+            CAT,
+            obj = element,
+            "Tried to set {buffer_size} as buffer size but only got {set_buffer_size}"
+        );
+    }
+
+    Ok(())
+}
+
+/// Restrict the socket to a single device via `SO_BINDTODEVICE`. This affects
+/// both directions: outgoing packets are routed via the device and incoming
+/// packets from other devices are dropped.
+fn bind_to_device(
+    element: &gst::Element,
+    socket: &socket2::SockRef<'_>,
+    multicast_iface: Option<&str>,
+) {
+    #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
+    if let Some(multicast_iface) = multicast_iface {
+        // SO_BINDTODEVICE only supports a single device
+        if multicast_iface.contains(',') {
+            gst::warning!(
+                CAT,
+                obj = element,
+                "Not binding the socket to a device via SO_BINDTODEVICE as multiple interfaces are set: {multicast_iface}"
+            );
+        } else if let Err(err) = socket.bind_device(Some(multicast_iface.as_bytes())) {
+            // Only warn if this fails e.g. due to missing CAP_NET_RAW
+            gst::warning!(
+                CAT,
+                obj = element,
+                "Failed to set SO_BINDTODEVICE to {multicast_iface}: {err}"
+            );
+        }
+    }
+    #[cfg(not(any(target_os = "android", target_os = "fuchsia", target_os = "linux")))]
+    let _ = (element, socket, multicast_iface);
+}
+
+/// Apply the options for the send path of a socket.
+#[allow(clippy::too_many_arguments)]
+#[allow(unused_variables)]
+fn configure_send_socket(
+    element: &gst::Element,
+    socket: &socket2::SockRef<'_>,
+    ipv4: bool,
+    multicast_iface: Option<&str>,
+    ttl: u32,
+    ttl_mc: u32,
+    multicast_loop: bool,
+    qos_dscp: i32,
+    buffer_size: u32,
+) -> Result<(), anyhow::Error> {
+    use anyhow::Context as _;
+
+    if buffer_size > 0 {
+        set_send_buffer_size(element, socket, buffer_size)?;
+    }
+
+    clear_multicast_all(element, socket, ipv4);
+
+    if ipv4 {
+        socket
+            .set_ttl_v4(ttl)
+            .with_context(|| "Failed to set IP_TTL")?;
+    } else {
+        socket
+            .set_unicast_hops_v6(ttl)
+            .with_context(|| "Failed to set IPV6_UNICAST_HOPS")?;
+    }
+
+    if ipv4 {
+        socket
+            .set_multicast_loop_v4(multicast_loop)
+            .with_context(|| {
+                format!(
+                    "Failed to {}able IP_MULTICAST_LOOP",
+                    if multicast_loop { "en" } else { "dis" }
+                )
+            })?;
+    } else {
+        socket
+            .set_multicast_loop_v6(multicast_loop)
+            .with_context(|| {
+                format!(
+                    "Failed to {}able IPV6_MULTICAST_LOOP",
+                    if multicast_loop { "en" } else { "dis" }
+                )
+            })?;
+    }
+
+    if ipv4 {
+        socket
+            .set_multicast_ttl_v4(ttl_mc)
+            .with_context(|| "Failed to set IP_MULTICAST_TTL")?;
+    } else {
+        socket
+            .set_multicast_hops_v6(ttl_mc)
+            .with_context(|| "Failed to set IPV6_MULTICAST_HOPS")?;
+    }
+
+    socket
+        .set_broadcast(true)
+        .with_context(|| "Failed to set SO_BROADCAST")?;
+
+    if qos_dscp != -1 {
+        let _ = &qos_dscp;
+        if ipv4 {
+            #[cfg(not(any(
+                target_os = "fuchsia",
+                target_os = "redox",
+                target_os = "solaris",
+                target_os = "haiku",
+                target_os = "wasi",
+            )))]
+            socket
+                .set_tos_v4(qos_dscp as u32)
+                .with_context(|| "Failed to set IP_TOS")?;
+        } else {
+            #[cfg(any(
+                target_os = "android",
+                target_os = "dragonfly",
+                target_os = "freebsd",
+                target_os = "fuchsia",
+                target_os = "linux",
+                target_os = "macos",
+                target_os = "netbsd",
+                target_os = "openbsd",
+                target_os = "cygwin",
+                target_os = "illumos",
+            ))]
+            socket
+                .set_tclass_v6(qos_dscp as u32)
+                .with_context(|| "Failed to set IPV6_TCLASS")?;
+        }
+    }
+
+    bind_to_device(element, socket, multicast_iface);
+
+    Ok(())
+}
+
+/// Apply the options for the receive path of a socket. Returns the
+/// number of control message slots to reserve for receiving.
+fn configure_recv_socket(
+    element: &gst::Element,
+    socket: &socket2::SockRef<'_>,
+    ipv4: bool,
+    multicast_iface: Option<&str>,
+    buffer_size: u32,
+) -> Result<usize, anyhow::Error> {
+    if buffer_size > 0 {
+        set_recv_buffer_size(element, socket, buffer_size)?;
+    }
+
+    clear_multicast_all(element, socket, ipv4);
+    bind_to_device(element, socket, multicast_iface);
+
+    #[allow(unused_mut)]
+    let mut num_ctrl = 0;
+
+    #[cfg(unix)]
+    {
+        use anyhow::Context as _;
+        use std::os::fd::AsFd as _;
+
+        if enable_dst_addr_reporting(&socket.as_fd(), ipv4)
+            .context("Failed to enable destination address reporting")?
+        {
+            num_ctrl += 1;
+        }
+    }
+
+    Ok(num_ctrl)
+}
+
 pub struct UdpRecvSocket {
     element: gst::Element,
     socket: SocketAndWrappedSocket,
@@ -159,7 +603,6 @@ impl UdpRecvSocket {
         source_filter: &[IpAddr],
         source_filter_exclusive: bool,
         auto_multicast: bool,
-        multicast_loop: bool,
         buffer_size: u32,
         batch_size: u32,
         allow_gro: bool,
@@ -201,67 +644,6 @@ impl UdpRecvSocket {
             .set_nonblocking(true)
             .context("Failed to set socket non-blocking")?;
 
-        if buffer_size > 0 {
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            {
-                let mut force = false;
-                if let Err(err) = socket.set_recv_buffer_size(buffer_size as usize) {
-                    gst::warning!(
-                        CAT,
-                        obj = element.as_ref(),
-                        "Failed to set receive buffer size of {buffer_size}: {err}"
-                    );
-                    force = true;
-                }
-
-                if let Ok(set_buffer_size) = socket.recv_buffer_size()
-                    && set_buffer_size < buffer_size as usize
-                {
-                    gst::warning!(
-                        CAT,
-                        obj = element.as_ref(),
-                        "Tried to set {buffer_size} as buffer size but only got {set_buffer_size}"
-                    );
-                    force = true;
-                }
-
-                if force {
-                    unsafe {
-                        use std::{mem, os::fd::AsRawFd};
-
-                        let raw_fd = socket.as_raw_fd();
-                        if libc::setsockopt(
-                            raw_fd,
-                            libc::SOL_SOCKET,
-                            libc::SO_RCVBUFFORCE,
-                            &buffer_size as *const u32 as *const _,
-                            mem::size_of_val(&buffer_size) as u32,
-                        ) != 0
-                        {
-                            let err = io::Error::last_os_error();
-                            return Err(err).context("Failed to set receive buffer size");
-                        }
-                    }
-                }
-            }
-            #[cfg(not(any(target_os = "android", target_os = "linux")))]
-            {
-                socket
-                    .set_recv_buffer_size(buffer_size as usize)
-                    .context("Failed to set receive buffer size")?;
-            }
-
-            if let Ok(set_buffer_size) = socket.recv_buffer_size()
-                && set_buffer_size < buffer_size as usize
-            {
-                gst::warning!(
-                    CAT,
-                    obj = element.as_ref(),
-                    "Tried to set {buffer_size} as buffer size but only got {set_buffer_size}"
-                );
-            }
-        }
-
         if allow_reuse {
             if saddr.port() == 0 && !saddr.ip().is_multicast() {
                 gst::warning!(
@@ -287,138 +669,14 @@ impl UdpRecvSocket {
             }
         }
 
-        #[allow(unused_mut)]
-        let mut num_ctrl = 0;
-
-        if saddr.ip().is_multicast() {
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            {
-                if bind_saddr.is_ipv4() {
-                    socket
-                        .set_multicast_all_v4(false)
-                        .context("Failed to disable IP_MULTICAST_ALL")?;
-                } else {
-                    socket
-                        .set_multicast_all_v6(false)
-                        .context("Failed to disable IPV6_MULTICAST_ALL")?;
-                }
-            }
-
-            #[cfg(any(
-                target_os = "android",
-                target_os = "linux",
-                target_os = "solaris",
-                target_os = "illumos",
-                target_os = "nto",
-                target_os = "cygwin",
-                target_os = "netbsd",
-                target_os = "macos",
-                target_os = "ios",
-                target_os = "tvos",
-                target_os = "watchos",
-                target_os = "visionos"
-            ))]
-            if bind_saddr.is_ipv4() {
-                unsafe {
-                    use std::{mem, os::fd::AsRawFd};
-
-                    let raw_fd = socket.as_raw_fd();
-
-                    let v = 1u32;
-                    if libc::setsockopt(
-                        raw_fd,
-                        libc::IPPROTO_IP,
-                        libc::IP_PKTINFO,
-                        &v as *const u32 as *const _,
-                        mem::size_of_val(&v) as u32,
-                    ) != 0
-                    {
-                        let err = io::Error::last_os_error();
-                        return Err(err).context("Failed to enable IP_PKTINFO");
-                    }
-                    num_ctrl += 1;
-                }
-            }
-
-            #[cfg(any(
-                target_os = "hurd",
-                target_os = "openbsd",
-                target_os = "freebsd",
-                target_os = "dragonfly",
-            ))]
-            if bind_saddr.is_ipv4() {
-                unsafe {
-                    use std::{mem, os::fd::AsRawFd};
-
-                    let raw_fd = socket.as_raw_fd();
-
-                    let v = 1u32;
-                    if libc::setsockopt(
-                        raw_fd,
-                        libc::IPPROTO_IP,
-                        libc::IP_RECVDSTADDR,
-                        &v as *const u32 as *const _,
-                        mem::size_of_val(&v) as u32,
-                    ) != 0
-                    {
-                        let err = io::Error::last_os_error();
-                        return Err(err).context("Failed to enable IP_RECVDSTADDR");
-                    }
-                    num_ctrl += 1;
-                }
-            }
-
-            #[cfg(any(
-                target_os = "android",
-                target_os = "linux",
-                target_os = "solaris",
-                target_os = "illumos",
-                target_os = "nto",
-                target_os = "netbsd",
-                target_os = "macos",
-                target_os = "ios",
-                target_os = "tvos",
-                target_os = "watchos",
-                target_os = "visionos",
-                target_os = "hurd",
-                target_os = "openbsd",
-                target_os = "freebsd",
-                target_os = "dragonfly",
-            ))]
-            if bind_saddr.is_ipv6() {
-                unsafe {
-                    use std::{mem, os::fd::AsRawFd};
-
-                    let raw_fd = socket.as_raw_fd();
-                    let v = 1u32;
-
-                    if libc::setsockopt(
-                        raw_fd,
-                        libc::IPPROTO_IPV6,
-                        libc::IPV6_RECVPKTINFO,
-                        &v as *const u32 as *const _,
-                        mem::size_of_val(&v) as u32,
-                    ) != 0
-                    {
-                        let err = io::Error::last_os_error();
-                        return Err(err).context("Failed to enable IPV6_RECVPKTINFO");
-                    }
-                    num_ctrl += 1;
-                }
-            }
-
-            if bind_saddr.is_ipv4() {
-                socket.set_multicast_loop_v4(multicast_loop)
-            } else {
-                socket.set_multicast_loop_v6(multicast_loop)
-            }
-            .with_context(|| {
-                format!(
-                    "Failed to {}able IP_MULTICAST_LOOP",
-                    if multicast_loop { "en" } else { "dis" }
-                )
-            })?;
-        }
+        let num_ctrl = configure_recv_socket(
+            element.as_ref(),
+            &socket2::SockRef::from(&socket),
+            bind_saddr.is_ipv4(),
+            multicast_iface,
+            buffer_size,
+        )
+        .with_context(|| format!("Failed to configure socket for {bind_saddr}"))?;
 
         socket
             .bind(&bind_saddr.into())
@@ -458,16 +716,31 @@ impl UdpRecvSocket {
         socket: &GioSocketWrapper,
         source_filter: &[IpAddr],
         source_filter_exclusive: bool,
+        buffer_size: u32,
+        multicast_iface: Option<&str>,
         batch_size: u32,
         allow_gro: bool,
         mtu: u32,
         preserve_packetization: bool,
         skip_first_bytes: u32,
     ) -> Result<Self, anyhow::Error> {
-        let socket = Self::wrap_socket_internal(
+        use anyhow::Context as _;
+
+        let socket = SocketAndWrappedSocket::from_wrapped_socket(socket)?;
+
+        let sock = socket2::SockRef::from(&*socket);
+        let ipv4 = socket
+            .local_addr()
+            .context("Can't get local address")?
+            .is_ipv4();
+
+        let num_ctrl =
+            configure_recv_socket(element.as_ref(), &sock, ipv4, multicast_iface, buffer_size)?;
+
+        Self::wrap_socket_internal(
             element.as_ref(),
-            SocketAndWrappedSocket::from_wrapped_socket(socket)?,
-            1, // One extra in case the application enabled IP_PKTINFO / IPV6_PKTINFO
+            socket,
+            num_ctrl,
             batch_size,
             allow_gro,
             mtu,
@@ -475,9 +748,7 @@ impl UdpRecvSocket {
             skip_first_bytes,
             source_filter,
             source_filter_exclusive,
-        )?;
-
-        Ok(socket)
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -645,6 +916,43 @@ impl UdpRecvSocket {
                 num_ctrl
             ],
         })
+    }
+
+    /// Join a multicast group on a socket created by somebody else, e.g.
+    /// another element sharing this socket.
+    pub fn join_multicast(
+        &mut self,
+        addr: IpAddr,
+        ifaces: Option<&str>,
+        source_filter: &[IpAddr],
+        source_filter_exclusive: bool,
+    ) -> Result<(), anyhow::Error> {
+        use anyhow::Context as _;
+
+        anyhow::ensure!(addr.is_multicast(), "{addr} is not a multicast address");
+        anyhow::ensure!(
+            addr.is_ipv4() == self.local_addr.is_ipv4(),
+            "Cannot join {addr} on a {} socket",
+            if self.local_addr.is_ipv4() {
+                "IPv4"
+            } else {
+                "IPv6"
+            }
+        );
+
+        let joined = join_multicast(
+            &self.element,
+            &mut self.socket,
+            addr,
+            ifaces,
+            source_filter,
+            source_filter_exclusive,
+        )
+        .with_context(|| format!("Failed to join multicast group {addr}. If the socket is shared with another element then enable auto-multicast on only one of them"))?;
+
+        self.multicast_joined = Some((addr, joined));
+
+        Ok(())
     }
 
     fn should_filter_packet(
@@ -1593,7 +1901,7 @@ impl UdpSendSocket {
     #[allow(clippy::too_many_arguments)]
     pub fn bind(
         element: &impl AsRef<gst::Element>,
-        #[allow(unused_variables)] multicast_iface: Option<&str>,
+        multicast_iface: Option<&str>,
         ttl: u32,
         ttl_mc: u32,
         multicast_loop: bool,
@@ -1630,67 +1938,6 @@ impl UdpSendSocket {
             .set_nonblocking(true)
             .context("Failed to set socket non-blocking")?;
 
-        if buffer_size > 0 {
-            #[cfg(any(target_os = "android", target_os = "linux"))]
-            {
-                let mut force = false;
-                if let Err(err) = socket.set_send_buffer_size(buffer_size as usize) {
-                    gst::warning!(
-                        CAT,
-                        obj = element.as_ref(),
-                        "Failed to set send buffer size of {buffer_size}: {err}"
-                    );
-                    force = true;
-                }
-
-                if let Ok(set_buffer_size) = socket.send_buffer_size()
-                    && set_buffer_size < buffer_size as usize
-                {
-                    gst::warning!(
-                        CAT,
-                        obj = element.as_ref(),
-                        "Tried to set {buffer_size} as buffer size but only got {set_buffer_size}"
-                    );
-                    force = true;
-                }
-
-                if force {
-                    unsafe {
-                        use std::{mem, os::fd::AsRawFd};
-
-                        let raw_fd = socket.as_raw_fd();
-                        if libc::setsockopt(
-                            raw_fd,
-                            libc::SOL_SOCKET,
-                            libc::SO_SNDBUFFORCE,
-                            &buffer_size as *const u32 as *const _,
-                            mem::size_of_val(&buffer_size) as u32,
-                        ) != 0
-                        {
-                            let err = io::Error::last_os_error();
-                            return Err(err).context("Failed to set send buffer size");
-                        }
-                    }
-                }
-            }
-            #[cfg(not(any(target_os = "android", target_os = "linux")))]
-            {
-                socket
-                    .set_send_buffer_size(buffer_size as usize)
-                    .context("Failed to set send buffer size")?;
-            }
-
-            if let Ok(set_buffer_size) = socket.send_buffer_size()
-                && set_buffer_size < buffer_size as usize
-            {
-                gst::warning!(
-                    CAT,
-                    obj = element.as_ref(),
-                    "Tried to set {buffer_size} as buffer size but only got {set_buffer_size}"
-                );
-            }
-        }
-
         if allow_reuse {
             if bind_saddr.port() == 0 && !bind_saddr.ip().is_multicast() {
                 gst::warning!(
@@ -1716,99 +1963,17 @@ impl UdpSendSocket {
             }
         }
 
-        if bind_saddr.is_ipv4() {
-            socket
-                .set_ttl_v4(ttl)
-                .with_context(|| "Failed to set IP_TTL")?;
-        } else {
-            socket
-                .set_unicast_hops_v6(ttl)
-                .with_context(|| "Failed to set IPV6_UNICAST_HOPS")?;
-        }
-
-        if bind_saddr.is_ipv4() {
-            socket
-                .set_multicast_loop_v4(multicast_loop)
-                .with_context(|| {
-                    format!(
-                        "Failed to {}able IP_MULTICAST_LOOP",
-                        if multicast_loop { "en" } else { "dis" }
-                    )
-                })?;
-        } else {
-            socket
-                .set_multicast_loop_v6(multicast_loop)
-                .with_context(|| {
-                    format!(
-                        "Failed to {}able IPV6_MULTICAST_LOOP",
-                        if multicast_loop { "en" } else { "dis" }
-                    )
-                })?;
-        }
-
-        if bind_saddr.is_ipv4() {
-            socket
-                .set_multicast_ttl_v4(ttl_mc)
-                .with_context(|| "Failed to set IP_MULTICAST_TTL")?;
-        } else {
-            socket
-                .set_multicast_hops_v6(ttl_mc)
-                .with_context(|| "Failed to set IPV6_MULTICAST_HOPS")?;
-        }
-
-        socket
-            .set_broadcast(true)
-            .with_context(|| "Failed to set SO_BROADCAST")?;
-
-        if qos_dscp != -1 {
-            if bind_saddr.is_ipv4() {
-                #[cfg(not(any(
-                    target_os = "fuchsia",
-                    target_os = "redox",
-                    target_os = "solaris",
-                    target_os = "haiku",
-                    target_os = "wasi",
-                )))]
-                socket
-                    .set_tos_v4(qos_dscp as u32)
-                    .with_context(|| "Failed to set IP_TOS")?;
-            } else {
-                #[cfg(any(
-                    target_os = "android",
-                    target_os = "dragonfly",
-                    target_os = "freebsd",
-                    target_os = "fuchsia",
-                    target_os = "linux",
-                    target_os = "macos",
-                    target_os = "netbsd",
-                    target_os = "openbsd",
-                    target_os = "cygwin",
-                    target_os = "illumos",
-                ))]
-                socket
-                    .set_tclass_v6(qos_dscp as u32)
-                    .with_context(|| "Failed to set IPV6_TCLASS")?;
-            }
-        }
-
-        #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
-        if let Some(multicast_iface) = multicast_iface {
-            // SO_BINDTODEVICE only supports a single device
-            if multicast_iface.contains(',') {
-                gst::warning!(
-                    CAT,
-                    obj = element.as_ref(),
-                    "Not binding the socket to a device via SO_BINDTODEVICE as multiple interfaces are set: {multicast_iface}"
-                );
-            } else if let Err(err) = socket.bind_device(Some(multicast_iface.as_bytes())) {
-                // Only warn if this fails e.g. due to missing CAP_NET_RAW
-                gst::warning!(
-                    CAT,
-                    obj = element.as_ref(),
-                    "Failed to set SO_BINDTODEVICE to {multicast_iface}: {err}"
-                );
-            }
-        }
+        configure_send_socket(
+            element.as_ref(),
+            &socket2::SockRef::from(&socket),
+            bind_saddr.is_ipv4(),
+            multicast_iface,
+            ttl,
+            ttl_mc,
+            multicast_loop,
+            qos_dscp,
+            buffer_size,
+        )?;
 
         socket
             .bind(&bind_saddr.into())
@@ -1822,16 +1987,40 @@ impl UdpSendSocket {
         Ok(socket)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn wrap_socket(
         element: &impl AsRef<gst::Element>,
         socket: &GioSocketWrapper,
+        multicast_iface: Option<&str>,
+        ttl: u32,
+        ttl_mc: u32,
+        multicast_loop: bool,
+        qos_dscp: i32,
+        buffer_size: u32,
     ) -> Result<Self, anyhow::Error> {
-        let socket = Self::wrap_socket_internal(
+        use anyhow::Context as _;
+
+        let socket = SocketAndWrappedSocket::from_wrapped_socket(socket)?;
+
+        let sock = socket2::SockRef::from(&*socket);
+        let ipv4 = socket
+            .local_addr()
+            .context("Can't get local address")?
+            .is_ipv4();
+
+        configure_send_socket(
             element.as_ref(),
-            SocketAndWrappedSocket::from_wrapped_socket(socket)?,
+            &sock,
+            ipv4,
+            multicast_iface,
+            ttl,
+            ttl_mc,
+            multicast_loop,
+            qos_dscp,
+            buffer_size,
         )?;
 
-        Ok(socket)
+        Self::wrap_socket_internal(element.as_ref(), socket)
     }
 
     fn wrap_socket_internal(

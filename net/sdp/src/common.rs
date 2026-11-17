@@ -166,6 +166,8 @@ pub(crate) enum SrcSocket<'a> {
         timeout: u64,
     },
     /// Share an already bound socket, which is not closed with the element.
+    /// The multicast group is owned by the other element sharing the socket,
+    /// so this element does not join it.
     Shared(&'a gio::Socket),
 }
 
@@ -199,7 +201,8 @@ pub(crate) fn make_udpsrc2(
         SrcSocket::Shared(socket) => {
             builder = builder
                 .property("socket", socket)
-                .property("close-socket", false);
+                .property("close-socket", false)
+                .property("auto-multicast", false);
             false
         }
     };

@@ -23,7 +23,7 @@
  *
  * Alternatively one can provide a custom socket to `udpsrc2` with the #GstUdpSrc2:socket
  * property, `udpsrc2` will then not allocate a socket itself but use the provided
- * one.
+ * one. All receive-side socket options are applied to it as well.
  *
  * The #GstUdpSrc2:caps property is mainly used to give a type to the UDP packet
  * so that they can be autoplugged in GStreamer pipelines. This is very useful
@@ -68,6 +68,20 @@
  * The socket will be closed when setting the element to READY by default. This
  * behaviour can be overridden with the #GstUdpSrc2:close-socket property, in which
  * case the application is responsible for closing the file descriptor.
+ *
+ * The socket can also be shared with a sending element such as `udpsink2` or
+ * `multiudpsink2`, for example to send RTCP from the port it is received on.
+ * Each element sharing a socket applies only the socket options of its own
+ * role: receive options are owned by `udpsrc2`, send options by the sending
+ * elements. Multicast group membership is per socket, so only one of the
+ * elements sharing a socket should have #GstUdpSrc2:auto-multicast enabled,
+ * otherwise joins conflict and leaving the group when one element is torn
+ * down also interrupts reception in the other.
+ *
+ * Multicast packets sent from the same host are also received by `udpsrc2`.
+ * Whether that happens is decided by the multicast loop option of the
+ * sending socket (#GstBaseUdpSink2:loop on the sink elements) for sockets
+ * on the same host.
  *
  * ## Examples
  * |[
@@ -124,7 +138,6 @@ struct Settings {
     source_filter: Vec<IpAddr>,
     source_filter_exclusive: bool,
     auto_multicast: bool,
-    loop_: bool,
     reuse: bool,
     batch_size: u32,
     allow_gro: bool,
@@ -148,7 +161,6 @@ impl Default for Settings {
             source_filter: Vec::new(),
             source_filter_exclusive: false,
             auto_multicast: true,
-            loop_: true,
             reuse: true,
             batch_size: 16,
             allow_gro: false,
@@ -289,13 +301,8 @@ impl ObjectImpl for UdpSrc {
                     .build(),
                 glib::ParamSpecBoolean::builder("auto-multicast")
                     .nick("Auto Multicast")
-                    .blurb("Automatically join/leave multicast groups")
+                    .blurb("Automatically join/leave multicast groups, only one element sharing a socket should do this")
                     .default_value(Settings::default().auto_multicast)
-                    .build(),
-                glib::ParamSpecBoolean::builder("loop")
-                    .nick("Loop")
-                    .blurb("Loop back multicast packets")
-                    .default_value(Settings::default().loop_)
                     .build(),
                 glib::ParamSpecBoolean::builder("reuse")
                     .nick("Reuse")
@@ -369,7 +376,7 @@ impl ObjectImpl for UdpSrc {
                     .build(),
                 glib::ParamSpecObject::builder::<gio::Socket>("socket")
                     .nick("Socket")
-                    .blurb("Socket to use for UDP reception. (None == allocate)")
+                    .blurb("Socket to use for UDP reception, can be shared with a sending element. (None == allocate)")
                     .build(),
                 glib::ParamSpecObject::builder::<gio::Socket>("used-socket")
                     .nick("Used Socket")
@@ -562,17 +569,6 @@ impl ObjectImpl for UdpSrc {
                 );
                 settings.auto_multicast = auto_multicast;
             }
-            "loop" => {
-                let mut settings = self.settings.lock().unwrap();
-                let loop_ = value.get().expect("type checked upstream");
-                gst::info!(
-                    CAT,
-                    imp = self,
-                    "Changing loop from {:?} to {loop_:?}",
-                    settings.loop_,
-                );
-                settings.loop_ = loop_;
-            }
             "reuse" => {
                 let mut settings = self.settings.lock().unwrap();
                 let reuse = value.get().expect("type checked upstream");
@@ -728,10 +724,6 @@ impl ObjectImpl for UdpSrc {
                 let settings = self.settings.lock().unwrap();
                 settings.auto_multicast.to_value()
             }
-            "loop" => {
-                let settings = self.settings.lock().unwrap();
-                settings.loop_.to_value()
-            }
             "reuse" => {
                 let settings = self.settings.lock().unwrap();
                 settings.reuse.to_value()
@@ -862,6 +854,8 @@ impl UdpSrc {
                 set_socket,
                 &settings.source_filter,
                 settings.source_filter_exclusive,
+                settings.buffer_size,
+                settings.multicast_iface.as_deref(),
                 settings.batch_size,
                 settings.allow_gro,
                 settings.mtu,
@@ -874,6 +868,22 @@ impl UdpSrc {
                     ["Failed to wrap application socket: {err:?}"]
                 )
             })?;
+
+            if settings.auto_multicast && settings.address.addr.is_multicast() {
+                socket
+                    .join_multicast(
+                        settings.address.addr,
+                        settings.multicast_iface.as_deref(),
+                        &settings.source_filter,
+                        settings.source_filter_exclusive,
+                    )
+                    .map_err(|err| {
+                        gst::error_msg!(
+                            gst::ResourceError::OpenRead,
+                            ["Failed to join multicast group: {err:?}"]
+                        )
+                    })?;
+            }
 
             let local_addr = socket.local_addr();
             gst::debug!(CAT, imp = self, "Application socket bound to {local_addr}");
@@ -890,7 +900,6 @@ impl UdpSrc {
                 &settings.source_filter,
                 settings.source_filter_exclusive,
                 settings.auto_multicast,
-                settings.loop_,
                 settings.buffer_size,
                 settings.batch_size,
                 settings.allow_gro,

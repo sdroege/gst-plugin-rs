@@ -552,12 +552,12 @@ impl ObjectImpl for BaseUdpSink {
                     .build(),
                 glib::ParamSpecObject::builder::<gio::Socket>("socket")
                     .nick("Socket")
-                    .blurb("Socket to use for UDP sending. (None == allocate)")
+                    .blurb("Socket to use for UDP sending, can be shared with a receiving element. (None == allocate)")
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecObject::builder::<gio::Socket>("socket-v6")
                     .nick("Socket IPv6")
-                    .blurb("Socket to use for UDPv6 sending. (None == allocate)")
+                    .blurb("Socket to use for UDPv6 sending, can be shared with a receiving element. (None == allocate)")
                     .mutable_ready()
                     .build(),
                 glib::ParamSpecBoolean::builder("close-socket")
@@ -577,7 +577,7 @@ impl ObjectImpl for BaseUdpSink {
                     .build(),
                 glib::ParamSpecBoolean::builder("auto-multicast")
                     .nick("Auto multicast")
-                    .blurb("Automatically join/leave multicast groups")
+                    .blurb("Automatically join/leave multicast groups, only one element sharing a socket should do this")
                     .default_value(Settings::default().auto_multicast)
                     .mutable_ready()
                     .build(),
@@ -608,7 +608,7 @@ impl ObjectImpl for BaseUdpSink {
                     .build(),
                 glib::ParamSpecBoolean::builder("loop")
                     .nick("Loop")
-                    .blurb("Multicast loopback")
+                    .blurb("Deliver multicast packets sent via the socket to local sockets")
                     .default_value(Settings::default().loop_)
                     .mutable_ready()
                     .build(),
@@ -976,7 +976,17 @@ impl BaseSinkImpl for BaseUdpSink {
         let mut used_socket_v6 = None;
 
         if let Some(ref socket) = settings.socket {
-            let socket = net::UdpSendSocket::wrap_socket(&*self.obj(), socket).map_err(|err| {
+            let socket = net::UdpSendSocket::wrap_socket(
+                &*self.obj(),
+                socket,
+                settings.multicast_iface.as_deref(),
+                settings.ttl,
+                settings.ttl_mc,
+                settings.loop_,
+                settings.qos_dscp,
+                settings.buffer_size,
+            )
+            .map_err(|err| {
                 gst::error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Failed to wrap application socket: {err:?}"]
@@ -1001,7 +1011,17 @@ impl BaseSinkImpl for BaseUdpSink {
                 ));
             }
 
-            let socket = net::UdpSendSocket::wrap_socket(&*self.obj(), socket).map_err(|err| {
+            let socket = net::UdpSendSocket::wrap_socket(
+                &*self.obj(),
+                socket,
+                settings.multicast_iface.as_deref(),
+                settings.ttl,
+                settings.ttl_mc,
+                settings.loop_,
+                settings.qos_dscp,
+                settings.buffer_size,
+            )
+            .map_err(|err| {
                 gst::error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Failed to wrap application socket: {err:?}"]
