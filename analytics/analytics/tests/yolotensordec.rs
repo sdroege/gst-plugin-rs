@@ -21,9 +21,22 @@ const OBB_OUT_NORMALIZED: &str = "yolo-v8-obb-out-normalized";
 const SEG_DETECTIONS: &str = "yolo-v8-segmentation-out-detections";
 const SEG_DETECTIONS_NORMALIZED: &str = "yolo-v8-segmentation-out-detections-normalized";
 const SEG_PROTOS: &str = "yolo-v8-segmentation-out-protos";
+const YOLOX_OUT: &str = "yolox-out";
+const YOLO26_OUT: &str = "yolo-26-end2end-out";
+const YOLO26OBB_OUT: &str = "yolo-26-obb-end2end-out";
+const YOLO26SEG_DETECTIONS: &str = "yolo-26-segmentation-end2end-out-detections";
+const YOLO26SEG_PROTOS: &str = "yolo-26-segmentation-end2end-out-protos";
 
 const DIMS2: &[i32] = &[1, i32::MAX, i32::MAX];
 const DIMS3: &[i32] = &[1, i32::MAX, i32::MAX, i32::MAX];
+// The Yolo26 and Yolo26Obb sink templates pin the number of fields to 6 and 7.
+const DIMS6: &[i32] = &[1, i32::MAX, 6];
+const DIMS7: &[i32] = &[1, i32::MAX, 7];
+
+const COL: &str = "col-major";
+const ROW: &str = "row-major";
+const COL_ORDER: gst_analytics::TensorDimOrder = gst_analytics::TensorDimOrder::ColMajor;
+const ROW_ORDER: gst_analytics::TensorDimOrder = gst_analytics::TensorDimOrder::RowMajor;
 
 fn init() {
     use std::sync::Once;
@@ -106,15 +119,39 @@ fn detections_tensor(id: &str, candidates: &[Candidate]) -> gst_analytics::Tenso
     )
 }
 
-// Column-major [1, num_masks, w, h] float32 protos/logits tensor, values in
-// row-major (y * w + x) order per mask.
-fn logits_tensor(num_masks: usize, w: usize, h: usize, values: &[f32]) -> gst_analytics::Tensor {
-    let bytes: Vec<u8> = values.iter().flat_map(|v| v.to_ne_bytes()).collect();
+// Row-major [1, n_candidates, fields] float32 tensor, one row per candidate
+// (the interleaved layout of the YoloX and end2end Yolo26 models).
+fn rows_tensor(id: &str, rows: &[&[f32]]) -> gst_analytics::Tensor {
+    let bytes: Vec<u8> = rows
+        .iter()
+        .flat_map(|row| row.iter())
+        .flat_map(|v| v.to_ne_bytes())
+        .collect();
     gst_analytics::Tensor::new_simple(
-        glib::Quark::from_str(SEG_PROTOS),
+        glib::Quark::from_str(id),
         gst_analytics::TensorDataType::Float32,
         gst::Buffer::from_slice(bytes),
-        gst_analytics::TensorDimOrder::ColMajor,
+        gst_analytics::TensorDimOrder::RowMajor,
+        &[1, rows.len(), rows[0].len()],
+    )
+}
+
+// Column-major [1, num_masks, w, h] float32 protos/logits tensor, values in
+// row-major (y * w + x) order per mask.
+fn logits_tensor(
+    id: &str,
+    order: gst_analytics::TensorDimOrder,
+    num_masks: usize,
+    w: usize,
+    h: usize,
+    values: &[f32],
+) -> gst_analytics::Tensor {
+    let bytes: Vec<u8> = values.iter().flat_map(|v| v.to_ne_bytes()).collect();
+    gst_analytics::Tensor::new_simple(
+        glib::Quark::from_str(id),
+        gst_analytics::TensorDataType::Float32,
+        gst::Buffer::from_slice(bytes),
+        order,
         &[1, num_masks, w, h],
     )
 }
@@ -132,21 +169,21 @@ fn input_buffer(tensors: Vec<gst_analytics::Tensor>) -> gst::Buffer {
     buffer
 }
 
-fn strided_tensor(id: &str, dims: &[i32]) -> gst::Caps {
+fn strided_tensor(id: &str, dims: &[i32], order: &str) -> gst::Caps {
     gst::Caps::builder("tensor/strided")
         .field("tensor-id", id)
         .field(
             "dims",
             gst::Array::from_values(dims.iter().map(|d| d.to_send_value())),
         )
-        .field("dims-order", "col-major")
+        .field("dims-order", order)
         .field("type", "float32")
         .build()
 }
 
 // The tensor group is required in the sink caps, but the tensor in the buffer
 // meta is looked up by id, so permissive dims suffice.
-fn caps(width: u32, height: u32, group: &str, tensors: &[(&str, &[i32])]) -> gst::Caps {
+fn caps(width: u32, height: u32, group: &str, tensors: &[(&str, &[i32], &str)]) -> gst::Caps {
     init();
     gst_video::VideoCapsBuilder::new()
         .format(gst_video::VideoFormat::Rgba)
@@ -158,7 +195,11 @@ fn caps(width: u32, height: u32, group: &str, tensors: &[(&str, &[i32])]) -> gst
             gst::Structure::builder("tensorgroups")
                 .field(
                     group,
-                    gst::UniqueList::new(tensors.iter().map(|(id, dims)| strided_tensor(id, dims))),
+                    gst::UniqueList::new(
+                        tensors
+                            .iter()
+                            .map(|(id, dims, order)| strided_tensor(id, dims, order)),
+                    ),
                 )
                 .build(),
         )
@@ -166,11 +207,11 @@ fn caps(width: u32, height: u32, group: &str, tensors: &[(&str, &[i32])]) -> gst
 }
 
 fn v8_caps(width: u32, height: u32) -> gst::Caps {
-    caps(width, height, V8_OUT, &[(V8_OUT, DIMS2)])
+    caps(width, height, V8_OUT, &[(V8_OUT, DIMS2, COL)])
 }
 
 fn obb_caps(width: u32, height: u32) -> gst::Caps {
-    caps(width, height, OBB_OUT, &[(OBB_OUT, DIMS2)])
+    caps(width, height, OBB_OUT, &[(OBB_OUT, DIMS2, COL)])
 }
 
 fn seg_caps(width: u32, height: u32) -> gst::Caps {
@@ -178,7 +219,31 @@ fn seg_caps(width: u32, height: u32) -> gst::Caps {
         width,
         height,
         "yolo-v8-segmentation-out",
-        &[(SEG_DETECTIONS, DIMS2), (SEG_PROTOS, DIMS3)],
+        &[(SEG_DETECTIONS, DIMS2, COL), (SEG_PROTOS, DIMS3, COL)],
+    )
+}
+
+fn x_caps(width: u32, height: u32) -> gst::Caps {
+    caps(width, height, YOLOX_OUT, &[(YOLOX_OUT, DIMS2, ROW)])
+}
+
+fn y26_caps(width: u32, height: u32) -> gst::Caps {
+    caps(width, height, YOLO26_OUT, &[(YOLO26_OUT, DIMS6, ROW)])
+}
+
+fn y26obb_caps(width: u32, height: u32) -> gst::Caps {
+    caps(width, height, YOLO26OBB_OUT, &[(YOLO26OBB_OUT, DIMS7, ROW)])
+}
+
+fn y26seg_caps(width: u32, height: u32) -> gst::Caps {
+    caps(
+        width,
+        height,
+        "yolo-26-segmentation-end2end-out",
+        &[
+            (YOLO26SEG_DETECTIONS, DIMS2, ROW),
+            (YOLO26SEG_PROTOS, DIMS3, ROW),
+        ],
     )
 }
 
@@ -283,6 +348,23 @@ struct Mask {
     w: u32,
     h: u32,
     pixels: Vec<u8>,
+}
+
+// One object detection and one segmentation relating to each other.
+#[track_caller]
+fn assert_od_seg_related(rmeta: &gst::MetaRef<'_, gst_analytics::AnalyticsRelationMeta>) {
+    let od_ids: Vec<u32> = rmeta
+        .iter::<gst_analytics::AnalyticsODMtd>()
+        .map(|od| od.id())
+        .collect();
+    let seg_ids: Vec<u32> = rmeta
+        .iter::<gst_analytics::AnalyticsSegmentationMtd>()
+        .map(|seg| seg.id())
+        .collect();
+    assert_eq!(od_ids.len(), 1);
+    assert_eq!(seg_ids.len(), 1);
+    assert!(rmeta.exist(od_ids[0], seg_ids[0], 1, gst_analytics::RelTypes::RELATE_TO));
+    assert!(rmeta.exist(seg_ids[0], od_ids[0], 1, gst_analytics::RelTypes::RELATE_TO));
 }
 
 // The single GRAY8 mask of a decoded buffer. Its rows are padded to the stride
@@ -652,22 +734,11 @@ fn seg_basic_decode() {
     ] {
         let outbuf = Dec::new("yolov8segtensordec", &seg_caps(4, 4)).push(vec![
             detections_tensor(id, &[cand]),
-            logits_tensor(1, 4, 4, &[1.0; 16]),
+            logits_tensor(SEG_PROTOS, COL_ORDER, 1, 4, 4, &[1.0; 16]),
         ]);
 
         let rmeta = relation(&outbuf).expect("relation meta");
-        let od_ids: Vec<u32> = rmeta
-            .iter::<gst_analytics::AnalyticsODMtd>()
-            .map(|od| od.id())
-            .collect();
-        let seg_ids: Vec<u32> = rmeta
-            .iter::<gst_analytics::AnalyticsSegmentationMtd>()
-            .map(|seg| seg.id())
-            .collect();
-        assert_eq!(od_ids.len(), 1);
-        assert_eq!(seg_ids.len(), 1);
-        assert!(rmeta.exist(od_ids[0], seg_ids[0], 1, gst_analytics::RelTypes::RELATE_TO));
-        assert!(rmeta.exist(seg_ids[0], od_ids[0], 1, gst_analytics::RelTypes::RELATE_TO));
+        assert_od_seg_related(&rmeta);
 
         let mask = seg_mask(&outbuf);
         assert_eq!((mask.x, mask.y, mask.w, mask.h), (1, 1, 2, 2));
@@ -686,7 +757,7 @@ fn seg_mask_pixel_values() {
             SEG_DETECTIONS,
             &[candidate_extras(1.0, 1.0, 2.0, 2.0, &[0.99], &[2.0])],
         ),
-        logits_tensor(1, 4, 4, &logits),
+        logits_tensor(SEG_PROTOS, COL_ORDER, 1, 4, 4, &logits),
     ]);
 
     let mask = seg_mask(&outbuf);
@@ -722,7 +793,7 @@ fn seg_mask_roi() {
 
         let outbuf = Dec::new("yolov8segtensordec", &seg_caps(width, height)).push(vec![
             detections_tensor(SEG_DETECTIONS, &[cand]),
-            logits_tensor(1, 8, 8, &logits),
+            logits_tensor(SEG_PROTOS, COL_ORDER, 1, 8, 8, &logits),
         ]);
 
         let mask = seg_mask(&outbuf);
@@ -746,7 +817,85 @@ fn seg_dims_too_small() {
             SEG_DETECTIONS,
             &[candidate_extras(2.0, 2.0, 2.0, 2.0, &[0.95], &[2.0])],
         ),
-        logits_tensor(2, 2, 2, &[1.0; 8]),
+        logits_tensor(SEG_PROTOS, COL_ORDER, 2, 2, 2, &[1.0; 8]),
     ]);
     assert!(relation(&outbuf).is_none());
+}
+
+// ---------------------------------------------------------------------------
+// yoloxtensordec
+// ---------------------------------------------------------------------------
+
+#[test]
+fn yolox_basic_decode() {
+    // Interleaved rows of absolute pixel values:
+    // [x, y, w, h, box confidence, class confidences..], the final confidence
+    // being the product of box and class confidence.
+    let ods = Dec::new("yoloxtensordec", &x_caps(640, 480)).push_ods(vec![rows_tensor(
+        YOLOX_OUT,
+        &[&[320.0, 240.0, 100.0, 50.0, 0.9, 0.8]],
+    )]);
+    assert_eq!(ods.len(), 1);
+    assert_od(&ods[0], (270, 215, 100, 50, 0.72));
+    assert_eq!(ods[0].obj_type, Some(quark("CLASS-0")));
+}
+
+// ---------------------------------------------------------------------------
+// yolo26tensordec2
+// ---------------------------------------------------------------------------
+
+#[test]
+fn yolo26_basic_decode() {
+    // End2end model, NMS already applied by it: interleaved rows of absolute
+    // pixel corners [x1, y1, x2, y2, score, class].
+    let ods = Dec::new("yolo26tensordec2", &y26_caps(640, 480)).push_ods(vec![rows_tensor(
+        YOLO26_OUT,
+        &[&[200.0, 160.0, 300.0, 240.0, 0.9, 0.0]],
+    )]);
+    assert_eq!(ods.len(), 1);
+    assert_od(&ods[0], (200, 160, 100, 80, 0.9));
+    assert_eq!(ods[0].obj_type, Some(quark("CLASS-0")));
+}
+
+// ---------------------------------------------------------------------------
+// yolo26obbtensordec
+// ---------------------------------------------------------------------------
+
+#[test]
+fn yolo26obb_basic_decode() {
+    // End2end model, NMS already applied by it: interleaved rows of absolute
+    // pixel values [x, y, w, h, score, class, rotation].
+    let ods = Dec::new("yolo26obbtensordec", &y26obb_caps(300, 300)).push_ods(vec![rows_tensor(
+        YOLO26OBB_OUT,
+        &[&[150.0, 120.0, 40.0, 20.0, 0.9, 0.0, 0.5]],
+    )]);
+    assert_eq!(ods.len(), 1);
+    assert!((ods[0].conf - 0.9).abs() <= EPS);
+
+    let (x, y, w, h, rot) = ods[0].o.expect("oriented location");
+    assert_eq!((x, y, w, h), (130, 110, 40, 20));
+    assert!((rot - 0.5).abs() <= EPS);
+}
+
+// ---------------------------------------------------------------------------
+// yolo26segtensordec
+// ---------------------------------------------------------------------------
+
+#[test]
+fn yolo26seg_basic_decode() {
+    // End2end model: interleaved rows of absolute pixel values
+    // [x1, y1, x2, y2, score, class, mask weights..].
+    let outbuf = Dec::new("yolo26segtensordec", &y26seg_caps(4, 4)).push(vec![
+        rows_tensor(
+            YOLO26SEG_DETECTIONS,
+            &[&[1.0, 1.0, 3.0, 3.0, 0.95, 0.0, 2.0]],
+        ),
+        logits_tensor(YOLO26SEG_PROTOS, ROW_ORDER, 1, 4, 4, &[1.0; 16]),
+    ]);
+
+    let rmeta = relation(&outbuf).expect("relation meta");
+    assert_od_seg_related(&rmeta);
+
+    let mask = seg_mask(&outbuf);
+    assert_eq!((mask.x, mask.y, mask.w, mask.h), (1, 1, 2, 2));
 }
