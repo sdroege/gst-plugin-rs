@@ -434,6 +434,14 @@ impl RtpBaseAudioPay2 {
 
         let (min_packet_size, max_packet_size, psize_multiple) =
             self.calculate_packet_sizes(settings, state, clock_rate, bits_per_frame);
+        if max_packet_size < psize_multiple {
+            gst::error!(
+                CAT,
+                imp = self,
+                "Impossible configuration, maximum packet size of {max_packet_size} is less than the packet size multiple {psize_multiple}."
+            );
+            return Err(gst::FlowError::Error);
+        }
 
         gst::trace!(
             CAT,
@@ -448,6 +456,7 @@ impl RtpBaseAudioPay2 {
                 packet_size -= packet_size % psize_multiple;
                 packet_size
             };
+            assert_ne!(packet_size, 0);
 
             let num_samples = (packet_size as u32)
                 .mul_div_ceil(8, bits_per_frame as u32)
