@@ -502,8 +502,9 @@ fn depay_flushes_leftover_on_byte_aligned_next_packet() {
     assert_eq!(buffers[0].0, vec![0x00, 0x01, 0x00, 0x16, 0xA0, 0xCD]);
 }
 
-/// The I flag describes the whole stream: I=0 marks the output inter
-/// coded, I=1 intra coded.
+/// The I flag describes the whole stream: only I=1 guarantees intra coded
+/// pictures. An I=0 stream may still contain intra pictures, so its output is
+/// flagged as a delta unit.
 #[test]
 fn depay_sets_delta_flag_from_i_flag() {
     let frame = qcif_frame(&[(1, 10, 2)]);
@@ -886,6 +887,22 @@ fn depay_requires_picture_start_after_skipped_picture() {
 
     let buffers = run_depay_only(&[(&tail, true, 0, false), (&no_psc, true, 1000, false)]).unwrap();
     assert!(buffers.is_empty());
+}
+
+/// The intra flag of the picture is taken from its first packet.
+#[test]
+fn depay_uses_intra_flag_of_first_packet() {
+    let frame = qcif_frame(&[(1, 10, 2)]);
+    let split = 8;
+
+    let mut p1 = h261_header(0, 0, true).to_vec();
+    p1.extend_from_slice(&frame[..split]);
+    let mut p2 = h261_header(0, 0, false).to_vec();
+    p2.extend_from_slice(&frame[split..]);
+
+    let buffers = run_depay_only(&[(&p1, false, 0, false), (&p2, true, 0, false)]).unwrap();
+    assert_eq!(buffers.len(), 1);
+    assert!(!buffers[0].1.contains(gst::BufferFlags::DELTA_UNIT));
 }
 
 /// A discontinuity drops the partially assembled picture.

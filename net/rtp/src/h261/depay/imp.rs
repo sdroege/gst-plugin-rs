@@ -60,6 +60,8 @@ struct PendingFrame {
     /// Trailing bits of the last byte of the last packet, to be merged with
     /// the first byte of the next packet.
     leftover: Option<u8>,
+    /// `I` flag of the packet that started the picture.
+    intra_only: bool,
 }
 
 #[derive(Default)]
@@ -236,6 +238,7 @@ impl RtpBaseDepay2Impl for RtpH261Depay {
         let pending_frame = state.pending_frame.get_or_insert_with(|| PendingFrame {
             start_ext_seqnum: packet.ext_seqnum(),
             ext_timestamp: packet.ext_timestamp(),
+            intra_only,
             ..Default::default()
         });
 
@@ -286,7 +289,7 @@ impl RtpBaseDepay2Impl for RtpH261Depay {
         let mut buffer = gst::Buffer::from_mut_slice(pending_frame.data);
         // A fresh buffer carries no flags, so only inter pictures are
         // flagged.
-        if !intra_only {
+        if !pending_frame.intra_only {
             buffer
                 .get_mut()
                 .unwrap()
