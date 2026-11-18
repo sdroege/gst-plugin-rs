@@ -1,0 +1,46 @@
+[package]
+name = "gst-plugin-debugutils"
+version.workspace = true
+authors = ["Xavier Claessens <xclaessens@netflix.com>"]
+license = "MPL-2.0"
+description = "GStreamer Rust Debug Utilities Plugin"
+repository.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+gst = { workspace = true, features = ["v1_28"] }
+gst-allocators = { workspace = true, features = ["v1_28"] }
+gst-base = { workspace = true, features = ["v1_28"] }
+gst-video = { workspace = true, features = ["v1_28"] }
+
+[dev-dependencies]
+gst-check = { workspace = true, features = ["v1_28"] }
+
+[lib]
+name = "gstrsdebugutils"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper.workspace = true
+
+[features]
+static = []
+capi = []
+doc = []
+v1_30 = ["gst/v1_30"]
+
+[package.metadata.capi]
+min_version = "0.9.21"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+import_library = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gstreamer-video-1.0, gstreamer-allocators-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

@@ -156,6 +156,7 @@ plugins = {
     'library': 'libgstdebugseimetainserter',
     'features': ['gst-video/v1_22'],
   },
+  'debugutils': {}, # debugutils is Linux only, see below
   'togglerecord': { }, # togglerecord can have gtk4 examples, see below
 
   'tracers': {'library': 'libgstrstracers'},
@@ -283,6 +284,12 @@ if analytics_option.allowed()
   deps += [['gstreamer-analytics-1.0', 'gst-plugins-bad', 'gstanalytics_dep', 'gstanalytics', analytics_option]]
 endif
 
+debugutils_option = debugutils_option.require(host_system == 'linux',
+  error_message: 'debugutils plugin requires Linux')
+if debugutils_option.allowed()
+  deps += [['gstreamer-allocators-1.0', 'gst-plugins-base', 'allocators_dep', 'gstallocators', debugutils_option]]
+endif
+
 if colorlut_option.allowed() and host_system == 'windows'
   deps += [['gstreamer-d3d12-1.0', 'gst-plugins-bad', 'gstd3d12_dep', 'gstd3d12', colorlut_option]]
 endif
@@ -313,6 +320,13 @@ if analytics_option.allowed()
       'analytics': plugins_analytics
     }
   endif
+endif
+
+if debugutils_option.allowed()
+  plugins += {'debugutils': {
+    'library': 'libgstrsdebugutils',
+    'gst-version': '>=1.28',
+  }}
 endif
 
 # colorlut requires d3d12 on Windows

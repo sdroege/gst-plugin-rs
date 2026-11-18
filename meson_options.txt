@@ -92,6 +92,7 @@ option('overlaycompositor', type: 'feature', value: 'auto', description: 'Build 
 option('png', type: 'feature', value: 'auto', description: 'Build png plugin')
 option('rav1e', type: 'feature', value: 'auto', description: 'Build rav1e plugin')
 option('debugseimetainserter', type: 'feature', value: 'auto', description: 'Build seidebugmeta plugin')
+option('debugutils', type: 'feature', value: 'auto', description: 'Build debugutils plugin')
 option('skia', type: 'feature', value: 'auto', description: 'Build skia plugin')
 option('videofx', type: 'feature', value: 'auto', description: 'Build videofx plugin')
 option('viuer', type: 'feature', value: 'auto', description: 'Build viuer terminal video sink plugin')

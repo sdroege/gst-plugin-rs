@@ -5242,6 +5242,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "gst-plugin-debugutils"
+version = "0.16.0-alpha"
+dependencies = [
+ "gst-plugin-version-helper",
+ "gstreamer",
+ "gstreamer-allocators",
+ "gstreamer-base",
+ "gstreamer-check",
+ "gstreamer-video",
+]
+
+[[package]]
 name = "gst-plugin-deepgram"
 version = "0.16.0-alpha"
 dependencies = [

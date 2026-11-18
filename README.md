@@ -395,6 +395,10 @@ You will find the following plugins in this repository:
     - `debugseimetainserter`: Element to insert SEI metadata into a video stream
       for debugging purposes.
 
+    - `debugutils`:
+      - `udmabufupload`: Copies raw video into udmabuf memory for debugging
+        DMABuf code paths.
+
     - `fallbackswitch`:
       - `fallbacksrc`: Element similar to `urisourcebin` that allows
         configuring a fallback audio/video if there are problems with the main

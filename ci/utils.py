@@ -16,6 +16,7 @@ RS_PREFIXED = [
     'audiofx',
     'audioparsers',
     'closedcaption',
+    'debugutils',
     'file',
     'onvif',
     'webp',
