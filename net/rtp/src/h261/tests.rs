@@ -860,16 +860,32 @@ fn depay_drops_short_payload() {
 }
 
 /// A timestamp change before picture completion drops the incomplete
-/// picture; accumulation restarts with the new picture's packets.
+/// picture; accumulation restarts only at the next picture start code.
 #[test]
 fn depay_drops_incomplete_picture_on_timestamp_change() {
     let mut p1 = h261_header(0, 0, false).to_vec();
     p1.extend_from_slice(&[0x00, 0x01, 0x00, 0x16]);
+    // New timestamp, but no picture start code: the packet cannot start a
+    // picture and is dropped.
     let mut p2 = h261_header(0, 0, false).to_vec();
     p2.extend_from_slice(&[0xAB, 0xCD]);
     let buffers = run_depay_only(&[(&p1, false, 0, false), (&p2, true, 1000, false)]).unwrap();
-    assert_eq!(buffers.len(), 1);
-    assert_eq!(buffers[0].0, vec![0xAB, 0xCD]);
+    assert!(buffers.is_empty());
+}
+
+/// A marker packet of a skipped picture does not let the next packet start a
+/// picture without a picture start code.
+#[test]
+fn depay_requires_picture_start_after_skipped_picture() {
+    // Tail of a picture whose start was lost, marked.
+    let mut tail = h261_header(0, 0, false).to_vec();
+    tail.extend_from_slice(&[0xAB, 0xCD]);
+    // A picture that also does not start with a picture start code.
+    let mut no_psc = h261_header(0, 0, false).to_vec();
+    no_psc.extend_from_slice(&[0x11, 0x22]);
+
+    let buffers = run_depay_only(&[(&tail, true, 0, false), (&no_psc, true, 1000, false)]).unwrap();
+    assert!(buffers.is_empty());
 }
 
 /// A discontinuity drops the partially assembled picture.

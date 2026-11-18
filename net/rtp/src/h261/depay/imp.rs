@@ -64,10 +64,16 @@ struct PendingFrame {
 
 #[derive(Default)]
 struct State {
-    /// Whether picture accumulation has started (picture start code seen or
-    /// a marker packet aligned us to the next picture).
-    started: bool,
     pending_frame: Option<PendingFrame>,
+}
+
+/// Whether the data starts with a picture start code at bit offset `sbit`.
+fn starts_with_picture_start_code(data: &[u8], sbit: u32) -> bool {
+    // Detection needs four data bytes; a first fragment carrying one to
+    // three data bytes is not recognised as a picture start and the
+    // picture is dropped.
+    data.len() >= 4
+        && (u32::from_be_bytes([data[0], data[1], data[2], data[3]]) << sbit) >> 12 == 0x10
 }
 
 #[derive(Default)]
@@ -199,56 +205,39 @@ impl RtpBaseDepay2Impl for RtpH261Depay {
         let intra_only = payload[0] & 0x02 != 0;
         let data = &payload[PAYLOAD_HEADER_LEN..];
 
-        if !state.started {
-            // Accumulation starts at a picture start code: the 20-bit
-            // pattern 0000 0000 0000 0001 0000 at the first data bit.
-            // shortcut: detection needs 4 data bytes; a first fragment
-            // carrying 1-3 data bytes is not recognised as a picture
-            // start and the picture is dropped.
-            if data.len() >= 4 {
-                let bits = u32::from_be_bytes([data[0], data[1], data[2], data[3]]) << sbit;
-                if bits >> 12 == 0x10 {
-                    state.started = true;
-                }
-            }
-
-            if !state.started {
-                if packet.marker_bit() {
-                    // The picture this packet ends was skipped; the next
-                    // packet starts a new one.
-                    state.started = true;
-                }
-                gst::debug!(
-                    CAT,
-                    imp = self,
-                    "No picture start code yet, dropping packet"
-                );
-                self.obj().drop_packet(packet);
-                return Ok(gst::FlowSuccess::Ok);
-            }
-        }
-
-        let pending_frame = state.pending_frame.get_or_insert(PendingFrame {
-            start_ext_seqnum: packet.ext_seqnum(),
-            ext_timestamp: packet.ext_timestamp(),
-            ..Default::default()
-        });
-
         // A packet of a new picture may have arrived after the marker packet
         // of the pending one was lost: the pending picture will never
-        // complete.
-        if pending_frame.ext_timestamp != packet.ext_timestamp() {
+        // complete. Drop it and require the current packet to start a new
+        // picture.
+        if state
+            .pending_frame
+            .as_ref()
+            .is_some_and(|frame| frame.ext_timestamp != packet.ext_timestamp())
+        {
             gst::warning!(
                 CAT,
                 imp = self,
                 "RTP timestamp changed before picture completion, dropping incomplete picture"
             );
-            *pending_frame = PendingFrame {
-                start_ext_seqnum: packet.ext_seqnum(),
-                ext_timestamp: packet.ext_timestamp(),
-                ..Default::default()
-            };
+            state.pending_frame = None;
         }
+
+        // Accumulation only starts at a picture start code.
+        if state.pending_frame.is_none() && !starts_with_picture_start_code(data, sbit) {
+            gst::debug!(
+                CAT,
+                imp = self,
+                "No picture start code yet, dropping packet"
+            );
+            self.obj().drop_packet(packet);
+            return Ok(gst::FlowSuccess::Ok);
+        }
+
+        let pending_frame = state.pending_frame.get_or_insert_with(|| PendingFrame {
+            start_ext_seqnum: packet.ext_seqnum(),
+            ext_timestamp: packet.ext_timestamp(),
+            ..Default::default()
+        });
 
         // Splice the packet into the picture: the first byte continues the
         // previous packet's last byte (SBIT unused leading bits, EBIT
@@ -293,7 +282,6 @@ impl RtpBaseDepay2Impl for RtpH261Depay {
             .pending_frame
             .take()
             .expect("pending frame was just inserted");
-        state.started = false;
 
         let mut buffer = gst::Buffer::from_mut_slice(pending_frame.data);
         // A fresh buffer carries no flags, so only inter pictures are
