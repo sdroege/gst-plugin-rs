@@ -486,6 +486,22 @@ fn depay_single_data_byte_packet() {
     assert_eq!(buffers[0].0, vec![0x00, 0x01, 0x00, 0x16, 0xAC, 0x99]);
 }
 
+/// A partial byte at the end of a packet is complete when the next packet
+/// starts on a byte boundary.
+#[test]
+fn depay_flushes_leftover_on_byte_aligned_next_packet() {
+    // Packet 1 ends with four unused low bits; 0xA is valid data.
+    let mut p1 = h261_header(0, 4, false).to_vec();
+    p1.extend_from_slice(&[0x00, 0x01, 0x00, 0x16, 0xAB]);
+    // Packet 2 starts on a byte boundary.
+    let mut p2 = h261_header(0, 0, false).to_vec();
+    p2.extend_from_slice(&[0xCD]);
+
+    let buffers = run_depay_only(&[(&p1, false, 0, false), (&p2, true, 0, false)]).unwrap();
+    assert_eq!(buffers.len(), 1);
+    assert_eq!(buffers[0].0, vec![0x00, 0x01, 0x00, 0x16, 0xA0, 0xCD]);
+}
+
 /// The I flag describes the whole stream: I=0 marks the output inter
 /// coded, I=1 intra coded.
 #[test]

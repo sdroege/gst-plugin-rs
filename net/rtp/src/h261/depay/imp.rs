@@ -260,9 +260,11 @@ impl RtpBaseDepay2Impl for RtpH261Depay {
                 first |= leftover;
             }
         } else {
-            // A packet that does not continue the previous byte (lost or
-            // reordered packet) invalidates the pending carry-over.
-            pending_frame.leftover = None;
+            // The previous packet ended on a byte boundary: its trailing
+            // byte is complete and the next packet must not overwrite it.
+            if let Some(leftover) = pending_frame.leftover.take() {
+                pending_frame.data.push(leftover);
+            }
         }
         pending_frame.data.push(first);
         if ebit == 0 {
