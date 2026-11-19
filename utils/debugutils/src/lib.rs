@@ -18,6 +18,8 @@
  */
 use gst::glib;
 
+mod debugseimetainserter;
+mod streamgrouper;
 #[cfg(target_os = "linux")]
 mod udmabufupload;
 
@@ -25,10 +27,12 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "v1_30")]
     plugin.set_static_features_flag();
 
+    debugseimetainserter::register(plugin)?;
+    streamgrouper::register(plugin)?;
+
     #[cfg(target_os = "linux")]
     udmabufupload::register(plugin)?;
 
-    let _ = plugin;
     Ok(())
 }
 

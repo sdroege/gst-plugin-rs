@@ -1,7 +1,11 @@
 [package]
 name = "gst-plugin-debugutils"
 version.workspace = true
-authors = ["Xavier Claessens <xclaessens@netflix.com>"]
+authors = [
+    "Xavier Claessens <xclaessens@netflix.com>",
+    "Thibault Saunier <tsaunier@igalia.com>",
+    "Alicia Boya García <aboya@igalia.com>",
+]
 license = "MPL-2.0"
 description = "GStreamer Rust Debug Utilities Plugin"
 repository.workspace = true
@@ -13,6 +17,7 @@ gst = { workspace = true, features = ["v1_28"] }
 gst-allocators = { workspace = true, features = ["v1_28"] }
 gst-base = { workspace = true, features = ["v1_28"] }
 gst-video = { workspace = true, features = ["v1_28"] }
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 gst-check = { workspace = true, features = ["v1_28"] }

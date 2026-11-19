@@ -3705,70 +3705,6 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
-    "debugseimetainserter": {
-        "description": "GStreamer Debug SEI Meta Inserter Plugin",
-        "elements": {
-            "debugseimetainserter": {
-                "author": "Thibault Saunier <tsaunier@igalia.com>",
-                "description": "Adds GstVideoSEIUserDataUnregisteredMeta to video buffers for testing",
-                "hierarchy": [
-                    "GstDebugSeiMetaInserter",
-                    "GstBaseTransform",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Debug/Video",
-                "pad-templates": {
-                    "sink": {
-                        "caps": "video/x-raw:\nvideo/x-h264:\nvideo/x-h265:\nvideo/x-h266:\n",
-                        "direction": "sink",
-                        "presence": "always"
-                    },
-                    "src": {
-                        "caps": "video/x-raw:\nvideo/x-h264:\nvideo/x-h265:\nvideo/x-h266:\n",
-                        "direction": "src",
-                        "presence": "always"
-                    }
-                },
-                "properties": {
-                    "data": {
-                        "blurb": "Payload data to insert as SEI user data",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "NULL",
-                        "mutable": "null",
-                        "readable": true,
-                        "type": "gchararray",
-                        "writable": true
-                    },
-                    "uuid": {
-                        "blurb": "16-byte UUID as hex string (e.g., 12345678-1234-1234-1234-123456789abc)",
-                        "conditionally-available": false,
-                        "construct": false,
-                        "construct-only": false,
-                        "controllable": false,
-                        "default": "deb95e10-deb9-5e10-deb9-5e10deb95e10",
-                        "mutable": "null",
-                        "readable": true,
-                        "type": "gchararray",
-                        "writable": true
-                    }
-                },
-                "rank": "none"
-            }
-        },
-        "filename": "gstdebugseimetainserter",
-        "license": "MPL",
-        "other-types": {},
-        "package": "gst-plugin-debugseimetainserter",
-        "source": "gst-plugin-debugseimetainserter",
-        "tracers": {},
-        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-    },
     "deepgram": {
         "description": "GStreamer Deepgram plugin",
         "elements": {
@@ -15202,6 +15138,83 @@
     "rsdebugutils": {
         "description": "GStreamer Rust Debug Utilities Plugin",
         "elements": {
+            "debugseimetainserter": {
+                "author": "Thibault Saunier <tsaunier@igalia.com>",
+                "description": "Adds GstVideoSEIUserDataUnregisteredMeta to video buffers for testing",
+                "hierarchy": [
+                    "GstDebugSeiMetaInserter",
+                    "GstBaseTransform",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Debug/Video",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-raw:\nvideo/x-h264:\nvideo/x-h265:\nvideo/x-h266:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\nvideo/x-h264:\nvideo/x-h265:\nvideo/x-h266:\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "data": {
+                        "blurb": "Payload data to insert as SEI user data",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "uuid": {
+                        "blurb": "16-byte UUID as hex string (e.g., 12345678-1234-1234-1234-123456789abc)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "deb95e10-deb9-5e10-deb9-5e10deb95e10",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
+            "streamgrouper": {
+                "author": "Alicia Boya García <aboya@igalia.com>",
+                "description": "Modifies all input streams to use the same group-id",
+                "hierarchy": [
+                    "GstStreamGrouper",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Generic",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "ANY",
+                        "direction": "sink",
+                        "presence": "request"
+                    },
+                    "src_%%u": {
+                        "caps": "ANY",
+                        "direction": "src",
+                        "presence": "sometimes"
+                    }
+                },
+                "rank": "none"
+            },
             "udmabufupload": {
                 "author": "Xavier Claessens <xclaessens@netflix.com>",
                 "description": "Copies raw video frames into udmabuf memory",
@@ -24617,43 +24630,6 @@
         },
         "package": "gst-plugin-spotify",
         "source": "gst-plugin-spotify",
-        "tracers": {},
-        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-    },
-    "streamgrouper": {
-        "description": "Filter element that makes all the incoming streams share a group-id",
-        "elements": {
-            "streamgrouper": {
-                "author": "Alicia Boya García <aboya@igalia.com>",
-                "description": "Modifies all input streams to use the same group-id",
-                "hierarchy": [
-                    "GstStreamGrouper",
-                    "GstElement",
-                    "GstObject",
-                    "GInitiallyUnowned",
-                    "GObject"
-                ],
-                "klass": "Generic",
-                "pad-templates": {
-                    "sink_%%u": {
-                        "caps": "ANY",
-                        "direction": "sink",
-                        "presence": "request"
-                    },
-                    "src_%%u": {
-                        "caps": "ANY",
-                        "direction": "src",
-                        "presence": "sometimes"
-                    }
-                },
-                "rank": "none"
-            }
-        },
-        "filename": "gststreamgrouper",
-        "license": "MPL",
-        "other-types": {},
-        "package": "gst-plugin-streamgrouper",
-        "source": "gst-plugin-streamgrouper",
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },

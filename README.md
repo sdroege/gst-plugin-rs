@@ -171,8 +171,6 @@ You will find the following plugins in this repository:
       - `sodiumdecrypter`: libsodium-based file decrypter.
       - `sodiumencrypter`: libsodium-based file encrypter.
 
-    - `streamgrouper`: Filter element that makes all the incoming streams use the same group-id.
-
     - `threadshare`: Some popular threaded elements reimplemented using common thread-sharing infrastructure.
       - `ts-appsrc`: Thread-sharing app source.
       - `ts-audiotestsrc`: Thread-sharing audio test source.
@@ -392,10 +390,10 @@ You will find the following plugins in this repository:
 
   * `utils`
 
-    - `debugseimetainserter`: Element to insert SEI metadata into a video stream
-      for debugging purposes.
-
-    - `debugutils`:
+    - `debugutils`: Elements useful for debugging and testing purposes.
+      - `debugseimetainserter`: Element to insert SEI metadata into a video stream
+        for debugging purposes.
+      - `streamgrouper`: Filter element that makes all the incoming streams use the same group-id.
       - `udmabufupload`: Copies raw video into udmabuf memory for debugging
         DMABuf code paths.
 

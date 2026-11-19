@@ -28,7 +28,6 @@ members = [
     "generic/sodium",
     "generic/threadshare",
     "generic/inter",
-    "generic/streamgrouper",
     "generic/gopbuffer",
 
     "mux/flavors",
@@ -66,7 +65,6 @@ members = [
 
     "utils/fallbackswitch",
     "utils/livesync",
-    "utils/debugseimetainserter",
     "utils/debugutils",
     "utils/togglerecord",
     "utils/tracers",
@@ -113,7 +111,6 @@ default-members = [
     "generic/threadshare",
     "generic/inter",
     "generic/gopbuffer",
-    "generic/streamgrouper",
 
     "mux/isobmff",
 
@@ -145,7 +142,6 @@ default-members = [
 
     "utils/fallbackswitch",
     "utils/livesync",
-    "utils/debugseimetainserter",
     "utils/debugutils",
     "utils/togglerecord",
     "utils/tracers",

@@ -29,7 +29,6 @@ option('sodium-source', type: 'combo',
        description: 'Whether to use libsodium from the system or the built-in version from the sodiumoxide crate')
 option('threadshare', type: 'feature', value: 'auto', description: 'Build threadshare plugin')
 option('inter', type: 'feature', value: 'auto', description: 'Build inter plugin')
-option('streamgrouper', type: 'feature', value: 'auto', description: 'Build streamgrouper plugin')
 
 # mux
 option('flavors', type: 'feature', value: 'auto', description: 'Build flavors plugin')
@@ -91,7 +90,6 @@ option('imagers', type: 'feature', value: 'auto', description: 'Build image-rs p
 option('overlaycompositor', type: 'feature', value: 'auto', description: 'Build overlaycompositor plugin')
 option('png', type: 'feature', value: 'auto', description: 'Build png plugin')
 option('rav1e', type: 'feature', value: 'auto', description: 'Build rav1e plugin')
-option('debugseimetainserter', type: 'feature', value: 'auto', description: 'Build seidebugmeta plugin')
 option('debugutils', type: 'feature', value: 'auto', description: 'Build debugutils plugin')
 option('skia', type: 'feature', value: 'auto', description: 'Build skia plugin')
 option('videofx', type: 'feature', value: 'auto', description: 'Build videofx plugin')

@@ -99,7 +99,6 @@ plugins = {
     ],
   },
   'inter': {'library': 'libgstrsinter'},
-  'streamgrouper': {'library': 'libgststreamgrouper'},
 
   'isobmff': {
     'library': 'libgstisobmff',
@@ -152,11 +151,7 @@ plugins = {
 
   'fallbackswitch': { }, # fallbackswitch can have gtk4 examples, see below
   'livesync': { },     # livesync can have gtk4 examples, see below
-  'debugseimetainserter': {
-    'library': 'libgstdebugseimetainserter',
-    'features': ['gst-video/v1_22'],
-  },
-  'debugutils': {}, # debugutils is Linux only, see below
+  'debugutils': {}, # debugutils needs gst-allocators, see below
   'togglerecord': { }, # togglerecord can have gtk4 examples, see below
 
   'tracers': {'library': 'libgstrstracers'},
@@ -284,8 +279,6 @@ if analytics_option.allowed()
   deps += [['gstreamer-analytics-1.0', 'gst-plugins-bad', 'gstanalytics_dep', 'gstanalytics', analytics_option]]
 endif
 
-debugutils_option = debugutils_option.require(host_system == 'linux',
-  error_message: 'debugutils plugin requires Linux')
 if debugutils_option.allowed()
   deps += [['gstreamer-allocators-1.0', 'gst-plugins-base', 'allocators_dep', 'gstallocators', debugutils_option]]
 endif
