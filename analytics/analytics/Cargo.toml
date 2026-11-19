@@ -50,6 +50,10 @@ required-features = ["v1_28"]
 name = "tensordecodebin"
 required-features = ["v1_28"]
 
+[[test]]
+name = "bytetracker"
+required-features = ["v1_30"]
+
 [package.metadata.capi]
 min_version = "0.9.21"
 

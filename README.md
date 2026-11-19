@@ -62,6 +62,7 @@ You will find the following plugins in this repository:
     - `analytics`:
       - `analyticscombiner`: Analytics combiner / batcher element
       - `analyticssplitter`: Analytics batch splitter element
+      - `bytetracker`: ByteTrack object tracker for object detection metadata
       - `crafttensordec`: Tensor decoder for CRAFT text detection models
       - `ctctexttensordec`: CTC text recognition tensor decoder
       - `handdetectiontensordec`: Tensor decoder for hand detection tensors.

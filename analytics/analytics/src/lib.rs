@@ -49,6 +49,9 @@ mod pipnettensordec;
 #[cfg(feature = "v1_30")]
 mod crafttensordec;
 
+#[cfg(feature = "v1_30")]
+mod bytetracker;
+
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     #[cfg(feature = "v1_30")]
     plugin.set_static_features_flag();
@@ -86,6 +89,9 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
     #[cfg(feature = "v1_30")]
     crafttensordec::register(plugin)?;
+
+    #[cfg(feature = "v1_30")]
+    bytetracker::register(plugin)?;
 
     Ok(())
 }
