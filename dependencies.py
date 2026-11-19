@@ -39,7 +39,6 @@ RENAMES = {
     'rstracers': 'tracers',
     'rsvalidate': 'validate',
     'rsclosedcaption': 'closedcaption',
-    'rsdebugutils': 'debugutils',
     'rswebrtc': 'webrtc',
     'rswebrtcbin2': 'webrtcbin2',
     'rspng': 'png',

@@ -26,8 +26,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstrsdebugutils::plugin_register_static()
-            .expect("gst-plugin-debugutils streamgrouper test");
+        gstdebugutils::plugin_register_static().expect("debugutils plugin");
     });
 }
 

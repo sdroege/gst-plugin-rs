@@ -23,7 +23,7 @@ uuid = { version = "1", features = ["v4"] }
 gst-check = { workspace = true, features = ["v1_28"] }
 
 [lib]
-name = "gstrsdebugutils"
+name = "gstdebugutils"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 

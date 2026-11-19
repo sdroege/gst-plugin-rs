@@ -317,7 +317,7 @@ endif
 
 if debugutils_option.allowed()
   plugins += {'debugutils': {
-    'library': 'libgstrsdebugutils',
+    'library': 'libgstdebugutils',
     'gst-version': '>=1.28',
   }}
 endif

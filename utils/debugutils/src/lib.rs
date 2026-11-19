@@ -10,7 +10,7 @@
 #![allow(clippy::non_send_fields_in_send_ty, unused_doc_comments)]
 
 /**
- * plugin-rsdebugutils:
+ * plugin-debugutils:
  *
  * Elements useful for debugging and testing purposes.
  *
@@ -37,7 +37,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 gst::plugin_define!(
-    rsdebugutils,
+    debugutils,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
     concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),
