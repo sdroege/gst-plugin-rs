@@ -10,8 +10,6 @@ use image::{DynamicImage, ImageReader, Limits};
 
 use std::sync::{LazyLock, Mutex};
 
-use crate::buffer::ImageWrapper;
-
 pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "imagersoverlay",
@@ -448,7 +446,7 @@ impl ImageRsOverlay {
 
         drop(settings);
 
-        let mut argb_image = match reader.decode().map_err(|v| {
+        let argb_image = match reader.decode().map_err(|v| {
             gst::element_imp_error!(
                 self,
                 gst::StreamError::Decode,
@@ -459,16 +457,6 @@ impl ImageRsOverlay {
             DynamicImage::ImageRgba8(v) => v,
             v => v.to_rgba8(),
         };
-        // image-rs always outputs image in RGBA channel order (individual
-        // channels respecting the native endianness).
-        // FIXME: use the upstream into_raw_bgr function for converting to
-        // BGRA, when it is released
-        // https://github.com/image-rs/image/commit/38456b67a943f39dfad7ab35589afe7a86ea4643
-        {
-            for pix in argb_image.as_chunks_mut::<4>().0 {
-                pix.swap(0, 2);
-            }
-        }
 
         // FIXME upstream: The underlying blending seems to simply assume 8-bit
         // sRGB, BGRA pixel format. The VideoFormatInfo could be created and
@@ -476,7 +464,9 @@ impl ImageRsOverlay {
         let (width, height) = argb_image.dimensions();
 
         let stride = [i32::try_from(argb_image.as_flat_samples().layout.height_stride).unwrap()];
-        let mut buffer = gst::Buffer::from_slice(ImageWrapper(argb_image.into()));
+        // image-rs always outputs image in RGBA channel order (individual
+        // channels respecting the native endianness).
+        let mut buffer = gst::Buffer::from_slice(argb_image.into_raw_bgra());
 
         gst_video::VideoMeta::add_full(
             buffer.get_mut().unwrap(),
