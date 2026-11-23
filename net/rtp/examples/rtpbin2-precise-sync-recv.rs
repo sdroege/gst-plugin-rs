@@ -277,7 +277,7 @@ fn prepare_expected_medias(
         };
 
     for media in &sdp.medias {
-        let Some(rtpmap_res) = media.attributes_typed::<RtpMap>().next() else {
+        let Some(rtpmap_res) = media.get_first_attribute_typed::<RtpMap>() else {
             eprintln!("Skipping media due to missing rtpmap: {media:?}");
             continue;
         };
