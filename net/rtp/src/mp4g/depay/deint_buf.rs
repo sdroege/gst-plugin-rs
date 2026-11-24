@@ -28,6 +28,9 @@ pub struct DeinterleaveAuBuffer {
     /// Index of the head in early_aus buffer
     head: Option<usize>,
     expected_index: Option<AccessUnitIndex>,
+    /// Total payload bytes held in `early_aus`, maintained on insert and
+    /// removal so the size cap is O(1).
+    total_bytes: usize,
 }
 
 impl DeinterleaveAuBuffer {
@@ -40,6 +43,7 @@ impl DeinterleaveAuBuffer {
 
     pub fn drain(&mut self) -> MaybeSingleAuOrList {
         self.expected_index = None;
+        self.total_bytes = 0;
 
         let mut cur_opt = self.head.take();
 
@@ -69,6 +73,12 @@ impl DeinterleaveAuBuffer {
         self.early_aus.clear();
         self.head = None;
         self.expected_index = None;
+        self.total_bytes = 0;
+    }
+
+    /// Total payload bytes currently held for reordering.
+    pub fn total_bytes(&self) -> usize {
+        self.total_bytes
     }
 
     #[track_caller]
@@ -112,6 +122,7 @@ impl DeinterleaveAuBuffer {
             }
 
             head_node = self.early_aus.remove(head);
+            self.total_bytes -= head_node.au.data.len();
             outbuf.push(head_node.au);
 
             expected_index += 1;
@@ -126,7 +137,10 @@ impl DeinterleaveAuBuffer {
     fn insert_au(&mut self, au: AccessUnit) -> Result<(), Mpeg4GenericDepayError> {
         use std::cmp::Ordering::*;
 
+        let au_len = au.data.len();
+
         if self.early_aus.is_empty() {
+            self.total_bytes += au_len;
             self.head = Some(self.early_aus.insert(AuNode { au, next: None }));
 
             // Nothing to pop
@@ -141,6 +155,7 @@ impl DeinterleaveAuBuffer {
             Greater => (),
             Less => {
                 // New head
+                self.total_bytes += au_len;
                 self.head = Some(self.early_aus.insert(AuNode {
                     au,
                     next: Some(cur),
@@ -164,6 +179,7 @@ impl DeinterleaveAuBuffer {
 
         loop {
             let Some(next) = cur_node.next else {
+                self.total_bytes += au_len;
                 let new = Some(self.early_aus.insert(AuNode { au, next: None }));
                 self.early_aus.get_mut(cur).unwrap().next = new;
 
@@ -175,6 +191,7 @@ impl DeinterleaveAuBuffer {
             match au.index.try_cmp(next_node.au.index)? {
                 Greater => (), // try next node
                 Less => {
+                    self.total_bytes += au_len;
                     let new = self.early_aus.insert(AuNode {
                         au,
                         next: Some(next),

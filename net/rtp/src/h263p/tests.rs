@@ -9,6 +9,7 @@
 
 use gst::prelude::*;
 
+use crate::h263p::depay::imp::MAX_FRAME_SIZE;
 use crate::tests::{
     ExpectedBuffer, ExpectedPacket, Source, run_test_pipeline,
     run_test_pipeline_and_validate_buffer, source_first_pts,
@@ -1115,4 +1116,47 @@ fn depay_drops_follow_on_with_new_timestamp() {
 
     assert_eq!(bufs.len(), 1, "only frame B must survive");
     assert_eq!(bufs[0], frame_b);
+}
+
+/// Continuation packets with the same timestamp and no marker bit must not
+/// grow the reassembly buffer without end: past the cap the frame is
+/// dropped and the next one arrives discontinuous.
+#[test]
+fn depay_max_frame_size_caps_and_resyncs() {
+    init();
+
+    let caps = depay_rtp_caps("H263-1998", &[]);
+
+    let frame = make_frame(1, 20);
+    // P=1 starts a frame; the packet carries the start code without its
+    // two leading zero bytes.
+    let mut good = vec![0x04, 0x00];
+    good.extend_from_slice(&frame[2..]);
+    // P=0 continuations of 4000 filler bytes.
+    let mut cont = vec![0x00, 0x00];
+    cont.extend_from_slice(&[0xAB; 4000]);
+    let mut end = vec![0x00, 0x00];
+    end.extend_from_slice(&[0xAB; 4]);
+
+    let mut packets: Vec<(&[u8], bool, u32, bool)> = Vec::new();
+    // Frame 1 is complete and consumes the base class' initial DISCONT.
+    packets.push((good.as_slice(), true, 0, false));
+    // Frame 2 dribbles past the reassembly cap and then ends. The cap must
+    // drop it, so only frames 1 and 3 come out.
+    packets.push((good.as_slice(), false, 2000, false));
+    // The two payload-header bytes per packet do not reach the accumulator.
+    for _ in 0..MAX_FRAME_SIZE / (cont.len() - 2) + 2 {
+        packets.push((cont.as_slice(), false, 2000, false));
+    }
+    packets.push((end.as_slice(), true, 2000, false));
+    // Frame 3 completes again after the cap fired.
+    packets.push((good.as_slice(), true, 4000, false));
+
+    let buffers = crate::tests::run_depay_only("rtph263pdepay2", &caps, &packets).unwrap();
+    assert_eq!(buffers.len(), 2);
+    assert_eq!(buffers[0].0, frame);
+    assert_eq!(buffers[1].0, frame);
+    assert!(buffers[0].1.contains(gst::BufferFlags::DISCONT));
+    // The drops in between must mark frame 3 discontinuous.
+    assert!(buffers[1].1.contains(gst::BufferFlags::DISCONT));
 }

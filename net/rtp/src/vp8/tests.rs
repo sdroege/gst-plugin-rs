@@ -8,6 +8,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::tests::{ExpectedBuffer, ExpectedPacket, Source, run_test_pipeline};
+use crate::vp8::depay::imp::MAX_FRAME_SIZE;
 
 fn init() {
     use std::sync::Once;
@@ -535,4 +536,52 @@ fn test_vp8_partitions() {
     ];
 
     run_test_pipeline(Source::Bin(src), pay, depay, expected_pay, expected_depay);
+}
+
+#[test]
+fn depay_max_frame_size_caps_and_resyncs() {
+    init();
+
+    let caps = gst::Caps::builder("application/x-rtp")
+        .field("media", "video")
+        .field("clock-rate", 90_000i32)
+        .field("encoding-name", "VP8")
+        .field("payload", 96i32)
+        .build();
+
+    // S=1 starts a frame; keyframe uncompressed header (sync code 9d 01 2a).
+    let header = [
+        0x10, 0x00, 0x00, 0x00, 0x9d, 0x01, 0x2a, 0x00, 0x40, 0x00, 0x40, 0x00,
+    ];
+    let mut good = header.to_vec();
+    good.extend_from_slice(&[0x42; 10]);
+    let mut start = header.to_vec();
+    start.extend_from_slice(&[0x11; 50]);
+    let mut cont = vec![0x00];
+    cont.extend_from_slice(&[0xAB; 4000]);
+    let mut end = vec![0x00];
+    end.extend_from_slice(&[0xAB; 4]);
+
+    let mut packets: Vec<(&[u8], bool, u32, bool)> = Vec::new();
+    // Picture 1 is complete and consumes the base class' initial DISCONT.
+    packets.push((good.as_slice(), true, 0, false));
+    // Picture 2 dribbles past the reassembly cap and then ends. The cap must
+    // drop it, so only pictures 1 and 3 come out; without the cap the end
+    // packet would complete an oversized picture.
+    packets.push((start.as_slice(), false, 2000, false));
+    // One descriptor byte per packet does not reach the accumulator.
+    for _ in 0..MAX_FRAME_SIZE / (cont.len() - 1) + 2 {
+        packets.push((cont.as_slice(), false, 2000, false));
+    }
+    packets.push((end.as_slice(), true, 2000, false));
+    // Picture 3 completes again after the cap fired.
+    packets.push((good.as_slice(), true, 4000, false));
+
+    let buffers = crate::tests::run_depay_only("rtpvp8depay2", &caps, &packets).unwrap();
+    assert_eq!(buffers.len(), 2);
+    assert_eq!(buffers[0].0.len(), 21);
+    assert_eq!(buffers[1].0.len(), 21);
+    assert!(buffers[0].1.contains(gst::BufferFlags::DISCONT));
+    // The drops in between must mark picture 3 discontinuous.
+    assert!(buffers[1].1.contains(gst::BufferFlags::DISCONT));
 }

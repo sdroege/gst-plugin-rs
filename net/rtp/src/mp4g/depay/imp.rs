@@ -43,6 +43,13 @@ use super::{
     AccessUnit, DeinterleaveAuBuffer, MaybeSingleAuOrList, Mpeg4GenericDepayError, SingleAuOrList,
 };
 
+/// Caps the fragmented-AU accumulator and the AU reorder buffer. RFC 3640
+/// defines no absolute AU size limit (field width is the session's
+/// `sizelength`), so this is a robustness bound rather than a spec one: real
+/// AUs are far smaller, and a dribbling sender must not grow the buffers
+/// without end.
+const MAX_FRAME_SIZE: usize = 1024 * 1024;
+
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpmp4gdepay2",
@@ -329,7 +336,9 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
             state.clock_rate = clock_rate;
 
             if let Some(max_displacement) = mode_config.max_displacement() {
-                state.deint_buf = Some(DeinterleaveAuBuffer::new(max_displacement));
+                // Initial capacity is a hint only, but ignore absurdly large
+                // configured values.
+                state.deint_buf = Some(DeinterleaveAuBuffer::new(max_displacement.min(1024)));
             }
 
             state.parser.set_config(mode_config);
@@ -414,6 +423,19 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
 
                         return Ok(gst::FlowSuccess::Ok);
                     }
+
+                    if acc.0.data.len() > MAX_FRAME_SIZE {
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Too big (> {MAX_FRAME_SIZE} bytes) reassembled frame, dropping."
+                        );
+                        *au_acc = None;
+                        parser.reset();
+                        self.obj().drop_packets(..=packet.ext_seqnum());
+
+                        return Ok(gst::FlowSuccess::Ok);
+                    }
                 } else {
                     *au_acc = Some(AuAccumulator::new(au));
                 }
@@ -482,6 +504,17 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4GenericDepay {
                     );
                     // The AU has been dropped, just keep going
                     // Packet will be dropped eventually
+                }
+
+                if deint_buf.total_bytes() > MAX_FRAME_SIZE {
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Too big (> {MAX_FRAME_SIZE} bytes) reorder buffer, dropping."
+                    );
+                    deint_buf.flush();
+                    self.obj().drop_packets(..=packet.ext_seqnum());
+                    return Ok(gst::FlowSuccess::Ok);
                 }
 
                 continue;

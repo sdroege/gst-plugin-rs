@@ -10,6 +10,7 @@
 use gst::prelude::*;
 
 use crate::h261::bitstream::test_util::qcif_frame;
+use crate::h261::depay::imp::MAX_FRAME_SIZE;
 use crate::tests::{
     ExpectedBuffer, ExpectedPacket, Source, run_test_pipeline_and_validate_buffer, source_first_pts,
 };
@@ -1082,4 +1083,45 @@ fn test_h261_avdec_decode() {
         expected_decoded,
         |_, _, _| Ok(()),
     );
+}
+
+/// Continuation packets with the same timestamp and no marker bit must not
+/// grow the reassembly buffer without end: past the cap the picture is
+/// dropped and the next one arrives discontinuous.
+#[test]
+fn depay_max_frame_size_caps_and_resyncs() {
+    init();
+
+    let frame = qcif_frame(&[(1, 10, 2), (2, 12, 2), (3, 9, 3)]);
+
+    let mut good = h261_header(0, 0, false).to_vec();
+    good.extend_from_slice(&frame);
+    // Byte-aligned continuations of 4000 filler bytes.
+    let mut cont = h261_header(0, 0, false).to_vec();
+    cont.extend_from_slice(&[0xAB; 4000]);
+    let mut end = h261_header(0, 0, false).to_vec();
+    end.extend_from_slice(&[0xAB; 4]);
+
+    let mut packets: Vec<(&[u8], bool, u32, bool)> = Vec::new();
+    // Picture 1 is complete and consumes the base class' initial DISCONT.
+    packets.push((good.as_slice(), true, 0, false));
+    // Picture 2 dribbles past the reassembly cap and then ends. The cap
+    // must drop it, so only pictures 1 and 3 come out.
+    packets.push((good.as_slice(), false, 2000, false));
+    // The four payload-header bytes per packet do not reach the
+    // accumulator.
+    for _ in 0..MAX_FRAME_SIZE / (cont.len() - 4) + 2 {
+        packets.push((cont.as_slice(), false, 2000, false));
+    }
+    packets.push((end.as_slice(), true, 2000, false));
+    // Picture 3 completes again after the cap fired.
+    packets.push((good.as_slice(), true, 4000, false));
+
+    let buffers = run_depay_only(&packets).unwrap();
+    assert_eq!(buffers.len(), 2);
+    assert_eq!(buffers[0].0, frame);
+    assert_eq!(buffers[1].0, frame);
+    assert!(buffers[0].1.contains(gst::BufferFlags::DISCONT));
+    // The drops in between must mark picture 3 discontinuous.
+    assert!(buffers[1].1.contains(gst::BufferFlags::DISCONT));
 }

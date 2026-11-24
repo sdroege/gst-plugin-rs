@@ -24,6 +24,7 @@ use atomic_refcell::AtomicRefCell;
 use gst::{glib, subclass::prelude::*};
 
 use std::sync::LazyLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
     basedepay::{PacketToBufferRelation, RtpBaseDepay2Ext},
@@ -62,10 +63,24 @@ struct State {
     validated_first_frame: bool,
 }
 
-#[derive(Default)]
 pub struct RtpJxsvDepay {
     state: AtomicRefCell<State>,
+    /// Cap on a reassembled picture, derived from the negotiated caps.
+    max_frame_size: AtomicUsize,
 }
+
+impl Default for RtpJxsvDepay {
+    fn default() -> Self {
+        Self {
+            state: AtomicRefCell::new(State::default()),
+            max_frame_size: AtomicUsize::new(DEFAULT_MAX_FRAME_SIZE),
+        }
+    }
+}
+
+/// Fallback cap when the caps declare no picture geometry: above the raw
+/// size of an 8K 12-bit 4:4:4 picture (~203 MiB).
+const DEFAULT_MAX_FRAME_SIZE: usize = 256 * 1024 * 1024;
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
@@ -235,6 +250,10 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpJxsvDepay {
             }
         };
         state.validated_first_frame = false;
+        self.max_frame_size.store(
+            Self::picture_size_cap(&state.stream_info),
+            Ordering::Relaxed,
+        );
 
         let stream_info = state.stream_info.clone();
         drop(state);
@@ -369,6 +388,18 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpJxsvDepay {
         pending_frame.data.extend_from_slice(picture_segment);
         pending_frame.next_packet_index = packet_index + 1;
 
+        let max_frame_size = self.max_frame_size.load(Ordering::Relaxed);
+        if pending_frame.data.len() > max_frame_size {
+            gst::warning!(
+                CAT,
+                imp = self,
+                "Too big (> {max_frame_size} bytes) reassembled frame, dropping."
+            );
+            state.pending_frame = None;
+            self.obj().drop_packet(packet);
+            return Ok(gst::FlowSuccess::Ok);
+        }
+
         if !packet.marker_bit() {
             return Ok(gst::FlowSuccess::Ok);
         }
@@ -403,6 +434,39 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpJxsvDepay {
 }
 
 impl RtpJxsvDepay {
+    /// Cap on the reassembled picture: a JPEG XS codestream stays close to
+    /// the raw picture size, so derive the limit from the negotiated caps
+    /// with headroom.
+    fn picture_size_cap(stream_info: &StreamInfo) -> usize {
+        // Sender-controlled caps: reject implausible dimensions instead of
+        // letting them overflow the raw-size computation below.
+        let (Some(width), Some(height)) = (stream_info.width, stream_info.height) else {
+            return DEFAULT_MAX_FRAME_SIZE;
+        };
+        if !(1..=32768).contains(&width) || !(1..=32768).contains(&height) {
+            return DEFAULT_MAX_FRAME_SIZE;
+        }
+        let (width, height) = (width as u64, height as u64);
+        // Components per pixel (numerator / denominator) for the RFC 9134
+        // sampling values (YCbCr-, CLYCbCr-, ICtCp- share the chroma
+        // structure); RGB, XYZ and UNSPECIFIED take the largest case.
+        let (components, den) = match stream_info.sampling.as_deref() {
+            Some(s) if s.ends_with("-4:2:0") => (3, 2),
+            Some(s) if s.ends_with("-4:2:2") => (2, 1),
+            Some("KEY") => (1, 1),
+            _ => (3, 1),
+        };
+        // Depths up to 8 bits pack one byte per component, deeper use two.
+        let bytes_per_component = if stream_info.depth.unwrap_or(12) > 8 {
+            2
+        } else {
+            1
+        };
+        let raw = width * height * components / den * bytes_per_component;
+        // Headroom for segment overhead around the codestream.
+        usize::try_from(raw + raw / 4).unwrap_or(DEFAULT_MAX_FRAME_SIZE)
+    }
+
     fn output_caps(stream_info: &StreamInfo) -> gst::Caps {
         // width, height, depth and sampling are all optional at the RTP layer in
         // RFC 9134, so pass through only those signalled by the SDP fmtp

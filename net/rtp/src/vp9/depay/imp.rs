@@ -108,6 +108,10 @@ pub struct RtpVp9Depay {
     settings: Mutex<Settings>,
 }
 
+/// VP9 pictures are bound only by the RTP marker bit; cap the reassembly
+/// buffer.
+pub(crate) const MAX_FRAME_SIZE: usize = 32 * 1024 * 1024;
+
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpvp9depay2",
@@ -501,6 +505,17 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp9Depay {
         state
             .pending_picture
             .extend_from_slice(&payload[payload_start_index..]);
+
+        if state.pending_picture.len() > MAX_FRAME_SIZE {
+            gst::warning!(
+                CAT,
+                imp = self,
+                "Too big (> {MAX_FRAME_SIZE} bytes) reassembled picture, dropping."
+            );
+            self.reset(&mut state);
+            self.obj().drop_packet(packet);
+            return Ok(gst::FlowSuccess::Ok);
+        }
 
         // The marker bit is set for the last packet of a picture.
         if !packet.marker_bit() {

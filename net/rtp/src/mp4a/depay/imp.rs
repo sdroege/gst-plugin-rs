@@ -38,6 +38,11 @@ use crate::basedepay::{Packet, PacketToBufferRelation, RtpBaseDepay2Ext, Timesta
 use crate::mp4a::parsers::{StreamMuxConfig, Subframes};
 use crate::mp4a::{DEFAULT_CLOCK_RATE, ENCODING_NAME};
 
+/// The AudioMuxElement is bound only by the RTP marker bit, and RFC 3640
+/// sets no absolute AU size limit (the AU-size field width is the session's
+/// `sizelength` parameter); cap the accumulation well above real muxels.
+const MAX_FRAME_SIZE: usize = 256 * 1024;
+
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpmp4adepay2",
@@ -141,6 +146,11 @@ impl FrameAccumulator {
             buf: Some(packet.payload().to_owned()),
             start_ext_seqnum: packet.ext_seqnum(),
         }
+    }
+
+    /// Number of payload bytes accumulated so far.
+    fn len(&self) -> usize {
+        self.buf.as_ref().map_or(0, |buf| buf.len())
     }
 
     /// Extends this `FrameAccumulator` with the provided `Packet` payload.
@@ -310,6 +320,21 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpMpeg4AudioDepay {
             frame_acc.extend(packet);
         } else {
             state.frame_acc = Some(FrameAccumulator::new(packet));
+        }
+
+        if state
+            .frame_acc
+            .as_ref()
+            .is_some_and(|acc| acc.len() > MAX_FRAME_SIZE)
+        {
+            gst::warning!(
+                CAT,
+                imp = self,
+                "Too big (> {MAX_FRAME_SIZE} bytes) reassembled frame, dropping."
+            );
+            state.frame_acc = None;
+            self.obj().drop_packet(packet);
+            return Ok(gst::FlowSuccess::Ok);
         }
 
         // RTP marker bit indicates the last packet of the AudioMuxElement

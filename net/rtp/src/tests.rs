@@ -833,3 +833,104 @@ pub fn run_test_pipeline_full_and_validate_buffer<
         }
     }
 }
+
+/// Feed RTP packets directly to a depayloader and collect its output.
+///
+/// Each packet is a `(payload, marker, timestamp, discont)` tuple.
+/// Returns the depayloaded buffers as `(bytes, flags)`.
+pub fn run_depay_only(
+    element_name: &str,
+    sink_caps: &gst::Caps,
+    packets: &[(&[u8], bool, u32, bool)],
+) -> Result<Vec<(Vec<u8>, gst::BufferFlags)>, anyhow::Error> {
+    let buffers: Vec<gst::Buffer> = packets
+        .iter()
+        .enumerate()
+        .map(|(i, (payload, marker, ts, discont))| {
+            let bytes = rtp_types::RtpPacketBuilder::new()
+                .payload_type(96)
+                .sequence_number(i as u16)
+                .timestamp(*ts)
+                .ssrc(0x1234)
+                .marker_bit(*marker)
+                .payload(*payload)
+                .write_vec()
+                .unwrap();
+            let mut buffer = gst::Buffer::from_slice(bytes);
+            if *discont {
+                buffer
+                    .get_mut()
+                    .unwrap()
+                    .set_flags(gst::BufferFlags::DISCONT);
+            }
+            buffer
+        })
+        .collect();
+    let mut buffers = buffers.into_iter();
+
+    let appsrc = gst_app::AppSrc::builder()
+        .format(gst::Format::Time)
+        .caps(sink_caps)
+        .callbacks(
+            gst_app::AppSrcCallbacks::builder()
+                .need_data(move |appsrc, _offset| {
+                    let Some(buffer) = buffers.next() else {
+                        let _ = appsrc.end_of_stream();
+                        return;
+                    };
+                    // Errors are collected from the bus below.
+                    let _ = appsrc.push_buffer(buffer);
+                })
+                .build(),
+        )
+        .build();
+
+    let pipeline = Pipeline(gst::Pipeline::new());
+    let depay = gst::ElementFactory::make(element_name).build().unwrap();
+    let sink = gst::ElementFactory::make("fakesink")
+        .property("sync", false)
+        .build()
+        .unwrap();
+    let appsrc = appsrc.upcast::<gst::Element>();
+    pipeline.add_many([&appsrc, &depay, &sink]).unwrap();
+    appsrc.link(&depay).unwrap();
+    depay.link(&sink).unwrap();
+
+    let out_bufs = Arc::new(Mutex::new(Vec::<(Vec<u8>, gst::BufferFlags)>::new()));
+    depay.static_pad("src").unwrap().add_probe(
+        gst::PadProbeType::BUFFER | gst::PadProbeType::BUFFER_LIST,
+        {
+            let out_bufs = out_bufs.clone();
+            move |_pad, info| {
+                let bufs: Vec<gst::Buffer> = match info.buffer_list() {
+                    Some(list) => (0..list.len())
+                        .filter_map(|i| list.get(i).map(|b| b.to_owned()))
+                        .collect(),
+                    None => info.buffer().map(|b| vec![b.clone()]).unwrap_or_default(),
+                };
+                let mut out = out_bufs.lock().unwrap();
+                for buf in bufs {
+                    let flags = buf.flags();
+                    out.push((buf.map_readable().unwrap().as_slice().to_vec(), flags));
+                }
+                gst::PadProbeReturn::Ok
+            }
+        },
+    );
+
+    pipeline.set_state(gst::State::Playing).unwrap();
+    let msg = pipeline
+        .bus()
+        .unwrap()
+        .timed_pop_filtered(
+            gst::ClockTime::from_seconds(30),
+            &[gst::MessageType::Error, gst::MessageType::Eos],
+        )
+        .ok_or_else(|| anyhow::anyhow!("no EOS/error from depay pipeline"))?;
+
+    if msg.type_() == gst::MessageType::Error {
+        return Err(anyhow::anyhow!("depay pipeline failed: {msg:?}"));
+    }
+
+    Ok(std::mem::take(&mut *out_bufs.lock().unwrap()))
+}

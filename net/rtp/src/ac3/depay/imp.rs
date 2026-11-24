@@ -64,6 +64,10 @@ struct State {
     clock_rate: Option<i32>,
 }
 
+/// RFC 4184 §4.2: AC-3 frames range from 128 to 3840 bytes; a fragmented
+/// reassembly larger than the largest valid frame can never complete.
+pub(crate) const MAX_FRAME_SIZE: usize = 3840;
+
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpac3depay2",
@@ -256,6 +260,17 @@ impl RtpBaseDepay2Impl for RtpAc3Depay {
                 }
 
                 partial_frame.data.extend_from_slice(payload);
+
+                if partial_frame.data.len() > MAX_FRAME_SIZE {
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Too big (> {MAX_FRAME_SIZE} bytes) reassembled frame, dropping."
+                    );
+                    state.partial_frame = None;
+                    self.obj().drop_packet(packet);
+                    return Ok(gst::FlowSuccess::Ok);
+                }
 
                 gst::log!(
                     CAT,

@@ -93,6 +93,10 @@ pub struct RtpVp8Depay {
     settings: Mutex<Settings>,
 }
 
+/// VP8 frames are bound only by the RTP marker bit; cap the reassembly
+/// buffer.
+pub(crate) const MAX_FRAME_SIZE: usize = 32 * 1024 * 1024;
+
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpvp8depay2",
@@ -359,6 +363,17 @@ impl crate::basedepay::RtpBaseDepay2Impl for RtpVp8Depay {
         state
             .pending_frame
             .extend_from_slice(&payload[payload_start_index..]);
+
+        if state.pending_frame.len() > MAX_FRAME_SIZE {
+            gst::warning!(
+                CAT,
+                imp = self,
+                "Too big (> {MAX_FRAME_SIZE} bytes) reassembled frame, dropping."
+            );
+            self.reset(&mut state);
+            self.obj().drop_packet(packet);
+            return Ok(gst::FlowSuccess::Ok);
+        }
 
         // The marker bit is set for the last packet of a frame.
         if !packet.marker_bit() {

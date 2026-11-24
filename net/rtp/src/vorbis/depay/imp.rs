@@ -93,6 +93,10 @@ pub struct RtpVorbisDepay {
     state: AtomicRefCell<State>,
 }
 
+/// The Vorbis packet length field is two octets (RFC 5215 §2.3); bound
+/// reassembled fragments to what a single packet can express.
+const MAX_FRAME_SIZE: usize = 64 * 1024;
+
 pub(crate) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpvorbisdepay2",
@@ -441,6 +445,17 @@ impl RtpBaseDepay2Impl for RtpVorbisDepay {
                 }
 
                 acc.data.extend_from_slice(payload);
+
+                if acc.data.len() > MAX_FRAME_SIZE {
+                    gst::warning!(
+                        CAT,
+                        imp = self,
+                        "Too big (> {MAX_FRAME_SIZE} bytes) reassembled frame, dropping."
+                    );
+                    state.acc = None;
+                    self.obj().drop_packet(packet);
+                    return Ok(gst::FlowSuccess::Ok);
+                }
 
                 gst::debug!(
                     CAT,

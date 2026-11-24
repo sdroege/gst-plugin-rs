@@ -36,6 +36,10 @@ use std::sync::LazyLock;
 
 use crate::basedepay::{PacketToBufferRelation, RtpBaseDepay2Ext, RtpBaseDepay2Impl};
 
+/// H.263+ frames are bound only by the RTP marker bit; cap the reassembly
+/// buffer.
+pub(crate) const MAX_FRAME_SIZE: usize = 32 * 1024 * 1024;
+
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtph263pdepay2",
@@ -295,6 +299,17 @@ impl RtpBaseDepay2Impl for RtpH263PDepay {
             pending_frame.data.extend_from_slice(&[0x00, 0x00]);
         }
         pending_frame.data.extend_from_slice(&payload[header_len..]);
+
+        if pending_frame.data.len() > MAX_FRAME_SIZE {
+            gst::warning!(
+                CAT,
+                imp = self,
+                "Too big (> {MAX_FRAME_SIZE} bytes) reassembled frame, dropping."
+            );
+            state.pending_frame = None;
+            self.obj().drop_packet(packet);
+            return Ok(gst::FlowSuccess::Ok);
+        }
 
         if !packet.marker_bit() {
             return Ok(gst::FlowSuccess::Ok);

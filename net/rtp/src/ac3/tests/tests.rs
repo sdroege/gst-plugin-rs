@@ -9,6 +9,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::ac3::ac3_audio_utils::*;
+use crate::ac3::depay::imp::MAX_FRAME_SIZE;
 use crate::tests::{
     ExpectedBuffer, ExpectedPacket, Liveness, Source, run_test_pipeline_and_validate_data,
     run_test_pipeline_full_and_validate_data,
@@ -422,4 +423,55 @@ fn test_ac3_pay_depay_fragmented_with_packet_loss() {
             run_ac3_pay_depay_fragmented_with_packet_loss_with_drop_mask(drop_mask, Some(65533));
         }
     }
+}
+
+#[test]
+fn depay_max_frame_size_caps_and_resyncs() {
+    init();
+
+    let caps = gst::Caps::builder("application/x-rtp")
+        .field("media", "audio")
+        .field("clock-rate", 48_000i32)
+        .field("encoding-name", "AC3")
+        .field("payload", 96i32)
+        .build();
+
+    // A real AC3 frame from the fixture, so frame header parsing succeeds.
+    let frame = parse_ac3_frames(AC3_DATA)[0].to_vec();
+
+    // Fragment types as this depayer decodes them: 1 or 2 = start, 3 with
+    // the marker bit = end, 0 = whole frame.
+    let mut good = vec![0x00, 0x00];
+    good.extend_from_slice(&frame);
+    // The depayer ignores packets with payloads shorter than 8 bytes.
+    let mut start = vec![0x01, 0x00];
+    start.extend_from_slice(&frame[..16]);
+    // Continuations carry real frame bytes so the reassembled header stays
+    // parseable: without the cap the end packet would complete an
+    // over-large frame instead of it failing to parse.
+    let mut cont = vec![0x03, 0x00];
+    cont.extend_from_slice(&frame);
+    let mut end = vec![0x03, 0x00];
+    end.extend_from_slice(&[0xAB; 8]);
+
+    let mut packets: Vec<(&[u8], bool, u32, bool)> = Vec::new();
+    // Frame 1 is complete and consumes the base class' initial DISCONT.
+    packets.push((good.as_slice(), true, 0, false));
+    // Frame 2 dribbles past the reassembly cap and then ends. The cap must
+    // drop it, so only frames 1 and 3 come out.
+    packets.push((start.as_slice(), false, 2000, false));
+    for _ in 0..(MAX_FRAME_SIZE / frame.len() + 2) {
+        packets.push((cont.as_slice(), false, 2000, false));
+    }
+    packets.push((end.as_slice(), true, 2000, false));
+    // Frame 3 completes again after the cap fired.
+    packets.push((good.as_slice(), true, 4000, false));
+
+    let buffers = crate::tests::run_depay_only("rtpac3depay2", &caps, &packets).unwrap();
+    assert_eq!(buffers.len(), 2);
+    assert_eq!(buffers[0].0, frame);
+    assert_eq!(buffers[1].0, frame);
+    assert!(buffers[0].1.contains(gst::BufferFlags::DISCONT));
+    // The drops in between must mark frame 3 discontinuous.
+    assert!(buffers[1].1.contains(gst::BufferFlags::DISCONT));
 }

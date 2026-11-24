@@ -73,6 +73,11 @@ pub struct RTPAv1Depay {
     settings: Mutex<Settings>,
 }
 
+/// Cap for an incomplete OBU fragment carried across packets: a forged
+/// element size is rejected at parse time, but continuations dribble the
+/// fragment in without one.
+const MAX_FRAME_SIZE: usize = 32 * 1024 * 1024;
+
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtpav1depay",
@@ -355,6 +360,23 @@ impl RTPAv1Depay {
             }
 
             idx += 1;
+        }
+
+        // An unclosed OBU fragment grows with every continuation packet;
+        // cap it like the other reassembly buffers.
+        if state
+            .obu_fragment
+            .as_ref()
+            .is_some_and(|frag| frag.bytes.len() > MAX_FRAME_SIZE)
+        {
+            gst::warning!(
+                CAT,
+                imp = self,
+                "Too big (> {MAX_FRAME_SIZE} bytes) incomplete OBU, dropping."
+            );
+            self.reset(&mut state);
+            self.obj().drop_packets(..=packet.ext_seqnum());
+            return Ok(None);
         }
 
         // handle other OBUs, including trailing fragments

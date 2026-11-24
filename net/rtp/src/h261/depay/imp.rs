@@ -43,6 +43,10 @@ use crate::basedepay::{PacketToBufferRelation, RtpBaseDepay2Ext, RtpBaseDepay2Im
 /// Size of the H.261 payload header (RFC 4587 section 4.1): 4 bytes.
 const PAYLOAD_HEADER_LEN: usize = 4;
 
+/// H.261 pictures are bound only by the RTP marker bit; cap the reassembly
+/// buffer.
+pub(crate) const MAX_FRAME_SIZE: usize = 32 * 1024 * 1024;
+
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
         "rtph261depay2",
@@ -271,6 +275,17 @@ impl RtpBaseDepay2Impl for RtpH261Depay {
                 .data
                 .extend_from_slice(&data[1..data.len() - 1]);
             pending_frame.leftover = Some(data[data.len() - 1] & (0xFF << ebit));
+        }
+
+        if pending_frame.data.len() > MAX_FRAME_SIZE {
+            gst::warning!(
+                CAT,
+                imp = self,
+                "Too big (> {MAX_FRAME_SIZE} bytes) reassembled picture, dropping."
+            );
+            state.pending_frame = None;
+            self.obj().drop_packet(packet);
+            return Ok(gst::FlowSuccess::Ok);
         }
 
         if !packet.marker_bit() {
