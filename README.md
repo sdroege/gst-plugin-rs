@@ -552,7 +552,7 @@ in components in other modules.
 
 - **generic**: inter, gopbuffer
 - **net**: rtp, rtsp, udp, webrtc
-- **audio**: audioparsers
+- **audio**: audioparsers, audiotags
 - **video**: closedcaption, dav1d, gtk4, imagers
 - **mux**: isobmff
 - **text**: accumulate, wrap
