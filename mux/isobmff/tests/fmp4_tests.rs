@@ -1320,30 +1320,34 @@ fn test_buffer_multi_stream_short_gops() {
     h1.push_event(gst::event::Eos::new());
     h2.push_event(gst::event::Eos::new());
 
-    let fragment_header = h1.pull().unwrap();
-    assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
-    assert_eq!(fragment_header.pts(), Some(3.seconds() + output_offset));
-    assert_eq!(fragment_header.dts(), Some(3.seconds() + output_offset));
-    assert_eq!(fragment_header.duration(), Some(6.seconds()));
+    for frag_range in [3..6, 6..9] {
+        let frag_start = frag_range.start.seconds();
+        let fragment_header = h1.pull().unwrap();
+        assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
+        assert_eq!(fragment_header.pts(), Some(frag_start + output_offset));
+        assert_eq!(fragment_header.dts(), Some(frag_start + output_offset));
+        assert_eq!(fragment_header.duration(), Some(3.seconds()));
 
-    for i in 3..9 {
-        for j in 0..2 {
-            let buffer = h1.pull().unwrap();
-            if i == 8 && j == 1 {
-                assert_eq!(
-                    buffer.flags(),
-                    gst::BufferFlags::DELTA_UNIT | gst::BufferFlags::MARKER
-                );
-            } else {
-                assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
+        let last_i = frag_range.end - 1;
+        for i in frag_range {
+            for j in 0..2 {
+                let buffer = h1.pull().unwrap();
+                if i == last_i && j == 1 {
+                    assert_eq!(
+                        buffer.flags(),
+                        gst::BufferFlags::DELTA_UNIT | gst::BufferFlags::MARKER
+                    );
+                } else {
+                    assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
+                }
+                assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
+                if j == 0 {
+                    assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
+                } else {
+                    assert!(buffer.dts().is_none());
+                }
+                assert_eq!(buffer.duration(), Some(gst::ClockTime::SECOND));
             }
-            assert_eq!(buffer.pts(), Some(i.seconds() + output_offset));
-            if j == 0 {
-                assert_eq!(buffer.dts(), Some(i.seconds() + output_offset));
-            } else {
-                assert!(buffer.dts().is_none());
-            }
-            assert_eq!(buffer.duration(), Some(gst::ClockTime::SECOND));
         }
     }
 
@@ -5446,6 +5450,219 @@ fn test_gap_event_exceeding_fragment_duration_chunked() {
                 3.seconds(),
                 2,
             ),
+        ]
+    );
+}
+
+#[test]
+fn test_eos_pending_gop_dts_lag() {
+    init();
+
+    let mut h = gst_check::Harness::new("cmafmux");
+    h.element()
+        .unwrap()
+        .set_property("fragment-duration", 2.seconds());
+
+    let caps = gst::Caps::builder("video/x-h264")
+        .field("width", 320i32)
+        .field("height", 240i32)
+        .field("framerate", gst::Fraction::new(10, 1))
+        .field("stream-format", "avc")
+        .field("alignment", "au")
+        .field("codec_data", gst::Buffer::with_size(1).unwrap())
+        .build();
+
+    h.set_src_caps(caps);
+    h.play();
+
+    let base = 1.seconds();
+    let frame_dur = 100.mseconds();
+    let dts_lag = 2 * frame_dur;
+
+    let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
+    segment.set_start(base);
+    segment.set_time(gst::ClockTime::ZERO);
+    h.push_event(gst::event::Segment::new(&segment));
+
+    // Three GOPs (1s, 1s, 0.2s) with DTS lagging behind PTS so all three stay queued until EOS
+    for i in 0..22 {
+        let mut buffer = gst::Buffer::with_size(1).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(base + i * frame_dur);
+            buffer.set_dts(base + i * frame_dur - dts_lag);
+            buffer.set_duration(frame_dur);
+            if i != 0 && i != 10 && i != 20 {
+                buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h.push(buffer), Ok(gst::FlowSuccess::Ok));
+    }
+
+    assert_eq!(h.buffers_in_queue(), 0);
+    h.push_event(gst::event::Eos::new());
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::StreamStart);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Caps);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Segment);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Eos);
+
+    let header = h.pull().unwrap();
+    assert_eq!(
+        header.flags(),
+        gst::BufferFlags::HEADER | gst::BufferFlags::DISCONT
+    );
+
+    let has_lmsg = |buf: &gst::BufferRef| {
+        buf.map_readable()
+            .unwrap()
+            .as_slice()
+            .windows(4)
+            .any(|w| w == b"lmsg")
+    };
+    let mut frags = Vec::new();
+    while h.buffers_in_queue() > 0 {
+        let buf = h.pull().unwrap();
+        if buf.flags().contains(gst::BufferFlags::HEADER) {
+            assert_eq!(buf.flags(), gst::BufferFlags::HEADER);
+            frags.push((
+                buf.pts().unwrap(),
+                buf.dts().unwrap(),
+                buf.duration().unwrap(),
+                has_lmsg(&buf),
+                0usize,
+            ));
+        } else {
+            frags.last_mut().unwrap().4 += 1;
+        }
+    }
+
+    // EOS should split them into 2s and 0.2s fragments
+    // and only the last one has lmsg flagged
+    assert_eq!(
+        frags,
+        vec![
+            (base, base - dts_lag, 2.seconds(), false, 20),
+            (
+                base + 2.seconds(),
+                base + 2.seconds() - dts_lag,
+                200.mseconds(),
+                true,
+                2,
+            ),
+        ]
+    );
+}
+
+#[test]
+fn test_eos_multi_stream_audio_overhang() {
+    init();
+
+    let mut h1 = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
+    let mut h2 = gst_check::Harness::with_element(&h1.element().unwrap(), Some("sink_1"), None);
+    h1.element()
+        .unwrap()
+        .set_property("fragment-duration", 2.seconds());
+
+    h1.set_src_caps(
+        gst::Caps::builder("video/x-h264")
+            .field("width", 320i32)
+            .field("height", 240i32)
+            .field("framerate", gst::Fraction::new(10, 1))
+            .field("stream-format", "avc")
+            .field("alignment", "au")
+            .field("codec_data", gst::Buffer::with_size(1).unwrap())
+            .build(),
+    );
+    h1.play();
+
+    h2.set_src_caps(
+        gst::Caps::builder("audio/mpeg")
+            .field("mpegversion", 4i32)
+            .field("channels", 1i32)
+            .field("rate", 48000i32)
+            .field("stream-format", "raw")
+            .field("base-profile", "lc")
+            .field("profile", "lc")
+            .field("level", "2")
+            .field(
+                "codec_data",
+                gst::Buffer::from_slice([0x11, 0x88, 0x56, 0xe5, 0x00]),
+            )
+            .build(),
+    );
+    h2.play();
+
+    // 2.1s video (three GOPs: 1s, 1s, 0.1s) and 2.35s audio
+    let v_dur = 100.mseconds();
+    let a_dur = 50.mseconds();
+    let mut a = 0;
+    for v in 0..21 {
+        let mut buf = gst::Buffer::with_size(1).unwrap();
+        {
+            let buf = buf.get_mut().unwrap();
+            buf.set_pts(v * v_dur);
+            buf.set_dts(v * v_dur);
+            buf.set_duration(v_dur);
+            if v != 0 && v != 10 && v != 20 {
+                buf.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h1.push(buf), Ok(gst::FlowSuccess::Ok));
+        while a < 47 && (v == 20 || a * a_dur <= v * v_dur) {
+            let mut buf = gst::Buffer::with_size(1).unwrap();
+            {
+                let buf = buf.get_mut().unwrap();
+                buf.set_pts(a * a_dur);
+                buf.set_duration(a_dur);
+            }
+            assert_eq!(h2.push(buf), Ok(gst::FlowSuccess::Ok));
+            a += 1;
+        }
+    }
+
+    assert_eq!(h1.buffers_in_queue(), 0);
+    h2.push_event(gst::event::Eos::new());
+    h1.push_event(gst::event::Eos::new());
+    let ev = h1.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::StreamStart);
+    let ev = h1.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Caps);
+    let ev = h1.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Segment);
+    let ev = h1.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Eos);
+
+    let output_offset = (60 * 60 * 1000).seconds();
+    let header = h1.pull().unwrap();
+    assert_eq!(
+        header.flags(),
+        gst::BufferFlags::HEADER | gst::BufferFlags::DISCONT
+    );
+
+    let mut fragments = Vec::new();
+    while h1.buffers_in_queue() > 0 {
+        let buf = h1.pull().unwrap();
+        if buf.flags().contains(gst::BufferFlags::HEADER) {
+            fragments.push((
+                buf.pts().unwrap() - output_offset,
+                buf.duration().unwrap(),
+                0usize,
+            ));
+        } else {
+            fragments.last_mut().unwrap().2 += 1;
+        }
+    }
+
+    // First fragment ends at 2s and the second one takes the tailing audio
+    assert_eq!(
+        fragments,
+        vec![
+            (gst::ClockTime::ZERO, 2.seconds(), 60),
+            (2.seconds(), 350.mseconds(), 8),
         ]
     );
 }
