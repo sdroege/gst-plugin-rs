@@ -529,6 +529,12 @@ impl State {
     }
 }
 
+fn is_gap_buffer(buffer: &gst::BufferRef) -> bool {
+    buffer.flags().contains(gst::BufferFlags::GAP)
+        && buffer.flags().contains(gst::BufferFlags::DROPPABLE)
+        && buffer.size() == 0
+}
+
 #[derive(Default)]
 pub(crate) struct FMP4Mux {
     state: Mutex<State>,
@@ -578,10 +584,7 @@ impl FMP4Mux {
 
         if buffer.dts().is_none() && delta_frames.requires_dts() {
             // For gap buffer simply set the missing DTS to PTS.
-            if buffer.flags().contains(gst::BufferFlags::GAP)
-                && buffer.flags().contains(gst::BufferFlags::DROPPABLE)
-                && buffer.size() == 0
-            {
+            if is_gap_buffer(buffer) {
                 let pts = buffer.pts();
                 buffer.make_mut().set_dts(pts);
                 return Ok(());
@@ -2092,6 +2095,7 @@ impl FMP4Mux {
         need_new_header: bool,
         timeout: bool,
         all_eos: bool,
+        drain_all: bool,
         fragment_end_pts: Option<gst::ClockTime>,
         chunk_start_pts: gst::ClockTime,
         chunk_end_pts: Option<gst::ClockTime>,
@@ -2624,7 +2628,7 @@ impl FMP4Mux {
                 // If this GOP starts after the fragment end then don't dequeue it yet unless this is
                 // the first stream and no GOPs were dequeued at all yet. This would mean that the
                 // GOP is bigger than the fragment duration.
-                if !all_eos
+                if !drain_all
                     && end_pts > dequeue_end_pts
                     && (chunk_end_pts.is_some() || !gops.is_empty())
                 {
@@ -2691,10 +2695,7 @@ impl FMP4Mux {
             // If this is a GAP buffer then skip it. Its duration was already considered
             // below for the non-GAP buffer preceding it, and if there was none then the
             // chunk start would be adjusted accordingly for this stream.
-            if buffer.buffer.flags().contains(gst::BufferFlags::GAP)
-                && buffer.buffer.flags().contains(gst::BufferFlags::DROPPABLE)
-                && buffer.buffer.size() == 0
-            {
+            if is_gap_buffer(&buffer.buffer) {
                 gst::trace!(CAT, obj = stream.sinkpad, "Skipping gap buffer {buffer:?}",);
                 continue;
             }
@@ -2729,11 +2730,11 @@ impl FMP4Mux {
             };
 
             // Take as end timestamp the timestamp of the next non-GAP buffer
-            let end_timestamp = match gop_buffers.as_slice().iter().find(|buf| {
-                !buf.buffer.flags().contains(gst::BufferFlags::GAP)
-                    || !buf.buffer.flags().contains(gst::BufferFlags::DROPPABLE)
-                    || buf.buffer.size() != 0
-            }) {
+            let end_timestamp = match gop_buffers
+                .as_slice()
+                .iter()
+                .find(|buf| !is_gap_buffer(&buf.buffer))
+            {
                 Some(buffer) => {
                     if !stream.delta_frames.requires_dts() {
                         gst::Signed::Positive(buffer.pts)
@@ -2949,13 +2950,17 @@ impl FMP4Mux {
                 .display(),
         );
 
+        let mut earlier_streams_empty = true;
         for (idx, stream) in state.streams.iter_mut().enumerate() {
+            let drain_all =
+                !chunk_mode && all_eos && earlier_streams_empty && chunk_end_pts.is_some();
             let gops = self.drain_buffers_one_stream(
                 settings,
                 stream,
                 state.need_new_header,
                 timeout,
                 all_eos,
+                drain_all,
                 fragment_end_pts,
                 chunk_start_pts,
                 chunk_end_pts,
@@ -2966,10 +2971,11 @@ impl FMP4Mux {
                 state.sent_headers && fragment_start,
                 fragment_filled,
             )?;
+            earlier_streams_empty &= stream.queued_gops.is_empty();
             stream.fragment_filled = false;
             stream.chunk_filled = false;
 
-            if settings.manual_split || all_eos {
+            if settings.manual_split || drain_all {
                 if let Some(last_gop) = gops.last()
                     && chunk_end_pts.is_none_or(|chunk_end_pts| chunk_end_pts < last_gop.end_pts)
                 {
@@ -3516,6 +3522,13 @@ impl FMP4Mux {
             state.sequence_number = state.sequence_number.wrapping_add(1);
         }
 
+        let is_final_eos = at_eos
+            && state.streams.iter().all(|s| {
+                s.queued_gops
+                    .iter()
+                    .all(|gop| gop.buffers.iter().all(|b| is_gap_buffer(&b.buffer)))
+            });
+
         let (mut fmp4_fragment_header, moof_offset) =
             create_fmp4_fragment_header(FragmentHeaderConfiguration {
                 variant: self.obj().class().as_ref().variant,
@@ -3523,7 +3536,7 @@ impl FMP4Mux {
                 chunk: !fragment_start,
                 streams: streams.as_slice(),
                 buffers: interleaved_buffers.as_slice(),
-                last_fragment: at_eos,
+                last_fragment: is_final_eos,
             })
             .map_err(|err| {
                 gst::error!(
@@ -3599,7 +3612,7 @@ impl FMP4Mux {
                     .build();
 
                 m.mut_structure().set("keyframe", s);
-                m.mut_structure().set("eos", at_eos);
+                m.mut_structure().set("eos", is_final_eos);
             }
 
             // Set the marker flag for the last buffer of the segment
