@@ -113,7 +113,7 @@ fn video_bin(
     iframe_only: bool,
     h265: bool,
 ) -> Result<gst::Bin, ()> {
-    const BUFFER_NB: i32 = 62;
+    const BUFFER_NB: i32 = 75;
 
     let bin = gst::Bin::new();
 
@@ -177,7 +177,7 @@ fn video_bin(
 }
 
 fn audio_bin(bitrate: i32) -> Result<gst::Bin, ()> {
-    const BUFFER_NB: i32 = 62;
+    const BUFFER_NB: i32 = 75;
 
     let bin = gst::Bin::new();
 
