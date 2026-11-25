@@ -35,13 +35,19 @@ mod sampler;
  * ROI preprocessing is currently enabled automatically for CTC text
  * recognition models.
  *
+ * Full-frame tensors are attached as a one-item tensor list with provenance.
+ * Set `allow-legacy-tensor-meta=true` for downstream elements that only
+ * support legacy tensor metadata. Results from matched regions always use
+ * tensor lists.
+ *
  * Test image, model and labels files can be found here:
  * https://gitlab.collabora.com/gstreamer/onnx-models
  *
  * |[
  * gst-launch-1.0 filesrc location=onnx-models/images/bus.jpg \
  *     ! jpegdec \
- *     ! videotensorpreproc model-info=onnx-models/models/yolo26s.onnx.modelinfo \
+ *     ! videotensorpreproc allow-legacy-tensor-meta=true \
+ *         model-info=onnx-models/models/yolo26s.onnx.modelinfo \
  *     ! onnxtensorinference model-file=onnx-models/models/yolo26s.onnx \
  *     ! imagefreeze \
  *     ! yolo26tensordec label-file=onnx-models/labels/COCO_classes.txt \
@@ -65,4 +71,27 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         gst::Rank::NONE,
         VideoTensorPreproc::static_type(),
     )
+}
+
+fn attach_single_tensor(
+    buffer: &mut gst::BufferRef,
+    group_id: glib::Quark,
+    tensor: gst_analytics::Tensor,
+    correlation_id: i64,
+    allow_legacy_tensor_meta: bool,
+) -> Result<(), String> {
+    if allow_legacy_tensor_meta {
+        gst_analytics::TensorMeta::add(buffer).set([tensor].into());
+        return Ok(());
+    }
+
+    let correlation_id = std::num::NonZeroI64::new(correlation_id)
+        .ok_or("Missing tensor provenance correlation ID")?;
+    let provenance = gst_analytics::TensorProvenance {
+        key: tensor.id(),
+        correlation_ids: &[correlation_id],
+    };
+    gst_analytics::TensorListMeta::add(buffer, group_id)
+        .append_item_full([tensor].into(), &[provenance])
+        .map_err(|err| err.to_string())
 }

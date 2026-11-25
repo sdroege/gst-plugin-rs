@@ -26,10 +26,12 @@ pub(super) static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
 #[derive(Default)]
 struct Settings {
     model_info: Option<String>,
+    allow_legacy_tensor_meta: bool,
 }
 
 struct State {
     model: model_info::Model,
+    allow_legacy_tensor_meta: bool,
     conv: Option<Converter>,
     roi_conv: Option<RoiConverter>,
 }
@@ -57,6 +59,11 @@ impl ObjectImpl for VideoTensorPreproc {
                     .blurb("Path to the .modelinfo file describing the input tensor")
                     .mutable_ready()
                     .build(),
+                glib::ParamSpecBoolean::builder("allow-legacy-tensor-meta")
+                    .nick("Allow Legacy Tensor Meta")
+                    .blurb("Use legacy tensor metadata when preprocessing the entire frame")
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
@@ -67,6 +74,9 @@ impl ObjectImpl for VideoTensorPreproc {
         let mut settings = self.settings.lock().unwrap();
         match pspec.name() {
             "model-info" => settings.model_info = value.get().expect("type checked upstream"),
+            "allow-legacy-tensor-meta" => {
+                settings.allow_legacy_tensor_meta = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -75,6 +85,7 @@ impl ObjectImpl for VideoTensorPreproc {
         let settings = self.settings.lock().unwrap();
         match pspec.name() {
             "model-info" => settings.model_info.to_value(),
+            "allow-legacy-tensor-meta" => settings.allow_legacy_tensor_meta.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -179,7 +190,13 @@ impl BaseTransformImpl for VideoTensorPreproc {
     const TRANSFORM_IP_ON_PASSTHROUGH: bool = true;
 
     fn start(&self) -> Result<(), gst::ErrorMessage> {
-        let path = self.settings.lock().unwrap().model_info.clone();
+        let (path, allow_legacy_tensor_meta) = {
+            let settings = self.settings.lock().unwrap();
+            (
+                settings.model_info.clone(),
+                settings.allow_legacy_tensor_meta,
+            )
+        };
         let path = path.filter(|path| !path.is_empty()).ok_or_else(|| {
             gst::error_msg!(
                 gst::ResourceError::Settings,
@@ -196,6 +213,7 @@ impl BaseTransformImpl for VideoTensorPreproc {
 
         *self.state.lock().unwrap() = Some(State {
             model,
+            allow_legacy_tensor_meta,
             conv: None,
             roi_conv: None,
         });
@@ -338,7 +356,14 @@ impl BaseTransformImpl for VideoTensorPreproc {
             }
 
             let text = glib::Quark::from_static_str(glib::gstr!("text"));
-            super::roi_preproc::preprocess(buffer, conv, &state.model, text).map_err(|err| {
+            super::roi_preproc::preprocess(
+                buffer,
+                conv,
+                &state.model,
+                text,
+                state.allow_legacy_tensor_meta,
+            )
+            .map_err(|err| {
                 gst::element_error!(
                     self.obj(),
                     gst::StreamError::Failed,
@@ -368,9 +393,9 @@ impl BaseTransformImpl for VideoTensorPreproc {
 
         let (tensor_rect, video_rect) = conv.tensor_to_video_rectangles();
 
-        {
+        let correlation_id = {
             let mut meta = gst_analytics::AnalyticsRelationMeta::add(buffer);
-            let id = meta
+            let provenance = meta
                 .add_tensor_provenance_mtd(group_id, &tensor)
                 .map_err(|err| {
                     gst::element_error!(
@@ -379,11 +404,12 @@ impl BaseTransformImpl for VideoTensorPreproc {
                         ["Failed to add tensor provenance: {err}"]
                     );
                     gst::FlowError::Error
-                })?
-                .id();
+                })?;
+            let id = provenance.id();
+            let correlation_id = provenance.correlation_id();
 
-            meta.mtd_mut::<AnalyticsTensorProvenanceMtd>(id)
-                .unwrap()
+            let mut provenance = meta.mtd_mut::<AnalyticsTensorProvenanceMtd>(id).unwrap();
+            provenance
                 .set_spatial_transform_from_rectangles(tensor_rect, video_rect)
                 .map_err(|err| {
                     gst::element_error!(
@@ -393,10 +419,24 @@ impl BaseTransformImpl for VideoTensorPreproc {
                     );
                     gst::FlowError::Error
                 })?;
-        }
+            correlation_id
+        };
 
-        let mut meta = gst_analytics::TensorMeta::add(buffer);
-        meta.set([tensor].into());
+        super::attach_single_tensor(
+            buffer,
+            group_id,
+            tensor,
+            correlation_id,
+            state.allow_legacy_tensor_meta,
+        )
+        .map_err(|err| {
+            gst::element_error!(
+                self.obj(),
+                gst::StreamError::Failed,
+                ["Failed to attach preprocessed tensor: {err}"]
+            );
+            gst::FlowError::Error
+        })?;
 
         Ok(gst::FlowSuccess::Ok)
     }

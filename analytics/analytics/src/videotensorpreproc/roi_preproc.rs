@@ -24,6 +24,7 @@ pub(super) fn preprocess(
     converter: &mut RoiConverter,
     model: &Model,
     object_type: glib::Quark,
+    allow_legacy_tensor_meta: bool,
 ) -> Result<(), String> {
     let info = converter.input_info();
     let mut has_matching_regions = false;
@@ -108,21 +109,27 @@ pub(super) fn preprocess(
         };
 
         let (tensor, transform) = converter.process(buffer, &[roi])?.remove(0);
-        {
+        let correlation_id = {
             let mut meta = AnalyticsRelationMeta::add(buffer);
-            let id = meta
+            let provenance = meta
                 .add_tensor_provenance_mtd(model.group_id, &tensor)
-                .map_err(|e| e.to_string())?
-                .id();
-            meta.mtd_mut::<AnalyticsTensorProvenanceMtd>(id)
-                .unwrap()
+                .map_err(|e| e.to_string())?;
+            let id = provenance.id();
+            let correlation_id = provenance.correlation_id();
+            let mut provenance = meta.mtd_mut::<AnalyticsTensorProvenanceMtd>(id).unwrap();
+            provenance
                 .set_spatial_transform(&transform)
                 .map_err(|e| e.to_string())?;
-        }
+            correlation_id
+        };
 
-        gst_analytics::TensorMeta::add(buffer).set([tensor].into());
-
-        return Ok(());
+        return super::attach_single_tensor(
+            buffer,
+            model.group_id,
+            tensor,
+            correlation_id,
+            allow_legacy_tensor_meta,
+        );
     }
 
     if rois.is_empty() {
