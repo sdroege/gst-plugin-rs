@@ -8,8 +8,12 @@
 
 use byte_slice_cast::*;
 use gst::{glib, prelude::*, subclass::prelude::*};
-use gst_analytics::prelude::*;
+use gst_analytics::{
+    AnalyticsMtdRef, AnalyticsRelationMeta, AnalyticsTensorProvenanceMtd, TensorMetaView,
+    TypedTensorDesc, prelude::*,
+};
 use gst_base::{prelude::*, subclass::prelude::*};
+use itertools::Itertools;
 use std::sync::{LazyLock, Mutex};
 
 use super::{
@@ -232,7 +236,8 @@ impl BaseTransformImpl for CraftTensorDec {
             return Err(gst::FlowError::Flushing);
         };
 
-        let Some(tensor) = find_craft_tensor(buffer) else {
+        let relation_meta = buffer.meta::<AnalyticsRelationMeta>();
+        let Some((tensor, provenance)) = find_craft_tensor(buffer, relation_meta.as_ref()) else {
             gst::trace!(CAT, imp = self, "No CRAFT tensor meta found");
             return Ok(gst::FlowSuccess::Ok);
         };
@@ -286,17 +291,13 @@ impl BaseTransformImpl for CraftTensorDec {
         drop(map);
 
         if !all_detections.is_empty() {
-            let mut rmeta = gst_analytics::AnalyticsRelationMeta::add(buffer);
-            let label = glib::Quark::from_static_str(OD_META_LABEL);
-            let tensor_id = glib::Quark::from_static_str(TENSOR_ID);
-
             let transform = |point: geo::Point<f64>| {
-                let (x, y) = transform_point(
-                    rmeta.as_ref(),
-                    tensor_id,
-                    point.x() * CRAFT_HEATMAP_SCALE,
-                    point.y() * CRAFT_HEATMAP_SCALE,
-                );
+                let x = (point.x() * CRAFT_HEATMAP_SCALE) as f32;
+                let y = (point.y() * CRAFT_HEATMAP_SCALE) as f32;
+                let (x, y) = provenance
+                    .as_ref()
+                    .and_then(|mtd| mtd.transform_point(x, y))
+                    .unwrap_or((x, y));
                 geo::Point::new(x as f64, y as f64)
             };
 
@@ -309,6 +310,8 @@ impl BaseTransformImpl for CraftTensorDec {
                     .collect()
             };
 
+            let mut rmeta = AnalyticsRelationMeta::add(buffer);
+            let label = glib::Quark::from_static_str(OD_META_LABEL);
             for detection in detections {
                 let x = detection.x.floor() as i32;
                 let y = detection.y.floor() as i32;
@@ -344,28 +347,37 @@ impl BaseTransformImpl for CraftTensorDec {
     }
 }
 
-fn transform_point(
-    meta: &gst::MetaRef<'_, gst_analytics::AnalyticsRelationMeta>,
-    group_id: glib::Quark,
-    x: f64,
-    y: f64,
-) -> (f32, f32) {
-    meta.iter::<gst_analytics::AnalyticsTensorProvenanceMtd>()
-        .find(|mtd| mtd.group_id() == Some(group_id))
-        .and_then(|mtd| mtd.transform_point(x as f32, y as f32))
-        .unwrap_or((x as f32, y as f32))
-}
+fn find_craft_tensor<'a>(
+    buffer: &gst::BufferRef,
+    relation_meta: Option<&'a gst::MetaRef<'a, AnalyticsRelationMeta>>,
+) -> Option<(
+    gst_analytics::Tensor,
+    Option<AnalyticsMtdRef<'a, AnalyticsTensorProvenanceMtd>>,
+)> {
+    let id = glib::Quark::from_static_str(TENSOR_ID);
+    let desc = TypedTensorDesc::new(
+        id,
+        gst_analytics::TensorDataType::Float32,
+        gst_analytics::TensorDimOrder::RowMajor,
+        &[1, usize::MAX, usize::MAX, 2],
+    );
 
-fn find_craft_tensor(buffer: &gst::BufferRef) -> Option<gst_analytics::Tensor> {
-    buffer
-        .iter_meta::<gst_analytics::TensorMeta>()
-        .find_map(|meta| {
-            meta.typed_tensor(
-                glib::Quark::from_static_str(TENSOR_ID),
-                gst_analytics::TensorDataType::Float32,
-                gst_analytics::TensorDimOrder::RowMajor,
-                &[1usize, usize::MAX, usize::MAX, 2usize],
-            )
-            .cloned()
-        })
+    let view = TensorMetaView::find_typed(buffer, id, &desc)?;
+    let (item, tensor) = view
+        .iter()
+        .find_map(|item| item.get(&desc).map(|tensor| (item, tensor)))?;
+    let provenance = relation_meta.and_then(|meta| {
+        if !view.is_list() {
+            return meta.find_single_provenance(id);
+        }
+
+        let entry = item.provenance().exactly_one().ok()?;
+        let [correlation] = entry.correlation_ids else {
+            return None;
+        };
+
+        meta.find_tensor_provenance(entry.key, *correlation)
+    });
+
+    Some((tensor.to_owned(), provenance))
 }
