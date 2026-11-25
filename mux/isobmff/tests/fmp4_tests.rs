@@ -5666,3 +5666,97 @@ fn test_eos_multi_stream_audio_overhang() {
         ]
     );
 }
+
+#[test]
+fn test_eos_chunked_fragment_boundary() {
+    init();
+
+    let mut h = gst_check::Harness::new("cmafmux");
+    let mux = h.element().unwrap();
+    mux.set_property("fragment-duration", 2.seconds());
+    mux.set_property("chunk-duration", 1.seconds());
+
+    let caps = gst::Caps::builder("video/x-h264")
+        .field("width", 320i32)
+        .field("height", 240i32)
+        .field("framerate", gst::Fraction::new(10, 1))
+        .field("stream-format", "avc")
+        .field("alignment", "au")
+        .field("codec_data", gst::Buffer::with_size(1).unwrap())
+        .build();
+
+    h.set_src_caps(caps);
+    h.play();
+
+    // Three GOPs (1s, 1s, 0.1s) so the second and third drain at EOS
+    let frame_dur = 100.mseconds();
+    for i in 0..21 {
+        let mut buffer = gst::Buffer::with_size(1).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(i * frame_dur);
+            buffer.set_dts(i * frame_dur);
+            buffer.set_duration(frame_dur);
+            if i != 0 && i != 10 && i != 20 {
+                buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h.push(buffer), Ok(gst::FlowSuccess::Ok));
+    }
+
+    h.push_event(gst::event::Eos::new());
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::StreamStart);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Caps);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Segment);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Eos);
+
+    let header = h.pull().unwrap();
+    assert_eq!(
+        header.flags(),
+        gst::BufferFlags::HEADER | gst::BufferFlags::DISCONT
+    );
+
+    let has_lmsg = |buf: &gst::BufferRef| {
+        buf.map_readable()
+            .unwrap()
+            .as_slice()
+            .windows(4)
+            .any(|w| w == b"lmsg")
+    };
+    let mut chunks = Vec::new();
+    while h.buffers_in_queue() > 0 {
+        let buf = h.pull().unwrap();
+        if buf.flags().contains(gst::BufferFlags::HEADER) {
+            chunks.push((
+                buf.flags(),
+                buf.pts().unwrap(),
+                buf.offset(),
+                has_lmsg(&buf),
+                0usize,
+            ));
+        } else {
+            chunks.last_mut().unwrap().4 += 1;
+        }
+    }
+
+    // Two 1s chunks for fragment 1, then a new fragment 2 at 2s
+    // and only the last one has lmsg flagged
+    assert_eq!(
+        chunks,
+        vec![
+            (gst::BufferFlags::HEADER, gst::ClockTime::ZERO, 1, false, 10),
+            (
+                gst::BufferFlags::HEADER | gst::BufferFlags::DELTA_UNIT,
+                1.seconds(),
+                1,
+                false,
+                10,
+            ),
+            (gst::BufferFlags::HEADER, 2.seconds(), 2, true, 1),
+        ]
+    );
+}
