@@ -2889,14 +2889,14 @@ impl FMP4Mux {
             let fragment_end_pts = fragment_end_pts.unwrap();
 
             // In fragment mode, each chunk is a full fragment. Otherwise, in chunk mode,
-            // this fragment is filled if it is filled for the first non-EOS stream
-            // that has a GOP inside this chunk
+            // this fragment is filled if it is filled for the first non-EOS (or first, at EOS)
+            // stream that has a GOP inside this chunk
             !chunk_mode
                 || state
                     .streams
                     .iter()
                     .find(|s| {
-                        !s.sinkpad.is_eos()
+                        (!s.sinkpad.is_eos() || all_eos)
                             && s.queued_gops.back().is_some_and(|gop| {
                                 gop.start_pts <= fragment_end_pts
                                 // In chunk mode we might've drained a partial GOP as a chunk after
