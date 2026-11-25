@@ -34,9 +34,8 @@ use std::time::{Duration, SystemTime};
 const DEFAULT_AWS_REGION: &str = "us-east-1";
 const DEFAULT_PING_TIMEOUT: i32 = 30;
 
-#[allow(deprecated)]
 pub static AWS_BEHAVIOR_VERSION: LazyLock<aws_config::BehaviorVersion> =
-    LazyLock::new(aws_config::BehaviorVersion::v2023_11_09);
+    LazyLock::new(aws_config::BehaviorVersion::v2026_01_12);
 
 static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
     gst::DebugCategory::new(
