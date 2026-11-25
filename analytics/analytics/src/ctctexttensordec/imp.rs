@@ -8,10 +8,14 @@
 
 use byte_slice_cast::*;
 use gst::{glib, prelude::*, subclass::prelude::*};
-use gst_analytics::prelude::*;
+use gst_analytics::{TensorMetaView, TypedTensorDesc, prelude::*};
 use gst_base::{prelude::*, subclass::prelude::*};
+use itertools::Itertools;
 
-use std::sync::{LazyLock, Mutex};
+use std::{
+    num::NonZeroI64,
+    sync::{LazyLock, Mutex},
+};
 
 use smol_str::SmolStr;
 
@@ -400,46 +404,42 @@ impl BaseTransformImpl for CtcTextTensorDec {
             TensorOutput::Prob => CTC_TEXT_RECOGNITION_OUT_PROB,
             TensorOutput::Logits => CTC_TEXT_RECOGNITION_OUT_LOGITS,
         });
+        let group_id = glib::Quark::from_static_str(CTC_TEXT_RECOGNITION_OUT);
+        let desc = TypedTensorDesc::new(
+            tensor_id,
+            gst_analytics::TensorDataType::Float32,
+            gst_analytics::TensorDimOrder::RowMajor,
+            &[usize::MAX, usize::MAX, usize::MAX],
+        );
 
         let mut decoded = Vec::new();
-        let list = buffer
-            .iter_meta::<gst_analytics::TensorListMeta>()
-            .find(|meta| {
-                meta.group_id() == Some(glib::Quark::from_static_str(CTC_TEXT_RECOGNITION_OUT))
-            });
-
-        if let Some(list) = list {
+        if let Some(view) = TensorMetaView::find_typed(buffer, group_id, &desc) {
             let rmeta = buffer.meta::<gst_analytics::AnalyticsRelationMeta>();
-            for item in 0..list.num_items() {
-                let tensor = list
-                    .typed_tensor(
-                        item,
-                        tensor_id,
-                        gst_analytics::TensorDataType::Float32,
-                        gst_analytics::TensorDimOrder::RowMajor,
-                        &[usize::MAX, usize::MAX, usize::MAX],
-                    )
-                    .ok_or_else(|| {
-                        gst::error!(CAT, imp = self, "Invalid CTC tensor in item {item}");
-                        gst::FlowError::Error
-                    })?;
+            for (index, item) in view.iter().enumerate() {
+                let tensor = item.get(&desc).ok_or_else(|| {
+                    gst::error!(CAT, imp = self, "Invalid CTC tensor in item {index}");
+                    gst::FlowError::Error
+                })?;
 
                 let results = self.decode_tensor(state, tensor)?;
                 if results.is_empty() {
                     continue;
                 }
 
-                let mut entries = list.provenance(item);
-                let provenance = entries.next().filter(|entry| {
-                    entries.next().is_none() && entry.correlation_ids.len() == results.len()
-                });
+                let provenance = item
+                    .provenance()
+                    .exactly_one()
+                    .ok()
+                    .filter(|entry| entry.correlation_ids.len() == results.len());
 
                 let Some(provenance) = provenance else {
-                    gst::warning!(
-                        CAT,
-                        imp = self,
-                        "Missing or mismatched provenance for CTC tensor item {item}"
-                    );
+                    if view.is_list() {
+                        gst::warning!(
+                            CAT,
+                            imp = self,
+                            "Missing or mismatched provenance for CTC tensor item {index}"
+                        );
+                    }
 
                     decoded.extend(
                         results
@@ -449,10 +449,9 @@ impl BaseTransformImpl for CtcTextTensorDec {
                     continue;
                 };
 
-                for ((text, confidence), correlation) in
+                for ((text, confidence), &correlation) in
                     results.into_iter().zip(provenance.correlation_ids)
                 {
-                    let correlation = correlation.get();
                     let od = rmeta.as_ref().and_then(|meta| {
                         find_related_od_from_tensor_provenance(meta, provenance.key, correlation)
                     });
@@ -460,28 +459,13 @@ impl BaseTransformImpl for CtcTextTensorDec {
                         gst::warning!(
                             CAT,
                             imp = self,
-                            "Couldn't find related OD for CTC tensor item {item}, correlation {correlation}"
+                            "Couldn't find related OD for CTC tensor item {index}, correlation {correlation}"
                         );
                     }
 
                     decoded.push((text, confidence, od));
                 }
             }
-        } else if let Some(meta) = find_ctc_tensor_meta(buffer, state.tensor_output) {
-            let tensor = meta
-                .typed_tensor(
-                    tensor_id,
-                    gst_analytics::TensorDataType::Float32,
-                    gst_analytics::TensorDimOrder::RowMajor,
-                    &[usize::MAX, usize::MAX, usize::MAX],
-                )
-                .unwrap();
-
-            decoded.extend(
-                self.decode_tensor(state, tensor)?
-                    .into_iter()
-                    .map(|(text, confidence)| (text, confidence, None)),
-            );
         }
 
         if !decoded.is_empty() {
@@ -628,13 +612,9 @@ impl CtcTextTensorDec {
 fn find_related_od_from_tensor_provenance(
     meta: &gst::MetaRef<'_, gst_analytics::AnalyticsRelationMeta>,
     key: glib::Quark,
-    correlation: i64,
+    correlation: NonZeroI64,
 ) -> Option<u32> {
-    let provenance = meta
-        .iter::<gst_analytics::AnalyticsTensorProvenanceMtd>()
-        .find(|provenance| {
-            provenance.correlation_id() == correlation && provenance.tensor_id() == Some(key)
-        })?;
+    let provenance = meta.find_tensor_provenance(key, correlation)?;
 
     let mut detections = meta.iter_direct_related::<gst_analytics::AnalyticsODMtd>(
         provenance.id(),
@@ -709,26 +689,4 @@ fn append_token(tokens: &[SmolStr], blank_index: usize, text: &mut String, class
     };
 
     text.push_str(&tokens[token_index]);
-}
-
-fn find_ctc_tensor_meta(
-    buffer: &gst::BufferRef,
-    tensor_output: TensorOutput,
-) -> Option<gst::MetaRef<'_, gst_analytics::TensorMeta>> {
-    let tensor_id = match tensor_output {
-        TensorOutput::Prob => CTC_TEXT_RECOGNITION_OUT_PROB,
-        TensorOutput::Logits => CTC_TEXT_RECOGNITION_OUT_LOGITS,
-    };
-
-    buffer
-        .iter_meta::<gst_analytics::TensorMeta>()
-        .find(|meta| {
-            meta.typed_tensor(
-                glib::Quark::from_static_str(tensor_id),
-                gst_analytics::TensorDataType::Float32,
-                gst_analytics::TensorDimOrder::RowMajor,
-                &[usize::MAX, usize::MAX, usize::MAX],
-            )
-            .is_some()
-        })
 }
