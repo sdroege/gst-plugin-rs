@@ -114,6 +114,12 @@ enum ChunkStrategy {
     Keyframe,
 }
 
+enum DrainResult {
+    Chunk(gst::BufferList),
+    Skipped,
+    Done,
+}
+
 impl ChunkStrategy {
     fn is_keyframe(&self) -> bool {
         *self == ChunkStrategy::Keyframe
@@ -3287,7 +3293,7 @@ impl FMP4Mux {
 
     /// Fills upstream events as needed and returns the caps the first time draining can happen.
     ///
-    /// If it returns `(_, None)` then there's currently nothing to drain anymore.
+    /// Returns `DrainResult::Done` when nothing can be drained anymore.
     fn drain_one_chunk(
         &self,
         state: &mut State,
@@ -3295,7 +3301,7 @@ impl FMP4Mux {
         timeout: bool,
         at_eos: bool,
         upstream_events: &mut Vec<(crate::isobmff::FMP4MuxPad, gst::Event)>,
-    ) -> Result<(Option<gst::Caps>, Option<gst::BufferList>), gst::FlowError> {
+    ) -> Result<(Option<gst::Caps>, DrainResult), gst::FlowError> {
         if at_eos {
             gst::info!(CAT, imp = self, "Draining at EOS");
         } else if timeout && !settings.manual_split {
@@ -3306,7 +3312,7 @@ impl FMP4Mux {
             if state.streams.iter().any(|stream| {
                 !stream.chunk_filled && !stream.fragment_filled && !stream.sinkpad.is_eos()
             }) {
-                return Ok((None, None));
+                return Ok((None, DrainResult::Done));
             }
             gst::info!(
                 CAT,
@@ -3320,7 +3326,7 @@ impl FMP4Mux {
         // previous chunk so once set it will always be set
         if state.fragment_start_pts.is_none() {
             gst::info!(CAT, imp = self, "Drain requested with nothing to drain yet");
-            return Ok((None, None));
+            return Ok((None, DrainResult::Done));
         }
 
         // Collect all buffers and their timing information that are to be drained right now.
@@ -3383,8 +3389,81 @@ impl FMP4Mux {
         }
 
         if interleaved_buffers.is_empty() {
-            // Either at EOS or only gap buffers drained.
-            return Ok((caps, None));
+            // Either at EOS, only gap buffers drained, or queued GOPs start past the current chunk.
+            if let Some(chunk_end_pts) = chunk_end_pts {
+                state.end_pts = state.end_pts.max(Some(chunk_end_pts));
+            }
+
+            let next_pts = chunk_end_pts.or_else(|| {
+                if settings.manual_split {
+                    None
+                } else {
+                    state
+                        .streams
+                        .iter()
+                        .filter_map(|s| s.queued_gops.back().map(|gop| gop.start_pts))
+                        .min()
+                }
+            });
+
+            let advanced = if let Some(next_pts) = next_pts
+                && next_pts > chunk_start_pts.unwrap()
+            {
+                let start_new_fragment = fragment_filled
+                    || state.need_new_header
+                    || fragment_start
+                    || (!settings.manual_split
+                        && state.fragment_end_pts.is_some_and(|end| next_pts >= end));
+
+                if start_new_fragment {
+                    if !fragment_start && !get_chunk_strategy(settings).is_keyframe() {
+                        state.sequence_number = state.sequence_number.wrapping_add(1);
+                    }
+                    let prev_fragment_end_pts = state.fragment_end_pts;
+                    state.fragment_start_pts = Some(next_pts);
+                    self.calculate_fragment_end_pts(settings, state);
+                    gst::info!(
+                        CAT,
+                        imp = self,
+                        "Starting new fragment at {} after empty chunk",
+                        next_pts,
+                    );
+                    if !at_eos
+                        && !state.need_new_header
+                        && state.fragment_end_pts != prev_fragment_end_pts
+                    {
+                        for stream in &state.streams {
+                            self.request_force_keyunit_event(
+                                settings,
+                                stream,
+                                state.fragment_end_pts,
+                                upstream_events,
+                            );
+                        }
+                    }
+                } else {
+                    gst::info!(
+                        CAT,
+                        imp = self,
+                        "Starting new chunk at {} after empty chunk",
+                        next_pts,
+                    );
+                }
+                state.chunk_start_pts = Some(next_pts);
+                state.timeout_delay = gst::ClockTime::ZERO;
+                true
+            } else {
+                false
+            };
+
+            return Ok((
+                caps,
+                if chunk_end_pts.is_some() || advanced {
+                    DrainResult::Skipped
+                } else {
+                    DrainResult::Done
+                },
+            ));
         }
 
         // If there are actual buffers to output then create headers as needed and create a
@@ -3589,7 +3668,7 @@ impl FMP4Mux {
         // TODO: Write edit list at EOS
         // TODO: Rewrite bitrates at EOS
 
-        Ok((caps, Some(buffer_list)))
+        Ok((caps, DrainResult::Chunk(buffer_list)))
     }
 
     /// Drain all chunks that can currently be drained.
@@ -3611,13 +3690,13 @@ impl FMP4Mux {
         loop {
             // If enough GOPs were queued, drain and create the output fragment or chunk
             let res = self.drain_one_chunk(state, settings, timeout, all_eos, upstream_events);
-            let mut buffer_list = match res {
-                Ok((new_caps, buffer_list)) => {
+            let drained = match res {
+                Ok((new_caps, drained)) => {
                     if caps.is_none() {
                         *caps = new_caps;
                     }
 
-                    buffer_list
+                    drained
                 }
                 Err(err) => {
                     if err == gst_base::AGGREGATOR_FLOW_NEED_DATA {
@@ -3632,37 +3711,33 @@ impl FMP4Mux {
                 }
             };
 
-            // If nothing can't be drained anymore then break the loop, and if all streams are
-            // EOS add the footers.
-            if buffer_list.is_none() {
-                if settings.write_mfra && all_eos {
-                    gst::debug!(CAT, imp = self, "Writing mfra box");
-                    match create_mfra(&state.streams[0].caps, &state.fragment_offsets) {
-                        Ok(mut mfra) => {
-                            {
-                                let mfra = mfra.get_mut().unwrap();
-                                // mfra is DELTA_UNIT like other buffers
-                                mfra.set_flags(gst::BufferFlags::DELTA_UNIT);
-                            }
+            match drained {
+                DrainResult::Chunk(buffer_list) => buffers.push(buffer_list),
+                DrainResult::Skipped => {}
+                DrainResult::Done => {
+                    if settings.write_mfra && all_eos {
+                        gst::debug!(CAT, imp = self, "Writing mfra box");
+                        match create_mfra(&state.streams[0].caps, &state.fragment_offsets) {
+                            Ok(mut mfra) => {
+                                {
+                                    let mfra = mfra.get_mut().unwrap();
+                                    // mfra is DELTA_UNIT like other buffers
+                                    mfra.set_flags(gst::BufferFlags::DELTA_UNIT);
+                                }
 
-                            if buffer_list.is_none() {
-                                buffer_list = Some(gst::BufferList::new_sized(1));
+                                let mut buffer_list = gst::BufferList::new_sized(1);
+                                buffer_list.get_mut().unwrap().add(mfra);
+                                buffers.push(buffer_list);
                             }
-                            buffer_list.as_mut().unwrap().get_mut().unwrap().add(mfra);
-                            buffers.extend(buffer_list);
-                        }
-                        Err(err) => {
-                            gst::error!(CAT, imp = self, "Failed to create mfra box: {}", err);
+                            Err(err) => {
+                                gst::error!(CAT, imp = self, "Failed to create mfra box: {}", err);
+                            }
                         }
                     }
+
+                    break Ok(());
                 }
-
-                break Ok(());
             }
-
-            // Otherwise extend the list of bufferlists and check again if something can be
-            // drained.
-            buffers.extend(buffer_list);
 
             // Only the first iteration is considered a timeout.
             timeout = false;
