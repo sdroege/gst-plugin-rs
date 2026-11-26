@@ -5171,3 +5171,281 @@ fn test_large_gop_split_at_fragment_boundary_chunked() {
 
     assert_eq!(num_buffers, 22);
 }
+
+#[test]
+fn test_caps_change_gap_exceeding_chunk_duration_chunked() {
+    init();
+
+    let mut h = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
+
+    h.element()
+        .unwrap()
+        .set_property_from_str("header-update-mode", "caps");
+    h.element()
+        .unwrap()
+        .set_property("fragment-duration", 2.seconds());
+    h.element()
+        .unwrap()
+        .set_property("chunk-duration", 100.mseconds());
+
+    let low_caps = gst::Caps::builder("video/x-h264")
+        .field("width", 1280i32)
+        .field("height", 720i32)
+        .field("framerate", gst::Fraction::new(10, 1))
+        .field("stream-format", "avc")
+        .field("alignment", "au")
+        .field("codec_data", gst::Buffer::from_slice([1, 2, 3, 4]))
+        .build();
+
+    let high_caps = gst::Caps::builder("video/x-h264")
+        .field("width", 2880i32)
+        .field("height", 1620i32)
+        .field("framerate", gst::Fraction::new(20, 1))
+        .field("stream-format", "avc")
+        .field("alignment", "au")
+        .field("codec_data", gst::Buffer::from_slice([5, 6, 7, 8]))
+        .build();
+
+    h.set_src_caps(low_caps);
+    h.play();
+
+    // Push 3 low-res frames so the first chunk drains
+    for i in 0..3u64 {
+        let pts = (i * 100).mseconds();
+        let mut buf = gst::Buffer::with_size(4).unwrap();
+        {
+            let buf = buf.get_mut().unwrap();
+            buf.set_pts(pts);
+            buf.set_dts(pts);
+            if i > 0 {
+                buf.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
+    }
+
+    let first_buf = h.pull().unwrap();
+    assert_eq!(
+        first_buf.flags(),
+        gst::BufferFlags::HEADER | gst::BufferFlags::DISCONT
+    );
+    let base_pts = first_buf.pts().unwrap();
+    let post_start = 1.seconds();
+    let mut media_pts = Vec::new();
+    let mut post_headers = Vec::new();
+    let mut record_buf = |buf: gst::Buffer| {
+        let pts = buf.pts().unwrap();
+        if buf.flags().contains(gst::BufferFlags::HEADER) {
+            if pts >= base_pts + post_start {
+                post_headers.push(buf.flags());
+            }
+        } else {
+            media_pts.push(pts);
+        }
+    };
+    while h.buffers_in_queue() > 0 {
+        record_buf(h.pull().unwrap());
+    }
+
+    h.set_src_caps(high_caps);
+
+    // Push high-res frames after a gap longer than chunk-duration
+    for i in 0..12u64 {
+        let pts = post_start + (i * 50).mseconds();
+        let mut buf = gst::Buffer::with_size(4).unwrap();
+        {
+            let buf = buf.get_mut().unwrap();
+            buf.set_pts(pts);
+            buf.set_dts(pts);
+            if i > 0 {
+                buf.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
+    }
+
+    // Wait for a post-caps-change frame before EOS
+    loop {
+        let buf = h.pull().unwrap();
+        let is_post_media = !buf.flags().contains(gst::BufferFlags::HEADER)
+            && buf.pts().unwrap() >= base_pts + post_start;
+        record_buf(buf);
+        if is_post_media {
+            break;
+        }
+    }
+    while h.buffers_in_queue() > 0 {
+        record_buf(h.pull().unwrap());
+    }
+
+    h.push_event(gst::event::Eos::new());
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::StreamStart);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Caps);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Segment);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Caps);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Eos);
+    while h.buffers_in_queue() > 0 {
+        record_buf(h.pull().unwrap());
+    }
+
+    // Output after the change starts with a new init segment and a new fragment
+    assert!(post_headers.len() >= 2);
+    assert_eq!(
+        post_headers[0],
+        gst::BufferFlags::HEADER | gst::BufferFlags::DISCONT
+    );
+    assert_eq!(post_headers[1], gst::BufferFlags::HEADER);
+
+    let post_total = media_pts
+        .iter()
+        .filter(|&&pts| pts >= base_pts + post_start)
+        .count();
+    assert_eq!(post_total, 12);
+    assert_eq!(media_pts.len(), 3 + 12);
+}
+
+#[test]
+fn test_gap_event_exceeding_fragment_duration_chunked() {
+    init();
+
+    let mut h = gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"));
+
+    h.element()
+        .unwrap()
+        .set_property("fragment-duration", 2.seconds());
+    h.element()
+        .unwrap()
+        .set_property("chunk-duration", 500.mseconds());
+
+    let caps = gst::Caps::builder("video/x-h264")
+        .field("width", 1920i32)
+        .field("height", 1080i32)
+        .field("framerate", gst::Fraction::new(20, 1))
+        .field("stream-format", "avc")
+        .field("alignment", "au")
+        .field("codec_data", gst::Buffer::from_slice([1, 2, 3, 4]))
+        .build();
+
+    h.set_src_caps(caps);
+    h.play();
+
+    // 1s of frames fills two 500ms chunks of fragment 1
+    for i in 0..20u64 {
+        let pts = (i * 50).mseconds();
+        let mut buf = gst::Buffer::with_size(4).unwrap();
+        {
+            let buf = buf.get_mut().unwrap();
+            buf.set_pts(pts);
+            buf.set_dts(pts);
+            buf.set_duration(50.mseconds());
+            if i > 0 {
+                buf.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
+    }
+
+    // GAP 1..2.5s crosses the 2s length limit
+    assert!(
+        h.push_event(
+            gst::event::Gap::builder(1.seconds())
+                .duration(1500.mseconds())
+                .build()
+        )
+    );
+
+    // Next GOP should start fragment 2 before EOS
+    for i in 0..20u64 {
+        let pts = (2500 + i * 50).mseconds();
+        let mut buf = gst::Buffer::with_size(4).unwrap();
+        {
+            let buf = buf.get_mut().unwrap();
+            buf.set_pts(pts);
+            buf.set_dts(pts);
+            buf.set_duration(50.mseconds());
+            if i > 0 {
+                buf.set_flags(gst::BufferFlags::DELTA_UNIT);
+            }
+        }
+        assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
+    }
+
+    let init_header = h.pull().unwrap();
+    assert_eq!(
+        init_header.flags(),
+        gst::BufferFlags::HEADER | gst::BufferFlags::DISCONT
+    );
+    let base_pts = init_header.pts().unwrap();
+
+    // Wait for a post-gap frame before EOS
+    let mut chunk_headers = Vec::new();
+    let mut media_pts = Vec::new();
+    loop {
+        let buf = h.pull().unwrap();
+        if buf.flags().contains(gst::BufferFlags::HEADER) {
+            chunk_headers.push((buf.flags(), buf.pts().unwrap() - base_pts, buf.offset()));
+        } else {
+            let pts = buf.pts().unwrap() - base_pts;
+            media_pts.push(pts);
+            if pts >= 2500.mseconds() {
+                break;
+            }
+        }
+    }
+
+    let mut fku_times = Vec::new();
+    while let Some(ev) = h.try_pull_upstream_event() {
+        if ev.type_() == gst::EventType::CustomUpstream
+            && let Ok(fku) = gst_video::UpstreamForceKeyUnitEvent::parse(&ev)
+        {
+            fku_times.push(fku.running_time);
+        }
+    }
+
+    // End of the initial 2s fragment and an updated 4.5s end after the GAP
+    assert_eq!(fku_times, vec![Some(2.seconds()), Some(4500.mseconds())]);
+
+    h.push_event(gst::event::Eos::new());
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::StreamStart);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Caps);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Segment);
+    let ev = h.pull_event().unwrap();
+    assert_eq!(ev.type_(), gst::EventType::Eos);
+
+    while h.buffers_in_queue() > 0 {
+        let buf = h.pull().unwrap();
+        if buf.flags().contains(gst::BufferFlags::HEADER) {
+            chunk_headers.push((buf.flags(), buf.pts().unwrap() - base_pts, buf.offset()));
+        } else {
+            media_pts.push(buf.pts().unwrap() - base_pts);
+        }
+    }
+
+    // Fragment 1 (seq 1) before the GAP, fragment 2 (seq 2) after
+    assert_eq!(media_pts.len(), 40);
+    assert_eq!(
+        chunk_headers,
+        vec![
+            (gst::BufferFlags::HEADER, gst::ClockTime::ZERO, 1),
+            (
+                gst::BufferFlags::HEADER | gst::BufferFlags::DELTA_UNIT,
+                500.mseconds(),
+                1,
+            ),
+            (gst::BufferFlags::HEADER, 2500.mseconds(), 2),
+            (
+                gst::BufferFlags::HEADER | gst::BufferFlags::DELTA_UNIT,
+                3.seconds(),
+                2,
+            ),
+        ]
+    );
+}
