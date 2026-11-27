@@ -7,39 +7,39 @@
 // SPDX-License-Identifier: MPL-2.0
 
 /**
-* tracer-pcap-writer:
-* @short_description: Dumps pad dataflow into a `.pcap` file.
-*
-* This tracer provides an easy way to save data flowing in a specified pad using
-* the [`pcap`](https://wiki.wireshark.org/Development/LibpcapFileFormat) format.
-*
-* It can also wrap the dataflow inside fake IpV4/UDP headers so those pcap can
-* then be reused with the #pcapparse element.
-*
-* It can be used to easily record/replay some parts of a WebRTC session without
-* requiring to modify the GStreamer pipeline.
-*
-* ## Parameters:
-*
-* - `output-dir` (string, default: "tracer_pcaps"): The directory where to save `.pcap` files
-* - `fake-protocol` (['udp', 'none'], default: "udp"): the fake headers to add to packets
-*
-* ## Example:
-*
-* ```console
-* $ GST_TRACERS=pcap-writer(target-factory=rtph264pay) gst-launch-1.0 videotestsrc num-buffers=15 ! x264enc tune=zerolatency ! video/x-h264,profile=constrained-baseline ! rtph264pay seqnum-offset=0 ! rtph264depay ! fakesink
-* ```
-*
-* Then this can be replayed with:
-*
-* ```console
-* $ gst-launch-1.0 filesrc location="tracer_pcaps/pipeline0>rtph264pay0>src.pcap" ! pcapparse ! \
-*   "application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264, profile-level-id=(string)42c015, a-framerate=(string)30" ! \
-*   rtph264depay ! avdec_h264 ! fakesink silent=false -v -m
-* ```
-*
-* Since: plugins-rs-0.13.0
-*/
+ * tracer-pcap-writer:
+ * @short_description: Dumps pad dataflow into a `.pcap` file.
+ *
+ * This tracer provides an easy way to save data flowing in a specified pad using
+ * the [`pcap`](https://wiki.wireshark.org/Development/LibpcapFileFormat) format.
+ *
+ * It can also wrap the dataflow inside fake IpV4/UDP headers so those pcap can
+ * then be reused with the #pcapparse element.
+ *
+ * It can be used to easily record/replay some parts of a WebRTC session without
+ * requiring to modify the GStreamer pipeline.
+ *
+ * ## Parameters:
+ *
+ * - `output-dir` (string, default: "tracer_pcaps"): The directory where to save `.pcap` files
+ * - `fake-protocol` (['udp', 'none'], default: "udp"): the fake headers to add to packets
+ *
+ * ## Example:
+ *
+ * ```console
+ * $ GST_TRACERS=pcap-writer(target-factory=rtph264pay) gst-launch-1.0 videotestsrc num-buffers=15 ! x264enc tune=zerolatency ! video/x-h264,profile=constrained-baseline ! rtph264pay seqnum-offset=0 ! rtph264depay ! fakesink
+ * ```
+ *
+ * Then this can be replayed with:
+ *
+ * ```console
+ * $ gst-launch-1.0 filesrc location="tracer_pcaps/pipeline0>rtph264pay0>src.pcap" ! pcapparse ! \
+ *   "application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264, profile-level-id=(string)42c015, a-framerate=(string)30" ! \
+ *   rtph264depay ! avdec_h264 ! fakesink silent=false -v -m
+ * ```
+ *
+ * Since: plugins-rs-0.13.0
+ */
 use pcap_file::pcap::{self, RawPcapPacket};
 
 use etherparse::PacketBuilder;

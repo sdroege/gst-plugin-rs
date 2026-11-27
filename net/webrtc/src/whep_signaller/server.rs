@@ -899,10 +899,7 @@ impl ObjectImpl for WhepServer {
 
                         None
                     })
-                    .param_types([
-                        String::static_type(),
-                        gst::Promise::static_type(),
-                    ])
+                    .param_types([String::static_type(), gst::Promise::static_type()])
                     .return_type::<()>()
                     .build(),
                 /**
@@ -944,22 +941,27 @@ impl ObjectImpl for WhepServer {
 
                             for (name, value) in headers.iter() {
                                 if let Ok(value) = value.get::<String>() {
-                                    let Ok(headername) = HeaderName::from_bytes(name.as_str().as_bytes()) else {
+                                    let Ok(headername) =
+                                        HeaderName::from_bytes(name.as_str().as_bytes())
+                                    else {
                                         continue;
                                     };
-                                    let Ok(headervalue) = HeaderValue::from_str(value.as_str()) else {
+                                    let Ok(headervalue) = HeaderValue::from_str(value.as_str())
+                                    else {
                                         continue;
                                     };
                                     headermap.push((Some(headername), headervalue));
                                 }
                             }
 
-                            let status = signaller.imp().patch_session(id, &request_body, headermap).await;
+                            let status = signaller
+                                .imp()
+                                .patch_session(id, &request_body, headermap)
+                                .await;
 
-                            let reply =
-                                gst::Structure::builder("whep-signaller/response")
-                                    .field("status", status.as_u16() as u32)
-                                    .build();
+                            let reply = gst::Structure::builder("whep-signaller/response")
+                                .field("status", status.as_u16() as u32)
+                                .build();
 
                             gst::log!(CAT, obj = signaller, "replying to promise with {reply:?}");
 

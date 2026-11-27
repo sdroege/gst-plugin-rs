@@ -145,11 +145,14 @@ impl ObjectImpl for CdpServiceInject {
                  *                                      a wide aspect ratio (>=16:9).
                  */
                 gst::ParamSpecArray::builder("services")
-                .nick("Services")
-                .blurb("List of service information to add or update in the CDP")
-                .element_spec(&glib::ParamSpecBoxed::builder::<gst::Structure>("service").build())
-                .mutable_playing()
-                .build()]
+                    .nick("Services")
+                    .blurb("List of service information to add or update in the CDP")
+                    .element_spec(
+                        &glib::ParamSpecBoxed::builder::<gst::Structure>("service").build(),
+                    )
+                    .mutable_playing()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

@@ -865,9 +865,15 @@ impl ObjectImpl for Cea708MuxSinkPad {
                 gst::ParamSpecArray::builder("discarded-services")
                     .nick("Discarded Services")
                     .blurb("List of services to discard")
-                    .element_spec(&glib::ParamSpecInt::builder("service").minimum(-4).maximum(63).build())
+                    .element_spec(
+                        &glib::ParamSpecInt::builder("service")
+                            .minimum(-4)
+                            .maximum(63)
+                            .build(),
+                    )
                     .mutable_playing()
-                    .build()]
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

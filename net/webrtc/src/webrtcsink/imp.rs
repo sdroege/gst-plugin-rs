@@ -6174,7 +6174,6 @@ impl ObjectImpl for BaseWebRTCSink {
                         let element = args[0].get::<super::BaseWebRTCSink>().expect("signal arg");
                         let this = element.imp();
 
-
                         Some(
                             this.state
                                 .lock()
@@ -6321,7 +6320,12 @@ impl ObjectImpl for BaseWebRTCSink {
                     .return_type::<gst::Structure>()
                     .run_last()
                     .class_handler(|args| {
-                        Some(args[3usize].get::<gst::Structure>().expect("wrong argument").to_value())
+                        Some(
+                            args[3usize]
+                                .get::<gst::Structure>()
+                                .expect("wrong argument")
+                                .to_value(),
+                        )
                     })
                     .accumulator(move |_hint, _acc, value| {
                         // First signal handler wins
@@ -6349,9 +6353,18 @@ impl ObjectImpl for BaseWebRTCSink {
                     .class_handler(|args| {
                         let video_info = args[2].get::<VideoInfo>().expect("No video info");
                         let current_bitrate = args[3].get::<i32>().expect("No bitrate");
-                        let enabled_mitigation_modes = args[4].get::<WebRTCSinkMitigationMode>().expect("No enabled mitigation modes");
+                        let enabled_mitigation_modes = args[4]
+                            .get::<WebRTCSinkMitigationMode>()
+                            .expect("No enabled mitigation modes");
 
-                        Some(default_configure_mitigation_mode(&video_info, current_bitrate, enabled_mitigation_modes).to_value())
+                        Some(
+                            default_configure_mitigation_mode(
+                                &video_info,
+                                current_bitrate,
+                                enabled_mitigation_modes,
+                            )
+                            .to_value(),
+                        )
                     })
                     .accumulator(move |_hint, _acc, value| {
                         std::ops::ControlFlow::Break(value.clone())
@@ -6978,8 +6991,10 @@ impl ObjectImpl for WebRTCSink {
                  */
                 glib::ParamSpecString::builder("signalling-server-key")
                     .nick("Signalling server private key")
-                    .blurb("Path to private encryption key the signalling server should use.
-                        The key should be formatted as PEM")
+                    .blurb(
+                        "Path to private encryption key the signalling server should use.
+                        The key should be formatted as PEM",
+                    )
                     .default_value(DEFAULT_SIGNALLING_SERVER_KEY)
                     .build(),
                 /**

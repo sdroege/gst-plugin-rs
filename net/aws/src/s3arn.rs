@@ -10,7 +10,7 @@
  *
  * Taken from
  * https://github.com/smithy-lang/smithy-rs/blob/main/rust-runtime/inlineable/src/endpoint_lib/arn.rs
-*/
+ */
 
 use std::borrow::Cow;
 use std::error::Error;

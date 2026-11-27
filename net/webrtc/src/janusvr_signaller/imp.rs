@@ -1061,7 +1061,6 @@ impl ObjectImpl for Signaller {
                 glib::subclass::Signal::builder("state-updated")
                     .param_types([JanusVRSignallerState::static_type()])
                     .build(),
-
             ]
         });
 

@@ -1386,10 +1386,7 @@ impl ObjectImpl for WhipServer {
 
                         None
                     })
-                    .param_types([
-                        String::static_type(),
-                        gst::Promise::static_type(),
-                    ])
+                    .param_types([String::static_type(), gst::Promise::static_type()])
                     .return_type::<()>()
                     .build(),
             ]
