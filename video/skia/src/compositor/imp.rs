@@ -134,11 +134,7 @@ impl SkiaCompositor {
         pad_rect.w = output_width as i32;
         pad_rect.h = output_height as i32;
 
-        if !self.is_rectangle_contained(rect, &pad_rect) {
-            return false;
-        }
-
-        true
+        self.is_rectangle_contained(rect, &pad_rect)
     }
 
     fn is_rectangle_contained(

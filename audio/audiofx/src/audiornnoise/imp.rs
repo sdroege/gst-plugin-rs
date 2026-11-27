@@ -199,8 +199,7 @@ impl AudioRNNoise {
             }
 
             for i in (in_frame.len() / channels)..(size / channels) {
-                for c in 0..channels {
-                    let channel_denoiser = &mut state.denoisers[c];
+                for channel_denoiser in &mut state.denoisers {
                     channel_denoiser.frame_chunk[i] = 0.0;
                 }
             }

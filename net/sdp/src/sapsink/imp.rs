@@ -1419,16 +1419,12 @@ fn pad_dest_checked(
 /// Whether the interface has the given name or, on Windows, the given
 /// friendly name
 fn interface_matches(iface: &getifaddrs::Interface<getifaddrs::Addresses>, name: &str) -> bool {
-    if iface.name == name {
-        return true;
-    }
-
     #[cfg(windows)]
     if iface.description == name {
         return true;
     }
 
-    false
+    iface.name == name
 }
 
 /// The name of the interface with the given name or, on Windows, the given

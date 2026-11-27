@@ -914,8 +914,7 @@ fn test_taic_stai_encode(video_enc: &str, enabled: bool) {
                             b"stai".into()
                         );
                         assert_eq!(saiz.aux_info.as_ref().unwrap().aux_info_type_parameter, 0);
-                        for i in 0..saio.offsets.len() {
-                            let offset = saio.offsets[i];
+                        for (i, &offset) in saio.offsets.iter().enumerate() {
                             let len = saiz.default_sample_info_size as u64;
                             let offset_into_mdat_start = (offset - mdat_offset) as usize;
                             let offset_into_mdat_end = offset_into_mdat_start + len as usize;

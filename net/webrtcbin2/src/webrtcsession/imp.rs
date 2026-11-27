@@ -2260,9 +2260,7 @@ mod tests {
     impl ExpectedSdp {
         fn match_against(&self, sdp: &Session) {
             assert_eq!(self.media.len(), sdp.media().len());
-            for i in 0..self.media.len() {
-                let our_media = &self.media[i];
-                let their_media = &sdp.media()[i];
+            for (our_media, their_media) in self.media.iter().zip(sdp.media().iter()) {
                 assert_eq!(our_media.media, their_media.media());
                 assert!(
                     our_media

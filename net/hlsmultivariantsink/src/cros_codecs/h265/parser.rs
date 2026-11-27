@@ -1507,8 +1507,8 @@ impl Parser {
             ptl.general_tier_flag = r.read_bit()?;
             ptl.general_profile_idc = r.read_bits(5)?;
 
-            for i in 0..32 {
-                ptl.general_profile_compatibility_flag[i] = r.read_bit()?;
+            for flag in &mut ptl.general_profile_compatibility_flag {
+                *flag = r.read_bit()?;
             }
 
             ptl.general_progressive_source_flag = r.read_bit()?;
@@ -1613,8 +1613,8 @@ impl Parser {
                 ptl.sub_layer_profile_space[i] = r.read_bits(2)?;
                 ptl.sub_layer_tier_flag[i] = r.read_bit()?;
                 ptl.sub_layer_profile_idc[i] = r.read_bits(5)?;
-                for j in 0..32 {
-                    ptl.sub_layer_profile_compatibility_flag[i][j] = r.read_bit()?;
+                for flag in &mut ptl.sub_layer_profile_compatibility_flag[i] {
+                    *flag = r.read_bit()?;
                 }
                 ptl.sub_layer_progressive_source_flag[i] = r.read_bit()?;
                 ptl.sub_layer_interlaced_source_flag[i] = r.read_bit()?;
